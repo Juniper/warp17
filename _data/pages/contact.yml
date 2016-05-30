@@ -1,0 +1,3 @@
+addresses:
+    - { email: 'dumitru.ceara@gmail.com', name: 'Dumitru Ceara' }
+    - { email: 'echaudron@gmail.com', name: 'Eelco Chaudron' }

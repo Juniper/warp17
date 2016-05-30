@@ -1,0 +1,13 @@
+---
+layout: default
+title: Contact
+permalink: /contact/
+---
+	{% for item in site.data.pages.contact.addresses %}
+        <address>
+            <strong>{{ item.name }}</strong><br>
+            <a href="mailto: {{ item.email }} ">{{ item.email }}</a>
+            </address>
+    {% endfor %}
+
+

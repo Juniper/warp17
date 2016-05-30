@@ -1,0 +1,28 @@
+title: "WARP17"
+description: "The Stateful Traffic Generator for Layer 1 to 7"
+url: ''
+copyright: '© 2016 Juniper Networks, Inc'
+
+media_btns:
+    - { name: 'github',
+        class: 'fa-github',
+        url: 'https://github.com/Juniper/warp17',
+        text: 'GitHub'}
+    - { name: 'google',
+        class: 'fa-google',
+        url: 'https://groups.google.com/forum/#!forum/warp17',
+        text: 'Google'}
+    - { name: 'facebook',
+        class: 'fa-facebook-square',
+        url: 'https://www.facebook.com/warp17stg',
+        text: 'Facebook'}
+    - { name: 'twitter',
+        class: 'fa-twitter',
+        url: 'https://twitter.com/warp1_7',
+        text: 'Twitter'}
+
+menu_entries:
+    - { url: '/', text: 'Home' }
+    - { url: '/contact', text: 'Contact' }
+
+google_analytics_id: 'UA-78735263-1'
