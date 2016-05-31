@@ -1,0 +1,103 @@
+//
+// DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
+//
+// Copyright (c) 2016, Juniper Networks, Inc. All rights reserved.
+//
+//
+// The contents of this file are subject to the terms of the BSD 3 clause
+// License (the "License"). You may not use this file except in compliance
+// with the License.
+//
+// You can obtain a copy of the license at
+// https://github.com/Juniper/warp17/blob/master/LICENSE.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice,
+// this list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+// contributors may be used to endorse or promote products derived from this
+// software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+// POSSIBILITY OF SUCH DAMAGE.
+//
+// File name:
+//     warp17-client.proto
+//
+// Description:
+//     Client config object definitions
+//
+// Author:
+//     Dumitru Ceara, Eelco Chaudron
+//
+// Initial Created:
+//     01/15/2016
+//
+// Notes:
+//
+//
+
+import "warp17-common.proto";
+import "warp17-app-raw.proto";
+import "warp17-app-http.proto";
+
+message TcpUdpClient {
+    required L4PortRange tuc_sports = 1;
+    required L4PortRange tuc_dports = 2;
+}
+
+message L4Client {
+    required L4Proto l4c_proto = 1;
+
+    /* Add different L4 configs below as optionals. */
+    optional TcpUdpClient l4c_tcp_udp = 2 [(warp17_union_anon) = true];
+}
+
+message RateClient {
+    required Rate rc_open_rate  = 1;
+    required Rate rc_close_rate = 2;
+    required Rate rc_send_rate  = 3;
+}
+
+message DelayClient {
+    required Delay dc_init_delay = 1;
+    required Delay dc_uptime     = 2;
+    required Delay dc_downtime   = 3;
+}
+
+message AppClient {
+    required AppProto   ac_app_proto = 1;
+
+    /* Add different App configs below as optionals. */
+    optional RawClient  ac_raw  = 2 [(warp17_union_anon) = true];
+    optional HttpClient ac_http = 3 [(warp17_union_anon) = true];
+}
+
+message Client {
+    required IpRange     cl_src_ips = 1;
+    required IpRange     cl_dst_ips = 2;
+
+    required L4Client    cl_l4      = 3;
+    required RateClient  cl_rates   = 4;
+    required DelayClient cl_delays  = 5;
+
+    required AppClient   cl_app     = 6;
+}
+

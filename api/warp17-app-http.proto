@@ -1,0 +1,96 @@
+//
+// DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
+//
+// Copyright (c) 2016, Juniper Networks, Inc. All rights reserved.
+//
+//
+// The contents of this file are subject to the terms of the BSD 3 clause
+// License (the "License"). You may not use this file except in compliance
+// with the License.
+//
+// You can obtain a copy of the license at
+// https://github.com/Juniper/warp17/blob/master/LICENSE.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice,
+// this list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+// contributors may be used to endorse or promote products derived from this
+// software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+// POSSIBILITY OF SUCH DAMAGE.
+//
+// File name:
+//     warp17-app-http.proto
+//
+// Description:
+//     HTTP 1.1 objects definitions
+//
+// Author:
+//     Dumitru Ceara, Eelco Chaudron
+//
+// Initial Created:
+//     01/15/2016
+//
+// Notes:
+//
+//
+
+enum HttpMethod {
+    GET             = 1; /* Currently supported. */
+    HEAD            = 2; /* Currently supported. */
+    POST            = 3; /* Currently not supported. */
+    PUT             = 4; /* Currently not supported. */
+    DELETE          = 5; /* Currently not supported. */
+    CONNECT         = 6; /* Currently not supported. */
+    OPTIONS         = 7; /* Currently not supported. */
+    TRACE           = 8; /* Currently not supported. */
+    HTTP_METHOD_MAX = 9;
+}
+
+enum HttpStatusCode {
+    OK_200               = 1;
+    NOT_FOUND_404        = 2;
+    FORBIDDEN_403        = 3; /* Currently not supported. */
+    /* All other response codes not supported yet! */
+    HTTP_STATUS_CODE_MAX = 4;
+}
+
+message HttpClient {
+    required HttpMethod hc_req_method       = 1;
+    required string     hc_req_object_name  = 2;
+    required string     hc_req_host_name    = 3;
+    required uint32     hc_req_size         = 4;
+}
+
+message HttpServer {
+    required HttpStatusCode hs_resp_code  = 1;
+    required uint32         hs_resp_size  = 2;
+}
+
+message HttpStats {
+    required uint32 hsts_req_cnt            = 1;
+    required uint32 hsts_resp_cnt           = 2;
+    required uint32 hsts_invalid_msg_cnt    = 3;
+    required uint32 hsts_no_content_len_cnt = 4;
+    required uint32 hsts_transfer_enc_cnt   = 5;
+}
+

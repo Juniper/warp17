@@ -1,0 +1,4 @@
+wheel==0.29.0
+enum34==1.1.2
+protobuf==2.6.1
+configparser==3.3.0.post2

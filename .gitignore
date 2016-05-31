@@ -1,0 +1,37 @@
+# Object directories
+/build/
+
+# OSX files
+.DS_Store
+
+# Temp emacs files
+*~
+
+# cscope and etags files
+TAGS
+tags
+cscope.files
+cscope.out
+cscope.po.out
+cscope.in.out
+
+# Object files
+*.o
+*.ko
+*.obj
+*.elf
+*.pyc
+
+# Libraries
+*.lib
+*.a
+
+# Sublime-text files
+*.sublime-project
+*.sublime-workspace
+
+# Protobuf generated files
+/api/generated/*
+
+# Python Venv
+/warp17-venv/

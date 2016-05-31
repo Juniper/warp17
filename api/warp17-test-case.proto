@@ -1,0 +1,156 @@
+//
+// DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
+//
+// Copyright (c) 2016, Juniper Networks, Inc. All rights reserved.
+//
+//
+// The contents of this file are subject to the terms of the BSD 3 clause
+// License (the "License"). You may not use this file except in compliance
+// with the License.
+//
+// You can obtain a copy of the license at
+// https://github.com/Juniper/warp17/blob/master/LICENSE.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice,
+// this list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+// contributors may be used to endorse or promote products derived from this
+// software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+// POSSIBILITY OF SUCH DAMAGE.
+//
+// File name:
+//     warp17-test-case.proto
+//
+// Description:
+//     Test case object definitions.
+//
+// Author:
+//     Dumitru Ceara, Eelco Chaudron
+//
+// Initial Created:
+//     01/15/2016
+//
+// Notes:
+//
+//
+
+import "warp17-common.proto";
+import "warp17-client.proto";
+import "warp17-server.proto";
+import "warp17-app-raw.proto";
+import "warp17-app-http.proto";
+
+enum TestCritType {
+    RUN_TIME    = 0;
+    SRV_UP      = 1;
+    CL_UP       = 2;
+    CL_ESTAB    = 3;
+    DATAMB_SENT = 4;
+    TC_CRIT_MAX = 5;
+}
+
+message TestCriteria {
+    required TestCritType tc_crit_type    = 1;
+    optional uint32       tc_run_time_s   = 2 [(warp17_union_anon) = true];
+    optional uint32       tc_srv_up       = 3 [(warp17_union_anon) = true];
+    optional uint32       tc_cl_up        = 4 [(warp17_union_anon) = true];
+    optional uint32       tc_cl_estab     = 5 [(warp17_union_anon) = true];
+    optional uint64       tc_data_mb_sent = 6 [(warp17_union_anon) = true];
+}
+
+enum TestCaseState {
+    IDLE         = 0;
+    RUNNING      = 1;
+    PASSED       = 2;
+    FAILED       = 3;
+    STOPPED      = 4;
+    TC_STATE_MAX = 5;
+}
+
+enum TestCaseType {
+    CLIENT = 0;
+    SERVER = 1;
+    MAX    = 2;
+}
+
+message TestCaseServerStats {
+    required uint32 tcss_up     = 1;
+    required uint32 tcss_estab  = 2;
+    required uint32 tcss_down   = 3;
+    required uint32 tcss_failed = 4;
+}
+
+message TestCaseClientStats {
+    required uint32 tccs_up     = 1;
+    required uint32 tccs_estab  = 2;
+    required uint32 tccs_down   = 3;
+    required uint32 tccs_failed = 4;
+}
+
+message TestCaseStats {
+    /* The user will do the translation. */
+    option (warp17_xlate_tpg) = false;
+
+    optional TestCaseServerStats tcs_server      = 1 [(warp17_union_anon) = true];
+    optional TestCaseClientStats tcs_client      = 2 [(warp17_union_anon) = true];
+
+    required uint32              tcs_data_failed = 3;
+    required uint32              tcs_data_null   = 4;
+
+    required uint64              tcs_start_time  = 5;
+    required uint64              tcs_end_time    = 6;
+}
+
+message TestCaseRateStats {
+
+    required uint32 tcrs_estab_per_s  = 1;
+    required uint32 tcrs_closed_per_s = 2;
+    required uint32 tcrs_data_per_s   = 3;
+
+    required uint64 tcrs_start_time   = 4;
+    required uint64 tcrs_end_time     = 5;
+}
+
+message TestCaseAppStats {
+    /* The user will do the translation. */
+    option (warp17_xlate_tpg) = false;
+
+    optional RawStats  tcas_raw  = 1 [(warp17_union_anon) = true];
+    optional HttpStats tcas_http = 2 [(warp17_union_anon) = true];
+
+}
+
+message TestCase {
+    required TestCaseType tc_type     = 1;
+
+    required uint32       tc_eth_port = 2;
+    required uint32       tc_id       = 3;
+
+    /* Add different Test Case configs below as optionals. */
+    optional Client       tc_client   = 4 [(warp17_union_anon) = true];
+    optional Server       tc_server   = 5 [(warp17_union_anon) = true];
+
+    required TestCriteria tc_criteria = 6;
+    required bool         tc_async    = 7;
+}
+

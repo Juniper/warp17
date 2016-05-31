@@ -1,0 +1,144 @@
+//
+// DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
+//
+// Copyright (c) 2016, Juniper Networks, Inc. All rights reserved.
+//
+//
+// The contents of this file are subject to the terms of the BSD 3 clause
+// License (the "License"). You may not use this file except in compliance
+// with the License.
+//
+// You can obtain a copy of the license at
+// https://github.com/Juniper/warp17/blob/master/LICENSE.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice,
+// this list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+// contributors may be used to endorse or promote products derived from this
+// software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+// POSSIBILITY OF SUCH DAMAGE.
+//
+// File name:
+//     warp17-common.proto
+//
+// Description:
+//     Common object definitions.
+//
+// Author:
+//     Dumitru Ceara, Eelco Chaudron
+//
+// Initial Created:
+//     01/15/2016
+//
+// Notes:
+//
+//
+
+import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.EnumOptions {
+    optional bool warp17_constants = 50002;
+}
+
+extend google.protobuf.MessageOptions {
+    optional bool warp17_xlate_tpg = 50002 [default = true];
+}
+
+enum Constants {
+    option allow_alias = true;
+    option (warp17_constants) = true;
+
+    TPG_TEST_MAX_ENTRIES = 16;
+    TPG_TEST_MAX_L3_INTF = 10;
+}
+
+extend google.protobuf.FieldOptions {
+    /* WARNING: warp17_array_size MUST correspond to a constant definition from
+     * 'enum Constants' above. */
+    optional string warp17_array_size = 50002;
+    optional string warp17_union_name = 50003;
+    optional bool   warp17_union_anon = 50004;
+}
+
+enum IpV {
+    IPV4 = 4;
+    IPV6 = 6;
+}
+
+message IpV6 {
+    required uint64 ip_high = 1;
+    required uint64 ip_low  = 2;
+}
+
+message Ip {
+    required IpV ip_version = 1;
+
+    /* Add v6 below as part of the union once supported. */
+    optional uint32 ip_v4 = 2 [(warp17_union_anon) = true];
+}
+
+message IpRange {
+    required Ip ipr_start = 1;
+    required Ip ipr_end   = 2;
+}
+
+message L4PortRange {
+    //TODO ports should be uint16 but no such type exists. Check on the server side!!
+    required uint32 l4pr_start = 1;
+    required uint32 l4pr_end   = 2;
+}
+
+enum L4Proto {
+    UDP          = 0;
+    TCP          = 1;
+    L4_PROTO_MAX = 2;
+}
+
+enum AppProto {
+    RAW           = 0;
+    HTTP          = 1;
+    APP_PROTO_MAX = 2;
+}
+
+message Delay {
+    optional uint32 d_value = 1;
+}
+
+enum DelayType {
+    INIT     = 0;
+    UPTIME   = 1;
+    DOWNTIME = 2;
+    CLDE_MAX = 3;
+}
+
+message Rate {
+    optional uint32 r_value = 1;
+}
+
+enum RateType {
+    OPEN     = 1;
+    SEND     = 2;
+    CLOSE    = 3;
+    CLRT_MAX = 4;
+}
+

@@ -1,0 +1,36 @@
+FEATURES:
+1. HTTP 1.1 Client/Server Application traffic generation.
+2. RAW TCP Client/Server Application traffic generation.
+3. RAW UDP Client/Server Application traffic generation.
+4. Python API for configuring, monitoring and controlling test cases.
+
+KNOWN ISSUES:
+1. When using a DUT (e.g., NAT device) between clients and servers, the
+   sessions on the DUT should be cleared after every test. This is required
+   because whenever a test-case stops, either because the pass-criteria was
+   reached or because it was explicitly stopped, the connections are forcefully
+   closed by WARP17 without performing the normal close sequence (e.g., no FIN is
+   sent for TCP). The DUT will only clear the existing sessions once its local
+   timeout expires.
+
+2. Client test cases are automatically stopped when the pass-criteria is
+   reached. This, however, is not the case for server test cases. The
+   pass-criteria for server test-cases is to have all the servers up and
+   waiting for connections. Therefore, even if a server test-case shows status
+   PASSED it MUST still be explicitly stopped ("stop tests port <x>") when
+   the user decides that the test has completed. This must be done in order to
+   avoid keeping server connections established forever when the clients silently
+   went down (e.g., when the client test case is manually stopped).
+
+3. Limited ARP table + limited number of L3 interfaces (TPG_TEST_MAX_L3_INTF):
+   only 10 interfaces supported per port for now
+
+4. No VLAN support.
+
+5. No TCP options or keep-alive support.
+
+6. No IPv4 fragmentation support (neither on the send side nor on the receive
+   side).
+
+API CHANGES:
+- Initial release

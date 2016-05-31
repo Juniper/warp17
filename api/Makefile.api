@@ -1,0 +1,129 @@
+#
+# DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
+#
+# Copyright (c) 2016, Juniper Networks, Inc. All rights reserved.
+#
+#
+# The contents of this file are subject to the terms of the BSD 3 clause
+# License (the "License"). You may not use this file except in compliance
+# with the License.
+#
+# You can obtain a copy of the license at
+# https://github.com/Juniper/warp17/blob/master/LICENSE.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+# this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright
+# notice, this list of conditions and the following disclaimer in the
+# documentation and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its
+# contributors may be used to endorse or promote products derived from this
+# software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+# File name:
+#     Makefile.api
+#
+# Description:
+#     WARP17 API makefile.
+#
+# Author:
+#     Dumitru Ceara, Eelco Chaudron
+#
+# Initial Created:
+#     01/07/2016
+#
+# Notes:
+#
+#
+
+.PHONY: all clean
+
+Q?=@
+
+PROTO-CC = protoc-c
+PROTO-CC-XLATE = protoc
+PROTO-PY = protoc
+
+GEN-DIR = ./generated
+GEN-DIR-C = $(GEN-DIR)/c
+GEN-DIR-PY = $(GEN-DIR)/py
+GEN-DIR-XLATE = $(GEN-DIR)/xlate
+
+PROTO-XLATE = ./xlate-gen/warp17_xlate_gen.py
+PROTO-XLATE-FLAGS = --proto_path=/usr/include:.
+PROTO-DESC = /usr/include/google/protobuf/descriptor.proto
+PROTO-DESC-H = $(GEN-DIR-C)/google/protobuf/descriptor.pb-c.h
+
+WARP17-API-C = $(GEN-DIR-C)/warp17-api.c
+WARP17-XLATE-C = $(GEN-DIR-XLATE)/warp17.xlate.c
+
+# Warning! The order of proto files is important for .xlate.h translation!
+PROTO-SRCS  = warp17-common.proto
+PROTO-SRCS += warp17-link.proto
+PROTO-SRCS += warp17-l3.proto
+PROTO-SRCS += warp17-app-raw.proto
+PROTO-SRCS += warp17-app-http.proto
+PROTO-SRCS += warp17-client.proto
+PROTO-SRCS += warp17-server.proto
+PROTO-SRCS += warp17-test-case.proto
+PROTO-SRCS += warp17-service.proto
+
+PROTO-OBJS-H        = $(addprefix $(GEN-DIR-C)/, $(PROTO-SRCS:.proto=.pb-c.h))
+PROTO-OBJS-C        = $(addprefix $(GEN-DIR-C)/, $(PROTO-SRCS:.proto=.pb-c.c))
+PROTO-OBJS-XLATE    = $(addprefix $(GEN-DIR-XLATE)/, $(PROTO-SRCS:.proto=.proto.xlate.c))
+PROTO-OBJS-XLATE-H  = $(addprefix $(GEN-DIR-XLATE)/, $(PROTO-SRCS:.proto=.proto.xlate.h))
+PROTO-OBJS-PY       = $(addprefix $(GEN-DIR-PY)/, $(PROTO-SRCS:.proto=_pb2.py))
+PROTO-OBJS-PYC      = $(addprefix $(GEN-DIR-PY)/, $(PROTO-SRCS:.proto=_pb2.pyc))
+
+PYOBJS              = xlate-gen/*.pyc
+
+$(PROTO-DESC-H): $(PROTO-DESC)
+	$(Q)$(PROTO-CC) $(PROTO-XLATE-FLAGS) --c_out=$(GEN-DIR-C) $^
+
+$(WARP17-API-C): $(PROTO-OBJS-H)
+	$(Q)cat $(PROTO-OBJS-C) > $@
+
+$(WARP17-XLATE-C): $(PROTO-OBJS-XLATE)
+	$(Q)cat $(PROTO-OBJS-XLATE) > $@
+
+$(GEN-DIR-C):
+	$(Q)mkdir -p $@
+
+$(GEN-DIR-PY):
+	$(Q)mkdir -p $@
+
+$(GEN-DIR-XLATE):
+	$(Q)mkdir -p $@
+
+$(GEN-DIR-C)/%.pb-c.h: %.proto
+	$(Q)echo "  PC-C $^"
+	$(Q)$(PROTO-CC) $(PROTO-XLATE-FLAGS) --c_out=$(GEN-DIR-C) $^
+	$(Q)echo "  PC-PY $^"
+	$(Q)$(PROTO-PY) $(PROTO-XLATE-FLAGS) --python_out=$(GEN-DIR-PY) $^
+	$(Q)echo "  PC-XLATE $^"
+	$(Q)$(PROTO-CC-XLATE) $(PROTO-XLATE-FLAGS) --plugin=protoc-gen-custom=$(PROTO-XLATE) --custom_out=$(GEN-DIR-XLATE) $^
+
+all: $(GEN-DIR-C) $(GEN-DIR-PY) $(GEN-DIR-XLATE) $(PROTO-DESC-H) $(WARP17-API-C) $(WARP17-XLATE-C)
+
+clean:
+	$(Q)$(RM) -rf $(GEN-DIR)
+	$(Q)$(RM) -rf $(PYOBJS)
+
