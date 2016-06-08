@@ -11,7 +11,7 @@ that would run on commodity hardware.
 
 ### Performance benchmarks
 
-A peak at _WARP17_'s performances shows that it easily reaches line rates of
+A peek at _WARP17_'s performances shows that it easily reaches line rate of
 40Gbps with:
 
 * TCP setup rates of __6.8M sessions/sec__
@@ -24,3 +24,4 @@ the documentation.
 ### Want to know more?
 
 Visit the GitHub [project page](https://github.com/Juniper/warp17).
+
