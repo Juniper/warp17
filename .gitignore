@@ -35,3 +35,6 @@ cscope.in.out
 
 # Python Venv
 /warp17-venv/
+
+# Perl autogen
+/_Inline/
