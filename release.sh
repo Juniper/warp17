@@ -62,7 +62,7 @@ function die {
 }
 
 function usage {
-    die "$1 -t major|minor -d \"<version_description>\" -p <perf_result_log_path>"
+    die "$1 -t major|minor -o <remote_name> -d \"<version_description>\" -p <perf_result_log_path>"
     exit 1
 }
 
@@ -78,13 +78,13 @@ function check_master {
 }
 
 function check_no_commits {
-    local=$(git rev-parse @)
-    remote=$(git rev-parse @{u})
-    base=$(git merge-base @ @{u})
+    local local_rev=$(git rev-parse @)
+    local remote_rev=$(git rev-parse @{u})
+    local base_rev=$(git merge-base @ @{u})
 
-    [ $local = $remote ] && return 1
-    [ $local = $base ] && die "Please first pull all remote changes!"
-    [ $remote = $base ] && die "Please first push all local changes!"
+    [ $local_rev = $remote_rev ] && return 1
+    [ $local_rev = $base_rev ] && die "Please first pull all remote changes!"
+    [ $remote_rev = $base_rev ] && die "Please first push all local changes!"
     die "Branch Diverged!"
 }
 
@@ -131,14 +131,18 @@ function exec_cmd {
 }
 
 type=
+remote=
 descr=
 perf_file=
 
 # Parse args
-while getopts "t:d:p:n" opt; do
+while getopts "t:o:d:p:n" opt; do
     case $opt in
     t)
         type=$OPTARG
+        ;;
+    o)
+        remote=$OPTARG
         ;;
     d)
         descr=$OPTARG
@@ -156,9 +160,10 @@ while getopts "t:d:p:n" opt; do
 done
 
 # Check mandatory args
-([ -z $type ] || [ -z $descr ] || [ -z $perf_file ]) && usage $0
+([[ -z $type ]] || [[ -z $descr ]] || [[ -z $perf_file ]] || [[ -z $remote ]]) &&
+usage $0
 
-#check_master
+check_master
 check_no_commits
 
 major=$(cat $vfile | cut -d '.' -f 1)
@@ -207,6 +212,6 @@ exec_cmd "git commit -m \"$commit_msg\" -- $vfile $bmark_out/*.png" \
          "Commit the new version"
 exec_cmd "git tag -a $tag_name -m \"$ver - $type - $descr\"" \
          "Tag the new release"
-exec_cmd "git push origin master" "Push release to master"
+exec_cmd "git push $remote master" "Push release to master"
 exec_cmd "git push --tags" "Push tags"
 
