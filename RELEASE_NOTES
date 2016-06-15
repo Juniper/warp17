@@ -1,3 +1,20 @@
+v1.1:
+-----
+FEATURES:
+- Add details on where to download the prebuilt & configured WARP17 VM
+- Add perl scripting support
+
+FIXED ISSUES:
+- Correct display of numa_node in "show port info"
+
+KNOWN ISSUES:
+- See v1.0
+
+API CHANGES:
+- No changes
+
+v1.0:
+-----
 FEATURES:
 1. HTTP 1.1 Client/Server Application traffic generation.
 2. RAW TCP Client/Server Application traffic generation.
@@ -34,3 +51,4 @@ KNOWN ISSUES:
 
 API CHANGES:
 - Initial release
+
