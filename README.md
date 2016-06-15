@@ -125,7 +125,8 @@ The tests stop after all the clients sent at least one request.
 ## UDP setup and data rates for RAW application traffic
 
 The tests continuously send UDP fixed size requests size requests (with random
-payload) from 4 million clients and wait for fixed size responses from the servers. The tests stop after 4 million clients sent at least one request.
+payload) from 4 million clients and wait for fixed size responses from the servers.
+The tests stop after 4 million clients sent at least one request.
 
 * UDP raw traffic packets per second varies between __22.5M pkts/s__ when
   sending small requests and __9.5M pkts/s__ when sending bigger packets:
@@ -140,7 +141,9 @@ payload) from 4 million clients and wait for fixed size responses from the serve
 
 ## Prerequisites
 
-Any 64 bit Linux distribution will do, however we have been testing this with Ubuntu Server 14.04 LTS.
+Any 64 bit Linux distribution will do, however we have been testing this with
+Ubuntu Server 14.04 LTS. In addition we have made an OVF virtual machine image
+available, details can be found in the respective [documentation](ovf/README.md).
 
 ### Install build essential, python and ncurses
 ```
@@ -293,12 +296,26 @@ device to IGB UIO module`.
 
 # How to run
 
-__NOTE: For now WARP17 must be run as root!__
-
 From the top directory of WARP17:
 
 ```
 ./build/warp17 <dpdk-command-line-args> -- <warp17-command-line-args>
+```
+
+## Running as non-root
+
+After compiling WARP17 change the owner of the binary to `root` (in order to
+allow access to `/proc/self/pagemap`:):
+
+```
+sudo chown root build/warp17
+```
+
+Set the `suid` bit on the binary in order to allow the user to keep
+permissions:
+
+```
+sudo chmod u+s build/warp17
 ```
 
 ## Command-line arguments
@@ -338,7 +355,9 @@ __NOTE: Users are encouraged to use the "qmap-default max-q" option whenever
 ethernet ports are on the same socket as the PKT cores as this usually gives
 the best performance!__
 
-__NOTE: The lowest two cores will be dedicated to CLI and management processing, and can not be assigned to a physical port for packet processing using the `--qmap` option!__
+__NOTE: The lowest two cores will be dedicated to CLI and management processing,
+and can not be assigned to a physical port for packet processing using the
+`--qmap` option!__
 
 ### Example (on a x86 server with 32G RAM for WARP17 and 4 memory channels):
 
@@ -349,13 +368,14 @@ __NOTE: The lowest two cores will be dedicated to CLI and management processing,
 	CPU(s):                12
 	```
 
-	Decide how many cores WARP17 should use. In this example we consider WARP17 uses
-	8 cores:
+	Decide how many cores WARP17 should use. In this example we consider WARP17
+    uses 8 cores:
 	- cores 6, 7, 8, 9, 10, 11 for packet processing
 	- cores 0, 1 for CLI and management
 
-	Based on that we determine the bitmask corresponding to the ids of the cores we
-	would like to use. The bit index in the bit mask corresponds to the core id:
+	Based on that we determine the bitmask corresponding to the ids of the cores
+    we would like to use. The bit index in the bit mask corresponds to the core
+    id:
 
 	```
 	Bitmask:  0  0  0  0      1   1  1  1     1  1  0  0     0  0  1  1 => 0xFC3
@@ -377,14 +397,15 @@ __NOTE: The lowest two cores will be dedicated to CLI and management processing,
 	The `-n` command line argument should be usually set to the max number of
 	channels available in the system.
 
-	WARP17 should be using 32G of memory in this example so the `-m` command line
-	argument should be set to 32768.
+    WARP17 should be using 32G of memory in this example so the `-m` command
+    line argument should be set to 32768.
 
 	In order for WARP17 to use the default core to port mapping while
 	maximizing the number of transmit queues the `--qmap-default` command line
 	argument should be set to `max-q`.
 
-* _Optional_: the startup commands file can be specified through the `--cmd-file` command line argument.
+* _Optional_: the startup commands file can be specified through the `--cmd-file`
+command line argument.
 
 For our example this translates into the following command:
 
@@ -697,7 +718,7 @@ ethernet port.
       case ID. This enforces a unique ARP table per port.
 
 		__NOTE: The current ARP implementation is limited in the sense that whenever tests
-		are started on a port gratuituous ARPs are sent for all the L3 interfaces that were
+		are started on a port, gratuituous ARPs are sent for all the L3 interfaces that were
 		defined on that port and an ARP request is sent for the default gateway.
 		All ARP requests and replies are properly processed but there is no timeout
 		mechanism in place for aging entries!__
@@ -851,6 +872,16 @@ WARP17 or executed directly in the CLI.
   The RAW servers reply with responses of size 4K. The clients are also rate
   limited to 1M sessions/s `open` and 900K sess/s `send` rate (clients will)
 
+* __examples/test\_6\_http\_40M\_sessions.cfg__: single test case per port
+  configuring __40M HTTP sessions__. The test case on port 0 will establish
+  connections from `[10.0.0.1, 10.0.0.4]:[10000, 60000)` to
+  `10.0.0.253:[6000, 6200)`. On each of those connections HTTP _GET_
+  requests will be sent continuously.
+
+* __examples/test\_7\_routing\_raw\_8M\_sesssions.cfg__: example config to
+  be used when having (multiple) routers in between the client and server
+  ports.
+
 # Python scripting API
 WARP17 offers an RPC-based API which allows users to write scripts and automate
 the tests that WARP17 would run. WARP17 listens to incoming RPC connections on TCP
@@ -865,6 +896,17 @@ definition file).
 A short example about how to use the Python API can be found in
 `examples/python/test_1_http_4M.py`. The example sets up 4M _HTTP_ clients
 and servers, polls for statistics and stops the tests after a while.
+
+# Perl scripting API
+WARP17 can also be scripted through Perl by using the `Inline::Python` module.
+A short example about how to use Perl to script WARP17 can be found in
+`examples/python/test_1_http_4M.py`. Requirements for running the Perl scripts:
+
+```
+sudo apt-get install python2.7-dev
+sudo apt-get install cpanminus
+sudo cpanm Inline::Python
+```
 
 # Contributing a new L7 Application implementation
 WARP17 currently supports _RAW TCP_ and _HTTP 1.1_ application traffic. Even

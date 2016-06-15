@@ -1,0 +1,4 @@
+The ovf images are too large to store on github, but they can be downloaded from
+the following link:
+
+    http://warp17.net/downloads

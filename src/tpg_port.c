@@ -871,7 +871,7 @@ static void cmd_show_port_info_parsed(void *parsed_result __rte_unused,
         pci = &dev_info.pci_dev->addr;
 
         cmdline_printf(cl,
-                       "%4u %-16.16s "PCI_PRI_FMT" %3u %5u %5u %c%c%c%c%c%c%c %c%c%c%c%c%c%c%c%c%c %c%c%c%c%c%c %c%c%c%c%c%c%c%c%c %c%c\n",
+                       "%4u %-16.16s "PCI_PRI_FMT" %3d %5u %5u %c%c%c%c%c%c%c %c%c%c%c%c%c%c%c%c%c %c%c%c%c%c%c %c%c%c%c%c%c%c%c%c %c%c\n",
                        port, dev_info.driver_name,
                        pci->domain, pci->bus, pci->devid, pci->function,
                        dev_info.pci_dev->numa_node,
