@@ -1,0 +1,10 @@
+---
+layout: default
+title: "Downloads"
+permalink: '/downloads/'
+---
+    <h3>OVF images download links:</h3>
+
+    {% for item in site.data.pages.downloads.ovf %}
+        <p><a href=" {{ item.link }} "> {{ item.name }} </a></p>
+    {% endfor %}

@@ -23,6 +23,7 @@ media_btns:
 
 menu_entries:
     - { url: '/', text: 'Home' }
+    - { url: '/downloads', text: 'Downloads' }
     - { url: '/contact', text: 'Contact' }
 
 google_analytics_id: 'UA-78735263-1'
