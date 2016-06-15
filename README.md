@@ -142,7 +142,8 @@ The tests stop after 4 million clients sent at least one request.
 ## Prerequisites
 
 Any 64 bit Linux distribution will do, however we have been testing this with
-Ubuntu Server 14.04 LTS.
+Ubuntu Server 14.04 LTS. In addition we have made an OVF virtual machine image
+available, details can be found in the respective [documentation](ovf/README.md).
 
 ### Install build essential, python and ncurses
 ```
@@ -310,7 +311,7 @@ allow access to `/proc/self/pagemap`:):
 sudo chown root build/warp17
 ```
 
-Set the `suid` bit on the binary in order to allow the user to keep 
+Set the `suid` bit on the binary in order to allow the user to keep
 permissions:
 
 ```
