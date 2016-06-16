@@ -1,2 +1,3 @@
 ovf:
+    - { name: 'WARP17_v1.1.ovf.zip', link: 'https://drive.google.com/open?id=0B52dydbheuKybUs0OFFyLUstVE0' }
     - { name: 'WARP17_v1.0.ovf.zip', link: 'https://drive.google.com/open?id=0B52dydbheuKyYjdNa0xwbkRwNjg' }
