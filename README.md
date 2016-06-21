@@ -900,7 +900,7 @@ and servers, polls for statistics and stops the tests after a while.
 # Perl scripting API
 WARP17 can also be scripted through Perl by using the `Inline::Python` module.
 A short example about how to use Perl to script WARP17 can be found in
-`examples/python/test_1_http_4M.py`. Requirements for running the Perl scripts:
+`examples/perl/test_1_http_4M.pl`. Requirements for running the Perl scripts:
 
 ```
 sudo apt-get install python2.7-dev
