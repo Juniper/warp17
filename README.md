@@ -150,59 +150,66 @@ available, details can be found in the respective [documentation](ovf/README.md)
 sudo apt-get install build-essential python ncurses-dev
 ```
 
-### Install DPDK 2.2.0
+### Install DPDK 16.04
 
-* Download [DPDK 2.2.0](http://dpdk.org/browse/dpdk/refs/).
+* Download [DPDK 16.04](http://dpdk.org/browse/dpdk/refs/).
 
 * Install DPDK:
-```
-tar xf dpdk.tar.gz
-cd dpdk
-make install T=x86_64-native-linuxapp-gcc
-```
+
+	```
+	tar xf dpdk-16.04.tar.gz
+	cd dpdk-16.04
+	make install T=x86_64-native-linuxapp-gcc
+	```
 
 * Load the `igb_uio` DPDK module, either as shown below or by running the
   `$RTE_SDK/tools/setup.sh` script and selecting option
   `[17] Insert IGB UIO module`:
-```
-sudo modprobe uio
-sudo insmod x86_64-native-linuxapp-gcc/kmod/igb_uio.ko
-```
+
+	```
+	sudo modprobe uio
+	sudo insmod x86_64-native-linuxapp-gcc/kmod/igb_uio.ko
+	```
 
 * Enable at least 32 1G hugepages and configure them (see section 2.3.2.1 from
 the [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/sys_reqs.html)):
-    - add the following line to `/etc/default/grub`:
-	```
-	GRUB_CMDLINE_LINUX="default_hugepagesz=1G hugepagesz=1G hugepages=32"
-	```
-    - update grub:
+	- add the following line to `/etc/default/grub`:
 
-	```
-	sudo update-grub
-	```
-    - reboot the machine
+		```
+		GRUB_CMDLINE_LINUX="default_hugepagesz=1G hugepagesz=1G hugepages=32"
+		```
 
-	```
-	sudo reboot
-	```
+   - update grub:
+
+		```
+		sudo update-grub
+		```
+
+   - reboot the machine
+
+		```
+		sudo reboot
+		```
 
 * Mount hugepages (see section 2.3.2.2 from the
 [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/sys_reqs.html)):
     - add the mountpoint:
 
-	```
-	sudo mkdir /mnt/huge_1GB
-	```
+		```
+		sudo mkdir /mnt/huge_1GB
+		```
+
     - make the mountpoint permanent by adding to `/etc/fstab`:
-	```
-	nodev           /mnt/huge_1GB   hugetlbfs pagesize=1GB  0       0
-	```
+
+		```
+		nodev           /mnt/huge_1GB   hugetlbfs pagesize=1GB  0       0
+		```
 
 * Export the path to the DPDK SDK (where DPDK was installed) into the variable
 RTE_SDK. For example:
 
 	```
-	export RTE_SDK=/home/<user>/src/dpdk-2.2.0
+	export RTE_SDK=/home/<user>/src/dpdk-16.04
 	```
 
 * Export the target of the DPDK SDK into the variable RTE_TARGET. For example:
@@ -215,15 +222,15 @@ RTE_SDK. For example:
 
 * First install the protobuf compilers and python libraries.
 
-```
-sudo apt-get install protobuf-compiler libprotobuf-dev python-protobuf
-```
+	```
+	sudo apt-get install protobuf-compiler libprotobuf-dev python-protobuf
+	```
 
 * If using Ubuntu Server 14.04 LTS then just install:
 
-```
-sudo apt-get install libprotobuf-c0 libprotobuf-c0-dev libprotobuf8 libprotoc8 protobuf-c-compiler
-```
+	```
+	sudo apt-get install libprotobuf-c0 libprotobuf-c0-dev libprotobuf8 libprotoc8 protobuf-c-	compiler
+	```
 
 * Otherwise (Ubuntu version >= 15.10):
  * Install [libprotobuf-c](http://packages.ubuntu.com/trusty/amd64/libprotobuf-c0/download),
@@ -260,6 +267,7 @@ sudo apt-get install libprotobuf-c0 libprotobuf-c0-dev libprotobuf8 libprotoc8 p
 Get the `warp17-<ver>.tgz` archive or clone the desired release.
 
 ## Compile WARP17
+
 ```
 tar xfz warp17-<ver>.tgz
 cd warp17
@@ -267,6 +275,7 @@ make
 ```
 
 ## Configure Python virtualenv
+
 ```
 sudo apt-get install python-pip
 sudo pip install virtualenv
@@ -277,12 +286,14 @@ pip install -r python/requirements.txt
 
 Once installed, whenever python tests need to run the virtual environment must
 be activated:
+
 ```
 source warp17-venv/bin/activate
 ```
 
 To exit the virtual environment and return to the default python interpretor
 and libraries:
+
 ```
 deactivate
 ```

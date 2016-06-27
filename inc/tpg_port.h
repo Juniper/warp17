@@ -149,12 +149,13 @@ typedef struct port_info_s {
             "Mbps" : "Gbps") :     \
         "Mbps")
 
-#define LINK_DUPLEX(ls)                                             \
-    ((ls)->link_status ?                                            \
-        ((ls)->link_duplex == ETH_LINK_HALF_DUPLEX ? "half" :       \
-            (ls)->link_duplex == ETH_LINK_FULL_DUPLEX ? "full" :    \
-            (ls)->link_duplex == ETH_LINK_AUTONEG_DUPLEX ? "auto" : \
-            "???") : "N/A")
+#define LINK_DUPLEX(ls)                                       \
+    ((ls)->link_status ?                                      \
+        ((ls)->link_duplex == ETH_LINK_HALF_DUPLEX ? "half" : \
+         (ls)->link_duplex == ETH_LINK_FULL_DUPLEX ? "full" : \
+         "???") : "N/A"),                                     \
+    ((ls)->link_autoneg == ETH_LINK_AUTONEG ? "(auto)" :      \
+        "(manual)")
 
 /*****************************************************************************
  * Port statistics

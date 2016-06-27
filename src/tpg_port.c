@@ -748,22 +748,15 @@ static void cmd_show_port_link_parsed(void *parsed_result __rte_unused,
             cmdline_printf(cl, "Port %d linkstate %s\n",
                            port, "DOWN");
         } else {
-            if (link.link_speed < 1000) {
-                cmdline_printf(cl, "Port %d linkstate %s, speed %uMB, duplex %s\n",
-                               port, "UP", link.link_speed,
-                               link.link_duplex == ETH_LINK_HALF_DUPLEX ? "half" :
-                               link.link_duplex == ETH_LINK_FULL_DUPLEX ? "full" :
-                               link.link_duplex == ETH_LINK_AUTONEG_DUPLEX ? "auto" :
-                               "???");
 
-            } else {
-                cmdline_printf(cl, "Port %d linkstate %s, speed %uG, duplex %s\n",
-                               port, "UP", link.link_speed/1000,
-                               link.link_duplex == ETH_LINK_HALF_DUPLEX ? "half" :
-                               link.link_duplex == ETH_LINK_FULL_DUPLEX ? "full" :
-                               link.link_duplex == ETH_LINK_AUTONEG_DUPLEX ? "auto" :
-                               "???");
-            }
+            cmdline_printf(cl,
+                           "Port %"PRIu32" linkstate %s, speed %d%s, "
+                           "duplex %s%s\n",
+                           port,
+                           LINK_STATE(&link),
+                           LINK_SPEED(&link),
+                           LINK_SPEED_SZ(&link),
+                           LINK_DUPLEX(&link));
         }
     }
 }
