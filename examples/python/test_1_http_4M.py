@@ -89,7 +89,7 @@ def init_test():
     global warp17_port
     global env
 
-    env = Warp17Env(path='./test_python_api.ini')
+    env = Warp17Env(path='./test_1_http_4M.ini')
 
     # First start WARP17 on the local machine, default IP and port.
     exec_bin = '../../build/warp17'

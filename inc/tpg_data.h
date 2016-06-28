@@ -136,7 +136,6 @@ static inline struct rte_mbuf *data_alloc_chain(uint32_t data_len)
     uint32_t             nb_segs = 0;
     uint32_t             pkt_len = data_len;
 
-
     data_mbuf = rte_pktmbuf_alloc(mpool);
     if (unlikely(!data_mbuf))
         goto done;
@@ -153,6 +152,56 @@ static inline struct rte_mbuf *data_alloc_chain(uint32_t data_len)
         prev_mbuf = &data_mbuf->next;
         data_len -= req_len;
     } while (data_len && (data_mbuf = rte_pktmbuf_alloc(mpool)));
+
+    *prev_mbuf = NULL;
+    data_mbufs->nb_segs = nb_segs;
+    data_mbufs->pkt_len = pkt_len;
+
+done:
+    if (data_mbufs && !data_mbuf) {
+        /* Failed! rte_pktmbuf_free frees the whole chain!!! */
+        rte_pktmbuf_free(data_mbufs);
+        return NULL;
+    }
+
+    return data_mbufs;
+}
+
+/*****************************************************************************
+ * data_copy_chain()
+ ****************************************************************************/
+static inline struct rte_mbuf *data_copy_chain(struct rte_mbuf *original,
+                                               struct rte_mempool *mpool)
+{
+    struct rte_mbuf  *data_mbufs = NULL;
+    struct rte_mbuf  *data_mbuf = NULL;
+    struct rte_mbuf **prev_mbuf = NULL;
+    uint32_t          nb_segs = 0;
+    uint32_t          pkt_len = original->pkt_len;
+
+    data_mbuf = rte_pktmbuf_alloc(mpool);
+    if (unlikely(!data_mbuf))
+        goto done;
+
+    data_mbufs = data_mbuf;
+    prev_mbuf = &data_mbuf->next;
+
+    do {
+        char *new_seg_data;
+
+        nb_segs++;
+        new_seg_data = rte_pktmbuf_append(data_mbuf, original->data_len);
+
+        *prev_mbuf = data_mbuf;
+
+        if (unlikely(!new_seg_data))
+            goto done;
+        rte_memcpy(new_seg_data, rte_pktmbuf_mtod(original, char *),
+                   original->data_len);
+
+        prev_mbuf = &data_mbuf->next;
+        original = original->next;
+    } while (original && (data_mbuf = rte_pktmbuf_alloc(mpool)));
 
     *prev_mbuf = NULL;
     data_mbufs->nb_segs = nb_segs;

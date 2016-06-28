@@ -39,16 +39,17 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  * File name:
- *     tpg_pktloop.h
+ *     tpg_ring_if.h
  *
  * Description:
- *     Packet receive/send functions / loop.
+ *     Ring based interface supoort for running WARP17 without any ethernet
+ *     interface.
  *
  * Author:
  *     Dumitru Ceara, Eelco Chaudron
  *
  * Initial Created:
- *     06/29/2015
+ *     06/21/2016
  *
  * Notes:
  *
@@ -57,66 +58,36 @@
 /*****************************************************************************
  * Multiple include protection
  ****************************************************************************/
-#ifndef _H_TPG_PKTLOOP_
-#define _H_TPG_PKTLOOP_
+#ifndef _H_TPG_RING_IF_
+#define _H_TPG_RING_IF_
 
 /*****************************************************************************
  * Definitions
  ****************************************************************************/
-#define PKTLOOP_CMDLINE_OPTIONS() \
-    CMDLINE_OPT_ARG("pkt-send-drop-rate", true)
+#define RING_IF_CMDLINE_OPTIONS() \
+    CMDLINE_OPT_ARG("ring-if-pairs", true)
 
-#define PKTLOOP_CMDLINE_PARSER() \
-    CMDLINE_ARG_PARSER(pkt_handle_cmdline_opt, NULL)
-
-/*****************************************************************************
- * Pkt loop module message type codes.
- ****************************************************************************/
-enum pktloop_msg_types {
-
-    MSG_TYPE_DEF_START_MARKER(PKTLOOP),
-    MSG_PKTLOOP_INIT_WAIT,
-    MSG_TYPE_DEF_END_MARKER(PKTLOOP),
-
-};
-
-MSG_TYPE_MAX_CHECK(PKTLOOP);
+#define RING_IF_CMDLINE_PARSER() \
+    CMDLINE_ARG_PARSER(ring_if_handle_cmdline_opt, NULL)
 
 /*****************************************************************************
- * External's for tpg_pktloop.c
+ * Globals
  ****************************************************************************/
-extern int  pkt_send(uint32_t port, struct rte_mbuf *mbuf, bool trace);
-extern void pkt_flush_tx_q(uint32_t port, port_statistics_t *stats);
-extern int  pkt_receive_loop(void *arg __rte_unused);
-
-extern bool pkt_handle_cmdline_opt(const char *opt_name, char *opt_arg);
-extern bool pkt_loop_init(void);
 
 /*****************************************************************************
- * Static inlines
+ * Static inlines for tpg_ring_if.c
  ****************************************************************************/
+
 /*****************************************************************************
- * pkt_send_with_hash()
+ * Externals for tpg_ring_if.c
  ****************************************************************************/
-static inline bool pkt_send_with_hash(uint32_t interface,
-                                      struct rte_mbuf *pkt,
-                                      uint32_t rss_hash,
-                                      bool trace)
-{
-    /*
-     * Slap the destination RSS hash if we're doing it ourselves.
-     * Also mark that the RSS has been set.
-     */
-#if defined(TPG_EXPLICIT_RX_HASH)
-    pkt->ol_flags |= PKT_RX_RSS_HASH;
-    pkt->hash.rss = rss_hash;
-#else /* defined(TPG_EXPLICIT_RX_HASH) */
-    (void)rss_hash;
-#endif /* defined(TPG_EXPLICIT_RX_HASH) */
+extern uint32_t ring_if_get_count(void);
+extern bool     ring_if_handle_cmdline_opt(const char *opt_name,
+                                           char *opt_arg);
+extern bool     ring_if_init(void);
 
-    return pkt_send(interface, pkt, trace);
-}
-
-
-#endif /* _H_TPG_PKTLOOP_ */
+/*****************************************************************************
+ * End of include file
+ ****************************************************************************/
+#endif /* _H_TPG_RING_IF_ */
 

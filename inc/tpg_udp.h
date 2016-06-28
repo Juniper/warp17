@@ -147,7 +147,7 @@ extern notif_cb_t udp_notif_cb;
      sizeof(struct udp_hdr))
 
 #define UCB_MTU(ucb) \
-    (PORT_MTU((ucb)->ucb_l4.l4cb_interface) - UCB_MIN_HDRS_SZ)
+    (port_dev_info[(ucb)->ucb_l4.l4cb_interface].pi_mtu - UCB_MIN_HDRS_SZ)
 
 /*****************************************************************************
  * Externals for tpg_udp.c

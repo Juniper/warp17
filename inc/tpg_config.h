@@ -61,6 +61,30 @@
 #define _H_TPG_CONFIG_
 
 /*****************************************************************************
+ * Command line helpers
+ ****************************************************************************/
+#define CMDLINE_OPT_ARG(knob_name, knob_has_arg) \
+    ((struct option) {.name = (knob_name), .has_arg = (knob_has_arg)})
+
+/* To be called whenever when a command line arg is found. */
+typedef bool (*cfg_handle_cmdline_arg_cb_t)(const char *arg_name,
+                                            char *opt_arg);
+
+/* To be called whenever the parsing of the command line is done. */
+typedef bool (*cfg_handle_cmdline_cb_t)(void);
+
+typedef struct cmdline_arg_parser_s {
+
+    cfg_handle_cmdline_arg_cb_t cap_arg_parser;
+    cfg_handle_cmdline_cb_t     cap_handler;
+
+} cfg_cmdline_arg_parser_t;
+
+#define CMDLINE_ARG_PARSER(arg_parser, handler)                  \
+    ((cfg_cmdline_arg_parser_t) {.cap_arg_parser = (arg_parser), \
+                                 .cap_handler = (handler)})
+
+/*****************************************************************************
  * Global configuration, and defaults
  ****************************************************************************/
 /*
@@ -319,13 +343,33 @@ int cfg_get_test_mgmt_core(void)
 }
 
 /*****************************************************************************
+ * cfg_pkt_core_count()
+ *      Note: we always reserve the first TPG_NR_OF_NON_PACKET_PROCESSING_CORES
+ *            lcore indexes for CLI and non-packet stuff.
+ ****************************************************************************/
+static inline __attribute__((always_inline))
+uint32_t cfg_pkt_core_count(void)
+{
+    static uint32_t pkt_core_count;
+    uint32_t        core;
+
+    if (pkt_core_count)
+        return pkt_core_count;
+
+    RTE_LCORE_FOREACH_SLAVE(core) {
+        if (cfg_is_pkt_core(core))
+            pkt_core_count++;
+    }
+    return pkt_core_count;
+}
+
+/*****************************************************************************
  * External's for tpg_config.c
  ****************************************************************************/
-extern bool              cfg_init(void);
-extern bool              cfg_handle_command_line(int argc, char **argv);
-extern global_config_t  *cfg_get_config(void);
-extern const char       *cfg_get_gtrace_name(gtrace_id_t id);
-extern char            **cfg_get_qmap(void);
+extern bool             cfg_init(void);
+extern bool             cfg_handle_command_line(int argc, char **argv);
+extern global_config_t *cfg_get_config(void);
+extern const char      *cfg_get_gtrace_name(gtrace_id_t id);
 
 #endif /* _H_TPG_CONFIG_ */
 

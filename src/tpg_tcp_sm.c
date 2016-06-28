@@ -697,11 +697,7 @@ static int tsm_SF_listen(tcp_control_block_t *tcb, tcpEvent_t event,
                     rte_be_to_cpu_16(pcb->pcb_tcp->src_port);
 
                 /* Recompute the hash and add the new_tcb to the htable. */
-                new_tcb->tcb_l4.l4cb_hash =
-                    tlkp_calc_connection_hash(new_tcb->tcb_l4.l4cb_dst_addr.ip_v4,
-                                              new_tcb->tcb_l4.l4cb_src_addr.ip_v4,
-                                              new_tcb->tcb_l4.l4cb_dst_port,
-                                              new_tcb->tcb_l4.l4cb_src_port);
+                l4_cb_calc_connection_hash(&new_tcb->tcb_l4);
 
                 /* TODO: No need to compute the hash, we can use it from the incomming packet,
                  *       however its messing up the performance numbers :( Need to make time

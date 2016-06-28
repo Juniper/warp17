@@ -194,6 +194,29 @@ static struct rte_mempool *mem_create_local_pool(const char *name, uint32_t core
 }
 
 /*****************************************************************************
+ * mem_handle_cmdline_opt()
+ ****************************************************************************/
+bool mem_handle_cmdline_opt(const char *opt_name, char *opt_arg)
+{
+    global_config_t *cfg = cfg_get_config();
+
+    if (!cfg)
+        TPG_ERROR_ABORT("ERROR: Unable to get config!\n");
+
+    if (strcmp(opt_name, "tcb-pool-sz") == 0) {
+        cfg->gcfg_tcb_pool_size = atoi(opt_arg) * 1024ULL * 1024ULL;
+        return true;
+    }
+
+    if (strcmp(opt_name, "ucb-pool-sz") == 0) {
+        cfg->gcfg_ucb_pool_size = atoi(opt_arg) * 1024ULL * 1024ULL;
+        return true;
+    }
+
+    return false;
+}
+
+/*****************************************************************************
  * mem_init()
  ****************************************************************************/
 bool mem_init(void)
@@ -201,9 +224,6 @@ bool mem_init(void)
     global_config_t *cfg;
     uint32_t         core;
     uint32_t         core_divider;
-    uint32_t         mbuf_pool_flags;
-    uint32_t         tcb_pool_flags;
-    uint32_t         ucb_pool_flags;
 
     /*
      * Add Memory module CLI commands
@@ -220,17 +240,6 @@ bool mem_init(void)
     mem_init_sockets();
 
     core_divider = (rte_lcore_count() - TPG_NR_OF_NON_PACKET_PROCESSING_CORES);
-    /*
-     * TODO: The pool isn't shared so making it single consumer/producer should
-     * improve performance but it doesn't! It's probably because of the
-     * pipeline flushing.. Keep flags 0 for now.
-     * mbuf_pool_flags = MEMPOOL_F_SP_PUT | MEMPOOL_F_SC_GET;
-     * tcb_pool_flags = MEMPOOL_F_SP_PUT | MEMPOOL_F_SC_GET;
-     * ucb_pool_flags = MEMPOOL_F_SP_PUT | MEMPOOL_F_SC_GET;
-     */
-    mbuf_pool_flags = 0;
-    tcb_pool_flags = 0;
-    ucb_pool_flags = 0;
 
     RTE_LCORE_FOREACH_SLAVE(core) {
         if (!cfg_is_pkt_core(core))
@@ -244,7 +253,7 @@ bool mem_init(void)
                                   sizeof(struct rte_pktmbuf_pool_private),
                                   rte_pktmbuf_pool_init,
                                   rte_pktmbuf_init,
-                                  mbuf_pool_flags);
+                                  MEM_MBUF_POOL_FLAGS);
 
         if (mbuf_pool[core] == NULL)
             return false;
@@ -257,7 +266,7 @@ bool mem_init(void)
                                   sizeof(struct rte_pktmbuf_pool_private),
                                   rte_pktmbuf_pool_init,
                                   rte_pktmbuf_init,
-                                  mbuf_pool_flags);
+                                  MEM_MBUF_POOL_FLAGS);
 
         if (mbuf_pool_tx_hdr[core] == NULL)
             return false;
@@ -270,7 +279,7 @@ bool mem_init(void)
                                   sizeof(struct rte_pktmbuf_pool_private),
                                   rte_pktmbuf_pool_init,
                                   rte_pktmbuf_init,
-                                  mbuf_pool_flags);
+                                  MEM_MBUF_POOL_FLAGS);
 
         if (mbuf_pool_clone[core] == NULL)
             return false;
@@ -283,7 +292,7 @@ bool mem_init(void)
                                   0,
                                   NULL,
                                   NULL,
-                                  tcb_pool_flags);
+                                  MEM_TCB_POOL_FLAGS);
 
         if (tcb_pool[core] == NULL)
             return false;
@@ -296,7 +305,7 @@ bool mem_init(void)
                                   0,
                                   NULL,
                                   NULL,
-                                  ucb_pool_flags);
+                                  MEM_UCB_POOL_FLAGS);
 
         if (ucb_pool[core] == NULL)
             return false;

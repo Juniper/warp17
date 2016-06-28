@@ -356,6 +356,10 @@ __NOTE: For now WARP17 supports at most 64 cores.__
   used per TCP connection endpoint). By default 10M TCBs are allocated.
 * `--ucb-pool-sz`: configure the size of the UDP control block pool (one UCB is
   used per UDP connection endpoint). By default 10M UCBs are allocated.
+* `--ring-if-pairs`: configure the number of _in-memory-ring-based_ interfaces.
+  __NOTE: please check section
+  [Using In-Memory-Ring-Based Interfaces](#using-in-memory-ring-based-interfaces)
+  for more information.__
 * `--cmd-file=<file>`: CLI command file to be executed when the application
   starts
 
@@ -435,6 +439,52 @@ which will start WARP17 with:
 * allocates 32 million TCBs (`--tcb-pool-sz 32`): for the configs in the
   examples sections we need 20M TCBs, i.e., 10M clients and 10M servers.
 * will execute the CLI commands in file cfg.txt after starting WARP17
+
+### Using In-Memory-Ring-Based Interfaces
+
+WARP17 can also be run when no physical interface is available. This is
+especially useful when developing new features as it removes the requirement
+of a specific hardware configuration. It also allows users to quickly try out
+WARP17 on their own laptop/VM.
+
+_In-Memory-Ring-Based Interfaces_ (let's just call them _ring interfaces_)
+are always created in pairs. The two interfaces in a pair act as if they
+would be physical interfaces connected back to back.
+
+By default the support for ring interfaces is disabled. However the user can
+easily enable it by compiling WARP17 with the following command:
+
+```
+make all-ring-if
+```
+
+Using the `--ring-if-pairs <number>` command line argument the user can
+specify the number of ring interface pairs that WARP17 will create. Updating
+the previous command line example we end up with:
+
+```
+./build/warp17 -c FC3 -n 4  -m 32768 -- --qmap-default max-q --tcb-pool-sz 32 --ring-if-pairs 1 --cmd-file cfg.txt
+```
+
+This will start WARP17 and add a pair of ring interfaces connected back to
+back.
+
+The user can also use custom queue mappings for ring interfaces. The ring
+interface pairs are always created after physical interfaces. This means that
+their IDs will be allocated in order after physical IDs. For example:
+
+```
+./build/warp17 -c FC3 -n 4  -m 32768 -w 0000:82:00.0 -- --ring-if-pairs 1
+```
+
+This will start WARP17 with three interfaces (one physical and two ring
+interfaces). The physical interface (`0000:82:00.0`) will have ID 0 while
+the two ring interfaces will have IDs 1 and 2.
+
+__NOTE: There's a restriction in place when using ring interfaces: the user
+must make sure that the same number of TX/RX queues is created through qmaps
+for both ring interfaces in a pair. Otherwise the command line will be
+rejected.__
 
 # CLI
 

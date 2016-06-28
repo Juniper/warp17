@@ -306,11 +306,7 @@ struct rte_mbuf *udp_receive_pkt(packet_control_block_t *pcb,
                 rte_be_to_cpu_16(pcb->pcb_tcp->src_port);
 
             /* Recompute the hash and add the new_tcb to the htable. */
-            new_ucb->ucb_l4.l4cb_hash =
-                tlkp_calc_connection_hash(new_ucb->ucb_l4.l4cb_dst_addr.ip_v4,
-                                          new_ucb->ucb_l4.l4cb_src_addr.ip_v4,
-                                          new_ucb->ucb_l4.l4cb_dst_port,
-                                          new_ucb->ucb_l4.l4cb_src_port);
+            l4_cb_calc_connection_hash(&new_ucb->ucb_l4);
 
             error = tlkp_add_ucb(new_ucb);
             if (error) {
@@ -651,7 +647,9 @@ int udp_send_v4(udp_control_block_t *ucb, struct rte_mbuf *data_mbuf,
     /*
      * Send the packet!!
      */
-    if (!pkt_send(ucb->ucb_l4.l4cb_interface, hdr, ucb->ucb_trace)) {
+    if (unlikely(!pkt_send_with_hash(ucb->ucb_l4.l4cb_interface, hdr,
+                                     L4CB_TX_HASH(&ucb->ucb_l4),
+                                     ucb->ucb_trace))) {
 
         TRACE_FMT(UDP, DEBUG, "[%s()] ERR: Failed tx on port %d\n",
                   __func__,

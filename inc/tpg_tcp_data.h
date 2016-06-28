@@ -76,8 +76,8 @@
 static_assert(sizeof(tcb_buf_hdr_t) <= TCB_MIN_HDRS_SZ,
               "Not enough headroom in the mbuf!");
 
-#define TCB_MTU(tcb)                                           \
-    (PORT_MTU((tcb)->tcb_l4.l4cb_interface) - TCB_MIN_HDRS_SZ)
+#define TCB_MTU(tcb) \
+    (port_dev_info[(tcb)->tcb_l4.l4cb_interface].pi_mtu - TCB_MIN_HDRS_SZ)
 
 /*****************************************************************************
  * TCP Send related macros

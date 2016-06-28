@@ -272,7 +272,7 @@ int tlkp_add_ucb(udp_control_block_t *ucb)
               "[%s()]: phys_port %u l4_hash %08X ladd/radd %08X/%08X lp/rp %u/%u",
               __func__,
               ucb->ucb_l4.l4cb_interface,
-              ucb->ucb_l4.l4cb_hash,
+              ucb->ucb_l4.l4cb_rx_hash,
               ucb->ucb_l4.l4cb_dst_addr.ip_v4,
               ucb->ucb_l4.l4cb_src_addr.ip_v4,
               ucb->ucb_l4.l4cb_dst_port,

@@ -385,7 +385,7 @@ bool arp_init(void)
     for (port = 0; port < rte_eth_dev_count(); port++) {
         uint32_t port_socket;
 
-        port_socket = port_dev_info[port].pi_dev_info.pci_dev->numa_node;
+        port_socket = port_dev_info[port].pi_numa_node;
         arp_per_port_tables[port] =
             rte_zmalloc_socket("arp_table_port",
                                TPG_ARP_PORT_TABLE_SIZE *
@@ -585,7 +585,7 @@ static bool arp_send_arp_reply(uint32_t port, uint32_t sip, uint32_t dip,
      * Send the ARP reply
      */
 
-    if (unlikely(!pkt_send(port, mbuf, true))) {
+    if (unlikely(!pkt_send_with_hash(port, mbuf, 0, true))) {
 
         RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Failed tx ARP reply for IP %u.%u.%u.%u on port %d\n",
                 rte_lcore_index(rte_lcore_id()),  __func__,
@@ -651,7 +651,7 @@ bool arp_send_arp_request(uint32_t port, uint32_t local_ip, uint32_t remote_ip)
      * Send the ARP reply
      */
 
-    if (unlikely(!pkt_send(port, mbuf, true))) {
+    if (unlikely(!pkt_send_with_hash(port, mbuf, 0, true))) {
 
         RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Failed tx ARP reply for IP %u.%u.%u.%u on port %d\n",
                 rte_lcore_index(rte_lcore_id()),  __func__,

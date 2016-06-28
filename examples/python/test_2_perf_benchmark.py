@@ -184,7 +184,7 @@ def configure_client_port(warp17_call, protocol, app, req_size, resp_size):
 
 
 def run_test(protocol, app, req_size, resp_size):
-    env = Warp17Env(path='./test_perf.ini')
+    env = Warp17Env(path='./test_2_perf_benchmark.ini')
     warp17_pid = warp17_start(env=env, exec_file='../../build/warp17',
                               output_args=Warp17OutputArgs(out_file='/tmp/test_2_perf.out'))
     warp17_wait(env=env, logger=LogHelper(name='benchmark',

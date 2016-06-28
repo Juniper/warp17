@@ -292,7 +292,7 @@ int tlkp_add_tcb(tcp_control_block_t *tcb)
               "[%s()]: phys_port %u l4_hash %08X ladd/radd %08X/%08X lp/rp %u/%u",
               __func__,
               tcb->tcb_l4.l4cb_interface,
-              tcb->tcb_l4.l4cb_hash,
+              tcb->tcb_l4.l4cb_rx_hash,
               tcb->tcb_l4.l4cb_dst_addr.ip_v4,
               tcb->tcb_l4.l4cb_src_addr.ip_v4,
               tcb->tcb_l4.l4cb_dst_port,

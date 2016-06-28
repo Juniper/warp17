@@ -62,6 +62,19 @@
 #include "tcp_generator.h"
 
 /*****************************************************************************
+ * Definitions
+ ****************************************************************************/
+/* Information about a port + queue that would be polled by the local core. */
+typedef struct local_port_info_s {
+
+    uint32_t     lpi_port_id;
+    uint32_t     lpi_queue_id;
+    port_info_t *lpi_port_info;
+
+} local_port_info_t;
+
+
+/*****************************************************************************
  * Static per lcore globals.
  ****************************************************************************/
 
@@ -306,6 +319,49 @@ int pkt_send(uint32_t port, struct rte_mbuf *mbuf, bool trace)
 }
 
 /*****************************************************************************
+ * pkt_rx_burst()
+ ****************************************************************************/
+static uint16_t pkt_rx_burst(uint8_t port_id, uint16_t queue_id,
+                             struct rte_mbuf **rx_pkts,
+                             const uint16_t nb_pkts,
+                             port_info_t *port_info,
+                             port_statistics_t *stats)
+{
+    uint16_t no_rx_buffers;
+
+    no_rx_buffers = rte_eth_rx_burst(port_id, queue_id, rx_pkts, nb_pkts);
+
+#if defined(TPG_RING_IF)
+    if (unlikely(port_info->pi_ring_if)) {
+
+        uint16_t i;
+
+        i = 0;
+        while (i < no_rx_buffers) {
+            struct rte_mbuf *orig_mbuf = rx_pkts[i];
+
+            rx_pkts[i] = data_copy_chain(orig_mbuf, mem_get_mbuf_local_pool());
+            if (unlikely(rx_pkts[i] == NULL)) {
+                INC_STATS(stats, ps_rx_ring_if_failed);
+
+                rx_pkts[i] = rx_pkts[no_rx_buffers - 1];
+                no_rx_buffers--;
+            } else {
+                i++;
+            }
+            rte_pktmbuf_free(orig_mbuf);
+        }
+    }
+#endif /* defined(TPG_RING_IF) */
+
+    /* Trick the compiler into shutting up about the unused parameter.. */
+    (void)port_info;
+    (void)stats;
+
+    return no_rx_buffers;
+}
+
+/*****************************************************************************
  * pkt_receive_loop()
  ****************************************************************************/
 int pkt_receive_loop(void *arg __rte_unused)
@@ -317,8 +373,9 @@ int pkt_receive_loop(void *arg __rte_unused)
     port_statistics_t      *port_stats;
     packet_control_block_t *pcb;
     uint32_t                port;
-    uint32_t               *local_ports;
-    int32_t                *local_qs;
+
+    /* Local port info array indexed by queue idx. */
+    local_port_info_t      *local_port_info;
     uint32_t                local_port_count;
 
     cfg = cfg_get_config();
@@ -380,25 +437,25 @@ int pkt_receive_loop(void *arg __rte_unused)
     if (pcb == NULL)
         TPG_ERROR_ABORT("[%d] Cannot allocate pcb!\n", lcore_index);
 
-    local_ports = rte_zmalloc_socket("local_ports_pktloop",
-                                     rte_eth_dev_count() * sizeof(*local_ports),
-                                     RTE_CACHE_LINE_SIZE,
-                                     rte_lcore_to_socket_id(lcore_id));
-    local_qs = rte_zmalloc_socket("local_ports_pktloop",
-                                  rte_eth_dev_count() * sizeof(*local_qs),
-                                  RTE_CACHE_LINE_SIZE,
-                                  rte_lcore_to_socket_id(lcore_id));
-    if (local_ports == NULL || local_qs == NULL) {
-        TPG_ERROR_ABORT("[%d] Cannot allocate pktloop ports and queues!\n",
+    local_port_info = rte_zmalloc_socket("local_port_info_pktloop",
+                                         rte_eth_dev_count() *
+                                            sizeof(*local_port_info),
+                                         RTE_CACHE_LINE_SIZE,
+                                         rte_lcore_to_socket_id(lcore_id));
+
+    if (local_port_info == NULL)
+        TPG_ERROR_ABORT("[%d] Cannot allocate pktloop port info!\n",
                         lcore_index);
-    }
 
     local_port_count = 0;
     for (port = 0; port < rte_eth_dev_count(); port++) {
         queue_id = port_get_rx_queue_id(lcore_id, port);
         if (queue_id != CORE_PORT_QINVALID) {
-            local_ports[local_port_count] = port;
-            local_qs[local_port_count] = queue_id;
+            local_port_info_t *pi = &local_port_info[local_port_count];
+
+            pi->lpi_port_id = port;
+            pi->lpi_queue_id = queue_id;
+            pi->lpi_port_info = &port_dev_info[port];
             local_port_count++;
         }
     }
@@ -430,10 +487,12 @@ int pkt_receive_loop(void *arg __rte_unused)
                     rte_strerror(-error), -error);
 
         for (qidx = 0; qidx < local_port_count; qidx++) {
-            port = local_ports[qidx];
-            queue_id = local_qs[qidx];
+            port = local_port_info[qidx].lpi_port_id;
+            queue_id = local_port_info[qidx].lpi_queue_id;
 
-            no_rx_buffers = rte_eth_rx_burst(port, queue_id, buf, TPG_RX_BURST_SIZE);
+            no_rx_buffers = pkt_rx_burst(port, queue_id, buf, TPG_RX_BURST_SIZE,
+                                         local_port_info[qidx].lpi_port_info,
+                                         &port_stats[port]);
             if (unlikely(no_rx_buffers <= 0)) {
                 /* Flush the bulk tx queue in case we have packets pending. */
                 pkt_flush_tx_q(port, &port_stats[port]);
@@ -499,6 +558,24 @@ static int pkt_loop_init_wait_cb(uint16_t msgid, uint16_t lcore __rte_unused,
      */
 
     return 0;
+}
+
+/*****************************************************************************
+ * pkt_handle_cmdline_opt()
+ ****************************************************************************/
+bool pkt_handle_cmdline_opt(const char *opt_name, char *opt_arg)
+{
+    global_config_t *cfg = cfg_get_config();
+
+    if (!cfg)
+        TPG_ERROR_ABORT("ERROR: Unable to get config!\n");
+
+    if (strcmp(opt_name, "pkt-send-drop-rate") == 0) {
+        cfg->gcfg_pkt_send_drop_rate = atoi(opt_arg);
+        return true;
+    }
+
+    return false;
 }
 
 /*****************************************************************************

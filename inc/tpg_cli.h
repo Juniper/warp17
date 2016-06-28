@@ -60,8 +60,20 @@
 #ifndef _H_TPG_CLI_
 #define _H_TPG_CLI_
 
+/*****************************************************************************
+ * Definitions
+ ****************************************************************************/
+#define CLI_CMDLINE_OPTIONS() \
+    CMDLINE_OPT_ARG("cmd-file", true)
+
+#define CLI_CMDLINE_PARSER() \
+    CMDLINE_ARG_PARSER(cli_handle_cmdline_opt, NULL)
+
 typedef int (*tpg_cli_override_cb_t)(char *buf, uint32_t size);
 
+/*****************************************************************************
+ * Externals for tpg_cli.c
+ ****************************************************************************/
 extern void cli_printer(void *printer_arg, const char *fmt, va_list ap);
 
 extern bool cli_init(void);
@@ -71,6 +83,7 @@ extern bool cli_unset_override(void);
 extern void cli_redisplay_prompt(void);
 extern bool cli_run_input_file(const char *filename);
 extern void cli_interact(void);
+extern bool cli_handle_cmdline_opt(const char *opt_name, char *opt_arg);
 extern bool cli_add_main_ctx(cmdline_parse_ctx_t *ctx);
 
 #endif /* _H_TPG_CLI_ */
