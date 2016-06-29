@@ -149,7 +149,12 @@ static bool port_adjust_info(uint32_t port)
         port_dev_info[port].pi_adjusted_reta_size = 1;
     }
 
-    if (port_dev_info[port].pi_dev_info.pci_dev)
+    /* For some devices (e.g., virtual e1000 interfaces) the socket id
+     * of the interface may not be set and returned as -1. In those cases
+     * assume the interface resides on socket-id 0.
+     */
+    if (port_dev_info[port].pi_dev_info.pci_dev &&
+            port_dev_info[port].pi_dev_info.pci_dev->numa_node != -1)
         port_dev_info[port].pi_numa_node =
             port_dev_info[port].pi_dev_info.pci_dev->numa_node;
 
