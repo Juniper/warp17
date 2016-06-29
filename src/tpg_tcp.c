@@ -716,7 +716,9 @@ bool tcp_send_data_pkt(tcp_control_block_t *tcb, uint32_t sseq, uint32_t flags,
     /*
      * Send the packet!!
      */
-    if (!pkt_send(tcb->tcb_l4.l4cb_interface, hdr, tcb->tcb_trace)) {
+    if (unlikely(!pkt_send_with_hash(tcb->tcb_l4.l4cb_interface, hdr,
+                                     L4CB_TX_HASH(&tcb->tcb_l4),
+                                     tcb->tcb_trace))) {
 
         TCB_TRACE(tcb, TSM, DEBUG, "[%s()] ERR: Failed tx on port %d\n",
                   __func__,
@@ -757,7 +759,9 @@ bool tcp_send_ctrl_pkt(tcp_control_block_t *tcb, uint32_t flags)
     /*
      * Send the packet!!
      */
-    if (!pkt_send(tcb->tcb_l4.l4cb_interface, hdr, tcb->tcb_trace)) {
+    if (unlikely(!pkt_send_with_hash(tcb->tcb_l4.l4cb_interface, hdr,
+                                     L4CB_TX_HASH(&tcb->tcb_l4),
+                                     tcb->tcb_trace))) {
 
         TCB_TRACE(tcb, TSM, DEBUG, "[%s()] ERR: Failed tx on port %d\n",
                   __func__,

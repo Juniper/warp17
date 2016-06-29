@@ -102,8 +102,10 @@ uint32_t tlkp_calc_pkt_hash(uint32_t local_addr, uint32_t remote_addr,
  ****************************************************************************/
 inline uint32_t tlkp_get_qindex_from_hash(uint32_t hash, uint32_t phys_port)
 {
+    uint16_t reta_size = port_dev_info[phys_port].pi_adjusted_reta_size;
+
     /* TODO: we assume the indirection table is built in a round-robin fashion */
-    return (hash % PORT_RETA_SIZE(phys_port)) % PORT_QCNT(phys_port);
+    return (hash % reta_size) % PORT_QCNT(phys_port);
 }
 
 /*****************************************************************************
@@ -165,7 +167,7 @@ l4_control_block_t *tlkp_find_v4_cb(tlkp_hash_bucket_t *htable,
     bucket = tlkp_get_hash_bucket(htable, phys_port, l4_hash);
 
     LIST_FOREACH(cb, bucket, l4cb_hash_bucket_entry) {
-        if (l4_hash == cb->l4cb_hash &&
+        if (l4_hash == cb->l4cb_rx_hash &&
             local_port == cb->l4cb_src_port &&
             remote_port == cb->l4cb_dst_port &&
             local_addr == cb->l4cb_src_addr.ip_v4 &&
@@ -193,9 +195,9 @@ int tlkp_add_cb(tlkp_hash_bucket_t *htable, l4_control_block_t *cb)
     TRACE_FMT(TLK, DEBUG, "[%s()]: phys_port %"PRIu32" l4_hash %"PRIX32,
               __func__,
               cb->l4cb_interface,
-              cb->l4cb_hash);
+              cb->l4cb_rx_hash);
 
-    bucket = tlkp_get_hash_bucket(htable, cb->l4cb_interface, cb->l4cb_hash);
+    bucket = tlkp_get_hash_bucket(htable, cb->l4cb_interface, cb->l4cb_rx_hash);
 
     /* TODO: Add duplicate check */
     LIST_INSERT_HEAD(bucket, cb, l4cb_hash_bucket_entry);
@@ -247,12 +249,20 @@ void tlkp_init_cb(l4_control_block_t *l4_cb, uint32_t local_addr,
     l4_cb->l4cb_app_data.ad_type = app_id;
 
     if (flags & TPG_CB_USE_L4_HASH_FLAG)
-        l4_cb->l4cb_hash = l4_hash;
+        l4_cb->l4cb_rx_hash = l4_hash;
     else
-        l4_cb->l4cb_hash =
+        l4_cb->l4cb_rx_hash =
             tlkp_calc_connection_hash(l4_cb->l4cb_dst_addr.ip_v4,
                                       l4_cb->l4cb_src_addr.ip_v4,
                                       l4_cb->l4cb_dst_port,
                                       l4_cb->l4cb_src_port);
+
+#if defined(TPG_L4_CB_TX_HASH)
+    l4_cb->l4cb_tx_hash =
+        tlkp_calc_connection_hash(l4_cb->l4cb_src_addr.ip_v4,
+                                  l4_cb->l4cb_dst_addr.ip_v4,
+                                  l4_cb->l4cb_src_port,
+                                  l4_cb->l4cb_dst_port);
+#endif /* defined(TPG_L4_CB_TX_HASH) */
 }
 

@@ -583,7 +583,7 @@ test_display_stats_hdr(ui_win_t *ui_win, int line, uint32_t port,
 
     UI_PRINTLN_WIN(win, line, 0,
                    "Port %"PRIu32": link %s, speed %d%s, "
-                   "duplex %s, TX: %.2lf%% RX: %.2lf%%",
+                   "duplex %s%s, TX: %.2lf%% RX: %.2lf%%",
                    port,
                    LINK_STATE(link_info),
                    LINK_SPEED(link_info),

@@ -62,6 +62,16 @@
 #define _H_TPG_PORT_
 
 /*****************************************************************************
+ * Definitions
+ ****************************************************************************/
+#define PORT_CMDLINE_OPTIONS()            \
+    CMDLINE_OPT_ARG("qmap", true),        \
+    CMDLINE_OPT_ARG("qmap-default", true)
+
+#define PORT_CMDLINE_PARSER() \
+    CMDLINE_ARG_PARSER(port_handle_cmdline_opt, port_handle_cmdline)
+
+/*****************************************************************************
  * Port core mask - for each core in a mask we allocate an RX HW queue and a
  * TX HW queue.
  ****************************************************************************/
@@ -124,11 +134,12 @@ typedef struct port_info_s {
     struct rte_eth_dev_info pi_dev_info;
     uint16_t                pi_adjusted_reta_size;
     uint16_t                pi_mtu;
+    uint16_t                pi_numa_node;
+
+    /* True if the port is a ring interface. */
+    uint16_t                pi_ring_if : 1;
 
 } port_info_t;
-
-#define PORT_MTU(port) (port_dev_info[(port)].pi_mtu)
-#define PORT_RETA_SIZE(port) (port_dev_info[(port)].pi_adjusted_reta_size)
 
 /*****************************************************************************
  * rte_eth_link print macros
@@ -149,12 +160,13 @@ typedef struct port_info_s {
             "Mbps" : "Gbps") :     \
         "Mbps")
 
-#define LINK_DUPLEX(ls)                                             \
-    ((ls)->link_status ?                                            \
-        ((ls)->link_duplex == ETH_LINK_HALF_DUPLEX ? "half" :       \
-            (ls)->link_duplex == ETH_LINK_FULL_DUPLEX ? "full" :    \
-            (ls)->link_duplex == ETH_LINK_AUTONEG_DUPLEX ? "auto" : \
-            "???") : "N/A")
+#define LINK_DUPLEX(ls)                                       \
+    ((ls)->link_status ?                                      \
+        ((ls)->link_duplex == ETH_LINK_HALF_DUPLEX ? "half" : \
+         (ls)->link_duplex == ETH_LINK_FULL_DUPLEX ? "full" : \
+         "???") : "N/A"),                                     \
+    ((ls)->link_autoneg == ETH_LINK_AUTONEG ? "(auto)" :      \
+        "(manual)")
 
 /*****************************************************************************
  * Port statistics
@@ -167,6 +179,8 @@ typedef struct port_statistics_s {
     uint64_t ps_send_pkts;
     uint64_t ps_send_bytes;
     uint64_t ps_send_failure;
+    uint64_t ps_rx_ring_if_failed;
+
     uint64_t ps_send_sim_failure;
 
 } port_statistics_t;
@@ -207,6 +221,9 @@ extern void               port_link_rate_stats_get(uint32_t port,
 extern void               port_total_stats_get(uint32_t port,
                                                port_statistics_t *total_port_stats);
 extern int                port_get_global_rss_key(uint8_t ** const rss_key);
+extern bool               port_handle_cmdline_opt(const char *opt_name,
+                                                  char *opt_arg);
+extern bool               port_handle_cmdline(void);
 
 /*****************************************************************************
  * Static inlines.

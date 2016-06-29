@@ -195,6 +195,7 @@ typedef struct test_case_info_s test_case_info_t;
 #include "tpg_udp_lookup.h"
 
 #include "tpg_memory.h"
+#include "tpg_ring_if.h"
 #include "tpg_port.h"
 #include "tpg_route.h"
 #include "tpg_pktloop.h"

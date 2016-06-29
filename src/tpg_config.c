@@ -62,11 +62,6 @@
 #include "tcp_generator.h"
 
 /*****************************************************************************
- * Local definitions
- ****************************************************************************/
-#define CFG_PMASK_STR_MAXLEN 512
-
-/*****************************************************************************
  * Globals
  ****************************************************************************/
 static global_config_t global_config;
@@ -86,9 +81,6 @@ static const char * const gtrace_names[TRACE_MAX] = {
     [TRACE_TMR]    = "TMR",
     [TRACE_HTTP]   = "HTTP",
 };
-
-static char    *qmap_args[TPG_ETH_DEV_MAX + 1];
-static uint32_t qmap_args_cnt;
 
 /*****************************************************************************
  * cfg_init()
@@ -130,110 +122,30 @@ bool cfg_init(void)
 }
 
 /*****************************************************************************
- * cfg_pkt_core_count()
- *      Note: we always reserve the first TPG_NR_OF_NON_PACKET_PROCESSING_CORES
- *            lcore indexes for CLI and non-packet stuff.
- ****************************************************************************/
-static uint32_t cfg_pkt_core_count(void)
-{
-    static uint32_t pkt_core_count;
-    uint32_t        core;
-
-    if (pkt_core_count)
-        return pkt_core_count;
-
-    RTE_LCORE_FOREACH_SLAVE(core) {
-        if (cfg_is_pkt_core(core))
-            pkt_core_count++;
-    }
-    return pkt_core_count;
-}
-
-/*****************************************************************************
- * cfg_handle_qmap_default_max_q()
- *      Note: we create as many queues per port as available cores.
- ****************************************************************************/
-static void
-cfg_handle_qmap_default_max_q(uint64_t *pcore_mask)
-{
-    uint32_t port;
-    uint32_t core;
-
-    for (port = 0; port < rte_eth_dev_count(); port++) {
-        RTE_LCORE_FOREACH_SLAVE(core) {
-            if (cfg_is_pkt_core(core))
-                PORT_ADD_CORE_TO_MASK(pcore_mask[port], core);
-        }
-    }
-}
-
-/*****************************************************************************
- * cfg_handle_qmap_default_max_c()
- *      Note: we try to have as many dedicated cores per port as possible.
- ****************************************************************************/
-static void cfg_handle_qmap_default_max_c(uint64_t *pcore_mask)
-{
-    uint32_t port;
-    uint32_t core;
-    uint32_t port_count     = rte_eth_dev_count();
-    uint32_t pkt_core_count = cfg_pkt_core_count();
-    uint32_t max            = ((port_count >= pkt_core_count) ?
-                               port_count : pkt_core_count);
-    uint32_t i;
-
-    port = 0;
-    core = 0;
-
-    /* Start with the first packet core. */
-    while (!cfg_is_pkt_core(core))
-        core = rte_get_next_lcore(core, true, true);
-
-    for (i = 0; i < max; i++) {
-        PORT_ADD_CORE_TO_MASK(pcore_mask[port], core);
-
-        /* Advance port and core ("modulo" port count and pkt core count) */
-        port++; port %= port_count;
-        do {
-            core = rte_get_next_lcore(core, true, true);
-        } while (!cfg_is_pkt_core(core));
-    }
-}
-
-/*****************************************************************************
  * cfg_handle_command_line()
- *
- * qmap configuration - for example (for 2 ports and 3 cores):
- *
- *      +-----------------------+
- *      |    P0   |   P1        |
- *      +----+----+---+----+----+
- *      | Q0 | Q1 | Q0| Q1 | Q2 |
- *      +----+----+---+----+----+
- *      | C1 | C2 | C1| C2 | C3 |
- *      +----+----+---+----+----+
- * => "--qmap 0.0x6" & "--qmap 1.0xE"
- *
- * tcb-pool-sz configuration - size in M (*1024*1024) of the tcb mempool
- *      default: GCFG_TCB_POOL_SIZE
- *
- * pkt-send-drop-rate - if set then one packet every 'pkt-send-drop-rate' will
- *      be dropped at TX. (per lcore)
- * cmd-file           - file containing startup commands
  ****************************************************************************/
 bool cfg_handle_command_line(int argc, char **argv)
 {
-    char *qmap_default = NULL;
-    int   opt;
-    int   optind;
+    cfg_cmdline_arg_parser_t *cmdline_parser;
+    int                       opt;
+    int                       optind;
 
     static struct option options[] = {
-        {.name = "qmap", .has_arg = true, },
-        {.name = "qmap-default", .has_arg = true},
-        {.name = "tcb-pool-sz", .has_arg = true},
-        {.name = "ucb-pool-sz", .has_arg = true},
-        {.name = "pkt-send-drop-rate", .has_arg = true},
-        {.name = "cmd-file", .has_arg = true},
+        PORT_CMDLINE_OPTIONS(),
+        MEM_CMDLINE_OPTIONS(),
+        PKTLOOP_CMDLINE_OPTIONS(),
+        CLI_CMDLINE_OPTIONS(),
+        RING_IF_CMDLINE_OPTIONS(),
         {.name = NULL},
+    };
+
+    static cfg_cmdline_arg_parser_t cmdline_parsers[] = {
+        PORT_CMDLINE_PARSER(),
+        RING_IF_CMDLINE_PARSER(),
+        MEM_CMDLINE_PARSER(),
+        PKTLOOP_CMDLINE_PARSER(),
+        CLI_CMDLINE_PARSER(),
+        CMDLINE_ARG_PARSER(NULL, NULL),
     };
 
     while ((opt = getopt_long(argc, argv, "", options, &optind)) != -1) {
@@ -241,58 +153,24 @@ bool cfg_handle_command_line(int argc, char **argv)
             TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s\n",
                            "invalid options supplied!");
 
-        if (strcmp(options[optind].name, "qmap") == 0) {
-            qmap_args[qmap_args_cnt++] = optarg;
-        } else if (strcmp(options[optind].name, "qmap-default") == 0) {
-            if (strcmp(optarg, "max-q") == 0 ||
-                    strcmp(optarg, "max-c") == 0) {
-                qmap_default = optarg;
-            } else {
-                TPG_ERROR_EXIT(EXIT_FAILURE,
-                               "ERROR: invalid qmap-default value %s!\n",
-                               optarg);
-            }
-        } else if (strcmp(options[optind].name, "tcb-pool-sz") == 0) {
-            global_config.gcfg_tcb_pool_size = atoi(optarg) *
-                                                    1024ULL * 1024ULL;
-        } else if (strcmp(options[optind].name, "ucb-pool-sz") == 0) {
-            global_config.gcfg_ucb_pool_size = atoi(optarg) *
-                                                    1024ULL * 1024ULL;
-        } else if (strcmp(options[optind].name, "pkt-send-drop-rate") == 0) {
-            global_config.gcfg_pkt_send_drop_rate = atoi(optarg);
-        } else if (strcmp(options[optind].name, "cmd-file") == 0) {
-            global_config.gcfg_cmd_file = strdup(optarg);
-        } else {
-            TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s\n",
-                           "invalid options supplied!");
+        for (cmdline_parser = &cmdline_parsers[0];
+             cmdline_parser->cap_arg_parser != NULL;
+             cmdline_parser++) {
+            if (cmdline_parser->cap_arg_parser(options[optind].name, optarg))
+                break;
         }
+        if (cmdline_parser->cap_arg_parser != NULL)
+            continue;
+
+        TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: invalid options supplied!\n");
     }
 
-    /* Initialize to default values here. E.g.: use the default qmap */
-    if (qmap_default != NULL) {
-        uint64_t pcore_mask[rte_eth_dev_count()];
-        uint32_t port;
-
-        if (qmap_args_cnt)
-            TPG_ERROR_EXIT(EXIT_FAILURE,
-                           "ERROR: %s\n",
-                           "cannot supply both qmap and qmap-default at the same time!");
-
-        bzero(&pcore_mask[0], sizeof(pcore_mask[0]) * rte_eth_dev_count());
-
-        if (strcmp(qmap_default, "max-q") == 0)
-            cfg_handle_qmap_default_max_q(pcore_mask);
-        else if (strcmp(qmap_default, "max-c") == 0)
-            cfg_handle_qmap_default_max_c(pcore_mask);
-
-        for (port = 0; port < rte_eth_dev_count(); port++) {
-            char pcore_mask_str[CFG_PMASK_STR_MAXLEN];
-
-            sprintf(pcore_mask_str, "%u.0x%" PRIX64, port, pcore_mask[port]);
-
-            /* We never free this memory */
-            qmap_args[qmap_args_cnt++] = strdup(pcore_mask_str);
-        }
+    /* Announce all modules that the command line arg is done. */
+    for (cmdline_parser = &cmdline_parsers[0];
+         cmdline_parser->cap_arg_parser != NULL;
+         cmdline_parser++) {
+        if (cmdline_parser->cap_handler && !cmdline_parser->cap_handler())
+            return false;
     }
 
     return true;
@@ -316,13 +194,5 @@ const char *cfg_get_gtrace_name(gtrace_id_t id)
 {
     assert(id < TRACE_MAX);
     return gtrace_names[id];
-}
-
-/*****************************************************************************
- * cfg_get_qmap()
- ****************************************************************************/
-char **cfg_get_qmap(void)
-{
-    return qmap_args;
 }
 

@@ -1,3 +1,20 @@
+v1.2:
+-----
+FEATURES:
+- Upgrade to DPDK 16.04.
+- Add Ring Interface support to allow running WARP17 without using physical
+  Ethernet interfaces.
+- Add command line options for customizing packet pool sizes.
+
+FIXED ISSUES:
+- Extra validation for command line core-queue mappings (qmap).
+
+KNOWN ISSUES:
+- See v1.1
+
+API CHANGES:
+- No Changes
+
 v1.1:
 -----
 FEATURES:

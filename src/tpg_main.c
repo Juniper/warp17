@@ -153,10 +153,6 @@ int main(int argc, char **argv)
         TPG_ERROR_EXIT(EXIT_FAILURE,
                        "ERROR: WARP17 supports at most %"PRIu32" cores!\n",
                        (uint32_t)sizeof(uint64_t) * 8);
-    if (rte_eth_dev_count() == 0)
-        TPG_ERROR_EXIT(EXIT_FAILURE,
-                       "ERROR: %s\n",
-                       "WARP17 couldn't find any available ports!");
     if (rte_eth_dev_count() > TPG_ETH_DEV_MAX)
         TPG_ERROR_EXIT(EXIT_FAILURE,
                        "ERROR: WARP17 works with at most %u ports!\n",
@@ -189,17 +185,22 @@ int main(int argc, char **argv)
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the trace filter module");
 
-    if (!msg_sys_init())
-        TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
-                       "Failed initializing the message queues");
-
     if (!mem_init())
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed allocating required mbufs");
 
+    /* WARNING: Careful when adding code above this point. Up until ports are
+     * initialized DPDK can't know that there might be ring interfaces that
+     * still need to be created. Therefore any call to rte_eth_dev_count()
+     * doesn't include them.
+     */
     if (!port_init())
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the Ethernets ports");
+
+    if (!msg_sys_init())
+        TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
+                       "Failed initializing the message queues");
 
     if (!test_mgmt_init())
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",

@@ -64,9 +64,20 @@
 
 #include "tcp_generator.h"
 
+
+/*****************************************************************************
+ * Local definitions
+ ****************************************************************************/
+#define PORT_PMASK_STR_MAXLEN 512
+
 /*****************************************************************************
  * Global variables
  ****************************************************************************/
+/* Qmapping args as parsed from the command line. */
+static char       *qmap_args[TPG_ETH_DEV_MAX + 1];
+static uint32_t    qmap_args_cnt;
+static const char *qmap_default;
+
 /* Define PORT global statistics. Each thread has its own set of locally
  * allocated stats which are accessible through STATS_GLOBAL(type, core, port).
  */
@@ -112,11 +123,13 @@ int port_get_global_rss_key(uint8_t ** const rss_key)
 }
 
 /*****************************************************************************
- * port_adjust_reta()
+ * port_adjust_info()
+ *  Fills the port_info fields we're interested in (reta_size and numa_node).
+ *  These are taken from the DPDK dev info if available.
  *  RETA size may be 0 in case we're running on a VF (e.g: for Intel 82599 10G)
  *  In that case make sure the user allocated only one core for that port.
  ****************************************************************************/
-static bool port_adjust_reta(uint32_t port)
+static bool port_adjust_info(uint32_t port)
 {
     /* Adjust reta_size. RETA size may be 0 in case we're running on a VF.
      * e.g: for Intel 82599 10G.
@@ -135,6 +148,15 @@ static bool port_adjust_reta(uint32_t port)
         }
         port_dev_info[port].pi_adjusted_reta_size = 1;
     }
+
+    /* For some devices (e.g., virtual e1000 interfaces) the socket id
+     * of the interface may not be set and returned as -1. In those cases
+     * assume the interface resides on socket-id 0.
+     */
+    if (port_dev_info[port].pi_dev_info.pci_dev &&
+            port_dev_info[port].pi_dev_info.pci_dev->numa_node != -1)
+        port_dev_info[port].pi_numa_node =
+            port_dev_info[port].pi_dev_info.pci_dev->numa_node;
 
     return true;
 }
@@ -239,7 +261,6 @@ static bool port_setup_port(uint8_t port)
 
     number_of_rings = port_port_cfg[port].ppc_q_cnt;
 
-    rte_eth_dev_info_get(port, &port_dev_info[port].pi_dev_info);
     default_port_config.rx_adv_conf.rss_conf.rss_key_len = port_dev_info[port].pi_dev_info.hash_key_size;
     if (default_port_config.rx_adv_conf.rss_conf.rss_key_len > sizeof(port_rss_key)) {
         RTE_LOG(ERR, USER1,
@@ -251,7 +272,7 @@ static bool port_setup_port(uint8_t port)
     if (number_of_rings > port_dev_info[port].pi_dev_info.max_rx_queues ||
         number_of_rings > port_dev_info[port].pi_dev_info.max_tx_queues) {
         RTE_LOG(ERR, USER1,
-                "ERROR: Number of rx_/tx_rings(%d) is larget than hardware supports(%u/%u)!\n",
+                "ERROR: Number of rx_/tx_rings(%d) is larger than hardware supports(%u/%u)!\n",
                 number_of_rings, port_dev_info[port].pi_dev_info.max_rx_queues,
                 port_dev_info[port].pi_dev_info.max_tx_queues);
         return false;
@@ -267,6 +288,22 @@ static bool port_setup_port(uint8_t port)
                 port, number_of_rings, number_of_rings, rte_strerror(-rc), -rc);
         return false;
     }
+
+    /* Warn if the user provided qmaps that are not on the same socket. */
+    for (queue = 0; queue < number_of_rings - 1; queue++) {
+        if (port_get_socket(port, queue) != port_get_socket(port, queue + 1)) {
+            RTE_LOG(WARNING, USER1,
+                    "WARNING: Cores handling port %u are on different sockets! This will affect performance!\n",
+                    port);
+            break;
+        }
+    }
+
+    /* Also warn if the port is on a different socket than it's cores. */
+    if (port_dev_info[port].pi_numa_node != port_get_socket(port, 0))
+        RTE_LOG(WARNING, USER1,
+                "WARNING: Cores handling port %u are on a different socket than the port itself! This will affect performance!\n",
+                port);
 
     /*
      * On failure cases it might be nice to undo allocation,
@@ -317,8 +354,6 @@ static bool port_setup_port(uint8_t port)
     rte_eth_dev_get_mtu(port, &port_dev_info[port].pi_mtu);
 
     port_setup_reta_table(port, number_of_rings);
-    if (!port_adjust_reta(port))
-        return false;
 
     return true;
 }
@@ -330,7 +365,7 @@ static bool port_setup_port(uint8_t port)
  ****************************************************************************/
 static bool port_parse_mappings(char *pcore_mask, uint32_t pcore_mask_len)
 {
-    int       port_count    = rte_eth_dev_count();
+    int       port_count    = rte_eth_dev_count() + ring_if_get_count();
     char     *core_mask     = pcore_mask;
     uint32_t  core_mask_len = pcore_mask_len;
     uint64_t  intmask;
@@ -355,8 +390,13 @@ static bool port_parse_mappings(char *pcore_mask, uint32_t pcore_mask_len)
     if (errno)
         return false;
 
-    if (port > port_count)
+    if (port < 0 || port > port_count) {
+        RTE_LOG(ERR, USER1,
+                "ERROR: Invalid port number in qmap (%ld). Ports should in range 0..%d!\n",
+                port,
+                port_count);
         return false;
+    }
 
     /* skip the '\0' */
     core_mask++;
@@ -377,7 +417,9 @@ static bool port_parse_mappings(char *pcore_mask, uint32_t pcore_mask_len)
     RTE_LCORE_FOREACH_SLAVE(core) {
         if (PORT_COREID_IN_MASK(intmask, core)) {
             if (!cfg_is_pkt_core(core)) {
-                RTE_LOG(ERR, USER1, "Non-Packet cores shouldn't be assigned to ports!\n");
+                RTE_LOG(ERR, USER1,
+                        "ERROR: Non-Packet cores shouldn't be assigned to port %ld!\n",
+                        port);
                 return false;
             }
             port_core_cfg[core].pcc_qport_map[port] = port_port_cfg[port].ppc_q_cnt;
@@ -389,7 +431,102 @@ static bool port_parse_mappings(char *pcore_mask, uint32_t pcore_mask_len)
         }
     }
 
+    if (port_port_cfg[port].ppc_q_cnt == 0) {
+        RTE_LOG(ERR, USER1, "ERROR: Cannot assign empty qmap to port %ld!\n",
+                port);
+        return false;
+    }
+
     return true;
+}
+
+/*****************************************************************************
+ * port_handle_cmdline_opt_qmap()
+ ****************************************************************************/
+static bool port_handle_cmdline_opt_qmap(char *qmap_str)
+{
+    uint32_t    i;
+    const char *old;
+    const char *new;
+
+    if (qmap_args_cnt == TPG_ETH_DEV_MAX)
+        TPG_ERROR_EXIT(EXIT_FAILURE,
+                       "ERROR: too many qmap arguments supplied!\n");
+
+    /* Make sure we don't already have a qmap argument for the same
+     * port.
+     */
+    for (i = 0; i < qmap_args_cnt; i++) {
+
+        for (old = qmap_args[i], new = qmap_str;
+             *old && *new && *old == *new && *old != '.';
+             old++, new++)
+            ;
+        if (*old == *new && *old == '.') {
+            TPG_ERROR_EXIT(EXIT_FAILURE,
+                           "ERROR: Qmap supplied multiple times for same port!\n");
+            return false;
+        }
+    }
+    qmap_args[qmap_args_cnt++] = qmap_str;
+    return true;
+}
+
+/*****************************************************************************
+ * port_handle_cmdline_opt_qmap_maxq()
+ ****************************************************************************/
+static void port_handle_cmdline_opt_qmap_maxq(uint64_t *pcore_mask)
+{
+    uint32_t port;
+    uint32_t core;
+
+    /* We still don't have any ring interfaces created so keep those in mind
+     * when assigning cores to port masks.
+     */
+    for (port = 0; port < rte_eth_dev_count() + ring_if_get_count(); port++) {
+        RTE_LCORE_FOREACH_SLAVE(core) {
+            if (cfg_is_pkt_core(core))
+                PORT_ADD_CORE_TO_MASK(pcore_mask[port], core);
+        }
+    }
+}
+
+/*****************************************************************************
+ * port_handle_cmdline_opt_qmap_maxc()
+ ****************************************************************************/
+static void port_handle_cmdline_opt_qmap_maxc(uint64_t *pcore_mask)
+{
+
+    /* We still don't have any ring interfaces created so keep those in mind
+     * when assigning cores to port masks.
+     */
+    uint32_t port_count     = rte_eth_dev_count() + ring_if_get_count();
+    uint32_t pkt_core_count = cfg_pkt_core_count();
+    uint32_t max            = ((port_count >= pkt_core_count) ?
+                               port_count : pkt_core_count);
+    uint32_t port;
+    uint32_t core;
+    uint32_t i;
+
+    if (port_count == 0)
+        return;
+
+    port = 0;
+    core = 0;
+
+    /* Start with the first packet core. */
+    while (!cfg_is_pkt_core(core))
+        core = rte_get_next_lcore(core, true, true);
+
+    for (i = 0; i < max; i++) {
+        PORT_ADD_CORE_TO_MASK(pcore_mask[port], core);
+
+        /* Advance port and core ("modulo" port count and pkt core count) */
+        port++; port %= port_count;
+        do {
+            core = rte_get_next_lcore(core, true, true);
+        } while (!cfg_is_pkt_core(core));
+    }
 }
 
 /*****************************************************************************
@@ -400,7 +537,7 @@ static bool port_start_ports(void)
     uint32_t            port;
     struct rte_eth_link link;
 
-    /* First setup and start the ports. */
+    /* First setup and start the ethernet ports. */
     for (port = 0; port < rte_eth_dev_count(); port++) {
         if (!port_setup_port(port))
             return false;
@@ -524,7 +661,91 @@ void port_total_stats_get(uint32_t port, port_statistics_t *total_port_stats)
         total_port_stats->ps_send_bytes += port_stats->ps_send_bytes;
         total_port_stats->ps_send_failure += port_stats->ps_send_failure;
         total_port_stats->ps_send_sim_failure += port_stats->ps_send_sim_failure;
+
+        total_port_stats->ps_rx_ring_if_failed += port_stats->ps_rx_ring_if_failed;
     }
+}
+
+/*****************************************************************************
+ * port_handle_cmdline_opt()
+ *
+ * qmap configuration - for example (for 2 ports and 3 cores):
+ *
+ *      +-----------------------+
+ *      |    P0   |   P1        |
+ *      +----+----+---+----+----+
+ *      | Q0 | Q1 | Q0| Q1 | Q2 |
+ *      +----+----+---+----+----+
+ *      | C1 | C2 | C1| C2 | C3 |
+ *      +----+----+---+----+----+
+ * => "--qmap 0.0x6" & "--qmap 1.0xE"
+ * defaults:
+ * "--qmap-default max-q"
+ * "--qmap-default max-c"
+ *
+ ****************************************************************************/
+bool port_handle_cmdline_opt(const char *opt_name, char *opt_arg)
+{
+    if (strcmp(opt_name, "qmap") == 0)
+        return port_handle_cmdline_opt_qmap(opt_arg);
+
+    if (strcmp(opt_name, "qmap-default") == 0) {
+        if (strcmp(optarg, "max-q") == 0 ||
+                strcmp(optarg, "max-c") == 0) {
+            qmap_default = opt_arg;
+        } else {
+            TPG_ERROR_EXIT(EXIT_FAILURE,
+                           "ERROR: invalid qmap-default value %s!\n",
+                           opt_arg);
+        }
+        return true;
+    }
+
+    return false;
+}
+
+/*****************************************************************************
+ * port_handle_cmdline()
+ ****************************************************************************/
+bool port_handle_cmdline(void)
+{
+    uint32_t total_if_count = rte_eth_dev_count() + ring_if_get_count();
+    uint64_t pcore_mask[total_if_count];
+    uint32_t port;
+
+    if (qmap_args_cnt) {
+        if (qmap_default)
+            TPG_ERROR_EXIT(EXIT_FAILURE,
+                           "ERROR: Cannot supply both qmap and qmap-default at the same time!\n");
+
+        if (qmap_args_cnt != total_if_count)
+            TPG_ERROR_EXIT(EXIT_FAILURE,
+                           "ERROR: Qmap not specified for all interfaces!\n");
+
+        return true;
+    }
+
+    /* By default we use the "max-c" qmap-default. */
+    if (!qmap_default)
+        qmap_default = "max-c";
+
+    bzero(&pcore_mask[0], sizeof(pcore_mask[0]) * total_if_count);
+
+    if (strcmp(qmap_default, "max-q") == 0)
+        port_handle_cmdline_opt_qmap_maxq(pcore_mask);
+    else if (strcmp(qmap_default, "max-c") == 0)
+        port_handle_cmdline_opt_qmap_maxc(pcore_mask);
+
+    for (port = 0; port < total_if_count; port++) {
+        char pcore_mask_str[PORT_PMASK_STR_MAXLEN];
+
+        sprintf(pcore_mask_str, "%u.0x%" PRIX64, port, pcore_mask[port]);
+
+        /* We never free this memory */
+        qmap_args[qmap_args_cnt++] = strdup(pcore_mask_str);
+    }
+
+    return true;
 }
 
 /*****************************************************************************
@@ -613,6 +834,11 @@ static void cmd_show_port_statistics_parsed(void *parsed_result __rte_unused,
 
         SHOW_64BIT_STATS("Sent failures", port_statistics_t,
                          ps_send_failure,
+                         port,
+                         option);
+
+        SHOW_64BIT_STATS("RX Ring If failures", port_statistics_t,
+                         ps_rx_ring_if_failed,
                          port,
                          option);
 
@@ -748,22 +974,15 @@ static void cmd_show_port_link_parsed(void *parsed_result __rte_unused,
             cmdline_printf(cl, "Port %d linkstate %s\n",
                            port, "DOWN");
         } else {
-            if (link.link_speed < 1000) {
-                cmdline_printf(cl, "Port %d linkstate %s, speed %uMB, duplex %s\n",
-                               port, "UP", link.link_speed,
-                               link.link_duplex == ETH_LINK_HALF_DUPLEX ? "half" :
-                               link.link_duplex == ETH_LINK_FULL_DUPLEX ? "full" :
-                               link.link_duplex == ETH_LINK_AUTONEG_DUPLEX ? "auto" :
-                               "???");
 
-            } else {
-                cmdline_printf(cl, "Port %d linkstate %s, speed %uG, duplex %s\n",
-                               port, "UP", link.link_speed/1000,
-                               link.link_duplex == ETH_LINK_HALF_DUPLEX ? "half" :
-                               link.link_duplex == ETH_LINK_FULL_DUPLEX ? "full" :
-                               link.link_duplex == ETH_LINK_AUTONEG_DUPLEX ? "auto" :
-                               "???");
-            }
+            cmdline_printf(cl,
+                           "Port %"PRIu32" linkstate %s, speed %d%s, "
+                           "duplex %s%s\n",
+                           port,
+                           LINK_STATE(&link),
+                           LINK_SPEED(&link),
+                           LINK_SPEED_SZ(&link),
+                           LINK_DUPLEX(&link));
         }
     }
 }
@@ -806,7 +1025,7 @@ static void cmd_show_port_map_parsed(void *parsed_result __rte_unused,
         uint32_t core;
 
         cmdline_printf(cl, "Port %u[socket: %d]:\n", port,
-                       port_dev_info[port].pi_dev_info.pci_dev->numa_node);
+                       port_dev_info[port].pi_numa_node);
         RTE_LCORE_FOREACH_SLAVE(core) {
             if (PORT_COREID_IN_MASK(port_port_cfg[port].ppc_core_mask, core)) {
                 cmdline_printf(cl, "   Core %u[socket:%u] (Tx: %d, Rx: %d)\n",
@@ -861,20 +1080,19 @@ static void cmd_show_port_info_parsed(void *parsed_result __rte_unused,
     for (port = 0; port < rte_eth_dev_count(); port++) {
 
         struct rte_eth_dev_info  dev_info;
-        struct rte_pci_addr     *pci;
+        struct rte_pci_addr     *pci = NULL;
 
         rte_eth_dev_info_get(port, &dev_info);
 
-        if (dev_info.pci_dev == NULL)
-            continue;
-
-        pci = &dev_info.pci_dev->addr;
+        if (dev_info.pci_dev)
+            pci = &dev_info.pci_dev->addr;
 
         cmdline_printf(cl,
                        "%4u %-16.16s "PCI_PRI_FMT" %3d %5u %5u %c%c%c%c%c%c%c %c%c%c%c%c%c%c%c%c%c %c%c%c%c%c%c %c%c%c%c%c%c%c%c%c %c%c\n",
                        port, dev_info.driver_name,
-                       pci->domain, pci->bus, pci->devid, pci->function,
-                       dev_info.pci_dev->numa_node,
+                       (pci ? pci->domain : '-'), (pci ? pci->bus : '-'),
+                       (pci ? pci->devid : '-'), (pci ? pci->function : '-'),
+                       port_dev_info[port].pi_numa_node,
                        dev_info.max_rx_queues, dev_info.max_tx_queues,
 
                        (dev_info.rx_offload_capa & DEV_RX_OFFLOAD_VLAN_STRIP) ? 'v' : '-',
@@ -972,60 +1190,30 @@ static cmdline_parse_ctx_t cli_ctx[] = {
 };
 
 /*****************************************************************************
- * port_init()
+ * port_interfaces_init()
+ *      Intializes the port mapping memory. Creates ring interfaces if
+ *      required. This function MUST be called before iterating through eth
+ *      devices or using the result of rte_eth_dev_count()!
  ****************************************************************************/
-bool port_init(void)
+static bool port_interfaces_init(void)
 {
-    uint32_t   port;
-    uint32_t   core;
-    char     **qmap;
+    uint32_t  total_if_count = rte_eth_dev_count() + ring_if_get_count();
+    uint32_t  port;
+    uint32_t  core;
+    uint32_t  i;
+    char     *qmap;
 
-    if (rte_eth_dev_count() < 1) {
-        RTE_LOG(ERR, USER1, "ERROR: Requered ethernet interfaces not available!\n");
-        return false;
-    }
-
-    /*
-     * Add port module CLI commands
-     */
-    if (!cli_add_main_ctx(cli_ctx)) {
-        RTE_LOG(ERR, USER1, "ERROR: Can't add port specific CLI commands!\n");
-        return false;
-    }
-
-    /*
-     * Allocate memory for port statistics, and clear all of them
-     */
-    if (STATS_GLOBAL_INIT(port_statistics_t, "port_stats") == NULL) {
+    if (total_if_count == 0) {
         RTE_LOG(ERR, USER1,
-                "ERROR: Failed allocating PORT statistics memory!\n");
+                "ERROR: WARP17 couldn't find any available ports!\n");
         return false;
-    }
-
-    /*
-     * Allocate memory for link rate stats and initialize all of them.
-     */
-    link_rate_statistics = rte_malloc("link_rate_stats",
-                                      rte_eth_dev_count() * sizeof(*link_rate_statistics),
-                                      0);
-
-    if (link_rate_statistics == NULL) {
-        RTE_LOG(ERR, USER1, "ERROR: Failed allocating link rate statistics memory!\n");
-        return false;
-    }
-
-    for (port = 0; port < rte_eth_dev_count(); port++) {
-        bzero(&link_rate_statistics[port].lrs_estats,
-              sizeof(link_rate_statistics[port].lrs_estats));
-        link_rate_statistics[port].lrs_timestamp = rte_get_timer_cycles();
     }
 
     /*
      * Allocate memory for the port-core mappings and clear them.
      */
-
     port_port_cfg = rte_zmalloc("port_port_cfg",
-                                rte_eth_dev_count() * sizeof(*port_port_cfg),
+                                total_if_count * sizeof(*port_port_cfg),
                                 0);
 
     if (port_port_cfg == NULL) {
@@ -1041,48 +1229,132 @@ bool port_init(void)
      * Allocate memory for the port-core mappings and clear them.
      */
     if (port_core_cfg == NULL) {
-        RTE_LOG(ERR, USER1, "ERROR: Failed allocating core-port mappings memory!\n");
+        RTE_LOG(ERR, USER1,
+                "ERROR: Failed allocating core-port mappings memory!\n");
         return false;
     }
 
     RTE_LCORE_FOREACH_SLAVE(core) {
-        port_core_cfg[core].pcc_qport_map = rte_zmalloc("port_core_cfg.pcc_qport_map",
-                                                        rte_eth_dev_count() *
-                                                            sizeof(*port_core_cfg[core].pcc_qport_map),
-                                                        0);
+        port_core_cfg[core].pcc_qport_map =
+            rte_zmalloc("port_core_cfg.pcc_qport_map",
+                        total_if_count *
+                            sizeof(*port_core_cfg[core].pcc_qport_map),
+                        0);
         if (!port_core_cfg[core].pcc_qport_map) {
-            RTE_LOG(ERR, USER1, "ERROR: Failed allocating core-port q mappings memory!\n");
+            RTE_LOG(ERR, USER1,
+                    "ERROR: Failed allocating core-port q mappings memory!\n");
             return false;
         }
 
-        for (port = 0; port < rte_eth_dev_count(); port++)
+        for (port = 0; port < total_if_count; port++)
             port_core_cfg[core].pcc_qport_map[port] = CORE_PORT_QINVALID;
     }
 
     /*
      * Allocate memory for the eth dev info.
      */
-
     port_dev_info = rte_zmalloc("port_dev_info",
-                                rte_eth_dev_count() * sizeof(*port_dev_info),
+                                total_if_count * sizeof(*port_dev_info),
                                 0);
-
     if (port_dev_info == NULL) {
         RTE_LOG(ERR, USER1, "ERROR: Failed allocating port dev info memory!\n");
         return false;
     }
 
-    RTE_LOG(INFO, USER1, "Found %d Ethernet ports to initialize.\n",
+    /* Parse qmappings for all ethernet ports AND ring interfaces. */
+    for (i = 0; i < qmap_args_cnt; i++) {
+        qmap = qmap_args[i];
+        if (!port_parse_mappings(qmap, strlen(qmap)))
+            TPG_ERROR_EXIT(EXIT_FAILURE,
+                           "ERROR: Failed initializing qmap %s!\n",
+                           qmap);
+    }
+
+    /* Initialize port_info for all physical ports. Ring-if port_info is
+     * initialized by ring_if_init().
+     */
+    for (port = 0; port < rte_eth_dev_count(); port++) {
+        rte_eth_dev_info_get(port, &port_dev_info[port].pi_dev_info);
+        if (!port_adjust_info(port))
+            return false;
+    }
+
+    /* Now initialize the ring interfaces. */
+    if (!ring_if_init()) {
+        RTE_LOG(ERR, USER1, "ERROR: Failed initializing ring interfaces!\n");
+        return false;
+    }
+
+    return true;
+}
+
+/*****************************************************************************
+ * port_init()
+ ****************************************************************************/
+bool port_init(void)
+{
+    uint32_t port;
+
+    /*
+     * Add port module CLI commands
+     */
+    if (!cli_add_main_ctx(cli_ctx)) {
+        RTE_LOG(ERR, USER1, "ERROR: Can't add port specific CLI commands!\n");
+        return false;
+    }
+
+    /* The very first thing to do is to allocate memory for the port-core
+     * mappings and parse the qmaps.
+     * WARNING: this must be first as we need the qmaps when initializing ring
+     * interfaces. The ring interfaces MUST be initialized early as they count
+     * as "eth devices" and there are a lot of arrays checking for
+     * rte_eth_dev_count().
+     */
+    if (!port_interfaces_init()) {
+        RTE_LOG(ERR, USER1, "ERROR: Can't initialize interfaces!\n");
+        return false;
+    }
+
+    /* rte_eth_dev_count() was updated by the call to port_interfaces_init().
+     * We can deal with any ring interfaes that were created as if they were
+     * "normal" interfaces.
+     */
+
+    /*
+     * Allocate memory for port statistics, and clear all of them
+     */
+    if (STATS_GLOBAL_INIT(port_statistics_t, "port_stats") == NULL) {
+        RTE_LOG(ERR, USER1,
+                "ERROR: Failed allocating PORT statistics memory!\n");
+        return false;
+    }
+
+    /*
+     * Allocate memory for link rate stats and initialize all of them.
+     */
+    link_rate_statistics = rte_malloc("link_rate_stats",
+                                      rte_eth_dev_count() *
+                                        sizeof(*link_rate_statistics),
+                                      0);
+
+    if (link_rate_statistics == NULL) {
+        RTE_LOG(ERR, USER1,
+                "ERROR: Failed allocating link rate statistics memory!\n");
+        return false;
+    }
+
+    for (port = 0; port < rte_eth_dev_count(); port++) {
+        bzero(&link_rate_statistics[port].lrs_estats,
+              sizeof(link_rate_statistics[port].lrs_estats));
+        link_rate_statistics[port].lrs_timestamp = rte_get_timer_cycles();
+    }
+
+    RTE_LOG(INFO, USER1, "Found %d Ethernet ports to start.\n",
             rte_eth_dev_count());
 
     /*
      * Initialize all available ethernet ports.
      */
-    for (qmap = cfg_get_qmap(); *qmap; qmap++) {
-        if (!port_parse_mappings(*qmap, strlen(*qmap)))
-            rte_exit(EXIT_FAILURE, "ERROR: Failed initializing qmap %s!\n", *qmap);
-    }
-
     if (!port_start_ports())
         return false;
 

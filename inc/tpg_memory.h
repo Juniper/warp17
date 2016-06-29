@@ -61,6 +61,30 @@
 #define _H_TPG_MEMORY_
 
 /*****************************************************************************
+ * Definitions
+ ****************************************************************************/
+/*
+ * TODO: The pools aren't shared so making it single consumer/producer should
+ * improve performance but it doesn't! It's probably because of the
+ * pipeline flushing.. Keep flags 0 for now.
+ * MEM_MBUF_POOL_FLAGS = MEMPOOL_F_SP_PUT | MEMPOOL_F_SC_GET;
+ * MEM_TCB_POOL_FLAGS = MEMPOOL_F_SP_PUT | MEMPOOL_F_SC_GET;
+ * MEM_UCB_POOL_FLAGS = MEMPOOL_F_SP_PUT | MEMPOOL_F_SC_GET;
+ */
+#define MEM_MBUF_POOL_FLAGS 0
+#define MEM_TCB_POOL_FLAGS  0
+#define MEM_UCB_POOL_FLAGS  0
+
+#define MEM_CMDLINE_OPTIONS()                 \
+    CMDLINE_OPT_ARG("tcb-pool-sz", true),     \
+    CMDLINE_OPT_ARG("ucb-pool-sz", true),     \
+    CMDLINE_OPT_ARG("mbuf-pool-sz", true),    \
+    CMDLINE_OPT_ARG("mbuf-hdr-pool-sz", true)
+
+#define MEM_CMDLINE_PARSER() \
+    CMDLINE_ARG_PARSER(mem_handle_cmdline_opt, NULL)
+
+/*****************************************************************************
  * External's for tpg_memory.c
  ****************************************************************************/
 RTE_DECLARE_PER_LCORE(struct rte_mempool *, mbuf_pool);
@@ -74,6 +98,8 @@ extern void                 mem_lcore_init(uint32_t lcore_id);
 extern struct rte_mempool  *mem_get_mbuf_pool(uint32_t port, uint32_t queue_id);
 extern struct rte_mempool **mem_get_tcb_pools(void);
 extern struct rte_mempool **mem_get_ucb_pools(void);
+extern bool                 mem_handle_cmdline_opt(const char *opt_name,
+                                                   char *opt_arg);
 
 /*****************************************************************************
  * mem_get_mbuf_local_pool()

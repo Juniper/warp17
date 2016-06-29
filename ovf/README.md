@@ -49,7 +49,7 @@ warp17@warp17:~$
 Now we need to setup the two interfaces eth1 and eth2 to be used by DPDK:
 
 ```
-warp17@warp17:~$ ./dpdk-2.2.0/tools/dpdk_nic_bind.py --status
+warp17@warp17:~$ $RTE_SDK/tools/dpdk_nic_bind.py --status
 
 Network devices using DPDK-compatible driver
 ============================================
@@ -67,12 +67,12 @@ Other network devices
 ```
 
 ```
-warp17@warp17:~$ sudo ./dpdk-2.2.0/tools/dpdk_nic_bind.py -b igb_uio 02:02.0
-warp17@warp17:~$ sudo ./dpdk-2.2.0/tools/dpdk_nic_bind.py -b igb_uio 02:03.0
+warp17@warp17:~$ sudo $RTE_SDK/tools/dpdk_nic_bind.py -b igb_uio 02:02.0
+warp17@warp17:~$ sudo $RTE_SDK/tools/dpdk_nic_bind.py -b igb_uio 02:03.0
 ```
 
 ```
-warp17@warp17:~$ ./dpdk-2.2.0/tools/dpdk_nic_bind.py --status
+warp17@warp17:~$ $RTE_SDK/tools/dpdk_nic_bind.py --status
 
 Network devices using DPDK-compatible driver
 ============================================
@@ -92,7 +92,7 @@ We are ready to run the example(s) supplied with WARP17:
 
 ```
 sudo ./warp17/build/warp17 -c f -m 12288 -- --qmap-default=max-c \
-	    --tcb-pool-sz 20 \
+	    --tcb-pool-sz 20480 \
 	    --cmd-file /home/warp17/warp17/examples/test_4_http_10M_sessions.cfg
 ```
 
@@ -160,7 +160,7 @@ sudo qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -hda WARP17-disk1.qcow2 \
 Now we need to setup the two interfaces eth1 and eth2 to be used by DPDK:
 
 ```
-warp17@warp17:~$ ./dpdk-2.2.0/tools/dpdk_nic_bind.py --status
+warp17@warp17:~$ $RTE_SDK/tools/dpdk_nic_bind.py --status
 
 Network devices using DPDK-compatible driver
 ============================================
@@ -178,12 +178,12 @@ Other network devices
 ```
 
 ```
-warp17@warp17:~$ sudo ./dpdk-2.2.0/tools/dpdk_nic_bind.py -b igb_uio 00:04.0
-warp17@warp17:~$ sudo ./dpdk-2.2.0/tools/dpdk_nic_bind.py -b igb_uio 00:05.0
+warp17@warp17:~$ sudo $RTE_SDK/tools/dpdk_nic_bind.py -b igb_uio 00:04.0
+warp17@warp17:~$ sudo $RTE_SDK/tools/dpdk_nic_bind.py -b igb_uio 00:05.0
 ```
 
 ```
-warp17@warp17:~$ ./dpdk-2.2.0/tools/dpdk_nic_bind.py --status
+warp17@warp17:~$ $RTE_SDK/tools/dpdk_nic_bind.py --status
 
 
 Network devices using DPDK-compatible driver
@@ -204,7 +204,7 @@ We are ready to run the example(s) supplied with WARP17:
 
 ```
 sudo ./warp17/build/warp17 -c f -m 12288 -- --qmap-default=max-c \
-	    --tcb-pool-sz 20 \
+	    --tcb-pool-sz 20480 \
 	    --cmd-file /home/warp17/warp17/examples/test_4_http_10M_sessions.cfg
 ```
 
@@ -245,7 +245,7 @@ qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -hda WARP17-disk1.qcow2 -m 16384
 Now we need to setup the two PCI interfaces to be used by DPDK:
 
 ```
-warp17@warp17:~$ ./dpdk-2.2.0/tools/dpdk_nic_bind.py --status
+warp17@warp17:~$ $RTE_SDK/tools/dpdk_nic_bind.py --status
 
 Network devices using DPDK-compatible driver
 ============================================
@@ -263,12 +263,12 @@ Other network devices
 ```
 
 ```
-warp17@warp17:~$ sudo ./dpdk-2.2.0/tools/dpdk_nic_bind.py -b igb_uio 00:04.0
-warp17@warp17:~$ sudo ./dpdk-2.2.0/tools/dpdk_nic_bind.py -b igb_uio 00:05.0
+warp17@warp17:~$ sudo $RTE_SDK/tools/dpdk_nic_bind.py -b igb_uio 00:04.0
+warp17@warp17:~$ sudo $RTE_SDK/tools/dpdk_nic_bind.py -b igb_uio 00:05.0
 ```
 
 ```
-warp17@warp17:~$ ./dpdk-2.2.0/tools/dpdk_nic_bind.py --status
+warp17@warp17:~$ $RTE_SDK/tools/dpdk_nic_bind.py --status
 
 Network devices using DPDK-compatible driver
 ============================================
@@ -288,7 +288,7 @@ We are ready to run the example(s) supplied with WARP17:
 
 ```
 sudo ./warp17/build/warp17 -c f -m 12288 -- --qmap-default=max-c \
-	    --tcb-pool-sz 20 \
+	    --tcb-pool-sz 20480 \
 	    --cmd-file /home/warp17/warp17/examples/test_4_http_10M_sessions.cfg
 ```
 
@@ -316,6 +316,6 @@ We are ready to run the example(s) supplied with WARP17:
 
 ```
 sudo ./warp17/build/warp17 -c ffff -m 32768 -- --qmap-default=max-c \
-       --tcb-pool-sz 20\
+       --tcb-pool-sz 20480 \
        --cmd-file /home/warp17/warp17/examples/test_4_http_10M_sessions.cfg
 ```

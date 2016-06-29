@@ -105,7 +105,11 @@ typedef struct l4_control_block_s {
     /*
      * Address information
      */
-    uint32_t         l4cb_hash;
+    uint32_t         l4cb_rx_hash;
+#if defined(TPG_L4_CB_TX_HASH)
+    uint32_t         l4cb_tx_hash;
+#endif /* defined(TPG_L4_CB_TX_HASH) */
+
     uint32_t         l4cb_interface;
     int              l4cb_domain;
     uint16_t         l4cb_src_port;
@@ -130,6 +134,13 @@ typedef struct l4_control_block_s {
 } l4_control_block_t;
 
 typedef LIST_HEAD(tlkp_hash_bucket_s, l4_control_block_s) tlkp_hash_bucket_t;
+
+/* Useful for extracting the l4cb_tx_hash from the control block. */
+#if defined(TPG_L4_CB_TX_HASH)
+#define L4CB_TX_HASH(l4_cb) ((l4_cb)->l4cb_tx_hash)
+#else /* defined(TPG_L4_CB_TX_HASH) */
+#define L4CB_TX_HASH(l4_cb) 0
+#endif /* defined(TPG_L4_CB_TX_HASH) */
 
 /*****************************************************************************
  * Externals for tpg_lookup.c
@@ -398,6 +409,23 @@ static inline void tlkp_walk_v4(tlkp_hash_bucket_t *htable,
             cb = nxt;
         }
     }
+}
+
+/*****************************************************************************
+ * l4_cb_calc_connection_hash()
+ ****************************************************************************/
+static inline void l4_cb_calc_connection_hash(l4_control_block_t *cb)
+{
+    cb->l4cb_rx_hash = tlkp_calc_connection_hash(cb->l4cb_dst_addr.ip_v4,
+                                                 cb->l4cb_src_addr.ip_v4,
+                                                 cb->l4cb_dst_port,
+                                                 cb->l4cb_src_port);
+#if defined(TPG_L4_CB_TX_HASH)
+    cb->l4cb_tx_hash = tlkp_calc_connection_hash(cb->l4cb_src_addr.ip_v4,
+                                                 cb->l4cb_dst_addr.ip_v4,
+                                                 cb->l4cb_src_port,
+                                                 cb->l4cb_dst_port);
+#endif /* defined(TPG_L4_CB_TX_HASH) */
 }
 
 /*****************************************************************************
