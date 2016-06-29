@@ -123,13 +123,6 @@ bool cfg_init(void)
 
 /*****************************************************************************
  * cfg_handle_command_line()
- *
- * tcb-pool-sz configuration - size in M (*1024*1024) of the tcb mempool
- *      default: GCFG_TCB_POOL_SIZE
- *
- * pkt-send-drop-rate - if set then one packet every 'pkt-send-drop-rate' will
- *      be dropped at TX. (per lcore)
- * cmd-file           - file containing startup commands
  ****************************************************************************/
 bool cfg_handle_command_line(int argc, char **argv)
 {

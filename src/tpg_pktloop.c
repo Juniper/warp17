@@ -562,6 +562,8 @@ static int pkt_loop_init_wait_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 
 /*****************************************************************************
  * pkt_handle_cmdline_opt()
+ * --pkt-send-drop-rate - if set then one packet every 'pkt-send-drop-rate' will
+ *      be dropped at TX. (per lcore)
  ****************************************************************************/
 bool pkt_handle_cmdline_opt(const char *opt_name, char *opt_arg)
 {

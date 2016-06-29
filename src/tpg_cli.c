@@ -411,6 +411,7 @@ void cli_interact(void)
 
 /*****************************************************************************
  * cli_handle_cmdline_opt()
+ * --cmd-file - file containing startup commands
  ****************************************************************************/
 bool cli_handle_cmdline_opt(const char *opt_name, char *opt_arg)
 {

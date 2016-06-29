@@ -170,6 +170,10 @@ static struct rte_mempool *mem_create_local_pool(const char *name, uint32_t core
 
     sprintf(pool_name, "%s-%u", name, core);
 
+    /* Cache size must be less than pool size. Force it! */
+    if (cache_size >= pool_size)
+        cache_size = pool_size / 2;
+
     RTE_LOG(INFO, USER1, "Creating mempool %s on core %"PRIu32
             "(size: %"PRIu32", obj_size: %"PRIu32", priv: %"PRIu32" cache: %"PRIu32")\n",
             pool_name,
@@ -195,6 +199,14 @@ static struct rte_mempool *mem_create_local_pool(const char *name, uint32_t core
 
 /*****************************************************************************
  * mem_handle_cmdline_opt()
+ * --tcb-pool-sz configuration - size in K (*1024) of the tcb mempool
+ *      default: GCFG_TCB_POOL_SIZE
+ * --ucb-pool-sz configuration - size in K (*1024) of the ucb mempool
+ *      default: GCFG_UCB_POOL_SIZE
+ * --mbuf-pool-sz configuration - size in K (*1024) of the mbuf mempool
+ *      default: GCFG_MBUF_POOL_SIZE
+ * --mbuf-hdr-pool-sz configuration - size in K (*1024) of the mbuf hdr mempool
+ *      default: GCFG_MBUF_HDR_POOL_SIZE
  ****************************************************************************/
 bool mem_handle_cmdline_opt(const char *opt_name, char *opt_arg)
 {
@@ -204,12 +216,22 @@ bool mem_handle_cmdline_opt(const char *opt_name, char *opt_arg)
         TPG_ERROR_ABORT("ERROR: Unable to get config!\n");
 
     if (strcmp(opt_name, "tcb-pool-sz") == 0) {
-        cfg->gcfg_tcb_pool_size = atoi(opt_arg) * 1024ULL * 1024ULL;
+        cfg->gcfg_tcb_pool_size = atoi(opt_arg) * 1024ULL;
         return true;
     }
 
     if (strcmp(opt_name, "ucb-pool-sz") == 0) {
-        cfg->gcfg_ucb_pool_size = atoi(opt_arg) * 1024ULL * 1024ULL;
+        cfg->gcfg_ucb_pool_size = atoi(opt_arg) * 1024ULL;
+        return true;
+    }
+
+    if (strcmp(opt_name, "mbuf-pool-sz") == 0) {
+        cfg->gcfg_mbuf_poolsize = atoi(opt_arg) * 1024UL;
+        return true;
+    }
+
+    if (strcmp(opt_name, "mbuf-hdr-pool-sz") == 0) {
+        cfg->gcfg_mbuf_hdr_poolsize = atoi(opt_arg) * 1024UL;
         return true;
     }
 

@@ -75,9 +75,11 @@
 #define MEM_TCB_POOL_FLAGS  0
 #define MEM_UCB_POOL_FLAGS  0
 
-#define MEM_CMDLINE_OPTIONS()             \
-    CMDLINE_OPT_ARG("tcb-pool-sz", true), \
-    CMDLINE_OPT_ARG("ucb-pool-sz", true)
+#define MEM_CMDLINE_OPTIONS()                 \
+    CMDLINE_OPT_ARG("tcb-pool-sz", true),     \
+    CMDLINE_OPT_ARG("ucb-pool-sz", true),     \
+    CMDLINE_OPT_ARG("mbuf-pool-sz", true),    \
+    CMDLINE_OPT_ARG("mbuf-hdr-pool-sz", true)
 
 #define MEM_CMDLINE_PARSER() \
     CMDLINE_ARG_PARSER(mem_handle_cmdline_opt, NULL)

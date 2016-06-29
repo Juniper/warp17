@@ -202,11 +202,6 @@ int main(int argc, char **argv)
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the message queues");
 
-    if (rte_eth_dev_count() == 0)
-        TPG_ERROR_EXIT(EXIT_FAILURE,
-                       "ERROR: %s\n",
-                       "WARP17 couldn't find any available ports!");
-
     if (!test_mgmt_init())
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing test mgmt");

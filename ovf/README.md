@@ -92,7 +92,7 @@ We are ready to run the example(s) supplied with WARP17:
 
 ```
 sudo ./warp17/build/warp17 -c f -m 12288 -- --qmap-default=max-c \
-	    --tcb-pool-sz 20 \
+	    --tcb-pool-sz 20480 \
 	    --cmd-file /home/warp17/warp17/examples/test_4_http_10M_sessions.cfg
 ```
 
@@ -204,7 +204,7 @@ We are ready to run the example(s) supplied with WARP17:
 
 ```
 sudo ./warp17/build/warp17 -c f -m 12288 -- --qmap-default=max-c \
-	    --tcb-pool-sz 20 \
+	    --tcb-pool-sz 20480 \
 	    --cmd-file /home/warp17/warp17/examples/test_4_http_10M_sessions.cfg
 ```
 
@@ -288,7 +288,7 @@ We are ready to run the example(s) supplied with WARP17:
 
 ```
 sudo ./warp17/build/warp17 -c f -m 12288 -- --qmap-default=max-c \
-	    --tcb-pool-sz 20 \
+	    --tcb-pool-sz 20480 \
 	    --cmd-file /home/warp17/warp17/examples/test_4_http_10M_sessions.cfg
 ```
 
@@ -316,6 +316,6 @@ We are ready to run the example(s) supplied with WARP17:
 
 ```
 sudo ./warp17/build/warp17 -c ffff -m 32768 -- --qmap-default=max-c \
-       --tcb-pool-sz 20\
+       --tcb-pool-sz 20480 \
        --cmd-file /home/warp17/warp17/examples/test_4_http_10M_sessions.cfg
 ```

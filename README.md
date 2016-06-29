@@ -353,9 +353,19 @@ __NOTE: For now WARP17 supports at most 64 cores.__
 * `--qmap-default max-q`: maximize the number of transmit queues per physical
   port.
 * `--tcb-pool-sz`: configure the size of the TCP control block pool (one TCB is
-  used per TCP connection endpoint). By default 10M TCBs are allocated.
+  used per TCP connection endpoint). The size of the pool will be given by the
+  argument of this option multiplied by 1024. By default 10M TCBs are
+  allocated.
 * `--ucb-pool-sz`: configure the size of the UDP control block pool (one UCB is
-  used per UDP connection endpoint). By default 10M UCBs are allocated.
+  used per UDP connection endpoint). The size of the pool will be given by the
+  argument of this option multiplied by 1024. By default 10M UCBs are
+  allocated.
+* `--mbuf-pool-sz`: configure the size of the packet pool. The size of the
+  pool will be given by the argument of this option multiplied by 1024. By
+  default 768K packets are allocated.
+* `--mbuf-hdr-pool-sz`: configure the size of the packet headers pool. The
+  size of the pool will be given by the argument of this option multiplied by
+  1024. By default 512K packet headers are allocated.
 * `--ring-if-pairs`: configure the number of _in-memory-ring-based_ interfaces.
   __NOTE: please check section
   [Using In-Memory-Ring-Based Interfaces](#using-in-memory-ring-based-interfaces)
@@ -425,7 +435,7 @@ command line argument.
 For our example this translates into the following command:
 
 ```
-./build/warp17 -c FC3 -n 4  -m 32768 -- --qmap-default max-q --tcb-pool-sz 32 --cmd-file cfg.txt
+./build/warp17 -c FC3 -n 4  -m 32768 -- --qmap-default max-q --tcb-pool-sz 32768 --cmd-file cfg.txt
 ```
 
 which will start WARP17 with:
@@ -436,7 +446,7 @@ which will start WARP17 with:
 * 4 mem channels (`-n 4`)
 * 32G of available memory (`-m 32768`)
 * all 6 PKT cores will process all physical ports (`--qmap-default max-q`)
-* allocates 32 million TCBs (`--tcb-pool-sz 32`): for the configs in the
+* allocates 32 million TCBs (`--tcb-pool-sz 32768`): for the configs in the
   examples sections we need 20M TCBs, i.e., 10M clients and 10M servers.
 * will execute the CLI commands in file cfg.txt after starting WARP17
 
@@ -463,7 +473,7 @@ specify the number of ring interface pairs that WARP17 will create. Updating
 the previous command line example we end up with:
 
 ```
-./build/warp17 -c FC3 -n 4  -m 32768 -- --qmap-default max-q --tcb-pool-sz 32 --ring-if-pairs 1 --cmd-file cfg.txt
+./build/warp17 -c FC3 -n 4  -m 32768 -- --qmap-default max-q --tcb-pool-sz 32768 --ring-if-pairs 1 --cmd-file cfg.txt
 ```
 
 This will start WARP17 and add a pair of ring interfaces connected back to

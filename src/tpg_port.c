@@ -503,6 +503,9 @@ static void port_handle_cmdline_opt_qmap_maxc(uint64_t *pcore_mask)
     uint32_t core;
     uint32_t i;
 
+    if (port_count == 0)
+        return;
+
     port = 0;
     core = 0;
 
@@ -1194,6 +1197,12 @@ static bool port_interfaces_init(void)
     uint32_t  core;
     uint32_t  i;
     char     *qmap;
+
+    if (total_if_count == 0) {
+        RTE_LOG(ERR, USER1,
+                "ERROR: WARP17 couldn't find any available ports!\n");
+        return false;
+    }
 
     /*
      * Allocate memory for the port-core mappings and clear them.
