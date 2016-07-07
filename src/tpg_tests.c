@@ -253,7 +253,7 @@ static uint32_t test_run_get_avail_rate(test_rate_info_t *rinfo)
  ****************************************************************************/
 static void test_case_tcp_close(l4_control_block_t *l4_cb)
 {
-    tcp_close_connection((tcp_control_block_t *)l4_cb, 0);
+    tcp_close_connection(container_of(l4_cb, tcp_control_block_t, tcb_l4), 0);
 }
 
 /*****************************************************************************
@@ -1171,7 +1171,8 @@ test_case_execute_tcp_send(test_case_info_t *tc_info,
         struct rte_mbuf     *data_mbuf;
         uint32_t             data_sent = 0;
         tcp_control_block_t *tcb = TEST_CBQ_FIRST(&ts->tos_to_send_cbs,
-                                                  tcp_control_block_t);
+                                                  tcp_control_block_t,
+                                                  tcb_l4);
         tpg_app_proto_t      app_id = tcb->tcb_l4.l4cb_app_data.ad_type;
 
         data_mbuf = APP_CALL(send, cfg->tcim_type, app_id)(&tcb->tcb_l4,
@@ -1231,7 +1232,8 @@ test_case_execute_tcp_close(test_case_info_t *tc_info,
     /* Stop a batch of clients from the to_close list. */
     while (!TEST_CBQ_EMPTY(&ts->tos_to_close_cbs) && closed_cnt < to_close_cnt) {
 
-        tcb = TEST_CBQ_FIRST(&ts->tos_to_close_cbs, tcp_control_block_t);
+        tcb = TEST_CBQ_FIRST(&ts->tos_to_close_cbs, tcp_control_block_t,
+                             tcb_l4);
 
         /* Warning! CLOSE will change the TCB state which will cause it to be
          * removed from the to_close list. No need to do it ourselves.
@@ -1273,7 +1275,8 @@ test_case_execute_tcp_open(test_case_info_t *tc_info,
     /* Start a batch of clients from the to_open list. */
     while (!TEST_CBQ_EMPTY(&ts->tos_to_open_cbs) && opened_cnt < to_open_cnt) {
 
-        tcb = TEST_CBQ_FIRST(&ts->tos_to_open_cbs, tcp_control_block_t);
+        tcb = TEST_CBQ_FIRST(&ts->tos_to_open_cbs, tcp_control_block_t,
+                             tcb_l4);
 
         /* OPEN will change the TCB state and cause it to be removed from the
          * to_send list. Careful here!!
@@ -1337,7 +1340,8 @@ test_case_execute_udp_send(test_case_info_t *tc_info,
         struct rte_mbuf     *data_mbuf;
         uint32_t             data_sent = 0;
         udp_control_block_t *ucb = TEST_CBQ_FIRST(&ts->tos_to_send_cbs,
-                                                  udp_control_block_t);
+                                                  udp_control_block_t,
+                                                  ucb_l4);
         tpg_app_proto_t      app_id = ucb->ucb_l4.l4cb_app_data.ad_type;
 
         data_mbuf = APP_CALL(send, cfg->tcim_type, app_id)(&ucb->ucb_l4,
@@ -1389,7 +1393,8 @@ test_case_execute_udp_close(test_case_info_t *tc_info,
     /* Stop a batch of clients from the to_close list. */
     while (!TEST_CBQ_EMPTY(&ts->tos_to_close_cbs) && closed_cnt < to_close_cnt) {
 
-        ucb = TEST_CBQ_FIRST(&ts->tos_to_close_cbs, udp_control_block_t);
+        ucb = TEST_CBQ_FIRST(&ts->tos_to_close_cbs, udp_control_block_t,
+                             ucb_l4);
 
         /* Warning! CLOSE will change the TCB state which will cause it to be
          * removed from the to_close list. No need to do it ourselves.
@@ -1431,7 +1436,7 @@ test_case_execute_udp_open(test_case_info_t *tc_info,
     /* Start a batch of clients from the to_open list. */
     while (!TEST_CBQ_EMPTY(&ts->tos_to_open_cbs) && opened_cnt < to_open_cnt) {
 
-        ucb = TEST_CBQ_FIRST(&ts->tos_to_open_cbs, udp_control_block_t);
+        ucb = TEST_CBQ_FIRST(&ts->tos_to_open_cbs, udp_control_block_t, ucb_l4);
 
         /* OPEN will change the TCB state and cause it to be removed from the
          * to_send list. Careful here!!
@@ -1634,7 +1639,7 @@ static uint32_t test_tcp_purge_list(tlkp_test_cb_list_t *cbs)
 
         purge_cnt++;
 
-        tcb = TEST_CBQ_FIRST(cbs, tcp_control_block_t);
+        tcb = TEST_CBQ_FIRST(cbs, tcp_control_block_t, tcb_l4);
         TEST_CBQ_REM(cbs, &tcb->tcb_l4);
         test_tcp_purge_tcb(tcb);
     }
@@ -1654,7 +1659,7 @@ static uint32_t test_udp_purge_list(tlkp_test_cb_list_t *cbs)
 
         purge_cnt++;
 
-        ucb = TEST_CBQ_FIRST(cbs, udp_control_block_t);
+        ucb = TEST_CBQ_FIRST(cbs, udp_control_block_t, ucb_l4);
         TEST_CBQ_REM(cbs, &ucb->ucb_l4);
         test_udp_purge_ucb(ucb);
     }
@@ -1676,7 +1681,7 @@ static uint32_t test_case_purge_tcp_cbs(test_case_info_t *tc_info)
 
         purge_cnt++;
 
-        test_tcp_purge_tcb((tcp_control_block_t *)cb);
+        test_tcp_purge_tcb(container_of(cb, tcp_control_block_t, tcb_l4));
         return true;
     }
 
@@ -1704,7 +1709,7 @@ static uint32_t test_case_purge_udp_cbs(test_case_info_t *tc_info)
 
         purge_cnt++;
 
-        test_udp_purge_ucb((udp_control_block_t *)cb);
+        test_udp_purge_ucb(container_of(cb, udp_control_block_t, ucb_l4));
         return true;
     }
 

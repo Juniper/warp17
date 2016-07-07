@@ -97,7 +97,8 @@ bool tlkp_udp_init(void)
         return false;
 
     L4_CB_MPOOL_INIT(mem_get_ucb_pools(), &tlkp_ucb_mpool_alloc_in_use,
-                     &ucb_l4cb_max_id);
+                     &ucb_l4cb_max_id,
+                     offsetof(udp_control_block_t, ucb_l4));
 
     return true;
 }
@@ -219,6 +220,7 @@ udp_control_block_t *tlkp_find_v4_ucb(uint32_t phys_port, uint32_t l4_hash,
                                       uint32_t local_addr, uint32_t remote_addr,
                                       uint16_t local_port, uint16_t remote_port)
 {
+    l4_control_block_t  *l4_cb;
     udp_control_block_t *ucb;
 
     TRACE_FMT(TLK, DEBUG,
@@ -231,17 +233,17 @@ udp_control_block_t *tlkp_find_v4_ucb(uint32_t phys_port, uint32_t l4_hash,
               local_port,
               remote_port);
 
-    ucb = container_of(tlkp_find_v4_cb(RTE_PER_LCORE(tlkp_ucb_hash_table),
-                                       phys_port,
-                                       l4_hash,
-                                       local_addr,
-                                       remote_addr,
-                                       local_port,
-                                       remote_port),
-                                       udp_control_block_t, ucb_l4);
-
-    if (unlikely(ucb == NULL))
+    l4_cb = tlkp_find_v4_cb(RTE_PER_LCORE(tlkp_ucb_hash_table),
+                                          phys_port,
+                                          l4_hash,
+                                          local_addr,
+                                          remote_addr,
+                                          local_port,
+                                          remote_port);
+    if (unlikely(l4_cb == NULL))
         return NULL;
+
+    ucb = container_of(l4_cb, udp_control_block_t, ucb_l4);
 
     /*
      * If we found a UCB and we have UCB trace filters enabled then

@@ -75,11 +75,13 @@ STATS_DEFINE(timer_statistics_t);
 
 /*****************************************************************************
  * Callbacks for processing the wheels in almost a generic way.
+ * TODO: we should change the void * to a real timer structure but that would
+ * require even more memory usage.
  ****************************************************************************/
 
-typedef l4_control_block_t *(*tmr_tcb_nxt_cb_t)(l4_control_block_t *cb);
+typedef void *(*tmr_nxt_cb_t)(void *entry);
 
-typedef void (*tmr_cb_t)(l4_control_block_t  *tcb);
+typedef void (*tmr_cb_t)(void *entry);
 
 /*****************************************************************************
  * Forward declarations
@@ -184,12 +186,12 @@ void timer_lcore_init(uint32_t lcore_id)
  *   - get wheel where we need to insert timer.
  *   - add to the end of the bucket associated with the timeout.
  ****************************************************************************/
-#define TIMER_SET(wheel, ctr_type, l4_cb, tmr_field, timeout_us, status)  \
+#define TIMER_SET(wheel, ctr_type, entry, tmr_field, timeout_us, status)  \
     do {                                                                  \
         int tmr_bucket = tcp_timer_get_wheel_bucket((wheel), timeout_us); \
         if (likely(tmr_bucket >= 0)) {                                    \
             TMR_LIST_INSERT_HEAD(&(wheel)->tw_wheel[tmr_bucket],          \
-                                 ctr_type, (l4_cb),                       \
+                                 ctr_type, (entry),                       \
                                  tmr_field);                              \
         } else {                                                          \
             (status) = -EINVAL;                                           \
@@ -200,16 +202,16 @@ void timer_lcore_init(uint32_t lcore_id)
  * TIMER_CANCEL()
  ****************************************************************************/
 /* Just quickly remove from the list and pray for the best.. */
-#define TIMER_CANCEL(ctr_type, l4_cb, tmr_field)  \
-    TMR_LIST_REMOVE(ctr_type, (l4_cb), tmr_field)
+#define TIMER_CANCEL(ctr_type, entry, tmr_field)  \
+    TMR_LIST_REMOVE(ctr_type, (entry), tmr_field)
 
 /*****************************************************************************
  * TCP_TIMER_SET()
  *   - get wheel where we need to insert timer.
  *   - add to the end of the bucket associated with the timeout.
  ****************************************************************************/
-#define TCP_TIMER_SET(wheel, l4_cb, tmr_field, timeout_us, status)  \
-        TIMER_SET((wheel), tcp_control_block_t, (l4_cb), tmr_field, \
+#define TCP_TIMER_SET(wheel, tcb, tmr_field, timeout_us, status)  \
+        TIMER_SET((wheel), tcp_control_block_t, (tcb), tmr_field, \
                   (timeout_us), (status))
 
 
@@ -217,8 +219,8 @@ void timer_lcore_init(uint32_t lcore_id)
  * TCP_TIMER_CANCEL()
  ****************************************************************************/
 /* Just quickly remove from the list and pray for the best.. */
-#define TCP_TIMER_CANCEL(l4_cb, tmr_field) \
-        TIMER_CANCEL(tcp_control_block_t, (l4_cb), tmr_field)
+#define TCP_TIMER_CANCEL(tcb, tmr_field) \
+        TIMER_CANCEL(tcp_control_block_t, (tcb), tmr_field)
 
 /*****************************************************************************
  * L4CB_TIMER_SET()
@@ -239,42 +241,48 @@ void timer_lcore_init(uint32_t lcore_id)
 /*****************************************************************************
  * tcp_tcb_slow_next()
  ****************************************************************************/
-static inline l4_control_block_t *tcp_tcb_slow_next(l4_control_block_t *l4_cb)
+static inline void *tcp_tcb_slow_next(void *entry)
 {
-    return ((tcp_control_block_t *)l4_cb)->tcb_slow_tmr_entry.tle_next;
+    tcp_control_block_t *tcb = entry;
+
+    return tcb->tcb_slow_tmr_entry.tle_next;
 }
 
 /*****************************************************************************
  * tcp_tcb_rto_next()
  ****************************************************************************/
-static inline l4_control_block_t *tcp_tcb_rto_next(l4_control_block_t *l4_cb)
+static inline void *tcp_tcb_rto_next(void *entry)
 {
-    return ((tcp_control_block_t *)l4_cb)->tcb_retrans_tmr_entry.tle_next;
+    tcp_control_block_t *tcb = entry;
+
+    return tcb->tcb_retrans_tmr_entry.tle_next;
 }
 
 /*****************************************************************************
  * l4cb_test_next()
  ****************************************************************************/
-static inline l4_control_block_t *l4cb_test_next(l4_control_block_t *l4_cb)
+static inline void *l4cb_test_next(void *entry)
 {
+    l4_control_block_t *l4_cb = entry;
+
     return l4_cb->l4cb_test_tmr_entry.tle_next;
 }
 
 /*****************************************************************************
  * tcp_handle_slow_to()
  ****************************************************************************/
-static void tcp_handle_slow_to(l4_control_block_t *l4_cb)
+static void tcp_handle_slow_to(void *entry)
 {
-    tcp_control_block_t *tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
+    tcp_control_block_t *tcb = entry;
 
     /*
      * Make sure we remove the tcb from the timer list first
      * (in case the event handler re-adds it). It's fine to call cancel here
      * because we know the timer just fired.
      */
-    INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+    INC_STATS(STATS_LOCAL(timer_statistics_t, tcb->tcb_l4.l4cb_interface),
               tts_slow_fired);
-    TCP_TIMER_CANCEL(l4_cb, tcb_slow_tmr_entry);
+    TCP_TIMER_CANCEL(tcb, tcb_slow_tmr_entry);
     tcb->tcb_on_slow_list = false;
 
     /*
@@ -313,16 +321,16 @@ static void tcp_handle_slow_to(l4_control_block_t *l4_cb)
 /*****************************************************************************
  * tcp_handle_retrans_to()
  ****************************************************************************/
-static void tcp_handle_retrans_to(l4_control_block_t *l4_cb)
+static void tcp_handle_retrans_to(void *entry)
 {
-    tcp_control_block_t *tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
+    tcp_control_block_t *tcb = entry;
 
     /*
      * Make sure we remove the tcb from the timer list first
      * (in case the event handler readds it). It's fine to call cancel here
      * because we know the timer just fired.
      */
-    INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+    INC_STATS(STATS_LOCAL(timer_statistics_t, tcb->tcb_l4.l4cb_interface),
               tts_rto_fired);
     TCP_TIMER_CANCEL(tcb, tcb_retrans_tmr_entry);
     tcb->tcb_on_rto_list = false;
@@ -335,8 +343,10 @@ static void tcp_handle_retrans_to(l4_control_block_t *l4_cb)
 /*****************************************************************************
  * l4cb_handle_test_to()
  ****************************************************************************/
-static void l4cb_handle_test_to(l4_control_block_t *l4_cb)
+static void l4cb_handle_test_to(void *entry)
 {
+    l4_control_block_t *l4_cb = entry;
+
     /*
      * Make sure we remove the cb from the timer list first
      * (in case the event handler readds it). It's fine to call cancel here
@@ -390,7 +400,7 @@ static int tcp_timer_get_wheel_bucket(tmr_wheel_t *wheel, uint32_t timeout_us)
  *  - Check if the current time is way ahead of the time pointer and log if so. (5seconds should be fine)
  ****************************************************************************/
 static void tpg_time_wheel_advance(tmr_wheel_t *wheel,
-                                   tmr_tcb_nxt_cb_t nxt_cb,
+                                   tmr_nxt_cb_t nxt_cb,
                                    tmr_cb_t cb,
                                    uint64_t now)
 {
@@ -406,19 +416,19 @@ static void tpg_time_wheel_advance(tmr_wheel_t *wheel,
     for (;
             wheel->tw_current != now_idx;
             wheel->tw_current = (wheel->tw_current + 1) % wheel->tw_size) {
-        l4_control_block_t *l4_cb;
+        void *current;
 
         /* NO LIST_FOREACH_SAFE available so we do it ourselves.. */
-        for (l4_cb = wheel->tw_wheel[wheel->tw_current].tlh_first;
-                l4_cb != NULL && cnt < GCFG_TMR_MAX_RUN_CNT;
+        for (current = wheel->tw_wheel[wheel->tw_current].tlh_first;
+                current != NULL && cnt < GCFG_TMR_MAX_RUN_CNT;
                 /* Advance in the loop */) {
-            l4_control_block_t *l4_cb_tmp;
+            void *tmp;
 
-            L4_CB_CHECK(l4_cb);
-            l4_cb_tmp = nxt_cb(l4_cb);
+            tmp = nxt_cb(current);
 
-            cb(l4_cb);
-            l4_cb = l4_cb_tmp;
+            /* The callback should remove the entry from the list. */
+            cb(current);
+            current = tmp;
             cnt++;
         }
 
@@ -494,16 +504,18 @@ void time_advance(void)
  ****************************************************************************/
 int tcp_timer_rto_set(l4_control_block_t *l4_cb, uint32_t timeout_us)
 {
-    tcp_control_block_t *tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
+    tcp_control_block_t *tcb;
     int                  status = 0;
 
-    TCB_CHECK(tcb);
-
-    if (unlikely(tcb == NULL)) {
+    if (unlikely(l4_cb == NULL)) {
         INC_STATS(STATS_LOCAL(timer_statistics_t, 0), tts_l4cb_null);
         TRACE_FMT(TMR, ERROR, "[%s] tcb NULL", __func__);
         return -EINVAL;
     }
+
+    L4_CB_CHECK(l4_cb);
+
+    tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
 
     if (unlikely(TCB_RTO_TMR_IS_SET(tcb))) {
         INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
@@ -513,7 +525,7 @@ int tcp_timer_rto_set(l4_control_block_t *l4_cb, uint32_t timeout_us)
     }
 
     /* status is set inside! */
-    TCP_TIMER_SET(&RTE_PER_LCORE(tcp_rto_timer_wheel), l4_cb,
+    TCP_TIMER_SET(&RTE_PER_LCORE(tcp_rto_timer_wheel), tcb,
                   tcb_retrans_tmr_entry,
                   timeout_us,
                   status);
@@ -535,15 +547,16 @@ int tcp_timer_rto_set(l4_control_block_t *l4_cb, uint32_t timeout_us)
  ****************************************************************************/
 int tcp_timer_rto_cancel(l4_control_block_t *l4_cb)
 {
-    tcp_control_block_t *tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
+    tcp_control_block_t *tcb;
 
-    TCB_CHECK(tcb);
-
-    if (unlikely(tcb == NULL)) {
+    if (unlikely(l4_cb == NULL)) {
         INC_STATS(STATS_LOCAL(timer_statistics_t, 0), tts_l4cb_null);
         TRACE_FMT(TMR, ERROR, "[%s] tcb NULL", __func__);
         return -EINVAL;
     }
+
+    L4_CB_CHECK(l4_cb);
+    tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
 
     if (unlikely(!TCB_RTO_TMR_IS_SET(tcb))) {
         INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
@@ -552,7 +565,7 @@ int tcp_timer_rto_cancel(l4_control_block_t *l4_cb)
         return -EINVAL;
     }
 
-    TCP_TIMER_CANCEL(l4_cb, tcb_retrans_tmr_entry);
+    TCP_TIMER_CANCEL(tcb, tcb_retrans_tmr_entry);
     tcb->tcb_on_rto_list = false;
 
     INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
@@ -566,16 +579,18 @@ int tcp_timer_rto_cancel(l4_control_block_t *l4_cb)
  ****************************************************************************/
 int tcp_timer_slow_set(l4_control_block_t *l4_cb, uint32_t timeout_us)
 {
-    tcp_control_block_t *tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
+    tcp_control_block_t *tcb;
     int                  status = 0;
 
-    TCB_CHECK(tcb);
-
-    if (unlikely(tcb == NULL)) {
+    if (unlikely(l4_cb == NULL)) {
         INC_STATS(STATS_LOCAL(timer_statistics_t, 0), tts_l4cb_null);
         TRACE_FMT(TMR, ERROR, "[%s] tcb NULL", __func__);
         return -EINVAL;
     }
+
+    L4_CB_CHECK(l4_cb);
+
+    tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
 
     if (unlikely(TCB_SLOW_TMR_IS_SET(tcb))) {
         INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
@@ -586,7 +601,7 @@ int tcp_timer_slow_set(l4_control_block_t *l4_cb, uint32_t timeout_us)
     }
 
     /* status is set inside! */
-    TCP_TIMER_SET(&RTE_PER_LCORE(tcp_slow_timer_wheel), l4_cb,
+    TCP_TIMER_SET(&RTE_PER_LCORE(tcp_slow_timer_wheel), tcb,
                   tcb_slow_tmr_entry,
                   timeout_us,
                   status);
@@ -608,15 +623,17 @@ int tcp_timer_slow_set(l4_control_block_t *l4_cb, uint32_t timeout_us)
  ****************************************************************************/
 int tcp_timer_slow_cancel(l4_control_block_t *l4_cb)
 {
-    tcp_control_block_t *tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
+    tcp_control_block_t *tcb;
 
-    TCB_CHECK(tcb);
-
-    if (unlikely(tcb == NULL)) {
+    if (unlikely(l4_cb == NULL)) {
         INC_STATS(STATS_LOCAL(timer_statistics_t, 0), tts_l4cb_null);
         TRACE_FMT(TMR, ERROR, "[%s] tcb NULL", __func__);
         return -EINVAL;
     }
+
+    L4_CB_CHECK(l4_cb);
+
+    tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
 
     if (unlikely(!TCB_SLOW_TMR_IS_SET(tcb))) {
         INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
@@ -626,7 +643,7 @@ int tcp_timer_slow_cancel(l4_control_block_t *l4_cb)
     }
 
 
-    TCP_TIMER_CANCEL(&tcb->tcb_l4, tcb_slow_tmr_entry);
+    TCP_TIMER_CANCEL(tcb, tcb_slow_tmr_entry);
     tcb->tcb_on_slow_list = false;
 
     INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),

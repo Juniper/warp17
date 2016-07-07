@@ -181,12 +181,12 @@ typedef struct tcp_control_block_s {
     /*
      * TCP slow timer linkage (slow wait/keep-alive/etc.)
      */
-    tmr_list_entry_t   tcb_slow_tmr_entry;
+    tmr_list_entry(tcp_control_block_s) tcb_slow_tmr_entry;
 
     /*
      * TCP retrans timer linkage
      */
-    tmr_list_entry_t   tcb_retrans_tmr_entry;
+    tmr_list_entry(tcp_control_block_s) tcb_retrans_tmr_entry;
 
     /*
      * TCP state-machine information

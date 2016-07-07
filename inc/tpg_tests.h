@@ -141,7 +141,9 @@ typedef TAILQ_HEAD(tcp_test_cb_list_s, l4_control_block_s) tlkp_test_cb_list_t;
 
 #define TEST_CBQ_EMPTY(list) TAILQ_EMPTY((list))
 
-#define TEST_CBQ_FIRST(list, type) ((__typeof__(type) *)TAILQ_FIRST((list)))
+/* WARNING: Should never be called with an empty list! */
+#define TEST_CBQ_FIRST(list, type, member) \
+    (container_of(TAILQ_FIRST((list)), type, member))
 
 #define TEST_CBQ_ADD_TO_OPEN(ts, cb)                                            \
     do {                                                                        \
