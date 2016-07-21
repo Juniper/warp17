@@ -117,11 +117,6 @@ static inline void data_seg_attach(struct rte_mbuf *mi, struct rte_mbuf *m)
     } else {
         rte_pktmbuf_attach(mi, m);
     }
-
-    if (RTE_MBUF_INDIRECT(m)) {
-        rte_pktmbuf_attach(mi, m);
-        return;
-    }
 }
 
 /*****************************************************************************
