@@ -150,17 +150,13 @@ available, details can be found in the respective [documentation](ovf/README.md)
 sudo apt-get install build-essential python ncurses-dev
 ```
 
-### Install DPDK 16.04
+### Install DPDK 16.07
 
-* Download [DPDK 16.04](http://dpdk.org/browse/dpdk/refs/) and apply patches
-  for not yet fixed/propagated DPDK issues:
-  	- [i40e RSS](http://dpdk.org/dev/patchwork/patch/15024/)
+* Download [DPDK 16.07](http://dpdk.org/browse/dpdk/refs/)
 
 	```
-	tar xf dpdk-16.04.tar.gz
-	cd dpdk-16.04
-	wget -O - http://dpdk.org/dev/patchwork/patch/15024/raw/ |
-	patch -p1 --
+	tar xf dpdk-16.07.tar.xz
+	cd dpdk-16.07
 
 	```
 
@@ -172,7 +168,7 @@ sudo apt-get install build-essential python ncurses-dev
 
 * Load the `igb_uio` DPDK module, either as shown below or by running the
   `$RTE_SDK/tools/setup.sh` script and selecting option
-  `[17] Insert IGB UIO module`:
+  `[18] Insert IGB UIO module`:
 
 	```
 	sudo modprobe uio
@@ -217,7 +213,7 @@ the [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/sys_reqs.html)):
 RTE_SDK. For example:
 
 	```
-	export RTE_SDK=/home/<user>/src/dpdk-16.04
+	export RTE_SDK=/home/<user>/src/dpdk-16.07
 	```
 
 * Export the target of the DPDK SDK into the variable RTE_TARGET. For example:
@@ -253,23 +249,17 @@ RTE_SDK. For example:
  * Install [libprotobuf8](http://packages.ubuntu.com/trusty/amd64/libprotobuf8/download)
    from Ubuntu 14.04LTS:
 
-		```
 		sudo dpkg -i libprotobuf8_2.5.0-9ubuntu1_amd64.deb
-		```
 
  * Install [libprotoc8](http://packages.ubuntu.com/trusty/amd64/libprotoc8/download)
    from Ubuntu 14.04LTS:
 
-		```
 		sudo dpkg -i libprotoc8_2.5.0-9ubuntu1_amd64.deb
-		```
 
  * Install [protobuf-c-compiler](http://packages.ubuntu.com/trusty/amd64/protobuf-c-compiler/download)
    from ubuntu 14.04LTS:
 
-		```
 		sudo dpkg -i protobuf-c-compiler_0.15-1build1_amd64.deb
-		```
 
 ## Get WARP17
 Get the `warp17-<ver>.tgz` archive or clone the desired release.
@@ -308,9 +298,9 @@ deactivate
 
 ## Configure DPDK ports
 
-Use the `$RTE_SDK/tools/setup.sh` script (as described in the
+Use the `$RTE_SDK/tools/dpdk-setup.sh` script (as described in the
 [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/quick_start.html)). Select
-which ports to be controlled by the IGB UIO module: option `[23] Bind Ethernet
+which ports to be controlled by the IGB UIO module: option `[24] Bind Ethernet
 device to IGB UIO module`.
 
 # How to run

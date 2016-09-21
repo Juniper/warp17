@@ -136,7 +136,8 @@ udp_control_block_t *tlkp_alloc_ucb(void)
 {
     void *ucb;
 
-    if (rte_mempool_sc_get(mem_get_ucb_local_pool(), &ucb) != 0)
+    if (rte_mempool_generic_get(mem_get_ucb_local_pool(), &ucb, 1, NULL,
+                                MEMPOOL_F_SC_GET))
         return NULL;
 
     L4_CB_ALLOC_INIT(&((udp_control_block_t *)ucb)->ucb_l4,
@@ -204,9 +205,13 @@ void tlkp_init_ucb_client(udp_control_block_t *ucb, uint32_t local_addr,
  ****************************************************************************/
 void tlkp_free_ucb(udp_control_block_t *ucb)
 {
+    void *ucb_p = ucb;
+
     L4_CB_FREE_DEINIT(&ucb->ucb_l4, tlkp_ucb_mpool_alloc_in_use,
                       ucb_l4cb_max_id);
-    rte_mempool_sp_put(mem_get_ucb_local_pool(), ucb);
+
+    rte_mempool_generic_put(mem_get_ucb_local_pool(), &ucb_p, 1, NULL,
+                            MEMPOOL_F_SP_PUT);
 }
 
 /*****************************************************************************
@@ -214,7 +219,7 @@ void tlkp_free_ucb(udp_control_block_t *ucb)
  ****************************************************************************/
 unsigned int tlkp_total_ucbs_allocated(void)
 {
-    return rte_mempool_free_count(mem_get_ucb_local_pool());
+    return rte_mempool_in_use_count(mem_get_ucb_local_pool());
 }
 
 /*****************************************************************************

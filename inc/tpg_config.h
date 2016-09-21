@@ -175,7 +175,7 @@ enum {
  * Since for now it's used only for control messages we don't need to many
  * elements. The size can be increased later if needed.
  */
-#define GCFG_MSGQ_NAME                 "tpg_per_core_mqueue_lcore"
+#define GCFG_MSGQ_NAME                 "tpg_mqueue_lcore"
 #define GCFG_MSGQ_SIZE                 (4096)
 
 /*

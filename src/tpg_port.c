@@ -335,14 +335,6 @@ static bool port_setup_port(uint8_t port)
         }
     }
 
-    rc  = rte_eth_dev_start(port);
-    if (rc < 0) {
-        RTE_LOG(ERR, USER1,
-                "ERROR: Failed rte_eth_dev_start(%u), returned %s(%d)!\n",
-                port, rte_strerror(-rc), -rc);
-        return false;
-    }
-
     rte_eth_macaddr_get(port, &mac_addr);
     RTE_LOG(INFO, USER1, "Ethernet port %u initialized with MAC address %02X:%02X:%02X:%02X:%02X:%02X\n",
             port,
@@ -353,13 +345,18 @@ static bool port_setup_port(uint8_t port)
             mac_addr.addr_bytes[4],
             mac_addr.addr_bytes[5]);
 
-    rte_eth_dev_get_mtu(port, &port_dev_info[port].pi_mtu);
-
-    port_setup_reta_table(port, number_of_rings);
-
-
     tpg_xlate_default_PortOptions(&default_port_options);
     port_set_conn_options(port, &default_port_options);
+
+    rc  = rte_eth_dev_start(port);
+    if (rc < 0) {
+        RTE_LOG(ERR, USER1,
+                "ERROR: Failed rte_eth_dev_start(%u), returned %s(%d)!\n",
+                port, rte_strerror(-rc), -rc);
+        return false;
+    }
+
+    port_setup_reta_table(port, number_of_rings);
 
     return true;
 }
@@ -903,7 +900,6 @@ static void cmd_show_port_statistics_parsed(void *parsed_result __rte_unused,
             SHOW_ETH_STATS(imissed);
             SHOW_ETH_STATS(ierrors);
             SHOW_ETH_STATS(oerrors);
-            SHOW_ETH_STATS(imcasts);
             SHOW_ETH_STATS(rx_nombuf);
 
             SHOW_ETH_STATS_QUEUE(q_ipackets);
@@ -912,11 +908,6 @@ static void cmd_show_port_statistics_parsed(void *parsed_result __rte_unused,
             SHOW_ETH_STATS_QUEUE(q_obytes);
             SHOW_ETH_STATS_QUEUE(q_errors);
 
-            SHOW_ETH_STATS(ilbpackets);
-            SHOW_ETH_STATS(olbpackets);
-            SHOW_ETH_STATS(ilbbytes);
-            SHOW_ETH_STATS(olbbytes);
-
             cmdline_printf(cl, "\n");
         }
 
@@ -924,8 +915,9 @@ static void cmd_show_port_statistics_parsed(void *parsed_result __rte_unused,
 
 #define MAX_XSTATS_TO_DISPLAY 128
 
-            int                   i, rc;
-            struct rte_eth_xstats exstats[MAX_XSTATS_TO_DISPLAY];
+            int                       i, rc;
+            struct rte_eth_xstat      exstats[MAX_XSTATS_TO_DISPLAY];
+            struct rte_eth_xstat_name exstat_names[MAX_XSTATS_TO_DISPLAY];
 
             rc = rte_eth_xstats_get(port, exstats, MAX_XSTATS_TO_DISPLAY);
 
@@ -941,10 +933,23 @@ static void cmd_show_port_statistics_parsed(void *parsed_result __rte_unused,
                 continue;
             }
 
+            rc = rte_eth_xstats_get_names(port, exstat_names,
+                                          MAX_XSTATS_TO_DISPLAY);
+
+            if (rc < 0) {
+                cmdline_printf(cl, "  ERROR: Failed getting statistics names, error %d\n", rc);
+                continue;
+            }
+
+            if (rc > MAX_XSTATS_TO_DISPLAY) {
+                cmdline_printf(cl, "  ERROR: More statistics names available than we can display, number %d\n", rc);
+                continue;
+            }
+
             for (i = 0; i < rc; i++) {
                 if (exstats[i].value != 0) {
                     cmdline_printf(cl, "  %-32s :  %20"PRIu64"\n",
-                                   exstats[i].name, exstats[i].value);
+                                   exstat_names[i].name, exstats[i].value);
                 }
             }
 

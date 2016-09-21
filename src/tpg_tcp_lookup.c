@@ -138,7 +138,8 @@ tcp_control_block_t *tlkp_alloc_tcb(void)
 {
     void *tcb;
 
-    if (rte_mempool_sc_get(mem_get_tcb_local_pool(), &tcb) != 0)
+    if (rte_mempool_generic_get(mem_get_tcb_local_pool(), &tcb, 1, NULL,
+                                MEMPOOL_F_SC_GET))
         return NULL;
 
     L4_CB_ALLOC_INIT(&((tcp_control_block_t *)tcb)->tcb_l4,
@@ -215,10 +216,13 @@ void tlkp_init_tcb_client(tcp_control_block_t *tcb, uint32_t local_addr,
  ****************************************************************************/
 void tlkp_free_tcb(tcp_control_block_t *tcb)
 {
+    void *tcb_p = tcb;
+
     L4_CB_FREE_DEINIT(&tcb->tcb_l4,
                       tlkp_tcb_mpool_alloc_in_use,
                       tcb_l4cb_max_id);
-    rte_mempool_sp_put(mem_get_tcb_local_pool(), tcb);
+    rte_mempool_generic_put(mem_get_tcb_local_pool(), &tcb_p, 1, NULL,
+                            MEMPOOL_F_SP_PUT);
 }
 
 
@@ -227,7 +231,7 @@ void tlkp_free_tcb(tcp_control_block_t *tcb)
  ****************************************************************************/
 unsigned int tlkp_total_tcbs_allocated(void)
 {
-    return rte_mempool_free_count(mem_get_tcb_local_pool());
+    return rte_mempool_in_use_count(mem_get_tcb_local_pool());
 }
 
 /*****************************************************************************

@@ -282,7 +282,8 @@ void l4_cb_mempool_init(struct rte_mempool **mempools, rte_atomic16_t **mask,
 
         TAILQ_INIT(&tq);
 
-        while (rte_mempool_sc_get(mempools[core], &entry) == 0) {
+        while (rte_mempool_generic_get(mempools[core], &entry, 1, NULL,
+                                       MEMPOOL_F_SC_GET) == 0) {
             l4_cb = (l4_control_block_t *)(((char *)entry) + l4_cb_offset);
 
             l4_cb->l4cb_id = id++;
@@ -295,7 +296,8 @@ void l4_cb_mempool_init(struct rte_mempool **mempools, rte_atomic16_t **mask,
             entry = (((char *)l4_cb) - l4_cb_offset);
 
             TAILQ_REMOVE(&tq, l4_cb, l4cb_test_list_entry);
-            rte_mempool_sp_put(mempools[core], entry);
+            rte_mempool_generic_put(mempools[core], &entry, 1, NULL,
+                                    MEMPOOL_F_SP_PUT);
         }
     }
 
