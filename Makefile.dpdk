@@ -119,6 +119,7 @@ SRCS-y += warp17.xlate.c
 CFLAGS += -O3
 CFLAGS += -I$(SRCDIR)/inc
 CFLAGS += -I$(SRCDIR)/inc/appl
+CFLAGS += -I$(SRCDIR)/inc/sock
 CFLAGS += -I$(SRCDIR)/inc/ring_if
 CFLAGS += -I$(SRCDIR)/api/generated/c
 CFLAGS += -I$(SRCDIR)/api/generated/xlate
@@ -126,6 +127,8 @@ CFLAGS += -I$(SRCDIR)/3rdparty
 
 CFLAGS += $(WERROR_FLAGS)
 CFLAGS += -Wmaybe-uninitialized
+# Always fail on warnings!
+CFLAGS += -Werror
 
 CFLAGS += -DTPG_HAVE_STATS
 CFLAGS += -DTPG_NO_DEBUG_LOGS

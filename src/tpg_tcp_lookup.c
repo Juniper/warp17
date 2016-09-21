@@ -159,6 +159,7 @@ void tlkp_init_tcb(tcp_control_block_t *tcb, uint32_t local_addr,
                    uint32_t tcb_interface,
                    uint32_t test_case_id,
                    tpg_app_proto_t app_id,
+                   sockopt_t *sockopt,
                    uint32_t flags)
 {
     tlkp_init_cb(&tcb->tcb_l4, local_addr, remote_addr, local_port, remote_port,
@@ -166,17 +167,13 @@ void tlkp_init_tcb(tcp_control_block_t *tcb, uint32_t local_addr,
                  tcb_interface,
                  test_case_id,
                  app_id,
+                 sockopt,
                  flags);
 
     if ((flags & TCG_CB_CONSUME_ALL_DATA))
         tcb->tcb_consume_all_data = true;
     else
         tcb->tcb_consume_all_data = false;
-
-    if ((flags & TCG_CB_NO_TIMEWAIT))
-        tcb->tcb_no_timewait = true;
-    else
-        tcb->tcb_no_timewait = false;
 
     if ((flags & TCG_CB_MALLOCED))
         tcb->tcb_malloced = true;
@@ -195,6 +192,7 @@ void tlkp_init_tcb_client(tcp_control_block_t *tcb, uint32_t local_addr,
                           uint32_t tcb_interface,
                           uint32_t test_case_id,
                           tpg_app_proto_t app_id,
+                          sockopt_t *sockopt,
                           uint32_t flags)
 {
     tlkp_init_tcb(tcb, local_addr, remote_addr, local_port, remote_port,
@@ -202,6 +200,7 @@ void tlkp_init_tcb_client(tcp_control_block_t *tcb, uint32_t local_addr,
                   tcb_interface,
                   test_case_id,
                   app_id,
+                  sockopt,
                   flags);
 
     /* At least the minimal initialization of the state has to be already

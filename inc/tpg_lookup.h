@@ -128,6 +128,9 @@ typedef struct l4_control_block_s {
 
     /* uint32_t      l4cb_unused           :14; */
 
+    /* Socket options. */
+    sockopt_t        l4cb_sockopt;
+
     /* Application level state storage. */
     app_data_t       l4cb_app_data;
 
@@ -173,6 +176,7 @@ extern void tlkp_init_cb(l4_control_block_t *l4_cb,
                          uint32_t l4_hash, uint32_t cb_interface,
                          uint32_t test_case_id,
                          tpg_app_proto_t app_id,
+                         sockopt_t *sockopt,
                          uint32_t flags);
 
 /*****************************************************************************
@@ -439,8 +443,7 @@ static inline void l4_cb_calc_connection_hash(l4_control_block_t *cb)
 #define TCG_CB_REUSE_CB                 0x00000002
 /* Flags. */
 #define TCG_CB_CONSUME_ALL_DATA         0x00000004
-#define TCG_CB_NO_TIMEWAIT              0x00000008
-#define TCG_CB_MALLOCED                 0x00000010
+#define TCG_CB_MALLOCED                 0x00000008
 
 #endif /* _H_TPG_LOOKUP_ */
 

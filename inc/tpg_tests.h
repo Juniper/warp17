@@ -194,6 +194,8 @@ typedef struct test_case_init_msg_s {
         tpg_server_t     tcim_server;
     };
 
+    sockopt_t            tcim_sockopt;
+
 } __tpg_msg test_case_init_msg_t;
 
 typedef struct test_case_start_msg_s {

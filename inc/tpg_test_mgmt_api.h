@@ -60,6 +60,9 @@
 #ifndef _H_TPG_TEST_MGMT_API_
 #define _H_TPG_TEST_MGMT_API_
 
+/*****************************************************************************
+ * Mgmt API
+ ****************************************************************************/
 #define __tpg_api_func __attribute__((warn_unused_result))
 
 extern void
@@ -138,50 +141,9 @@ test_mgmt_del_test_case(uint32_t eth_port, uint32_t test_case_id,
  *  0 on success.
  */
 extern __tpg_api_func int
-test_mgmt_update_test_case_rate(uint32_t eth_port,
-                                uint32_t test_case_id,
-                                tpg_rate_type_t rate_type,
-                                const tpg_rate_t *rate,
-                                printer_arg_t *printer_arg);
-
-/*
- * Returns:
- *  -ENOENT: test_case_id not found.
- *  -EALREADY: tests already started on port
- *  -EINVAL when arguments are wrong.
- *  0 on success.
- */
-extern __tpg_api_func int
-test_mgmt_update_test_case_timeout(uint32_t eth_port,
-                                   uint32_t test_case_id,
-                                   tpg_delay_type_t timeout_type,
-                                   const tpg_delay_t *timeout,
-                                   printer_arg_t *printer_arg);
-
-/*
- * Returns:
- *  -ENOENT: test_case_id not found.
- *  -EALREADY: tests already started on port
- *  -EINVAL when arguments are wrong.
- *  0 on success.
- */
-extern __tpg_api_func int
-test_mgmt_update_test_case_criteria(uint32_t eth_port, uint32_t test_case_id,
-                                    const tpg_test_criteria_t *criteria,
-                                    printer_arg_t *printer_arg);
-
-
-/*
- * Returns:
- *  -ENOENT: test_case_id not found.
- *  -EALREADY: tests already started on port.
- *  -EINVAL: when arguments are wrong.
- *  0 on success.
- */
-extern __tpg_api_func int
-test_mgmt_update_test_case_async(uint32_t eth_port, uint32_t test_case_id,
-                                 bool async,
-                                 printer_arg_t *printer_arg);
+test_mgmt_update_test_case(uint32_t eth_port, uint32_t test_case_id,
+                           const tpg_update_arg_t *update_arg,
+                           printer_arg_t *printer_arg);
 
 /*
  * Returns:
@@ -257,6 +219,51 @@ extern __tpg_api_func int
 test_mgmt_get_test_case_state(uint32_t eth_port, uint32_t test_case_id,
                               test_env_oper_state_t *out,
                               printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -EALREADY: tests already started on port.
+ *  -EINVAL: when arguments are wrong.
+ *  -E*: when internal errors occur
+ *  0 on success.
+ */
+extern __tpg_api_func int
+test_mgmt_set_port_options(uint32_t eth_port, tpg_port_options_t *options,
+                           printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -ENOENT: test_case_id not found.
+ *  -EINVAL: invalid arguments or wrong test case type.
+ *  0 on success
+ */
+extern __tpg_api_func int
+test_mgmt_get_port_options(uint32_t eth_port, tpg_port_options_t *out,
+                           printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -EALREADY: tests already started on port.
+ *  -ENOENT: no such test case exists.
+ *  -EINVAL: when arguments are wrong.
+ *  -E*: when internal errors occur
+ *  0 on success.
+ */
+extern __tpg_api_func int
+test_mgmt_set_tcp_sockopt(uint32_t eth_port, uint32_t test_case_id,
+                          const tpg_tcp_sockopt_t *options,
+                          printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -ENOENT: test_case_id not found.
+ *  -EINVAL: invalid arguments or wrong test case type.
+ *  0 on success
+ */
+extern __tpg_api_func int
+test_mgmt_get_tcp_sockopt(uint32_t eth_port, uint32_t test_case_id,
+                          tpg_tcp_sockopt_t *out,
+                          printer_arg_t *printer_arg);
 
 /*
  * Returns:

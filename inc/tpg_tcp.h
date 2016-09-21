@@ -218,13 +218,12 @@ typedef struct tcp_control_block_s {
     uint32_t           tcb_on_slow_list     :1;
     uint32_t           tcb_on_rto_list      :1;
 
-    uint32_t           tcb_no_timewait      :1;
     uint32_t           tcb_trace            :1;
 
     uint32_t           tcb_retrans_cnt      :8;
     uint32_t           tcb_fin_rcvd         :1;
 
-    /* uint32_t        tcb_unused           :16; */
+    /* uint32_t        tcb_unused           :17; */
 
     uint32_t           tcb_rcv_fin_seq;
 
@@ -233,11 +232,15 @@ typedef struct tcp_control_block_s {
 #define TCB_SLOW_TMR_IS_SET(tcb) ((tcb)->tcb_on_slow_list)
 #define TCB_RTO_TMR_IS_SET(tcb)  ((tcb)->tcb_on_rto_list)
 
-/* Need to be able to tweak the window size through config but until then
- * we keep it low because if we have a lot of retransmits we will run out of
- * mbufs.
- */
-#define TCP_DEFAULT_WINDOW_SIZE 1024
+/* Maximum values for TCP configurable options. */
+#define TCP_MAX_WINDOW_SIZE  65535
+#define TCP_MAX_RETRY_CNT      128
+
+#define TCP_MAX_RTO_MS        1000
+#define TCP_MAX_FIN_TO_MS     1000
+#define TCP_MAX_TWAIT_TO_MS  10000
+#define TCP_MAX_ORPHAN_TO_MS  2000
+
 
 /*****************************************************************************
  * Modulo2 macro's for sequence comparison
@@ -279,6 +282,10 @@ STATS_LOCAL_DECLARE(tcp_statistics_t);
  ****************************************************************************/
 extern bool             tcp_init(void);
 extern void             tcp_lcore_init(uint32_t lcore_id);
+extern void             tcp_store_sockopt(tcp_sockopt_t *dest,
+                                          const tpg_tcp_sockopt_t *options);
+extern void             tcp_load_sockopt(tpg_tcp_sockopt_t *dest,
+                                         const tcp_sockopt_t *options);
 extern int              tcp_build_tcp_hdr(struct rte_mbuf *mbuf,
                                           tcp_control_block_t *tcb,
                                           struct ipv4_hdr *ipv4hdr,
@@ -300,6 +307,7 @@ extern int              tcp_open_v4_connection(tcp_control_block_t **tcb,
                                                uint16_t dst_port,
                                                uint32_t test_case_id,
                                                tpg_app_proto_t app_id,
+                                               sockopt_t *sockopt,
                                                uint32_t flags);
 extern int              tcp_listen_v4(tcp_control_block_t **tcb,
                                       uint32_t eth_port,
@@ -307,6 +315,7 @@ extern int              tcp_listen_v4(tcp_control_block_t **tcb,
                                       uint16_t local_port,
                                       uint32_t test_case_id,
                                       tpg_app_proto_t app_id,
+                                      sockopt_t *sockopt,
                                       uint32_t flags);
 
 extern int              tcp_send_v4(tcp_control_block_t *tcb,

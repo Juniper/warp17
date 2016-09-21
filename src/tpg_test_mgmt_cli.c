@@ -60,6 +60,37 @@
 #include "tcp_generator.h"
 
 /****************************************************************************
+ * Local definitions
+ ****************************************************************************/
+/****************************************************************************
+ * Fill callbacks for generating CLIs that set optional fields in big
+ * structures.
+ * These macros are really ugly but they save about 1000 lines of copy/paste!
+ ****************************************************************************/
+#define OPT_FILL_TYPE_NAME(comp) comp ## _options_cli_cb_t
+
+#define OPT_FILL_TYPEDEF(comp, type)                         \
+    typedef struct OPT_FILL_TYPE_NAME(comp) {                \
+        void (*opt_cb)(__typeof__(type) *dest, void *value); \
+    } OPT_FILL_TYPE_NAME(comp)
+
+#define OPT_FILL_CB_NAME(comp, field) comp ## _fill_ ## field
+#define OPT_FILL_PARAM_NAME(comp, field) comp ## _fill_ ## field ## _param
+
+#define OPT_FILL_DEFINE(comp, type, field, field_type)                       \
+    static void OPT_FILL_CB_NAME(comp, field)(__typeof__(type) *dest,        \
+                                              void *value)                   \
+    {                                                                        \
+        bzero(dest, sizeof(*dest));                                          \
+        dest->field = *(__typeof__(field_type) *)value;                      \
+        dest->has_ ## field = true;                                          \
+    }                                                                        \
+                                                                             \
+    static OPT_FILL_TYPE_NAME(comp) OPT_FILL_PARAM_NAME(comp, field) = {     \
+        OPT_FILL_CB_NAME(comp, field)                                        \
+    }
+
+/****************************************************************************
  * - "start/stop tests "
  ****************************************************************************/
 struct cmd_tests_start_stop_result {
@@ -130,7 +161,7 @@ static void cmd_tests_stop_parsed(void *parsed_result __rte_unused,
 cmdline_parse_inst_t cmd_tests_start = {
     .f = cmd_tests_start_parsed,
     .data = NULL,
-    .help_str = "start tests port <port>",
+    .help_str = "start tests port <eth_port>",
     .tokens = {
         (void *)&cmd_tests_start_T_start,
         (void *)&cmd_tests_start_T_tests,
@@ -143,7 +174,7 @@ cmdline_parse_inst_t cmd_tests_start = {
 cmdline_parse_inst_t cmd_tests_stop = {
     .f = cmd_tests_stop_parsed,
     .data = NULL,
-    .help_str = "stop tests port <port>",
+    .help_str = "stop tests port <eth_port>",
     .tokens = {
         (void *)&cmd_tests_start_T_stop,
         (void *)&cmd_tests_start_T_tests,
@@ -243,7 +274,7 @@ static void cmd_show_tests_config_parsed(void *parsed_result, struct cmdline *cl
 cmdline_parse_inst_t cmd_show_tests_config = {
     .f = cmd_show_tests_config_parsed,
     .data = NULL,
-    .help_str = "show tests config port <port>",
+    .help_str = "show tests config port <eth_port>",
     .tokens = {
         (void *)&cmd_show_tests_config_T_show,
         (void *)&cmd_show_tests_config_T_tests,
@@ -298,7 +329,7 @@ static void cmd_show_tests_state_parsed(void *parsed_result, struct cmdline *cl,
 cmdline_parse_inst_t cmd_show_tests_state = {
     .f = cmd_show_tests_state_parsed,
     .data = NULL,
-    .help_str = "show tests state port <port>",
+    .help_str = "show tests state port <eth_port>",
     .tokens = {
         (void *)&cmd_show_tests_state_T_show,
         (void *)&cmd_show_tests_state_T_tests,
@@ -365,7 +396,7 @@ static void cmd_show_tests_stats_parsed(void *parsed_result, struct cmdline *cl,
 cmdline_parse_inst_t cmd_show_tests_stats = {
     .f = cmd_show_tests_stats_parsed,
     .data = NULL,
-    .help_str = "show tests stats port <port> test-case-id <tcid>",
+    .help_str = "show tests stats port <eth_port> test-case-id <tcid>",
     .tokens = {
         (void *)&cmd_show_tests_stats_T_show,
         (void *)&cmd_show_tests_stats_T_tests,
@@ -379,7 +410,7 @@ cmdline_parse_inst_t cmd_show_tests_stats = {
 };
 
 /****************************************************************************
- * - "add tests l3_intf port <port> ip <ip> mask <mask> gw <gw>"
+ * - "add tests l3_intf port <eth_port> ip <ip> mask <mask> gw <gw>"
  ****************************************************************************/
  struct cmd_tests_add_l3_intf_result {
     cmdline_fixed_string_t add;
@@ -447,7 +478,7 @@ static void cmd_tests_add_l3_intf_parsed(void *parsed_result, struct cmdline *cl
 cmdline_parse_inst_t cmd_tests_add_l3_intf = {
     .f = cmd_tests_add_l3_intf_parsed,
     .data = NULL,
-    .help_str = "add tests l3_intf port <port> ip <ip> mask <mask>",
+    .help_str = "add tests l3_intf port <eth_port> ip <ip> mask <mask>",
     .tokens = {
         (void *)&cmd_tests_add_l3_intf_T_add,
         (void *)&cmd_tests_add_l3_intf_T_tests,
@@ -463,7 +494,7 @@ cmdline_parse_inst_t cmd_tests_add_l3_intf = {
 };
 
 /****************************************************************************
- * - "add tests l3_gw port <port> gw <gw>"
+ * - "add tests l3_gw port <eth_port> gw <gw>"
  ****************************************************************************/
  struct cmd_tests_add_l3_gw_result {
     cmdline_fixed_string_t add;
@@ -515,7 +546,7 @@ static void cmd_tests_add_l3_gw_parsed(void *parsed_result, struct cmdline *cl,
 cmdline_parse_inst_t cmd_tests_add_l3_gw = {
     .f = cmd_tests_add_l3_gw_parsed,
     .data = NULL,
-    .help_str = "add tests l3_gw port <port> gw <gw>",
+    .help_str = "add tests l3_gw port <eth_port> gw <gw>",
     .tokens = {
         (void *)&cmd_tests_add_l3_gw_T_add,
         (void *)&cmd_tests_add_l3_gw_T_tests,
@@ -529,7 +560,7 @@ cmdline_parse_inst_t cmd_tests_add_l3_gw = {
 };
 
 /****************************************************************************
- * - "add tests server tcp|udp port <port>
+ * - "add tests server tcp|udp port <eth_port>
       ips <ip_range> l4_ports <port_range>
       data-req-plen <len> data-resp-plen <len>"
  ****************************************************************************/
@@ -636,7 +667,7 @@ static void cmd_tests_add_tcp_udp_server_parsed(void *parsed_result,
 cmdline_parse_inst_t cmd_tests_add_tcp_udp_server = {
     .f = cmd_tests_add_tcp_udp_server_parsed,
     .data = NULL,
-    .help_str = "add tests server tcp|udp port <port> "
+    .help_str = "add tests server tcp|udp port <eth_port> "
                 "src <ip_range> sport <port_range>",
     .tokens = {
         (void *)&cmd_tests_add_server_T_add,
@@ -658,7 +689,7 @@ cmdline_parse_inst_t cmd_tests_add_tcp_udp_server = {
 };
 
 /****************************************************************************
- * - "add tests client tcp|udp port <port> test-case-id <tcid>
+ * - "add tests client tcp|udp port <eth_port> test-case-id <tcid>
         srcs <srcs_range> sports <sports>
         dests <rip> dports <rports>"
  ****************************************************************************/
@@ -787,7 +818,7 @@ static void cmd_tests_add_client_parsed(void *parsed_result, struct cmdline *cl,
 cmdline_parse_inst_t cmd_tests_add_client = {
     .f = cmd_tests_add_client_parsed,
     .data = NULL,
-    .help_str = "add tests client tcp|udp port <port> test-case-id <tcid> "
+    .help_str = "add tests client tcp|udp port <eth_port> test-case-id <tcid> "
                 "src <ip-range> sport <l4-ports> "
                 "dest <ip-range> dport <l4-ports>",
     .tokens = {
@@ -820,7 +851,7 @@ cmdline_parse_inst_t cmd_tests_add_client = {
 };
 
 /****************************************************************************
- * - "del tests port <port> test-case-id <tcid>
+ * - "del tests port <eth_port> test-case-id <tcid>
  ****************************************************************************/
 struct cmd_tests_del_test_result {
     cmdline_fixed_string_t del;
@@ -872,7 +903,7 @@ static void cmd_tests_del_test_parsed(void *parsed_result, struct cmdline *cl,
 cmdline_parse_inst_t cmd_tests_del_test = {
     .f = cmd_tests_del_test_parsed,
     .data = NULL,
-    .help_str = "del tests port <port> test-case-id <tcid>",
+    .help_str = "del tests port <eth_port> test-case-id <tcid>",
     .tokens = {
         (void *)&cmd_tests_del_test_T_del,
         (void *)&cmd_tests_del_test_T_tests,
@@ -885,7 +916,7 @@ cmdline_parse_inst_t cmd_tests_del_test = {
 };
 
 /****************************************************************************
- * - "set tests rate port <port> test-case-id <tcid>
+ * - "set tests rate port <eth_port> test-case-id <tcid>
  *      open|close|send <rate> | infinite"
  ****************************************************************************/
  struct cmd_tests_set_rate_result {
@@ -934,29 +965,28 @@ static void cmd_tests_set_rate_parsed(void *parsed_result, struct cmdline *cl,
     printer_arg_t                     parg;
     struct cmd_tests_set_rate_result *pr;
     bool                              infinite = (((intptr_t) data) == 'i');
+    tpg_update_arg_t                  update_arg;
     tpg_rate_t                        rate;
-    tpg_rate_type_t                   rate_type;
 
+    tpg_xlate_default_UpdateArg(&update_arg);
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
-
-
-    if (strncmp(pr->rate_kw, "open", strlen("open")) == 0)
-        rate_type = RATE_TYPE__OPEN;
-    else if (strncmp(pr->rate_kw, "close", strlen("close")) == 0)
-        rate_type = RATE_TYPE__CLOSE;
-    else if (strncmp(pr->rate_kw, "send", strlen("send")) == 0)
-        rate_type = RATE_TYPE__SEND;
-    else
-        assert(false);
 
     if (infinite)
         rate = TPG_RATE_INF();
     else
         rate = TPG_RATE(pr->rate_val);
 
-    if (test_mgmt_update_test_case_rate(pr->port, pr->tcid, rate_type,
-                                        &rate, &parg) == 0)
+    if (strncmp(pr->rate_kw, "open", strlen("open")) == 0)
+        update_arg.ua_rate_open = &rate;
+    else if (strncmp(pr->rate_kw, "close", strlen("close")) == 0)
+        update_arg.ua_rate_close = &rate;
+    else if (strncmp(pr->rate_kw, "send", strlen("send")) == 0)
+        update_arg.ua_rate_send = &rate;
+    else
+        assert(false);
+
+    if (test_mgmt_update_test_case(pr->port, pr->tcid, &update_arg, &parg) == 0)
         cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
                        pr->port,
                        pr->tcid);
@@ -971,7 +1001,7 @@ static void cmd_tests_set_rate_parsed(void *parsed_result, struct cmdline *cl,
 cmdline_parse_inst_t cmd_tests_set_rate = {
     .f = cmd_tests_set_rate_parsed,
     .data = NULL,
-    .help_str = "set tests rate port <port> test-case-id <tcid> "
+    .help_str = "set tests rate port <eth_port> test-case-id <tcid> "
                 "open|close|send <rate>",
     .tokens = {
         (void *)&cmd_tests_set_rate_T_set,
@@ -990,7 +1020,7 @@ cmdline_parse_inst_t cmd_tests_set_rate = {
 cmdline_parse_inst_t cmd_tests_set_rate_infinite = {
     .f = cmd_tests_set_rate_parsed,
     .data = (void *) (intptr_t) 'i',
-    .help_str = "set tests rate port <port> test-case-id <tcid> "
+    .help_str = "set tests rate port <eth_port> test-case-id <tcid> "
                 "open|close|send infinite",
     .tokens = {
         (void *)&cmd_tests_set_rate_T_set,
@@ -1007,7 +1037,7 @@ cmdline_parse_inst_t cmd_tests_set_rate_infinite = {
 };
 
 /****************************************************************************
- * - "set tests timeouts port <port> test-case-id <tcid>
+ * - "set tests timeouts port <eth_port> test-case-id <tcid>
  *      init|uptime|downtime <timeout>|infinite
  ****************************************************************************/
  struct cmd_tests_set_timeouts_result {
@@ -1057,30 +1087,29 @@ static void cmd_tests_set_timeouts_parsed(void *parsed_result,
     printer_arg_t                         parg;
     struct cmd_tests_set_timeouts_result *pr;
     bool                                  infinite;
+    tpg_update_arg_t                      update_arg;
     tpg_delay_t                           timeout;
-    tpg_delay_type_t                      timeout_type;
 
+    tpg_xlate_default_UpdateArg(&update_arg);
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
     infinite = (((intptr_t) data) == 'i');
-
-    if (strncmp(pr->timeout_kw, "init", strlen("init")) == 0)
-        timeout_type = DELAY_TYPE__INIT;
-    else if (strncmp(pr->timeout_kw, "uptime", strlen("uptime")) == 0)
-        timeout_type = DELAY_TYPE__UPTIME;
-    else if (strncmp(pr->timeout_kw, "downtime", strlen("downtime")) == 0)
-        timeout_type = DELAY_TYPE__DOWNTIME;
-    else
-        assert(false);
 
     if (infinite)
         timeout = TPG_DELAY_INF();
     else
         timeout = TPG_DELAY(pr->timeout);
 
-    if (test_mgmt_update_test_case_timeout(pr->port, pr->tcid, timeout_type,
-                                           &timeout,
-                                           &parg) == 0)
+    if (strncmp(pr->timeout_kw, "init", strlen("init")) == 0)
+        update_arg.ua_init_delay = &timeout;
+    else if (strncmp(pr->timeout_kw, "uptime", strlen("uptime")) == 0)
+        update_arg.ua_uptime = &timeout;
+    else if (strncmp(pr->timeout_kw, "downtime", strlen("downtime")) == 0)
+        update_arg.ua_downtime = &timeout;
+    else
+        assert(false);
+
+    if (test_mgmt_update_test_case(pr->port, pr->tcid, &update_arg, &parg) == 0)
         cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
                        pr->port,
                        pr->tcid);
@@ -1095,7 +1124,7 @@ static void cmd_tests_set_timeouts_parsed(void *parsed_result,
 cmdline_parse_inst_t cmd_tests_set_timeouts = {
     .f = cmd_tests_set_timeouts_parsed,
     .data = NULL,
-    .help_str = "set tests timeouts port <port> test-case-id <tcid> "
+    .help_str = "set tests timeouts port <eth_port> test-case-id <tcid> "
                 "init|uptime|downtime <rate>",
     .tokens = {
         (void *)&cmd_tests_set_timeouts_T_set,
@@ -1114,7 +1143,7 @@ cmdline_parse_inst_t cmd_tests_set_timeouts = {
 cmdline_parse_inst_t cmd_tests_set_timeouts_infinite = {
     .f = cmd_tests_set_timeouts_parsed,
     .data = (void *) (intptr_t) 'i',
-    .help_str = "set tests timeouts port <port> test-case-id <tcid> "
+    .help_str = "set tests timeouts port <eth_port> test-case-id <tcid> "
                 "init|uptime|downtime infinite",
     .tokens = {
         (void *)&cmd_tests_set_timeouts_T_set,
@@ -1131,7 +1160,7 @@ cmdline_parse_inst_t cmd_tests_set_timeouts_infinite = {
 };
 
 /****************************************************************************
- * - "set tests criteria port <port> test-case-id <tcid>
+ * - "set tests criteria port <eth_port> test-case-id <tcid>
  *      run-time|servers-up|clients-up|clients-estab|data-MB <value>"
  ****************************************************************************/
  struct cmd_tests_set_criteria_result {
@@ -1175,8 +1204,10 @@ static void cmd_tests_set_criteria_parsed(void *parsed_result,
 {
     printer_arg_t                         parg;
     struct cmd_tests_set_criteria_result *pr;
+    tpg_update_arg_t                      update_arg;
     tpg_test_criteria_t                   criteria;
 
+    tpg_xlate_default_UpdateArg(&update_arg);
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
 
@@ -1193,8 +1224,9 @@ static void cmd_tests_set_criteria_parsed(void *parsed_result,
     else
         assert(false);
 
-    if (test_mgmt_update_test_case_criteria(pr->port, pr->tcid, &criteria,
-                                            &parg) == 0)
+    update_arg.ua_criteria = &criteria;
+
+    if (test_mgmt_update_test_case(pr->port, pr->tcid, &update_arg, &parg) == 0)
         cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
                        pr->port,
                        pr->tcid);
@@ -1209,7 +1241,7 @@ static void cmd_tests_set_criteria_parsed(void *parsed_result,
 cmdline_parse_inst_t cmd_tests_set_criteria = {
     .f = cmd_tests_set_criteria_parsed,
     .data = NULL,
-    .help_str = "set tests criteria port <port> test-case-id <tcid> "
+    .help_str = "set tests criteria port <eth_port> test-case-id <tcid> "
                  "run-time|servers-up|clients-up|clients-estab|data-MB <value>",
     .tokens = {
         (void *)&cmd_tests_set_criteria_T_set,
@@ -1226,12 +1258,14 @@ cmdline_parse_inst_t cmd_tests_set_criteria = {
 };
 
 /****************************************************************************
- * - "set tests async port <port> test-case-id <tcid>""
+ * - "set tests async port <eth_port> test-case-id <tcid>""
+ * - "set tests no-async port <eth_port> test-case-id <tcid>""
  ****************************************************************************/
  struct cmd_tests_set_async_result {
     cmdline_fixed_string_t set;
     cmdline_fixed_string_t tests;
     cmdline_fixed_string_t async;
+    cmdline_fixed_string_t noasync;
     cmdline_fixed_string_t port_kw;
     uint32_t               port;
     cmdline_fixed_string_t tcid_kw;
@@ -1244,6 +1278,8 @@ static cmdline_parse_token_string_t cmd_tests_set_async_T_tests =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_async_result, tests, "tests");
 static cmdline_parse_token_string_t cmd_tests_set_async_T_async =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_async_result, async, "async");
+static cmdline_parse_token_string_t cmd_tests_set_async_T_noasync =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_async_result, noasync, "no-async");
 
 static cmdline_parse_token_string_t cmd_tests_set_async_T_port_kw =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_async_result, port_kw, "port");
@@ -1257,15 +1293,18 @@ static cmdline_parse_token_num_t cmd_tests_set_async_T_tcid =
 
 static void cmd_tests_set_async_parsed(void *parsed_result,
                                        struct cmdline *cl,
-                                       void *data __rte_unused)
+                                       void *data)
 {
     printer_arg_t                      parg;
     struct cmd_tests_set_async_result *pr;
+    tpg_update_arg_t                   update_arg;
 
+    tpg_xlate_default_UpdateArg(&update_arg);
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
+    update_arg.ua_async = ((intptr_t) data);
 
-    if (test_mgmt_update_test_case_async(pr->port, pr->tcid, true, &parg) == 0)
+    if (test_mgmt_update_test_case(pr->port, pr->tcid, &update_arg, &parg) == 0)
         cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
                        pr->port,
                        pr->tcid);
@@ -1277,10 +1316,10 @@ static void cmd_tests_set_async_parsed(void *parsed_result,
                        pr->port);
 }
 
-cmdline_parse_inst_t cmd_tests_set_noasync = {
+cmdline_parse_inst_t cmd_tests_set_async = {
     .f = cmd_tests_set_async_parsed,
-    .data = NULL,
-    .help_str = "set tests async port <port> test-case-id <tcid>",
+    .data = (void *) (intptr_t) true,
+    .help_str = "set tests async port <eth_port> test-case-id <tcid>",
     .tokens = {
         (void *)&cmd_tests_set_async_T_set,
         (void *)&cmd_tests_set_async_T_tests,
@@ -1289,6 +1328,459 @@ cmdline_parse_inst_t cmd_tests_set_noasync = {
         (void *)&cmd_tests_set_async_T_port,
         (void *)&cmd_tests_set_async_T_tcid_kw,
         (void *)&cmd_tests_set_async_T_tcid,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_tests_set_noasync = {
+    .f = cmd_tests_set_async_parsed,
+    .data = (void *) (intptr_t) false,
+    .help_str = "set tests noasync port <eth_port> test-case-id <tcid>",
+    .tokens = {
+        (void *)&cmd_tests_set_async_T_set,
+        (void *)&cmd_tests_set_async_T_tests,
+        (void *)&cmd_tests_set_async_T_noasync,
+        (void *)&cmd_tests_set_async_T_port_kw,
+        (void *)&cmd_tests_set_async_T_port,
+        (void *)&cmd_tests_set_async_T_tcid_kw,
+        (void *)&cmd_tests_set_async_T_tcid,
+        NULL,
+    },
+};
+
+/****************************************************************************
+ * - "set tests port <eth_port> mtu <mtu_value>"
+ ****************************************************************************/
+ struct cmd_tests_set_mtu_result {
+    cmdline_fixed_string_t set;
+    cmdline_fixed_string_t tests;
+    cmdline_fixed_string_t port_kw;
+    uint32_t               port;
+    cmdline_fixed_string_t mtu_kw;
+    uint16_t               mtu;
+};
+
+static cmdline_parse_token_string_t cmd_tests_set_mtu_T_set =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_mtu_result, set, "set");
+static cmdline_parse_token_string_t cmd_tests_set_mtu_T_tests =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_mtu_result, tests, "tests");
+
+static cmdline_parse_token_string_t cmd_tests_set_mtu_T_port_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_mtu_result, port_kw, "port");
+static cmdline_parse_token_num_t cmd_tests_set_mtu_T_port =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_mtu_result, port, UINT32);
+
+static cmdline_parse_token_string_t cmd_tests_set_mtu_T_mtu_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_mtu_result, mtu_kw, "mtu");
+static cmdline_parse_token_num_t cmd_tests_set_mtu_T_mtu =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_mtu_result, mtu, UINT16);
+
+OPT_FILL_TYPEDEF(port, tpg_port_options_t);
+
+OPT_FILL_DEFINE(port, tpg_port_options_t, po_mtu, uint16_t);
+
+static void cmd_tests_set_mtu_parsed(void *parsed_result, struct cmdline *cl,
+                                     void *data __rte_unused)
+{
+    printer_arg_t                    parg;
+    struct cmd_tests_set_mtu_result *pr;
+    OPT_FILL_TYPE_NAME(port)        *fill_param = data;
+    tpg_port_options_t               port_opts;
+
+    parg = TPG_PRINTER_ARG(cli_printer, cl);
+    pr = parsed_result;
+    fill_param->opt_cb(&port_opts, &pr->mtu);
+
+    if (test_mgmt_set_port_options(pr->port, &port_opts, &parg) == 0)
+        cmdline_printf(cl, "Port %"PRIu32" MTU updated!\n",
+                       pr->port);
+    else
+        cmdline_printf(cl,
+                       "ERROR: Failed updating MTU config on port %"PRIu32"\n",
+                       pr->port);
+}
+
+cmdline_parse_inst_t cmd_tests_set_mtu = {
+    .f = cmd_tests_set_mtu_parsed,
+    .data = (void *) &OPT_FILL_PARAM_NAME(port, po_mtu),
+    .help_str = "set tests mtu port <eth_port> <mtu-value>",
+    .tokens = {
+        (void *)&cmd_tests_set_mtu_T_set,
+        (void *)&cmd_tests_set_mtu_T_tests,
+        (void *)&cmd_tests_set_mtu_T_mtu_kw,
+        (void *)&cmd_tests_set_mtu_T_port_kw,
+        (void *)&cmd_tests_set_mtu_T_port,
+        (void *)&cmd_tests_set_mtu_T_mtu,
+        NULL,
+    },
+};
+
+/****************************************************************************
+ * - "set tests tcp-options port <eth_port> test-case-id <tcid> option value"
+ ****************************************************************************/
+struct cmd_tests_set_tcp_opts_result {
+    cmdline_fixed_string_t set;
+    cmdline_fixed_string_t tests;
+    cmdline_fixed_string_t tcp_options;
+    cmdline_fixed_string_t port_kw;
+    uint32_t               port;
+    cmdline_fixed_string_t tcid_kw;
+    uint32_t               tcid;
+    cmdline_fixed_string_t win_size;
+    cmdline_fixed_string_t syn_retry;
+    cmdline_fixed_string_t syn_ack_retry;
+    cmdline_fixed_string_t data_retry;
+    cmdline_fixed_string_t retry;
+    cmdline_fixed_string_t rto;
+    cmdline_fixed_string_t fin_to;
+    cmdline_fixed_string_t twait_to;
+    cmdline_fixed_string_t orphan_to;
+    cmdline_fixed_string_t twait_skip;
+
+    union {
+        uint32_t opt_val_32;
+        uint8_t  opt_val_8;
+        bool     opt_val_bool;
+    } opt_u;
+};
+
+static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_set =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, set, "set");
+static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_tests =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, tests, "tests");
+static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_tcp_options =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, tcp_options, "tcp-options");
+
+static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_port_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, port_kw, "port");
+static cmdline_parse_token_num_t cmd_tests_set_tcp_opts_T_port =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_tcp_opts_result, port, UINT32);
+
+static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_tcid_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, tcid_kw, "test-case-id");
+static cmdline_parse_token_num_t cmd_tests_set_tcp_opts_T_tcid =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_tcp_opts_result, tcid, UINT32);
+
+static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_win_size =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, win_size, "win-size");
+static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_syn_retry =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, syn_retry, "syn-retry");
+static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_syn_ack_retry =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, syn_ack_retry, "syn-ack-retry");
+static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_data_retry =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, data_retry, "data-retry");
+static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_retry =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, retry, "retry");
+static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_rto =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, rto, "rto");
+static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_fin_to =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, fin_to, "fin-to");
+static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_twait_to =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, twait_to, "twait-to");
+static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_orphan_to =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, orphan_to, "orphan-to");
+static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_twait_skip =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, twait_skip, "twait-skip");
+
+static cmdline_parse_token_num_t cmd_tests_set_tcp_opts_T_opt_val_32 =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_tcp_opts_result, opt_u.opt_val_32, UINT32);
+static cmdline_parse_token_num_t cmd_tests_set_tcp_opts_T_opt_val_8 =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_tcp_opts_result, opt_u.opt_val_8, UINT8);
+static cmdline_parse_token_num_t cmd_tests_set_tcp_opts_T_opt_val_bool =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_tcp_opts_result, opt_u.opt_val_bool, UINT8);
+
+
+OPT_FILL_TYPEDEF(tcp, tpg_tcp_sockopt_t);
+
+OPT_FILL_DEFINE(tcp, tpg_tcp_sockopt_t, to_win_size, uint32_t);
+OPT_FILL_DEFINE(tcp, tpg_tcp_sockopt_t, to_syn_retry_cnt, uint8_t);
+OPT_FILL_DEFINE(tcp, tpg_tcp_sockopt_t, to_syn_ack_retry_cnt, uint8_t);
+OPT_FILL_DEFINE(tcp, tpg_tcp_sockopt_t, to_data_retry_cnt, uint8_t);
+OPT_FILL_DEFINE(tcp, tpg_tcp_sockopt_t, to_retry_cnt, uint8_t);
+OPT_FILL_DEFINE(tcp, tpg_tcp_sockopt_t, to_rto, uint32_t);
+OPT_FILL_DEFINE(tcp, tpg_tcp_sockopt_t, to_fin_to, uint32_t);
+OPT_FILL_DEFINE(tcp, tpg_tcp_sockopt_t, to_twait_to, uint32_t);
+OPT_FILL_DEFINE(tcp, tpg_tcp_sockopt_t, to_orphan_to, uint32_t);
+OPT_FILL_DEFINE(tcp, tpg_tcp_sockopt_t, to_skip_timewait, bool);
+
+static void cmd_tests_set_tcp_opts_parsed(void *parsed_result,
+                                          struct cmdline *cl,
+                                          void *data)
+{
+    printer_arg_t                         parg;
+    struct cmd_tests_set_tcp_opts_result *pr;
+    OPT_FILL_TYPE_NAME(tcp)              *fill_param = data;
+    tpg_tcp_sockopt_t                     tcp_sockopt;
+
+    parg = TPG_PRINTER_ARG(cli_printer, cl);
+    pr = parsed_result;
+    fill_param->opt_cb(&tcp_sockopt, &pr->opt_u);
+
+    if (test_mgmt_set_tcp_sockopt(pr->port, pr->tcid, &tcp_sockopt, &parg) == 0)
+        cmdline_printf(cl,
+                       "Port %"PRIu32", Test Case %"PRIu32" TCP Socket Options updated!\n",
+                       pr->port,
+                       pr->tcid);
+    else
+        cmdline_printf(cl,
+                       "ERROR: Failed updating test case %"PRIu32
+                       " TCP Socket Options on port %"PRIu32"\n",
+                       pr->tcid,
+                       pr->port);
+}
+
+cmdline_parse_inst_t cmd_tests_set_tcp_opts_win_size = {
+    .f = cmd_tests_set_tcp_opts_parsed,
+    .data = (void *) &OPT_FILL_PARAM_NAME(tcp, to_win_size),
+    .help_str = "set tests tcp-options port <eth_port> test-case-id <tcid> win-size <size>",
+    .tokens = {
+        (void *)&cmd_tests_set_tcp_opts_T_set,
+        (void *)&cmd_tests_set_tcp_opts_T_tests,
+        (void *)&cmd_tests_set_tcp_opts_T_tcp_options,
+        (void *)&cmd_tests_set_tcp_opts_T_port_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_port,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid,
+        (void *)&cmd_tests_set_tcp_opts_T_win_size,
+        (void *)&cmd_tests_set_tcp_opts_T_opt_val_32,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_tests_set_tcp_opts_syn_retry = {
+    .f = cmd_tests_set_tcp_opts_parsed,
+    .data = (void *) &OPT_FILL_PARAM_NAME(tcp, to_syn_retry_cnt),
+    .help_str = "set tests tcp-options port <eth_port> test-case-id <tcid> syn-retry <cnt>",
+    .tokens = {
+        (void *)&cmd_tests_set_tcp_opts_T_set,
+        (void *)&cmd_tests_set_tcp_opts_T_tests,
+        (void *)&cmd_tests_set_tcp_opts_T_tcp_options,
+        (void *)&cmd_tests_set_tcp_opts_T_port_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_port,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid,
+        (void *)&cmd_tests_set_tcp_opts_T_syn_retry,
+        (void *)&cmd_tests_set_tcp_opts_T_opt_val_8,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_tests_set_tcp_opts_syn_ack_retry = {
+    .f = cmd_tests_set_tcp_opts_parsed,
+    .data = (void *) &OPT_FILL_PARAM_NAME(tcp, to_syn_ack_retry_cnt),
+    .help_str = "set tests tcp-options port <eth_port> test-case-id <tcid> syn-ack-retry <cnt>",
+    .tokens = {
+        (void *)&cmd_tests_set_tcp_opts_T_set,
+        (void *)&cmd_tests_set_tcp_opts_T_tests,
+        (void *)&cmd_tests_set_tcp_opts_T_tcp_options,
+        (void *)&cmd_tests_set_tcp_opts_T_port_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_port,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid,
+        (void *)&cmd_tests_set_tcp_opts_T_syn_ack_retry,
+        (void *)&cmd_tests_set_tcp_opts_T_opt_val_8,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_tests_set_tcp_opts_data_retry = {
+    .f = cmd_tests_set_tcp_opts_parsed,
+    .data = (void *) &OPT_FILL_PARAM_NAME(tcp, to_data_retry_cnt),
+    .help_str = "set tests tcp-options port <eth_port> test-case-id <tcid> data-retry <cnt>",
+    .tokens = {
+        (void *)&cmd_tests_set_tcp_opts_T_set,
+        (void *)&cmd_tests_set_tcp_opts_T_tests,
+        (void *)&cmd_tests_set_tcp_opts_T_tcp_options,
+        (void *)&cmd_tests_set_tcp_opts_T_port_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_port,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid,
+        (void *)&cmd_tests_set_tcp_opts_T_data_retry,
+        (void *)&cmd_tests_set_tcp_opts_T_opt_val_8,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_tests_set_tcp_opts_retry = {
+    .f = cmd_tests_set_tcp_opts_parsed,
+    .data = (void *) &OPT_FILL_PARAM_NAME(tcp, to_retry_cnt),
+    .help_str = "set tests tcp-options port <eth_port> test-case-id <tcid> retry <cnt>",
+    .tokens = {
+        (void *)&cmd_tests_set_tcp_opts_T_set,
+        (void *)&cmd_tests_set_tcp_opts_T_tests,
+        (void *)&cmd_tests_set_tcp_opts_T_tcp_options,
+        (void *)&cmd_tests_set_tcp_opts_T_port_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_port,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid,
+        (void *)&cmd_tests_set_tcp_opts_T_retry,
+        (void *)&cmd_tests_set_tcp_opts_T_opt_val_8,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_tests_set_tcp_opts_rto = {
+    .f = cmd_tests_set_tcp_opts_parsed,
+    .data = (void *) &OPT_FILL_PARAM_NAME(tcp, to_rto),
+    .help_str = "set tests tcp-options port <eth_port> test-case-id <tcid> rto <rto_ms>",
+    .tokens = {
+        (void *)&cmd_tests_set_tcp_opts_T_set,
+        (void *)&cmd_tests_set_tcp_opts_T_tests,
+        (void *)&cmd_tests_set_tcp_opts_T_tcp_options,
+        (void *)&cmd_tests_set_tcp_opts_T_port_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_port,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid,
+        (void *)&cmd_tests_set_tcp_opts_T_rto,
+        (void *)&cmd_tests_set_tcp_opts_T_opt_val_32,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_tests_set_tcp_opts_fin_to = {
+    .f = cmd_tests_set_tcp_opts_parsed,
+    .data = (void *) &OPT_FILL_PARAM_NAME(tcp, to_fin_to),
+    .help_str = "set tests tcp-options port <eth_port> test-case-id <tcid> fin-to <fin_to_ms>",
+    .tokens = {
+        (void *)&cmd_tests_set_tcp_opts_T_set,
+        (void *)&cmd_tests_set_tcp_opts_T_tests,
+        (void *)&cmd_tests_set_tcp_opts_T_tcp_options,
+        (void *)&cmd_tests_set_tcp_opts_T_port_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_port,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid,
+        (void *)&cmd_tests_set_tcp_opts_T_fin_to,
+        (void *)&cmd_tests_set_tcp_opts_T_opt_val_32,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_tests_set_tcp_opts_twait_to = {
+    .f = cmd_tests_set_tcp_opts_parsed,
+    .data = (void *) &OPT_FILL_PARAM_NAME(tcp, to_twait_to),
+    .help_str = "set tests tcp-options port <eth_port> test-case-id <tcid> twait-to <twait_to_ms>",
+    .tokens = {
+        (void *)&cmd_tests_set_tcp_opts_T_set,
+        (void *)&cmd_tests_set_tcp_opts_T_tests,
+        (void *)&cmd_tests_set_tcp_opts_T_tcp_options,
+        (void *)&cmd_tests_set_tcp_opts_T_port_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_port,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid,
+        (void *)&cmd_tests_set_tcp_opts_T_twait_to,
+        (void *)&cmd_tests_set_tcp_opts_T_opt_val_32,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_tests_set_tcp_opts_orphan_to = {
+    .f = cmd_tests_set_tcp_opts_parsed,
+    .data = (void *) &OPT_FILL_PARAM_NAME(tcp, to_orphan_to),
+    .help_str = "set tests tcp-options port <eth_port> test-case-id <tcid> orphan-to <orphan_to_us>",
+    .tokens = {
+        (void *)&cmd_tests_set_tcp_opts_T_set,
+        (void *)&cmd_tests_set_tcp_opts_T_tests,
+        (void *)&cmd_tests_set_tcp_opts_T_tcp_options,
+        (void *)&cmd_tests_set_tcp_opts_T_port_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_port,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid,
+        (void *)&cmd_tests_set_tcp_opts_T_orphan_to,
+        (void *)&cmd_tests_set_tcp_opts_T_opt_val_32,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_tests_set_tcp_opts_twait_skip = {
+    .f = cmd_tests_set_tcp_opts_parsed,
+    .data = (void *) &OPT_FILL_PARAM_NAME(tcp, to_skip_timewait),
+    .help_str = "set tests tcp-options port <eth_port> test-case-id <tcid> twait-skip <true|false>",
+    .tokens = {
+        (void *)&cmd_tests_set_tcp_opts_T_set,
+        (void *)&cmd_tests_set_tcp_opts_T_tests,
+        (void *)&cmd_tests_set_tcp_opts_T_tcp_options,
+        (void *)&cmd_tests_set_tcp_opts_T_port_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_port,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid,
+        (void *)&cmd_tests_set_tcp_opts_T_twait_skip,
+        (void *)&cmd_tests_set_tcp_opts_T_opt_val_bool,
+        NULL,
+    },
+};
+
+/****************************************************************************
+ * - "show tests tcp-options port <eth_port> test-case-id <tcid>"
+ ****************************************************************************/
+ struct cmd_tests_show_tcp_opts_result {
+    cmdline_fixed_string_t show;
+    cmdline_fixed_string_t tests;
+    cmdline_fixed_string_t tcp_options;
+    cmdline_fixed_string_t port_kw;
+    uint32_t               port;
+    cmdline_fixed_string_t tcid_kw;
+    uint32_t               tcid;
+};
+
+static cmdline_parse_token_string_t cmd_tests_show_tcp_opts_T_set =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_show_tcp_opts_result, show, "show");
+static cmdline_parse_token_string_t cmd_tests_show_tcp_opts_T_tests =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_show_tcp_opts_result, tests, "tests");
+static cmdline_parse_token_string_t cmd_tests_show_tcp_opts_T_tcp_options =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_show_tcp_opts_result, tcp_options, "tcp-options");
+
+static cmdline_parse_token_string_t cmd_tests_show_tcp_opts_T_port_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_show_tcp_opts_result, port_kw, "port");
+static cmdline_parse_token_num_t cmd_tests_show_tcp_opts_T_port =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_show_tcp_opts_result, port, UINT32);
+
+static cmdline_parse_token_string_t cmd_tests_show_tcp_opts_T_tcid_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_show_tcp_opts_result, tcid_kw, "test-case-id");
+static cmdline_parse_token_num_t cmd_tests_show_tcp_opts_T_tcid =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_show_tcp_opts_result, tcid, UINT32);
+
+static void cmd_tests_show_tcp_opts_parsed(void *parsed_result,
+                                           struct cmdline *cl,
+                                           void *data __rte_unused)
+{
+    printer_arg_t                          parg;
+    struct cmd_tests_show_tcp_opts_result *pr;
+    tpg_tcp_sockopt_t                      tcp_sockopt;
+
+    parg = TPG_PRINTER_ARG(cli_printer, cl);
+    pr = parsed_result;
+
+    if (test_mgmt_get_tcp_sockopt(pr->port, pr->tcid, &tcp_sockopt, &parg) != 0)
+        return;
+
+    cmdline_printf(cl, "WIN   SYN SYN/ACK DATA RETRY RTO(ms) FIN(ms) TW(ms)  ORP(ms) TW-SKIP\n");
+    cmdline_printf(cl, "----- --- ------- ---- ----- ------- ------- ------- ------- -------\n");
+    cmdline_printf(cl, "%5u %3u %7u %4u %5u %7u %7u %7u %7u %7u\n",
+                   tcp_sockopt.to_win_size,
+                   tcp_sockopt.to_syn_retry_cnt,
+                   tcp_sockopt.to_syn_ack_retry_cnt,
+                   tcp_sockopt.to_data_retry_cnt,
+                   tcp_sockopt.to_retry_cnt,
+                   tcp_sockopt.to_rto,
+                   tcp_sockopt.to_fin_to,
+                   tcp_sockopt.to_twait_to,
+                   tcp_sockopt.to_orphan_to,
+                   tcp_sockopt.to_skip_timewait);
+    cmdline_printf(cl, "\n\n");
+}
+
+cmdline_parse_inst_t cmd_tests_show_tcp_opts = {
+    .f = cmd_tests_show_tcp_opts_parsed,
+    .data = NULL,
+    .help_str = "show tests tcp-options port <eth_port> test-case-id <tcid>",
+    .tokens = {
+        (void *)&cmd_tests_show_tcp_opts_T_set,
+        (void *)&cmd_tests_show_tcp_opts_T_tests,
+        (void *)&cmd_tests_show_tcp_opts_T_tcp_options,
+        (void *)&cmd_tests_show_tcp_opts_T_port_kw,
+        (void *)&cmd_tests_show_tcp_opts_T_port,
+        (void *)&cmd_tests_show_tcp_opts_T_tcid_kw,
+        (void *)&cmd_tests_show_tcp_opts_T_tcid,
         NULL,
     },
 };
@@ -1314,6 +1806,19 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_set_timeouts_infinite,
     &cmd_tests_set_criteria,
     &cmd_tests_set_noasync,
+    &cmd_tests_set_async,
+    &cmd_tests_set_mtu,
+    &cmd_tests_set_tcp_opts_win_size,
+    &cmd_tests_set_tcp_opts_syn_retry,
+    &cmd_tests_set_tcp_opts_syn_ack_retry,
+    &cmd_tests_set_tcp_opts_data_retry,
+    &cmd_tests_set_tcp_opts_retry,
+    &cmd_tests_set_tcp_opts_rto,
+    &cmd_tests_set_tcp_opts_fin_to,
+    &cmd_tests_set_tcp_opts_twait_to,
+    &cmd_tests_set_tcp_opts_orphan_to,
+    &cmd_tests_set_tcp_opts_twait_skip,
+    &cmd_tests_show_tcp_opts,
     NULL,
 };
 

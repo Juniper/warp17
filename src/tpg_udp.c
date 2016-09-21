@@ -157,7 +157,7 @@ static udp_control_block_t *ucb_clone(udp_control_block_t *ucb)
 
     stats = STATS_LOCAL(udp_statistics_t, ucb->ucb_l4.l4cb_interface);
     new_ucb = tlkp_alloc_ucb();
-    if (new_ucb == NULL) {
+    if (unlikely(new_ucb == NULL)) {
         INC_STATS(stats, us_ucb_alloc_err);
         return NULL;
     }
@@ -491,7 +491,7 @@ int udp_open_v4_connection(udp_control_block_t **ucb, uint32_t eth_port,
                            uint32_t src_ip_addr, uint16_t src_port,
                            uint32_t dst_ip_addr, uint16_t dst_port,
                            uint32_t test_case_id, tpg_app_proto_t app_id,
-                           uint32_t flags)
+                           sockopt_t *sockopt, uint32_t flags)
 {
     int                  rc = 0;
     udp_control_block_t *ucb_p;
@@ -503,6 +503,9 @@ int udp_open_v4_connection(udp_control_block_t **ucb, uint32_t eth_port,
         return -EINVAL;
 
     ucb_reuse = (flags & TCG_CB_REUSE_CB);
+
+    if (unlikely(!ucb_reuse && sockopt == NULL))
+        return -EINVAL;
 
     /* If the *ucb is NULL we should malloc one and mark that we need
      * to free it later.
@@ -535,6 +538,7 @@ int udp_open_v4_connection(udp_control_block_t **ucb, uint32_t eth_port,
                       eth_port,
                       test_case_id,
                       app_id,
+                      sockopt,
                       (flags | malloc_flag));
     }
 
@@ -570,13 +574,14 @@ int udp_open_v4_connection(udp_control_block_t **ucb, uint32_t eth_port,
 int udp_listen_v4(udp_control_block_t **ucb, uint32_t eth_port,
                   uint32_t local_ip_addr, uint16_t local_port,
                   uint32_t test_case_id, tpg_app_proto_t app_id,
-                  uint32_t flags)
+                  sockopt_t *sockopt, uint32_t flags)
 {
     return udp_open_v4_connection(ucb, eth_port, local_ip_addr, local_port,
                                   0, /* remote_ip ANY */
                                   0, /* remote_port ANY */
                                   test_case_id,
                                   app_id,
+                                  sockopt,
                                   flags);
 }
 

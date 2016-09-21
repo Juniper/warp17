@@ -205,20 +205,21 @@ static void port_setup_reta_table(uint8_t port, int nr_of_queus)
  ****************************************************************************/
 static bool port_setup_port(uint8_t port)
 {
-    int               rc;
-    int               queue;
-    uint16_t          number_of_rings;
-    struct ether_addr mac_addr;
+    int                rc;
+    int                queue;
+    uint16_t           number_of_rings;
+    struct ether_addr  mac_addr;
+    tpg_port_options_t default_port_options;
 
     struct rte_eth_conf default_port_config = {
         .rxmode = {
             .mq_mode        = ETH_MQ_RX_RSS,
-            .max_rx_pkt_len = GCFG_MBUF_PACKET_FRAGMENT_SIZE,
+            .max_rx_pkt_len = PORT_MAX_MTU,
             .split_hdr_size = 0,
             .header_split   = 0, /**< Header Split disabled */
             .hw_ip_checksum = 1, /**< IP checksum offload enabled */
             .hw_vlan_filter = 0, /**< VLAN filtering disabled */
-            .jumbo_frame    = 0, /**< Jumbo Frame Support disabled */
+            .jumbo_frame    = 1, /**< Jumbo Frame Support disabled */
             .hw_strip_crc   = 0, /**< CRC stripped by hardware */
         },
         .rx_adv_conf = {
@@ -336,8 +337,9 @@ static bool port_setup_port(uint8_t port)
 
     rc  = rte_eth_dev_start(port);
     if (rc < 0) {
-        RTE_LOG(ERR, USER1, "ERROR: Failed rte_eth_dev_start(%u), returned %d!\n",
-                port, rc);
+        RTE_LOG(ERR, USER1,
+                "ERROR: Failed rte_eth_dev_start(%u), returned %s(%d)!\n",
+                port, rte_strerror(-rc), -rc);
         return false;
     }
 
@@ -354,6 +356,10 @@ static bool port_setup_port(uint8_t port)
     rte_eth_dev_get_mtu(port, &port_dev_info[port].pi_mtu);
 
     port_setup_reta_table(port, number_of_rings);
+
+
+    tpg_xlate_default_PortOptions(&default_port_options);
+    port_set_conn_options(port, &default_port_options);
 
     return true;
 }
@@ -664,6 +670,35 @@ void port_total_stats_get(uint32_t port, port_statistics_t *total_port_stats)
 
         total_port_stats->ps_rx_ring_if_failed += port_stats->ps_rx_ring_if_failed;
     }
+}
+
+/*****************************************************************************
+ * port_set_conn_options()
+ ****************************************************************************/
+void port_set_conn_options(uint32_t port, tpg_port_options_t *options)
+{
+    int rc;
+
+    /* Store the MTU in our own structures. Configure in HW if possible.
+     * For example, for ring interfaces the hw configuration is not supported.
+     */
+    port_dev_info[port].pi_mtu = options->po_mtu;
+
+    /* This can fail if hw doesn't support it.. */
+    rc = rte_eth_dev_set_mtu(port, options->po_mtu);
+    if (rc != 0)
+        RTE_LOG(WARNING, USER1,
+                "WARNING: Port %u Failed to set MTU in HW: %s(%d)\n",
+                port, rte_strerror(-rc), -rc);
+}
+
+/*****************************************************************************
+ * port_get_conn_options()
+ ****************************************************************************/
+void port_get_conn_options(uint32_t port, tpg_port_options_t *out)
+{
+    out->po_mtu = port_dev_info[port].pi_mtu;
+    out->has_po_mtu = true;
 }
 
 /*****************************************************************************
@@ -1073,26 +1108,30 @@ static void cmd_show_port_info_parsed(void *parsed_result __rte_unused,
 {
     int port;
 
-    cmdline_printf(cl, "                                       Queues max  rx      tx         rss offloads\n");
-    cmdline_printf(cl, "Port Driver           PCI address  Soc rx    tx    offload offload    IPv4   IPv6  ex  2\n");
-    cmdline_printf(cl, "---- ---------------- ------------ --- ----- ----- ------- ---------- ------+---------+--\n");
+    cmdline_printf(cl, "                                             Queues max  rx      tx         rss offloads\n");
+    cmdline_printf(cl, "Port Driver           MTU   PCI address  Soc rx    tx    offload offload    IPv4   IPv6  ex  2\n");
+    cmdline_printf(cl, "---- ---------------- ----- ------------ --- ----- ----- ------- ---------- ------+---------+--\n");
 
     for (port = 0; port < rte_eth_dev_count(); port++) {
 
         struct rte_eth_dev_info  dev_info;
+        struct rte_pci_device   *pci_dev = NULL;
         struct rte_pci_addr     *pci = NULL;
 
         rte_eth_dev_info_get(port, &dev_info);
 
-        if (dev_info.pci_dev)
+        if (dev_info.pci_dev) {
+            pci_dev = dev_info.pci_dev;
             pci = &dev_info.pci_dev->addr;
+        }
 
         cmdline_printf(cl,
-                       "%4u %-16.16s "PCI_PRI_FMT" %3d %5u %5u %c%c%c%c%c%c%c %c%c%c%c%c%c%c%c%c%c %c%c%c%c%c%c %c%c%c%c%c%c%c%c%c %c%c\n",
+                       "%4u %-16.16s %5u "PCI_PRI_FMT" %3d %5u %5u %c%c%c%c%c%c%c %c%c%c%c%c%c%c%c%c%c %c%c%c%c%c%c %c%c%c%c%c%c%c%c%c %c%c\n",
                        port, dev_info.driver_name,
-                       (pci ? pci->domain : '-'), (pci ? pci->bus : '-'),
-                       (pci ? pci->devid : '-'), (pci ? pci->function : '-'),
-                       port_dev_info[port].pi_numa_node,
+                       port_dev_info[port].pi_mtu,
+                       (pci ? pci->domain : 0), (pci ? pci->bus : 0),
+                       (pci ? pci->devid : 0), (pci ? pci->function : 0),
+                       (pci_dev->numa_node == -1 ? -1 : port_dev_info[port].pi_numa_node),
                        dev_info.max_rx_queues, dev_info.max_tx_queues,
 
                        (dev_info.rx_offload_capa & DEV_RX_OFFLOAD_VLAN_STRIP) ? 'v' : '-',

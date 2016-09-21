@@ -91,6 +91,7 @@ extern void                 tlkp_init_ucb(udp_control_block_t *ucb,
                                           uint32_t ucb_interface,
                                           uint32_t test_case_id,
                                           tpg_app_proto_t app_id,
+                                          sockopt_t *sockopt,
                                           uint32_t flags);
 extern void                 tlkp_init_ucb_client(udp_control_block_t *tcb,
                                                  uint32_t local_addr,
@@ -101,6 +102,7 @@ extern void                 tlkp_init_ucb_client(udp_control_block_t *tcb,
                                                  uint32_t tcb_interface,
                                                  uint32_t test_case_id,
                                                  tpg_app_proto_t app_id,
+                                                 sockopt_t *sockopt,
                                                  uint32_t flags);
 extern void                 tlkp_free_ucb(udp_control_block_t *ucb);
 extern unsigned int         tlkp_total_ucbs_allocated(void);

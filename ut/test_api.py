@@ -64,6 +64,7 @@ sys.path.append('../python')
 sys.path.append('../api/generated/py')
 
 from warp17_ut import Warp17UnitTestCase
+from warp17_ut import Warp17NoTrafficTestCase
 from b2b_setup import *
 
 from warp17_common_pb2    import *
@@ -568,54 +569,54 @@ class TestApi(Warp17UnitTestCase):
 ##############################################################################
 # Partial Get/Update APIs.
 ##############################################################################
-def _get_dummy_server_test(eth_port, tc_id):
-    l4_scfg = L4Server(l4s_proto=TCP,
-                       l4s_tcp_udp=TcpUdpServer(tus_ports=b2b_ports(1)))
-    app_scfg = AppServer(as_app_proto=RAW,
-                         as_raw=RawServer(rs_req_plen=42,
-                                          rs_resp_plen=42))
-    return TestCase(tc_type=SERVER, tc_eth_port=eth_port, tc_id=tc_id,
-                    tc_server=Server(srv_ips=b2b_sips(1, 1),
-                                     srv_l4=l4_scfg,
-                                     srv_app=app_scfg),
-                    tc_criteria=TestCriteria(tc_crit_type=SRV_UP,
-                                             tc_srv_up=1),
-                    tc_async=False)
-
-def _get_dummy_client_test(eth_port, tc_id):
-    l4cfg = L4Client(l4c_proto=TCP,
-                     l4c_tcp_udp=TcpUdpClient(tuc_sports=b2b_ports(1),
-                                              tuc_dports=b2b_ports(1)))
-
-    rate_cfg = RateClient(rc_open_rate=Rate(r_value=42),
-                          rc_close_rate=Rate(r_value=42),
-                          rc_send_rate=Rate(r_value=42))
-
-    delay_cfg = DelayClient(dc_init_delay=Delay(d_value=42),
-                            dc_uptime=Delay(d_value=42),
-                            dc_downtime=Delay(d_value=42))
-
-    app_cfg = AppClient(ac_app_proto=RAW,
-                        ac_raw=RawClient(rc_req_plen=1,
-                                         rc_resp_plen=1))
-
-    return TestCase(tc_type=CLIENT, tc_eth_port=eth_port,
-                    tc_id=tc_id,
-                    tc_client=Client(cl_src_ips=b2b_sips(eth_port, 1),
-                                     cl_dst_ips=b2b_dips(eth_port, 1),
-                                     cl_l4=l4cfg,
-                                     cl_rates=rate_cfg,
-                                     cl_delays=delay_cfg,
-                                     cl_app=app_cfg),
-                    tc_criteria=TestCriteria(tc_crit_type=RUN_TIME,
-                                             tc_run_time_s=42),
-                    tc_async=False)
-
 class TestPartialPortApi(Warp17UnitTestCase):
     """Tests the functionality of the partial update/get port config APIs."""
     """Assumes a B2B setup with even two ports."""
     """Port 0 <-> Port 1"""
     PORT_CNT = 2
+
+    def _get_server_test(self, eth_port, tc_id):
+        l4_scfg = L4Server(l4s_proto=TCP,
+                           l4s_tcp_udp=TcpUdpServer(tus_ports=b2b_ports(1)))
+        app_scfg = AppServer(as_app_proto=RAW,
+                             as_raw=RawServer(rs_req_plen=42,
+                                              rs_resp_plen=42))
+        return TestCase(tc_type=SERVER, tc_eth_port=eth_port, tc_id=tc_id,
+                        tc_server=Server(srv_ips=b2b_sips(1, 1),
+                                         srv_l4=l4_scfg,
+                                         srv_app=app_scfg),
+                        tc_criteria=TestCriteria(tc_crit_type=SRV_UP,
+                                                 tc_srv_up=1),
+                        tc_async=False)
+
+    def _get_client_test(self, eth_port, tc_id):
+        l4cfg = L4Client(l4c_proto=TCP,
+                         l4c_tcp_udp=TcpUdpClient(tuc_sports=b2b_ports(1),
+                                                  tuc_dports=b2b_ports(1)))
+
+        rate_cfg = RateClient(rc_open_rate=Rate(r_value=42),
+                              rc_close_rate=Rate(r_value=42),
+                              rc_send_rate=Rate(r_value=42))
+
+        delay_cfg = DelayClient(dc_init_delay=Delay(d_value=42),
+                                dc_uptime=Delay(d_value=42),
+                                dc_downtime=Delay(d_value=42))
+
+        app_cfg = AppClient(ac_app_proto=RAW,
+                            ac_raw=RawClient(rc_req_plen=1,
+                                             rc_resp_plen=1))
+
+        return TestCase(tc_type=CLIENT, tc_eth_port=eth_port,
+                        tc_id=tc_id,
+                        tc_client=Client(cl_src_ips=b2b_sips(eth_port, 1),
+                                         cl_dst_ips=b2b_dips(eth_port, 1),
+                                         cl_l4=l4cfg,
+                                         cl_rates=rate_cfg,
+                                         cl_delays=delay_cfg,
+                                         cl_app=app_cfg),
+                        tc_criteria=TestCriteria(tc_crit_type=RUN_TIME,
+                                                 tc_run_time_s=42),
+                        tc_async=False)
 
     def setUp(self):
         self._pcfg = b2b_configure_port(eth_port=0,
@@ -665,7 +666,7 @@ class TestPartialPortApi(Warp17UnitTestCase):
         """Tests the ConfigureL3Intf API when tests are already running"""
 
         self.assertEqual(self.warp17_call('ConfigureTestCase',
-                                          _get_dummy_server_test(0, 0)).e_code,
+                                          self._get_server_test(0, 0)).e_code,
                          0,
                          'Configure Test Case')
         self.assertEqual(self.warp17_call('PortStart', PortArg(pa_eth_port=0)).e_code, 0,
@@ -718,7 +719,7 @@ class TestPartialPortApi(Warp17UnitTestCase):
         """Tests the ConfigureL3Gw API when tests are already running"""
 
         self.assertEqual(self.warp17_call('ConfigureTestCase',
-                                          _get_dummy_server_test(0, 0)).e_code,
+                                          self._get_server_test(0, 0)).e_code,
                          0,
                          'Configure Test Case')
         self.assertEqual(self.warp17_call('PortStart', PortArg(pa_eth_port=0)).e_code, 0,
@@ -733,174 +734,99 @@ class TestPartialPortApi(Warp17UnitTestCase):
         self.warp17_call('PortStop', PortArg(pa_eth_port=0))
         self.warp17_call('DelTestCase', TestCaseArg(tca_eth_port=0, tca_test_case_id=0))
 
-class TestPartialApiBase:
-    def test_partial_test_case_update_valid(self):
-        """Tests the UpdateTestCase* API with valid configs"""
-        self._update_calls(self._tc_arg, 0)
+class TestPartialApi(Warp17NoTrafficTestCase, Warp17UnitTestCase):
+    """Tests the functionality of the partial update config APIs."""
 
-    def test_partial_test_case_update_invalid_port(self):
-        """Tests the UpdateTestCase* API with invalid ports"""
-        tc_arg = TestCaseArg(tca_eth_port=self.PORT_CNT + 1,
-                             tca_test_case_id=self._tc_arg.tca_test_case_id)
-        self._update_calls(tc_arg, -errno.EINVAL)
+    def get_updates(self):
+        tca = TestCaseArg(tca_eth_port=0, tca_test_case_id=0)
 
-    def test_partial_test_case_update_invalid_test_case(self):
-        """Tests the UpdateTestCase* API with invalid test case ids"""
-        tc_arg = TestCaseArg(tca_eth_port=self._tc_arg.tca_eth_port,
-                             tca_test_case_id=TPG_TEST_MAX_ENTRIES + 1)
-        self._update_calls(tc_arg, -errno.EINVAL)
+        # First client updates:
+        yield (UpdateArg(ua_tc_arg=tca,
+                         ua_rate_open=Rate(r_value=84),
+                         ua_rate_send=Rate(r_value=84),
+                         ua_rate_close=Rate(r_value=84)), None)
 
-    def test_partial_test_case_update_no_test_case(self):
-        """Tests the UpdateTestCase* API with inexistent test case ids"""
-        tc_arg = TestCaseArg(tca_eth_port=self._tc_arg.tca_eth_port,
-                             tca_test_case_id=self._tc_arg.tca_test_case_id + 1)
-        self._update_calls(tc_arg, -errno.ENOENT)
+        yield (UpdateArg(ua_tc_arg=tca,
+                         ua_init_delay=Delay(d_value=84),
+                         ua_uptime=Delay(d_value=84),
+                         ua_downtime=Delay(d_value=84)), None)
 
-    def test_partial_test_case_update_test_running(self):
-        """Tests the UpdateTestCase* API when tests are already running"""
-        err = self.warp17_call('PortStart', self._tc_arg)
-        self.assertEqual(err.e_code, 0, 'PortStart')
+        yield (UpdateArg(ua_tc_arg=tca,
+                         ua_criteria=TestCriteria(tc_crit_type=RUN_TIME,
+                                                  tc_run_time_s=84)), None)
 
-        self._update_calls(self._tc_arg, -errno.EALREADY)
+        # Now server updates:
+        yield (None, UpdateArg(ua_tc_arg=tca,
+                               ua_criteria=TestCriteria(tc_crit_type=SRV_UP,
+                                                        tc_srv_up=42)))
 
-class TestPartialClientApi(Warp17UnitTestCase, TestPartialApiBase):
-    """Tests the functionality of the partial update/get client config APIs."""
-    """Assumes a B2B setup with even two ports."""
-    """Port 0 <-> Port 1"""
-    PORT_CNT = 2
 
-    def setUp(self):
-        tc_cfg = _get_dummy_client_test(0, 0)
-        self._port_arg = PortArg(pa_eth_port=tc_cfg.tc_eth_port)
-        self._tc_arg = TestCaseArg(tca_eth_port=tc_cfg.tc_eth_port,
-                                   tca_test_case_id=tc_cfg.tc_id)
-        self.assertEqual(self.warp17_call('ConfigureTestCase', tc_cfg).e_code,
-                         0,
-                         'Configure Test Case')
+        # Now common updates:
+        for async in [True, False]:
+            yield (UpdateArg(ua_tc_arg=tca, ua_async=async),
+                   UpdateArg(ua_tc_arg=tca, ua_async=async))
+    def get_invalid_updates(self):
+        for _ in []: yield ()
 
-    def tearDown(self):
-        self.warp17_call('PortStop', self._port_arg)
-        self.warp17_call('DelTestCase', self._tc_arg)
+    def _update(self, tc_arg, update_arg, expected_err=0):
+        if update_arg is None:
+            return
 
-    def _update_calls(self, tc_arg, expected_err):
-        invalid_err = -errno.EINVAL if expected_err == 0 else expected_err
+        update_arg.ua_tc_arg.tca_eth_port = tc_arg.tca_eth_port
+        update_arg.ua_tc_arg.tca_test_case_id = tc_arg.tca_test_case_id
+        err = self.warp17_call('UpdateTestCase', update_arg)
+        self.assertEqual(err.e_code, expected_err)
 
-        # Rate updates
-        for rate_type in [OPEN, SEND, CLOSE]:
-            err = self.warp17_call('UpdateTestCaseRate',
-                                   UpdRateArg(ura_tc_arg=tc_arg,
-                                              ura_rate_type=rate_type,
-                                              ura_rate=Rate(r_value=42)))
-            self.assertEqual(err.e_code, expected_err, 'UpdateRate')
+    def update_client(self, tc_arg, update_arg, expected_err=0):
+        self._update(tc_arg, update_arg, expected_err)
 
-        err = self.warp17_call('UpdateTestCaseRate',
-                               UpdRateArg(ura_tc_arg=tc_arg,
-                                          ura_rate_type=CLRT_MAX,
-                                          ura_rate=Rate(r_value=42)))
-        self.assertEqual(err.e_code, invalid_err, 'UpdateRate Invalid')
+    def update_server(self, tc_arg, update_arg, expected_err=0):
+        self._update(tc_arg, update_arg, expected_err)
 
-        # Timeout updates
-        for delay_type in [INIT, UPTIME, DOWNTIME]:
-            err = self.warp17_call('UpdateTestCaseDelay',
-                                   UpdDelayArg(uda_tc_arg=tc_arg,
-                                               uda_delay_type=delay_type,
-                                               uda_delay=Delay(d_value=42)))
-            self.assertEqual(err.e_code, expected_err, 'UpdateDelay')
+class TestPartialAppApi(Warp17NoTrafficTestCase, Warp17UnitTestCase):
+    """Tests the functionality of the partial update app config APIs."""
 
-        err = self.warp17_call('UpdateTestCaseDelay',
-                               UpdDelayArg(uda_tc_arg=tc_arg,
-                                           uda_delay_type=CLDE_MAX,
-                                           uda_delay=Delay(d_value=42)))
-        self.assertEqual(err.e_code, invalid_err, 'UpdateDelay Invalid')
+    tca = TestCaseArg(tca_eth_port=0, tca_test_case_id=0)
 
-        # Criteria updates
-        err = self.warp17_call('UpdateTestCaseCriteria',
-                               UpdCritArg(uca_tc_arg=tc_arg,
-                                          uca_criteria=TestCriteria(tc_crit_type=RUN_TIME,
-                                                                    tc_run_time_s=42)))
-        self.assertEqual(err.e_code, expected_err, 'UpdateCriteria')
+    cl_app = AppClient(ac_app_proto=RAW,
+                       ac_raw=RawClient(rc_req_plen=84, rc_resp_plen=84))
+    srv_app = AppServer(as_app_proto=RAW, as_raw=RawServer(rs_req_plen=42,
+                                                           rs_resp_plen=42))
+    def get_updates(self):
+        yield (UpdClientArg(uca_tc_arg=self.tca, uca_cl_app=self.cl_app),
+               UpdServerArg(usa_tc_arg=self.tca, usa_srv_app=self.srv_app))
 
-        # Async updates
-        err = self.warp17_call('UpdateTestCaseAsync',
-                               UpdAsyncArg(uaa_tc_arg=tc_arg,
-                                           uaa_async=True))
-        self.assertEqual(err.e_code, expected_err, 'UpdateAsync')
+    def get_invalid_updates(self):
+        yield (UpdServerArg(usa_tc_arg=self.tca, usa_srv_app=self.srv_app),
+               UpdClientArg(uca_tc_arg=self.tca, uca_cl_app=self.cl_app))
 
-        # Client App updates
-        cl_app = AppClient(ac_app_proto=RAW, ac_raw=RawClient(rc_req_plen=42,
-                                                              rc_resp_plen=42))
-        err = self.warp17_call('UpdateTestCaseAppClient',
-                               UpdClientArg(uca_tc_arg=tc_arg,
-                                            uca_cl_app=cl_app))
-        self.assertEqual(err.e_code, expected_err, 'UpdateAppClient')
+    def _update(self, tc_arg, update_arg):
+        if update_arg.__class__.__name__ == 'UpdClientArg':
+            update_arg.uca_tc_arg.tca_eth_port = tc_arg.tca_eth_port
+            update_arg.uca_tc_arg.tca_test_case_id = tc_arg.tca_test_case_id
+            err = self.warp17_call('UpdateTestCaseAppClient', update_arg)
+        elif update_arg.__class__.__name__ == 'UpdServerArg':
+            update_arg.usa_tc_arg.tca_eth_port = tc_arg.tca_eth_port
+            update_arg.usa_tc_arg.tca_test_case_id = tc_arg.tca_test_case_id
+            err = self.warp17_call('UpdateTestCaseAppServer', update_arg)
+        return err
+
+    def update_client(self, tc_arg, update_arg, expected_err=0):
+        err = self._update(tc_arg, update_arg)
+        self.assertEqual(err.e_code, expected_err)
 
         if expected_err == 0:
-            cl_result = self.warp17_call('GetTestCaseAppClient', tc_arg)
+            cl_result = self.warp17_call('GetTestCaseAppClient',
+                                         update_arg.uca_tc_arg)
             self.assertEqual(cl_result.tccr_error.e_code, 0)
-            self.assertTrue(cl_result.tccr_cl_app, cl_app)
+            self.assertTrue(cl_result.tccr_cl_app == update_arg.uca_cl_app)
 
-    def test_partial_test_case_update_server_wrong_type(self):
-        """Tests the UpdateTestCaseAppServer API when the underlying test is a client"""
-        srv_app = AppServer(as_app_proto=RAW, as_raw=RawServer(rs_req_plen=42,
-                                                               rs_resp_plen=42))
-        err = self.warp17_call('UpdateTestCaseAppServer',
-                               UpdServerArg(usa_tc_arg=self._tc_arg,
-                                            usa_srv_app=srv_app))
-        self.assertEqual(err.e_code, -errno.EINVAL, 'UpdateAppServer')
-
-class TestPartialServerApi(Warp17UnitTestCase, TestPartialApiBase):
-    """Tests the functionality of the partial update/get server config APIs."""
-    """Assumes a B2B setup with even two ports."""
-    """Port 0 <-> Port 1"""
-    PORT_CNT = 2
-
-    def setUp(self):
-        tc_cfg = _get_dummy_server_test(0, 0)
-        self._port_arg = PortArg(pa_eth_port=tc_cfg.tc_eth_port)
-        self._tc_arg = TestCaseArg(tca_eth_port=tc_cfg.tc_eth_port,
-                                   tca_test_case_id=tc_cfg.tc_id)
-        self.assertEqual(self.warp17_call('ConfigureTestCase', tc_cfg).e_code,
-                         0,
-                         'Configure Test Case')
-
-    def tearDown(self):
-        self.warp17_call('PortStop', self._port_arg)
-        self.warp17_call('DelTestCase', self._tc_arg)
-
-    def _update_calls(self, tc_arg, expected_err):
-
-        # Criteria updates
-        err = self.warp17_call('UpdateTestCaseCriteria',
-                               UpdCritArg(uca_tc_arg=tc_arg,
-                                          uca_criteria=TestCriteria(tc_crit_type=SRV_UP,
-                                                                    tc_srv_up=42)))
-        self.assertEqual(err.e_code, expected_err, 'UpdateCriteria')
-
-        # Async updates
-        err = self.warp17_call('UpdateTestCaseAsync',
-                               UpdAsyncArg(uaa_tc_arg=tc_arg,
-                                           uaa_async=True))
-        self.assertEqual(err.e_code, expected_err, 'UpdateAsync')
-
-        # Server App updates
-        srv_app = AppServer(as_app_proto=RAW, as_raw=RawServer(rs_req_plen=42,
-                                                               rs_resp_plen=42))
-        err = self.warp17_call('UpdateTestCaseAppServer',
-                               UpdServerArg(usa_tc_arg=tc_arg,
-                                            usa_srv_app=srv_app))
-        self.assertEqual(err.e_code, expected_err, 'UpdateAppServer')
+    def update_server(self, tc_arg, update_arg, expected_err=0):
+        err = self._update(tc_arg, update_arg)
+        self.assertEqual(err.e_code, expected_err)
 
         if expected_err == 0:
-            srv_result = self.warp17_call('GetTestCaseAppServer', tc_arg)
+            srv_result = self.warp17_call('GetTestCaseAppServer',
+                                          update_arg.usa_tc_arg)
             self.assertEqual(srv_result.tcsr_error.e_code, 0)
-            self.assertTrue(srv_result.tcsr_srv_app, srv_app)
-
-    def test_partial_test_case_update_client_wrong_type(self):
-        """Tests the UpdateTestCaseAppClient API when the underlying test is a server"""
-        cl_app = AppClient(ac_app_proto=RAW, ac_raw=RawClient(rc_req_plen=42,
-                                                              rc_resp_plen=42))
-        err = self.warp17_call('UpdateTestCaseAppClient',
-                               UpdClientArg(uca_tc_arg=self._tc_arg,
-                                            uca_cl_app=cl_app))
-        self.assertEqual(err.e_code, -errno.EINVAL, 'UpdateAppClient')
-
+            self.assertTrue(srv_result.tcsr_srv_app == update_arg.usa_srv_app)

@@ -142,6 +142,12 @@ typedef struct port_info_s {
 } port_info_t;
 
 /*****************************************************************************
+ * Port options definitions.
+ ****************************************************************************/
+#define PORT_MIN_MTU   68
+#define PORT_MAX_MTU 9198
+
+/*****************************************************************************
  * rte_eth_link print macros
  ****************************************************************************/
 #define LINK_STATE(ls) \
@@ -209,21 +215,24 @@ STATS_LOCAL_DECLARE(port_statistics_t);
 /*****************************************************************************
  * External's for tpg_port.c
  ****************************************************************************/
-extern bool               port_init(void);
-extern void               port_lcore_init(uint32_t lcore_id);
-extern uint32_t           port_get_socket(int port, int queue);
-extern void               port_link_info_get(uint32_t port,
-                                             struct rte_eth_link *link_info);
-extern void               port_link_stats_get(uint32_t port,
-                                              struct rte_eth_stats *total_link_stats);
-extern void               port_link_rate_stats_get(uint32_t port,
-                                                   struct rte_eth_stats *total_rate_stats);
-extern void               port_total_stats_get(uint32_t port,
-                                               port_statistics_t *total_port_stats);
-extern int                port_get_global_rss_key(uint8_t ** const rss_key);
-extern bool               port_handle_cmdline_opt(const char *opt_name,
-                                                  char *opt_arg);
-extern bool               port_handle_cmdline(void);
+extern bool     port_init(void);
+extern void     port_lcore_init(uint32_t lcore_id);
+extern uint32_t port_get_socket(int port, int queue);
+extern void     port_link_info_get(uint32_t port,
+                                   struct rte_eth_link *link_info);
+extern void     port_link_stats_get(uint32_t port,
+                                    struct rte_eth_stats *total_link_stats);
+extern void     port_link_rate_stats_get(uint32_t port,
+                                         struct rte_eth_stats *total_rate_stats);
+extern void     port_total_stats_get(uint32_t port,
+                                     port_statistics_t *total_port_stats);
+extern int      port_get_global_rss_key(uint8_t ** const rss_key);
+extern void     port_set_conn_options(uint32_t port,
+                                      tpg_port_options_t *options);
+extern void     port_get_conn_options(uint32_t port, tpg_port_options_t *out);
+extern bool     port_handle_cmdline_opt(const char *opt_name,
+                                        char *opt_arg);
+extern bool     port_handle_cmdline(void);
 
 /*****************************************************************************
  * Static inlines.

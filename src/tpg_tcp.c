@@ -125,6 +125,7 @@ int tcp_open_v4_connection(tcp_control_block_t **tcb, uint32_t eth_port,
                            uint32_t src_ip_addr, uint16_t src_port,
                            uint32_t dst_ip_addr, uint16_t dst_port,
                            uint32_t test_case_id, tpg_app_proto_t app_id,
+                           sockopt_t *sockopt,
                            uint32_t flags)
 {
     int                  rc = 0;
@@ -137,6 +138,9 @@ int tcp_open_v4_connection(tcp_control_block_t **tcb, uint32_t eth_port,
         return -EINVAL;
 
     tcb_reuse = (flags & TCG_CB_REUSE_CB);
+
+    if (unlikely(!tcb_reuse && sockopt == NULL))
+        return -EINVAL;
 
     /* If the *tcb is NULL we should malloc one and mark that we need
      * to free it later.
@@ -169,6 +173,7 @@ int tcp_open_v4_connection(tcp_control_block_t **tcb, uint32_t eth_port,
                       eth_port,
                       test_case_id,
                       app_id,
+                      sockopt,
                       (flags | malloc_flag));
     }
 
@@ -202,6 +207,7 @@ int tcp_open_v4_connection(tcp_control_block_t **tcb, uint32_t eth_port,
 int tcp_listen_v4(tcp_control_block_t **tcb, uint32_t eth_port,
                   uint32_t local_ip_addr, uint16_t local_port,
                   uint32_t test_case_id, tpg_app_proto_t app_id,
+                  sockopt_t *sockopt,
                   uint32_t flags)
 {
     return tcp_open_v4_connection(tcb, eth_port, local_ip_addr, local_port,
@@ -209,6 +215,7 @@ int tcp_listen_v4(tcp_control_block_t **tcb, uint32_t eth_port,
                                   0, /* remote_port ANY */
                                   test_case_id,
                                   app_id,
+                                  sockopt,
                                   flags);
 }
 
@@ -306,6 +313,62 @@ int tcp_close_connection(tcp_control_block_t *tcb, uint32_t flags)
      * Else handle it trough the statemachine
      */
     return tsm_dispatch_event(tcb, TE_CLOSE, NULL);
+}
+
+/*****************************************************************************
+ * tcp_store_sockopt()
+ ****************************************************************************/
+void tcp_store_sockopt(tcp_sockopt_t *dest, const tpg_tcp_sockopt_t *options)
+{
+    dest->tcpo_win_size = options->to_win_size;
+    dest->tcpo_syn_retry_cnt = options->to_syn_retry_cnt;
+    dest->tcpo_syn_ack_retry_cnt = options->to_syn_ack_retry_cnt;
+    dest->tcpo_data_retry_cnt = options->to_data_retry_cnt;
+    dest->tcpo_retry_cnt = options->to_retry_cnt;
+    dest->tcpo_rto = options->to_rto * 1000;
+    dest->tcpo_fin_to = options->to_fin_to * 1000;
+    dest->tcpo_twait_to = options->to_twait_to * 1000;
+    dest->tcpo_orphan_to = options->to_orphan_to * 1000;
+
+    /* Bit flags. */
+    dest->tcpo_skip_timewait = (options->to_skip_timewait > 0 ? true : false);
+}
+
+/*****************************************************************************
+ * tcp_load_sockopt()
+ ****************************************************************************/
+void tcp_load_sockopt(tpg_tcp_sockopt_t *dest, const tcp_sockopt_t *options)
+{
+    dest->to_win_size = options->tcpo_win_size;
+    dest->has_to_win_size = true;
+
+    dest->to_syn_retry_cnt = options->tcpo_syn_retry_cnt;
+    dest->has_to_syn_retry_cnt = true;
+
+    dest->to_syn_ack_retry_cnt = options->tcpo_syn_ack_retry_cnt;
+    dest->has_to_syn_ack_retry_cnt = true;
+
+    dest->to_data_retry_cnt = options->tcpo_data_retry_cnt;
+    dest->has_to_data_retry_cnt = true;
+
+    dest->to_retry_cnt = options->tcpo_retry_cnt;
+    dest->has_to_retry_cnt = true;
+
+    dest->to_rto = options->tcpo_rto / 1000;
+    dest->has_to_rto = true;
+
+    dest->to_fin_to = options->tcpo_fin_to / 1000;
+    dest->has_to_fin_to = true;
+
+    dest->to_twait_to = options->tcpo_twait_to / 1000;
+    dest->has_to_twait_to = true;
+
+    dest->to_orphan_to = options->tcpo_orphan_to / 1000;
+    dest->has_to_orphan_to = true;
+
+    /* Bit flags. */
+    dest->to_skip_timewait = options->tcpo_skip_timewait;
+    dest->has_to_skip_timewait = true;
 }
 
 
@@ -792,7 +855,7 @@ tcp_control_block_t *tcb_clone(tcp_control_block_t *tcb)
     stats = STATS_LOCAL(tcp_statistics_t, tcb->tcb_l4.l4cb_interface);
 
     new_tcb = tlkp_alloc_tcb();
-    if (new_tcb == NULL) {
+    if (unlikely(new_tcb == NULL)) {
         INC_STATS(stats, ts_tcb_alloc_err);
         return NULL;
     }

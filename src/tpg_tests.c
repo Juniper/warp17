@@ -788,8 +788,10 @@ static void test_case_init_tcp_srv(test_case_info_t *tc_info,
     /* No rate limiting on the server side for now! */
     tpg_rate_t           send_rate = TPG_RATE_INF();
     tpg_app_proto_t      app_id;
+    sockopt_t           *sockopt;
 
     app_id = tc_info->tci_cfg_msg.tcim_server.srv_app.as_app_proto;
+    sockopt = &tc_info->tci_cfg_msg.tcim_sockopt;
 
     test_init_rate_info(&tc_info->tci_rate_send_info, &send_rate,
                         GCFG_TCP_CLIENT_BURST_MAX);
@@ -809,6 +811,7 @@ static void test_case_init_tcp_srv(test_case_info_t *tc_info,
                                   tcp_port,
                                   test_case_id,
                                   app_id,
+                                  sockopt,
                                   TCG_CB_CONSUME_ALL_DATA);
             if (unlikely(error)) {
                 TEST_NOTIF(TEST_NOTIF_SERVER_FAILED, NULL, test_case_id,
@@ -857,8 +860,10 @@ static void test_case_init_udp_srv(test_case_info_t *tc_info,
     /* No rate limiting on the server side for now! */
     tpg_rate_t           send_rate = TPG_RATE_INF();
     tpg_app_proto_t      app_id;
+    sockopt_t           *sockopt;
 
     app_id = tc_info->tci_cfg_msg.tcim_server.srv_app.as_app_proto;
+    sockopt = &tc_info->tci_cfg_msg.tcim_sockopt;
 
     test_init_rate_info(&tc_info->tci_rate_send_info, &send_rate,
                         GCFG_UDP_CLIENT_BURST_MAX);
@@ -878,6 +883,7 @@ static void test_case_init_udp_srv(test_case_info_t *tc_info,
                                   udp_port,
                                   test_case_id,
                                   app_id,
+                                  sockopt,
                                   0);
             if (unlikely(error)) {
                 TEST_NOTIF(TEST_NOTIF_SERVER_FAILED, NULL, test_case_id,
@@ -927,8 +933,10 @@ static void test_case_init_tcp_clients(test_case_info_t *tc_info,
     uint32_t             sip, dip;
     uint16_t             sport, dport;
     tpg_app_proto_t      app_id;
+    sockopt_t           *sockopt;
 
     app_id = tc_info->tci_cfg_msg.tcim_client.cl_app.ac_app_proto;
+    sockopt = &tc_info->tci_cfg_msg.tcim_sockopt;
 
     /* First initialize rates. */
     test_init_rate_info(&tc_info->tci_rate_open_info,
@@ -973,6 +981,7 @@ static void test_case_init_tcp_clients(test_case_info_t *tc_info,
         tlkp_init_tcb_client(tcb, sip, dip, sport, dport, conn_hash, eth_port,
                              test_case_id,
                              app_id,
+                             sockopt,
                              (TPG_CB_USE_L4_HASH_FLAG |
                               TCG_CB_CONSUME_ALL_DATA));
 
@@ -1008,8 +1017,10 @@ static void test_case_init_udp_clients(test_case_info_t *tc_info,
     uint32_t             sip, dip;
     uint16_t             sport, dport;
     tpg_app_proto_t      app_id;
+    sockopt_t           *sockopt;
 
     app_id = tc_info->tci_cfg_msg.tcim_client.cl_app.ac_app_proto;
+    sockopt = &tc_info->tci_cfg_msg.tcim_sockopt;
 
     /* First initialize rates. */
     test_init_rate_info(&tc_info->tci_rate_open_info,
@@ -1054,6 +1065,7 @@ static void test_case_init_udp_clients(test_case_info_t *tc_info,
         tlkp_init_ucb_client(ucb, sip, dip, sport, dport, conn_hash, eth_port,
                              test_case_id,
                              app_id,
+                             sockopt,
                              (TPG_CB_USE_L4_HASH_FLAG |
                               0));
 
@@ -1290,6 +1302,7 @@ test_case_execute_tcp_open(test_case_info_t *tc_info,
                                        tcb->tcb_l4.l4cb_dst_port,
                                        tcb->tcb_l4.l4cb_test_case_id,
                                        tcb->tcb_l4.l4cb_app_data.ad_type,
+                                       NULL,
                                        TCG_CB_REUSE_CB);
 
         if (unlikely(error)) {
@@ -1450,6 +1463,7 @@ test_case_execute_udp_open(test_case_info_t *tc_info,
                                        ucb->ucb_l4.l4cb_dst_port,
                                        ucb->ucb_l4.l4cb_test_case_id,
                                        ucb->ucb_l4.l4cb_app_data.ad_type,
+                                       NULL,
                                        TCG_CB_REUSE_CB);
 
         if (unlikely(error)) {

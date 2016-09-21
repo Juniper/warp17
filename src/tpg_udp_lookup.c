@@ -157,6 +157,7 @@ void tlkp_init_ucb(udp_control_block_t *ucb, uint32_t local_addr,
                    uint32_t interface,
                    uint32_t test_case_id,
                    tpg_app_proto_t app_id,
+                   sockopt_t *sockopt,
                    uint32_t flags)
 {
     tlkp_init_cb(&ucb->ucb_l4, local_addr, remote_addr, local_port, remote_port,
@@ -164,6 +165,7 @@ void tlkp_init_ucb(udp_control_block_t *ucb, uint32_t local_addr,
                  interface,
                  test_case_id,
                  app_id,
+                 sockopt,
                  flags);
 
     if ((flags & TCG_CB_MALLOCED))
@@ -183,6 +185,7 @@ void tlkp_init_ucb_client(udp_control_block_t *ucb, uint32_t local_addr,
                           uint32_t tcb_interface,
                           uint32_t test_case_id,
                           tpg_app_proto_t app_id,
+                          sockopt_t *sockopt,
                           uint32_t flags)
 {
     tlkp_init_ucb(ucb, local_addr, remote_addr, local_port, remote_port,
@@ -190,6 +193,7 @@ void tlkp_init_ucb_client(udp_control_block_t *ucb, uint32_t local_addr,
                   tcb_interface,
                   test_case_id,
                   app_id,
+                  sockopt,
                   flags);
     ucb->ucb_state = US_INIT;
     ucb->ucb_active = true;

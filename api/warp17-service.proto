@@ -60,6 +60,7 @@ import "warp17-l3.proto";
 import "warp17-client.proto";
 import "warp17-server.proto";
 import "warp17-test-case.proto";
+import "warp17-sockopt.proto";
 
 option py_generic_services = true;
 option cc_generic_services = true;
@@ -108,26 +109,16 @@ message TestCaseResult {
     required TestCase tcr_cfg   = 2;
 }
 
-message UpdRateArg {
-    required TestCaseArg ura_tc_arg       = 1;
-    required RateType    ura_rate_type    = 2;
-    required Rate        ura_rate         = 3;
-}
-
-message UpdDelayArg {
-    required TestCaseArg uda_tc_arg       = 1;
-    required DelayType   uda_delay_type   = 2;
-    required Delay       uda_delay        = 3;
-}
-
-message UpdCritArg {
-    required TestCaseArg  uca_tc_arg   = 1;
-    required TestCriteria uca_criteria = 2;
-}
-
-message UpdAsyncArg {
-    required TestCaseArg uaa_tc_arg = 1;
-    required bool        uaa_async  = 2;
+message UpdateArg {
+    required TestCaseArg  ua_tc_arg     = 1;
+    optional Rate         ua_rate_open  = 2;
+    optional Rate         ua_rate_send  = 3;
+    optional Rate         ua_rate_close = 4;
+    optional Delay        ua_init_delay = 5;
+    optional Delay        ua_uptime     = 6;
+    optional Delay        ua_downtime   = 7;
+    optional TestCriteria ua_criteria   = 8;
+    optional bool         ua_async      = 9;
 }
 
 message TestCaseClientResult {
@@ -152,6 +143,26 @@ message UpdServerArg {
 
 message PortArg {
     required uint32 pa_eth_port = 1;
+}
+
+message PortOptionsArg {
+    required PortArg     poa_port = 1;
+    required PortOptions poa_opts = 2;
+}
+
+message PortOptionsResult {
+    required Error       por_error = 1;
+    required PortOptions por_opts = 2;
+}
+
+message TcpSockoptArg {
+    required TestCaseArg toa_tc_arg = 1;
+    required TcpSockopt  toa_opts   = 2;
+}
+
+message TcpSockoptResult {
+    required Error      tor_error = 1;
+    required TcpSockopt tor_opts = 2;
 }
 
 message TestStatusResult {
@@ -182,28 +193,32 @@ service Warp17 {
     rpc ConfigurePort(PortCfg)                returns (Error);
     rpc GetPortCfg(PortArg)                   returns (PortCfgResult);
 
-    /* Partial port configs. */
-    rpc ConfigureL3Intf(L3IntfArg)            returns (Error);
-    rpc ConfigureL3Gw(L3GwArg)                returns (Error);
-
     /* Test case configs. */
     rpc ConfigureTestCase(TestCase)           returns (Error);
     rpc GetTestCase(TestCaseArg)              returns (TestCaseResult);
     rpc DelTestCase(TestCaseArg)              returns (Error);
 
-    /* Partial test case configs. */
-    rpc UpdateTestCaseRate(UpdRateArg)        returns (Error);
-    rpc UpdateTestCaseDelay(UpdDelayArg)      returns (Error);
-    rpc UpdateTestCaseCriteria(UpdCritArg)    returns (Error);
-    rpc UpdateTestCaseAsync(UpdAsyncArg)      returns (Error);
-    rpc GetTestCaseAppClient(TestCaseArg)     returns (TestCaseClientResult);
-    rpc GetTestCaseAppServer(TestCaseArg)     returns (TestCaseServerResult);
-    rpc UpdateTestCaseAppClient(UpdClientArg) returns (Error);
-    rpc UpdateTestCaseAppServer(UpdServerArg) returns (Error);
+    /* Stack customization RPCs. */
+    rpc SetPortOptions(PortOptionsArg)        returns (Error);
+    rpc GetPortOptions(PortArg)               returns (PortOptionsResult);
+    rpc SetTcpSockopt(TcpSockoptArg)          returns (Error);
+    rpc GetTcpSockopt(TestCaseArg)            returns (TcpSockoptResult);
 
     /* Operational calls. */
     rpc PortStart(PortArg)                    returns (Error);
     rpc PortStop(PortArg)                     returns (Error);
     rpc GetTestStatus(TestCaseArg)            returns (TestStatusResult);
+
+    /* Partial port configs: : FOR WARP17 INTERNAL USE ONLY! */
+    rpc ConfigureL3Intf(L3IntfArg)            returns (Error);
+    rpc ConfigureL3Gw(L3GwArg)                returns (Error);
+
+    /* Partial test case configs: FOR WARP17 INTERNAL USE ONLY! */
+    rpc UpdateTestCase(UpdateArg)             returns (Error);
+
+    rpc GetTestCaseAppClient(TestCaseArg)     returns (TestCaseClientResult);
+    rpc GetTestCaseAppServer(TestCaseArg)     returns (TestCaseServerResult);
+    rpc UpdateTestCaseAppClient(UpdClientArg) returns (Error);
+    rpc UpdateTestCaseAppServer(UpdServerArg) returns (Error);
 }
 

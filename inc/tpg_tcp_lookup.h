@@ -85,6 +85,7 @@ extern void                 tlkp_init_tcb(tcp_control_block_t *tcb,
                                           uint16_t local_port, uint16_t remote_port,
                                           uint32_t l4_hash, uint32_t tcb_interface,
                                           uint32_t test_case_id, tpg_app_proto_t app_id,
+                                          sockopt_t *sockopt,
                                           uint32_t flags);
 extern void                 tlkp_init_tcb_client(tcp_control_block_t *tcb,
                                                  uint32_t local_addr,
@@ -95,6 +96,7 @@ extern void                 tlkp_init_tcb_client(tcp_control_block_t *tcb,
                                                  uint32_t tcb_interface,
                                                  uint32_t test_case_id,
                                                  tpg_app_proto_t app_id,
+                                                 sockopt_t *sockopt,
                                                  uint32_t flags);
 extern void                 tlkp_free_tcb(tcp_control_block_t *tcb);
 extern unsigned int         tlkp_total_tcbs_allocated(void);
