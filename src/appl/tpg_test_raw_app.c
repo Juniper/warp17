@@ -511,7 +511,7 @@ static void cmd_tests_set_app_raw_client_parsed(void *parsed_result,
 cmdline_parse_inst_t cmd_tests_set_app_raw_client = {
     .f = cmd_tests_set_app_raw_client_parsed,
     .data = NULL,
-    .help_str = "set tests client_raw port <port> test-case-id <tcid>"
+    .help_str = "set tests client raw port <port> test-case-id <tcid>"
                 "data-req-plen <len> data-resp-plen <len>",
     .tokens = {
         (void *)&cmd_tests_set_app_raw_client_T_set,

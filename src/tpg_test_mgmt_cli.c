@@ -464,10 +464,10 @@ static void cmd_tests_add_l3_intf_parsed(void *parsed_result, struct cmdline *cl
     }
 
     l3_intf = (tpg_l3_intf_t){
-                .l3i_ip.ip_v4 = rte_be_to_cpu_32(pr->ip.addr.ipv4.s_addr),
-                .l3i_mask.ip_v4 = rte_be_to_cpu_32(pr->mask.addr.ipv4.s_addr),
-                .l3i_count = 1 /* TODO: count not implemented yet! */
-            };
+        .l3i_ip = TPG_IPV4(rte_be_to_cpu_32(pr->ip.addr.ipv4.s_addr)),
+        .l3i_mask = TPG_IPV4(rte_be_to_cpu_32(pr->mask.addr.ipv4.s_addr)),
+        .l3i_count = 1 /* TODO: count not implemented yet! */
+    };
 
     if (test_mgmt_add_port_cfg_l3_intf(pr->port, &l3_intf, &parg) == 0)
         cmdline_printf(cl, "L3 interface successfully added.\n");
@@ -536,7 +536,7 @@ static void cmd_tests_add_l3_gw_parsed(void *parsed_result, struct cmdline *cl,
         return;
     }
 
-    gw.ip_v4 = rte_be_to_cpu_32(pr->gw.addr.ipv4.s_addr);
+    gw = TPG_IPV4(rte_be_to_cpu_32(pr->gw.addr.ipv4.s_addr));
     if (test_mgmt_add_port_cfg_l3_gw(pr->port, &gw, &parg) == 0)
         cmdline_printf(cl, "Default gateway successfully added.\n");
     else
