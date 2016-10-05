@@ -95,7 +95,9 @@ class TestHttpCfg(Warp17TrafficTestCase, Warp17UnitTestCase):
     # Overrides of Warp17TrafficTestCase specific to HTTP
     #####################################################
     def get_tc_retry_count(self):
-        return self.RUN_TIME_S
+        """Allow the test to actually finish. Don't be too aggressive with"""
+        """retrying"""
+        return self.RUN_TIME_S + 2
 
     def get_client_app_cfg(self, eth_port, tc_id):
         return self._http_client_cfg()

@@ -123,45 +123,6 @@ int port_get_global_rss_key(uint8_t ** const rss_key)
 }
 
 /*****************************************************************************
- * port_adjust_info()
- *  Fills the port_info fields we're interested in (reta_size and numa_node).
- *  These are taken from the DPDK dev info if available.
- *  RETA size may be 0 in case we're running on a VF (e.g: for Intel 82599 10G)
- *  In that case make sure the user allocated only one core for that port.
- ****************************************************************************/
-static bool port_adjust_info(uint32_t port)
-{
-    /* Adjust reta_size. RETA size may be 0 in case we're running on a VF.
-     * e.g: for Intel 82599 10G.
-     */
-    if (port_dev_info[port].pi_dev_info.reta_size) {
-        port_dev_info[port].pi_adjusted_reta_size =
-            port_dev_info[port].pi_dev_info.reta_size;
-    } else {
-        if (PORT_QCNT(port) > 1) {
-            RTE_LOG(ERR, USER1, "ERROR: Detected reta_size == 0 "
-                    "for port %"PRIu32"! "
-                    "Are you running in a VM? Please allocate at "
-                    "most one core per port!\n",
-                    port);
-            return false;
-        }
-        port_dev_info[port].pi_adjusted_reta_size = 1;
-    }
-
-    /* For some devices (e.g., virtual e1000 interfaces) the socket id
-     * of the interface may not be set and returned as -1. In those cases
-     * assume the interface resides on socket-id 0.
-     */
-    if (port_dev_info[port].pi_dev_info.pci_dev &&
-            port_dev_info[port].pi_dev_info.pci_dev->numa_node != -1)
-        port_dev_info[port].pi_numa_node =
-            port_dev_info[port].pi_dev_info.pci_dev->numa_node;
-
-    return true;
-}
-
-/*****************************************************************************
  * port_setup_reta_table()
  ****************************************************************************/
 static void port_setup_reta_table(uint8_t port, int nr_of_queus)
@@ -201,6 +162,137 @@ static void port_setup_reta_table(uint8_t port, int nr_of_queus)
 }
 
 /*****************************************************************************
+ * port_set_hw_conn_options_internal()
+ ****************************************************************************/
+static int port_set_hw_conn_options_internal(uint32_t port,
+                                             tpg_port_options_t *options)
+{
+    int rc;
+
+    /* This can fail if hw doesn't support it.. Just log then, don't return
+     * an error. For example, for ring interfaces the hw configuration is not
+     * supported.
+     */
+    rc = rte_eth_dev_set_mtu(port, options->po_mtu);
+    if (rc != 0) {
+        RTE_LOG(WARNING, USER1,
+                "WARNING: Port %u Failed to set MTU in HW: %s(%d)\n",
+                port, rte_strerror(-rc), -rc);
+    }
+
+    return 0;
+}
+
+/*****************************************************************************
+ * port_store_conn_options_internal()
+ ****************************************************************************/
+static void port_store_conn_options_internal(uint32_t port,
+                                             tpg_port_options_t *options)
+{
+    /* Store the port configuration in our own structures. */
+    port_dev_info[port].pi_mtu = options->po_mtu;
+}
+
+/*****************************************************************************
+ * port_set_conn_options_internal()
+ ****************************************************************************/
+static int port_set_conn_options_internal(uint32_t port,
+                                          tpg_port_options_t *options)
+{
+    int         rc;
+    const char *driver_name;
+
+    /* WARNING: HACK: the rte_eth_dev_set_mtu API is extremely inconsistent
+     * between different poll mode drivers. That's why we have to do this
+     * ugly differentiation based on driver name..
+     */
+    driver_name = port_dev_info[port].pi_dev_info.driver_name;
+    if (strncmp(driver_name, "rte_i40e_pmd",
+                strlen("rte_i40e_pmd") + 1) == 0) {
+
+        /* First stop port. Restart port after configuration is done. */
+        rte_eth_dev_stop(port);
+
+        rc = port_set_hw_conn_options_internal(port, options);
+        if (rc != 0)
+            return rc;
+
+        rc = rte_eth_dev_start(port);
+        if (rc < 0) {
+            RTE_LOG(ERR, USER1,
+                    "ERROR: Failed rte_eth_dev_start(%u), returned %s(%d)!\n",
+                    port, rte_strerror(-rc), -rc);
+            return rc;
+        }
+
+    } else if (strncmp(driver_name, "rte_ixgbe_pmd",
+                       strlen("rte_ixgbe_pmd") + 1) == 0 ||
+               strncmp(driver_name, "rte_igb_pmd",
+                       strlen("rte_ixgbe_pmd") + 1) == 0) {
+
+        /* For igb and ixgbe we can reconfigure MTU on the fly. */
+        rc = port_set_hw_conn_options_internal(port, options);
+        if (rc != 0)
+            return rc;
+
+    } else {
+
+        /* WARNING: Assume for now that MTU should be configurable on the fly
+         * for most NICs.
+         */
+        rc = port_set_hw_conn_options_internal(port, options);
+        if (rc != 0)
+            return rc;
+
+    }
+
+    /* Reset the RETA table. We need to do it after every port start.. */
+    port_setup_reta_table(port, port_port_cfg[port].ppc_q_cnt);
+
+    port_store_conn_options_internal(port, options);
+    return 0;
+}
+
+/*****************************************************************************
+ * port_adjust_info()
+ *  Fills the port_info fields we're interested in (reta_size and numa_node).
+ *  These are taken from the DPDK dev info if available.
+ *  RETA size may be 0 in case we're running on a VF (e.g: for Intel 82599 10G)
+ *  In that case make sure the user allocated only one core for that port.
+ ****************************************************************************/
+static bool port_adjust_info(uint32_t port)
+{
+    /* Adjust reta_size. RETA size may be 0 in case we're running on a VF.
+     * e.g: for Intel 82599 10G.
+     */
+    if (port_dev_info[port].pi_dev_info.reta_size) {
+        port_dev_info[port].pi_adjusted_reta_size =
+            port_dev_info[port].pi_dev_info.reta_size;
+    } else {
+        if (PORT_QCNT(port) > 1) {
+            RTE_LOG(ERR, USER1, "ERROR: Detected reta_size == 0 "
+                    "for port %"PRIu32"! "
+                    "Are you running in a VM? Please allocate at "
+                    "most one core per port!\n",
+                    port);
+            return false;
+        }
+        port_dev_info[port].pi_adjusted_reta_size = 1;
+    }
+
+    /* For some devices (e.g., virtual e1000 interfaces) the socket id
+     * of the interface may not be set and returned as -1. In those cases
+     * assume the interface resides on socket-id 0.
+     */
+    if (port_dev_info[port].pi_dev_info.pci_dev &&
+            port_dev_info[port].pi_dev_info.pci_dev->numa_node != -1)
+        port_dev_info[port].pi_numa_node =
+            port_dev_info[port].pi_dev_info.pci_dev->numa_node;
+
+    return true;
+}
+
+/*****************************************************************************
  * port_setup_port
  ****************************************************************************/
 static bool port_setup_port(uint8_t port)
@@ -219,7 +311,7 @@ static bool port_setup_port(uint8_t port)
             .header_split   = 0, /**< Header Split disabled */
             .hw_ip_checksum = 1, /**< IP checksum offload enabled */
             .hw_vlan_filter = 0, /**< VLAN filtering disabled */
-            .jumbo_frame    = 1, /**< Jumbo Frame Support disabled */
+            .jumbo_frame    = 1, /**< Jumbo Frame Support enabled */
             .hw_strip_crc   = 0, /**< CRC stripped by hardware */
         },
         .rx_adv_conf = {
@@ -279,13 +371,16 @@ static bool port_setup_port(uint8_t port)
         return false;
     }
 
-    rc = rte_eth_dev_configure(port, number_of_rings, number_of_rings, &default_port_config);
+    rc = rte_eth_dev_configure(port, number_of_rings, number_of_rings,
+                               &default_port_config);
     if (rc < 0) {
         if (rc == -EINVAL) {
-            RTE_LOG(INFO, USER1, "WARNING: Virtual driver does not support multiple rings, "
-                    "use single packet core!! Max rx\n");
+            RTE_LOG(INFO, USER1,
+                    "WARNING: Virtual driver does not support multiple rings, "
+                    "use single packet core!!\n");
         }
-        RTE_LOG(ERR, USER1, "ERROR: Failed rte_eth_dev_configure(%d, %d, %d, ..,), returned %s(%d)!\n",
+        RTE_LOG(ERR, USER1,
+                "ERROR: Failed rte_eth_dev_configure(%d, %d, %d, ..,), returned %s(%d)!\n",
                 port, number_of_rings, number_of_rings, rte_strerror(-rc), -rc);
         return false;
     }
@@ -345,10 +440,14 @@ static bool port_setup_port(uint8_t port)
             mac_addr.addr_bytes[4],
             mac_addr.addr_bytes[5]);
 
-    tpg_xlate_default_PortOptions(&default_port_options);
-    port_set_conn_options(port, &default_port_options);
+    /* WARNING: HACK: We start by default we the max supported MTU.
+     * Some NIC PMDs cannot enable scatter mode on the fly so we
+     * force them to enable it from the beginning. The default MTU
+     * will be set below.
+     */
+    rte_eth_dev_set_mtu(port, PORT_MAX_MTU);
 
-    rc  = rte_eth_dev_start(port);
+    rc = rte_eth_dev_start(port);
     if (rc < 0) {
         RTE_LOG(ERR, USER1,
                 "ERROR: Failed rte_eth_dev_start(%u), returned %s(%d)!\n",
@@ -356,7 +455,11 @@ static bool port_setup_port(uint8_t port)
         return false;
     }
 
-    port_setup_reta_table(port, number_of_rings);
+    /* Now apply the real port (MTU) configuration. */
+    tpg_xlate_default_PortOptions(&default_port_options);
+
+    if (port_set_conn_options_internal(port, &default_port_options))
+        return false;
 
     return true;
 }
@@ -672,21 +775,25 @@ void port_total_stats_get(uint32_t port, port_statistics_t *total_port_stats)
 /*****************************************************************************
  * port_set_conn_options()
  ****************************************************************************/
-void port_set_conn_options(uint32_t port, tpg_port_options_t *options)
+int port_set_conn_options(uint32_t port, tpg_port_options_t *options)
 {
-    int rc;
+    struct rte_eth_link link;
+    int                 rc;
 
-    /* Store the MTU in our own structures. Configure in HW if possible.
-     * For example, for ring interfaces the hw configuration is not supported.
+    rc = port_set_conn_options_internal(port, options);
+    if (rc)
+        return rc;
+
+    /* WARNING: Hack! Need to take the link state in order to block until
+     * port reinitialization is over.
      */
-    port_dev_info[port].pi_mtu = options->po_mtu;
-
-    /* This can fail if hw doesn't support it.. */
-    rc = rte_eth_dev_set_mtu(port, options->po_mtu);
-    if (rc != 0)
+    rte_eth_link_get(port, &link);
+    if (!link.link_status)
         RTE_LOG(WARNING, USER1,
-                "WARNING: Port %u Failed to set MTU in HW: %s(%d)\n",
-                port, rte_strerror(-rc), -rc);
+                "WARNING: Ethernet port %"PRIu32" is DOWN when setting options!\n",
+                port);
+
+    return 0;
 }
 
 /*****************************************************************************
@@ -913,7 +1020,7 @@ static void cmd_show_port_statistics_parsed(void *parsed_result __rte_unused,
 
         for (port = 0; port < rte_eth_dev_count(); port++) {
 
-#define MAX_XSTATS_TO_DISPLAY 128
+#define MAX_XSTATS_TO_DISPLAY 256
 
             int                       i, rc;
             struct rte_eth_xstat      exstats[MAX_XSTATS_TO_DISPLAY];

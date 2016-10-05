@@ -67,16 +67,26 @@ from warp17_ut import Warp17UnitTestCase
 from warp17_ut import Warp17TrafficTestCase
 from warp17_ut import Warp17PortTestCase
 
-from warp17_sockopt_pb2   import *
-from warp17_service_pb2   import *
+from warp17_sockopt_pb2 import *
+from warp17_service_pb2 import *
 
 class TestPortSockOpt(Warp17PortTestCase, Warp17UnitTestCase):
 
     #############################################################
     # Overrides of Warp17TrafficTestCase specific to port options
     #############################################################
+
+    def get_l4_port_count(self):
+        """Lower the session count (especially due to big MTU tests)"""
+        return 10
+
+    def get_l3_intf_count(self):
+        """Lower the session count (especially due to big MTU tests)"""
+        return 4
+
     def get_updates(self):
         for mtu in [128, 256, 1500, 9198]:
+            self.lh.info('MTU %(arg)u' % {'arg': mtu})
             yield (PortOptions(po_mtu=mtu), PortOptions(po_mtu=mtu))
 
     def get_invalid_updates(self):

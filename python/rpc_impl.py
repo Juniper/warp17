@@ -64,11 +64,12 @@ from google.protobuf.service import RpcController
 import socket
 import struct
 import random
+import os
 
 from helpers import LogHelper
 from helpers import Warp17Exception
 
-WARP17_RPC_LOG_FILE='/tmp/warp17-rpc.log'
+WARP17_RPC_LOG_FILE='/tmp/warp17-rpc.' + str(os.getuid()) + '.log'
 
 lh = LogHelper(name=__name__, filename=WARP17_RPC_LOG_FILE)
 

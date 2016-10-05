@@ -392,7 +392,7 @@ class TestPerf(Warp17UnitTestCase):
                                        rate_ccfg=self._get_rates_client(),
                                        app_ccfg=self._get_raw_app_client(0),
                                        app_scfg=self._get_raw_app_server(0),
-                                       expected_rate=self._get_expected_tcp_data_setup())
+                                       expected_rate=self._get_expected_tcp_setup())
 
     def test_4_4M_tcp_sess_data_10b_setup_rate(self):
         """Tests setting up 4M TCP sessions + 10 bytes packet data."""

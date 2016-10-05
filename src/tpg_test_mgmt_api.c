@@ -1121,7 +1121,10 @@ test_mgmt_set_port_options(uint32_t eth_port, tpg_port_options_t *opts,
     if (!test_mgmt_validate_port_options(opts, printer_arg))
         return -EINVAL;
 
-    port_set_conn_options(eth_port, opts);
+    err = port_set_conn_options(eth_port, opts);
+    if (err != 0)
+        return err;
+
     return 0;
 }
 

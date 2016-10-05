@@ -227,7 +227,7 @@ extern void     port_link_rate_stats_get(uint32_t port,
 extern void     port_total_stats_get(uint32_t port,
                                      port_statistics_t *total_port_stats);
 extern int      port_get_global_rss_key(uint8_t ** const rss_key);
-extern void     port_set_conn_options(uint32_t port,
+extern int      port_set_conn_options(uint32_t port,
                                       tpg_port_options_t *options);
 extern void     port_get_conn_options(uint32_t port, tpg_port_options_t *out);
 extern bool     port_handle_cmdline_opt(const char *opt_name,

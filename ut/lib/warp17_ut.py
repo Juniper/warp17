@@ -119,7 +119,7 @@ class Warp17TrafficTestCase():
     """Assumes a B2B setup with even two ports."""
     """Port 0 <-> Port 1"""
 
-    # Test cases should pass in after a fixed time
+    # Test cases should pass after a fixed time
     RETRY_CNT = 5
 
     L4_PORT_COUNT = 100
@@ -140,6 +140,18 @@ class Warp17TrafficTestCase():
 
         return self.L3_INTF_COUNT
 
+    def get_open_rate(self):
+        """Override in child class if a specific value is needed."""
+        return Rate()
+
+    def get_send_rate(self):
+        """Override in child class if a specific value is needed."""
+        return Rate()
+
+    def get_close_rate(self):
+        """Override in child class if a specific value is needed."""
+        return Rate()
+
     def get_port_cfg(self, eth_port):
         # No def gw
         no_def_gw = Ip(ip_version=IPV4, ip_v4=0)
@@ -155,8 +167,9 @@ class Warp17TrafficTestCase():
     def get_client_rate_cfg(self, eth_port, tc_id):
         """Override in child class if a specif client rate config is needed."""
 
-        return RateClient(rc_open_rate=Rate(), rc_close_rate=Rate(),
-                          rc_send_rate=Rate())
+        return RateClient(rc_open_rate=self.get_open_rate(),
+                          rc_close_rate=self.get_close_rate(),
+                          rc_send_rate=self.get_send_rate())
 
     def get_client_delay_cfg(self, eth_port, tc_id):
         """Override in child class if a specif client delay config is needed."""
@@ -428,14 +441,15 @@ class Warp17TrafficTestCase():
                              0,
                              'Port Start Client')
 
-            for i in range(0, self.RETRY_CNT):
+            for i in range(0, self.get_tc_retry_count()):
                 cl_result = self.warp17_call('GetTestStatus', self._tc_arg_client)
                 self.assertEqual(cl_result.tsr_error.e_code, 0, 'GetTestStatus')
                 if cl_result.tsr_state == PASSED:
                     break
+                self.lh.debug('still waiting for test to pass...')
                 time.sleep(1)
 
-            self.assertTrue(i < self.RETRY_CNT, 'Retry count')
+            self.assertTrue(cl_result.tsr_state == PASSED, 'Retry count')
 
             self.verify_stats(cl_result)
 
