@@ -97,7 +97,8 @@ bool tlkp_udp_init(void)
         return false;
 
     L4_CB_MPOOL_INIT(mem_get_ucb_pools(), &tlkp_ucb_mpool_alloc_in_use,
-                     &ucb_l4cb_max_id);
+                     &ucb_l4cb_max_id,
+                     offsetof(udp_control_block_t, ucb_l4));
 
     return true;
 }
@@ -135,7 +136,8 @@ udp_control_block_t *tlkp_alloc_ucb(void)
 {
     void *ucb;
 
-    if (rte_mempool_sc_get(mem_get_ucb_local_pool(), &ucb) != 0)
+    if (rte_mempool_generic_get(mem_get_ucb_local_pool(), &ucb, 1, NULL,
+                                MEMPOOL_F_SC_GET))
         return NULL;
 
     L4_CB_ALLOC_INIT(&((udp_control_block_t *)ucb)->ucb_l4,
@@ -156,6 +158,7 @@ void tlkp_init_ucb(udp_control_block_t *ucb, uint32_t local_addr,
                    uint32_t interface,
                    uint32_t test_case_id,
                    tpg_app_proto_t app_id,
+                   sockopt_t *sockopt,
                    uint32_t flags)
 {
     tlkp_init_cb(&ucb->ucb_l4, local_addr, remote_addr, local_port, remote_port,
@@ -163,6 +166,7 @@ void tlkp_init_ucb(udp_control_block_t *ucb, uint32_t local_addr,
                  interface,
                  test_case_id,
                  app_id,
+                 sockopt,
                  flags);
 
     if ((flags & TCG_CB_MALLOCED))
@@ -182,6 +186,7 @@ void tlkp_init_ucb_client(udp_control_block_t *ucb, uint32_t local_addr,
                           uint32_t tcb_interface,
                           uint32_t test_case_id,
                           tpg_app_proto_t app_id,
+                          sockopt_t *sockopt,
                           uint32_t flags)
 {
     tlkp_init_ucb(ucb, local_addr, remote_addr, local_port, remote_port,
@@ -189,6 +194,7 @@ void tlkp_init_ucb_client(udp_control_block_t *ucb, uint32_t local_addr,
                   tcb_interface,
                   test_case_id,
                   app_id,
+                  sockopt,
                   flags);
     ucb->ucb_state = US_INIT;
     ucb->ucb_active = true;
@@ -199,9 +205,13 @@ void tlkp_init_ucb_client(udp_control_block_t *ucb, uint32_t local_addr,
  ****************************************************************************/
 void tlkp_free_ucb(udp_control_block_t *ucb)
 {
+    void *ucb_p = ucb;
+
     L4_CB_FREE_DEINIT(&ucb->ucb_l4, tlkp_ucb_mpool_alloc_in_use,
                       ucb_l4cb_max_id);
-    rte_mempool_sp_put(mem_get_ucb_local_pool(), ucb);
+
+    rte_mempool_generic_put(mem_get_ucb_local_pool(), &ucb_p, 1, NULL,
+                            MEMPOOL_F_SP_PUT);
 }
 
 /*****************************************************************************
@@ -209,7 +219,7 @@ void tlkp_free_ucb(udp_control_block_t *ucb)
  ****************************************************************************/
 unsigned int tlkp_total_ucbs_allocated(void)
 {
-    return rte_mempool_free_count(mem_get_ucb_local_pool());
+    return rte_mempool_in_use_count(mem_get_ucb_local_pool());
 }
 
 /*****************************************************************************
@@ -219,6 +229,7 @@ udp_control_block_t *tlkp_find_v4_ucb(uint32_t phys_port, uint32_t l4_hash,
                                       uint32_t local_addr, uint32_t remote_addr,
                                       uint16_t local_port, uint16_t remote_port)
 {
+    l4_control_block_t  *l4_cb;
     udp_control_block_t *ucb;
 
     TRACE_FMT(TLK, DEBUG,
@@ -231,17 +242,17 @@ udp_control_block_t *tlkp_find_v4_ucb(uint32_t phys_port, uint32_t l4_hash,
               local_port,
               remote_port);
 
-    ucb = container_of(tlkp_find_v4_cb(RTE_PER_LCORE(tlkp_ucb_hash_table),
-                                       phys_port,
-                                       l4_hash,
-                                       local_addr,
-                                       remote_addr,
-                                       local_port,
-                                       remote_port),
-                                       udp_control_block_t, ucb_l4);
-
-    if (unlikely(ucb == NULL))
+    l4_cb = tlkp_find_v4_cb(RTE_PER_LCORE(tlkp_ucb_hash_table),
+                                          phys_port,
+                                          l4_hash,
+                                          local_addr,
+                                          remote_addr,
+                                          local_port,
+                                          remote_port);
+    if (unlikely(l4_cb == NULL))
         return NULL;
+
+    ucb = container_of(l4_cb, udp_control_block_t, ucb_l4);
 
     /*
      * If we found a UCB and we have UCB trace filters enabled then

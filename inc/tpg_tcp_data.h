@@ -66,7 +66,7 @@
 /* TODO: doesn't include any potential options (IP+TCP). */
 #define TCB_MIN_HDRS_SZ                                   \
     (sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr) + \
-     sizeof(struct tcp_hdr))
+     sizeof(struct tcp_hdr) + ETHER_CRC_LEN)
 
 /*
  * Quite an ugly hack to test that we have room to store the
@@ -82,13 +82,14 @@ static_assert(sizeof(tcb_buf_hdr_t) <= TCB_MIN_HDRS_SZ,
 /*****************************************************************************
  * TCP Send related macros
  ****************************************************************************/
-/* In theory we could store more than the default window size but that would
+/* In theory we could store more than the window size but that would
  * just waste memory. Keep it like this for now.
  */
-#define TCB_MAX_TX_BUF_SZ TCP_DEFAULT_WINDOW_SIZE
+#define TCB_MAX_TX_BUF_SZ(tcb) \
+    (tcp_get_sockopt(&(tcb)->tcb_l4.l4cb_sockopt)->tcpo_win_size)
 
 #define TCB_AVAIL_SEND(tcb) \
-    (TCB_MAX_TX_BUF_SZ - (tcb)->tcb_retrans.tr_total_size)
+    (TCB_MAX_TX_BUF_SZ(tcb) - (tcb)->tcb_retrans.tr_total_size)
 
 #define TCB_SEGS_PER_SEND GCFG_TCP_SEGS_PER_SEND
 

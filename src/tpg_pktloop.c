@@ -99,7 +99,7 @@ static void pkt_trace_tx(packet_control_block_t *pcb, int32_t tx_queue_id,
 
     PKT_TRACE(pcb, PKT_TX, DEBUG,
               "port=%d qid=%d data_len=%u, buf_len = %u failed = %d",
-              pcb->pcb_port, tx_queue_id, rte_pktmbuf_data_len(mbuf),
+              pcb->pcb_port, tx_queue_id, rte_pktmbuf_pkt_len(mbuf),
               mbuf->buf_len, failed);
     if (!PKT_TRACE_ENABLED(pcb))
         return;
@@ -236,7 +236,7 @@ void pkt_flush_tx_q(uint32_t port, port_statistics_t *stats)
     packet_control_block_t pcb;
     uint32_t               i;
 
-    if (RTE_PER_LCORE(pkt_tx_q_len)[port] == 0)
+    if (unlikely(RTE_PER_LCORE(pkt_tx_q_len)[port] == 0))
         return;
 
     pcb.pcb_port = port;
@@ -260,7 +260,7 @@ void pkt_flush_tx_q(uint32_t port, port_statistics_t *stats)
 
         INC_STATS(stats, ps_send_pkts);
         INC_STATS_VAL(stats, ps_send_bytes,
-                      rte_pktmbuf_data_len(RTE_PER_LCORE(pkt_tx_q)[port][i]));
+                      rte_pktmbuf_pkt_len(RTE_PER_LCORE(pkt_tx_q)[port][i]));
     }
 
     pkt_sent_cnt = rte_eth_tx_burst(port, tx_queue_id, &RTE_PER_LCORE(pkt_tx_q)[port][0],
@@ -274,7 +274,7 @@ void pkt_flush_tx_q(uint32_t port, port_statistics_t *stats)
         INC_STATS(stats, ps_send_failure);
         DEC_STATS(stats, ps_send_pkts);
         DEC_STATS_VAL(stats, ps_send_bytes,
-                      rte_pktmbuf_data_len(RTE_PER_LCORE(pkt_tx_q)[port][i]));
+                      rte_pktmbuf_pkt_len(RTE_PER_LCORE(pkt_tx_q)[port][i]));
 
         pcb.pcb_trace = RTE_PER_LCORE(pkt_tx_q_trace)[port][i];
         pkt_trace_tx(&pcb, tx_queue_id, RTE_PER_LCORE(pkt_tx_q)[port][i], true);
@@ -522,7 +522,7 @@ int pkt_receive_loop(void *arg __rte_unused)
 
                 PKT_TRACE(pcb, PKT_RX, DEBUG,
                           "  data_len=%u/%u, rss_hash=0x%8.8X",
-                          rte_pktmbuf_data_len(buf[i]),
+                          rte_pktmbuf_pkt_len(buf[i]),
                           buf[i]->buf_len,
                           buf[i]->hash.rss);
 

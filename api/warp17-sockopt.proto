@@ -39,91 +39,38 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 // File name:
-//     warp17-common.proto
+//     warp17-sockopt.proto
 //
 // Description:
-//     Common object definitions.
+//     Definitions for options used for customizing the networking stack at
+//     various levels.
 //
 // Author:
 //     Dumitru Ceara, Eelco Chaudron
 //
 // Initial Created:
-//     01/15/2016
+//     06/28/2016
 //
 // Notes:
 //
 //
 
-import "google/protobuf/descriptor.proto";
-
-extend google.protobuf.EnumOptions {
-    optional bool warp17_constants = 50002;
+message PortOptions {
+    optional uint32 po_mtu = 1 [default = 1500];
 }
 
-extend google.protobuf.MessageOptions {
-    optional bool warp17_xlate_tpg = 50002 [default = true];
+message TcpSockopt {
+    optional uint32 to_win_size          =  1 [default = 1024];
+    optional uint32 to_syn_retry_cnt     =  2 [default = 24];   // actually 8bit
+    optional uint32 to_syn_ack_retry_cnt =  3 [default = 24];   // actually 8bit
+    optional uint32 to_data_retry_cnt    =  4 [default = 128];  // actually 8bit
+    optional uint32 to_retry_cnt         =  5 [default = 12];   // actually 8bit
+
+    optional uint32 to_rto               =  6 [default = 50];   // in msec
+    optional uint32 to_fin_to            =  7 [default = 100];  // in msec
+    optional uint32 to_twait_to          =  8 [default = 500];  // in msec
+    optional uint32 to_orphan_to         =  9 [default = 100];  // in msec
+
+    optional bool   to_skip_timewait     = 10 [default = false];
 }
 
-enum Constants {
-    option allow_alias = true;
-    option (warp17_constants) = true;
-
-    TPG_TEST_MAX_ENTRIES = 16;
-    TPG_TEST_MAX_L3_INTF = 10;
-}
-
-extend google.protobuf.FieldOptions {
-    /* WARNING: warp17_array_size MUST correspond to a constant definition from
-     * 'enum Constants' above. */
-    optional string warp17_array_size = 50002;
-    optional string warp17_union_name = 50003;
-    optional bool   warp17_union_anon = 50004;
-}
-
-enum IpV {
-    IPV4 = 4;
-    IPV6 = 6;
-}
-
-message IpV6 {
-    required uint64 ip_high = 1;
-    required uint64 ip_low  = 2;
-}
-
-message Ip {
-    required IpV ip_version = 1;
-
-    /* Add v6 below as part of the union once supported. */
-    optional uint32 ip_v4 = 2 [(warp17_union_anon) = true];
-}
-
-message IpRange {
-    required Ip ipr_start = 1;
-    required Ip ipr_end   = 2;
-}
-
-message L4PortRange {
-    //TODO ports should be uint16 but no such type exists. Check on the server side!!
-    required uint32 l4pr_start = 1;
-    required uint32 l4pr_end   = 2;
-}
-
-enum L4Proto {
-    UDP          = 0;
-    TCP          = 1;
-    L4_PROTO_MAX = 2;
-}
-
-enum AppProto {
-    RAW           = 0;
-    HTTP          = 1;
-    APP_PROTO_MAX = 2;
-}
-
-message Delay {
-    optional uint32 d_value = 1;
-}
-
-message Rate {
-    optional uint32 r_value = 1;
-}

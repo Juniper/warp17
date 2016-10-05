@@ -89,20 +89,20 @@ def extract_field_name(field):
 def line(s):
     return s + '\n'
 
-def generate_h_guard_name(filename):
+def gen_h_guard_name(filename):
     return 'H_WARP17_RPC_GEN__' + cstringify(filename) + '_'
 
-def generate_guard_begin(guard_name):
+def gen_guard_begin(guard_name):
     return line('#ifndef ' + guard_name) + \
                 line('#define ' + guard_name)
 
-def generate_guard_end(guard_name):
+def gen_guard_end(guard_name):
     return line(line('#endif /* ' + guard_name + ' */'))
 
-def generate_h_include(filename):
+def gen_h_include(filename):
     return line(line('#include "' + filename + '"'))
 
-def generate_standard_includes():
+def gen_standard_includes():
     return \
         line('#include <stdbool.h>') + \
         line('#include <stdint.h>') + \
@@ -110,80 +110,111 @@ def generate_standard_includes():
         line('#include <errno.h>') + \
         line('#include <rte_malloc.h>')
 
-def generate_name(name):
+def gen_name(name):
     return 'tpg_' + uncamel(name) + '_s'
 
-def generate_fwname(name):
+def gen_fwname(name):
     return 'tpg_' + uncamel(name) + '_t'
 
-def generate_xlate_protoc_name(name):
+def gen_protoc_name_init(name):
+    return '(' + name + ')' + uncamel(name).upper() + '__INIT'
+
+def gen_xlate_protoc_name(name):
     return 'tpg_xlate_protoc_' + name
 
-def generate_xlate_tpg_name(name):
+def gen_xlate_tpg_name(name):
     return 'tpg_xlate_tpg_' + name
 
-def generate_xlate_tpg_union_name(name):
+def gen_xlate_tpg_union_name(name):
     return 'tpg_xlate_tpg_union_' + name
 
-def generate_xlate_free_name(name):
+def gen_xlate_free_name(name):
     return 'tpg_xlate_free_' + name
 
-def generate_xlate_sig(name, ret_type, in_name, out_name):
-    return ret_type + ' ' + name +'(' + \
-           'const ' + in_name + ' *in, ' + \
-           out_name + ' *out)'
+def gen_xlate_tpg_free_name(name):
+    return 'tpg_xlate_tpg_free_' + name
 
-def generate_xlate_protoc_sig(name):
-    return generate_xlate_sig(generate_xlate_protoc_name(name),
-                              'void',
-                              name,
-                              generate_fwname(name))
+def gen_xlate_default_name(name):
+    return 'tpg_xlate_default_' + name
 
-def generate_xlate_tpg_sig(name):
-    return generate_xlate_sig(generate_xlate_tpg_name(name),
-                              'int',
-                              generate_fwname(name),
-                              name)
+def gen_sig(name, ret_type, decls):
+    return ret_type + ' ' + name + '(' + ', '.join(decls) + ')'
 
-def generate_xlate_tpg_union_sig(name):
-    return generate_xlate_sig(generate_xlate_tpg_union_name(name),
-                              'int',
-                              generate_fwname(name),
-                              name)
+def gen_xlate_sig(name, ret_type, in_name, out_name):
+    return gen_sig(name, ret_type,
+                   [gen_decl('const ' + in_name + '*', 'in'),
+                    gen_decl(out_name + '*', 'out')])
 
-def generate_xlate_free_sig(name):
-    return 'void ' + generate_xlate_free_name(name) + \
-           '(' + name + ' *ptr' + ')'
+def gen_xlate_protoc_sig(name):
+    return gen_xlate_sig(gen_xlate_protoc_name(name),
+                         'int',
+                         name,
+                         gen_fwname(name))
 
-def generate_xlate_protoc_h(item):
-    return line(line(generate_xlate_protoc_sig(item.name) + ';'))
+def gen_xlate_tpg_sig(name):
+    return gen_xlate_sig(gen_xlate_tpg_name(name),
+                         'int',
+                         gen_fwname(name),
+                         name)
 
-def generate_xlate_tpg_h(item):
-    return line(line(generate_xlate_tpg_sig(item.name) + ';'))
+def gen_xlate_tpg_union_sig(name):
+    return gen_xlate_sig(gen_xlate_tpg_union_name(name),
+                         'int',
+                         gen_fwname(name),
+                         name)
 
-def generate_xlate_tpg_union_h(item):
-    return line(line(generate_xlate_tpg_union_sig(item.name) + ';'))
+def gen_xlate_free_sig(name):
+    return gen_sig(gen_xlate_free_name(name),
+                   'void',
+                   [gen_decl(name + '*', 'ptr')])
 
-def generate_xlate_free_h(item):
-    return line(line(generate_xlate_free_sig(item.name) + ';'))
+def gen_xlate_tpg_free_sig(name):
+    return gen_sig(gen_xlate_tpg_free_name(name),
+                   'void',
+                   [gen_decl(gen_fwname(name) + '*', 'ptr')])
 
-def generate_xlate_h(item):
-    return generate_xlate_protoc_h(item)    + \
-           generate_xlate_tpg_h(item)       + \
-           generate_xlate_tpg_union_h(item) + \
-           generate_xlate_free_h(item)
+def gen_xlate_default_sig(name):
+    return gen_sig(gen_xlate_default_name(name),
+                   'void',
+                   [gen_decl(gen_fwname(name) + '*', 'out')])
 
-def generate_xlate_guard_name(name):
+def gen_xlate_protoc_h(item):
+    return line(line(gen_xlate_protoc_sig(item.name) + ';'))
+
+def gen_xlate_tpg_h(item):
+    return line(line(gen_xlate_tpg_sig(item.name) + ';'))
+
+def gen_xlate_tpg_union_h(item):
+    return line(line(gen_xlate_tpg_union_sig(item.name) + ';'))
+
+def gen_xlate_free_h(item):
+    return line(line(gen_xlate_free_sig(item.name) + ';'))
+
+def gen_xlate_tpg_free_h(item):
+    return line(line(gen_xlate_tpg_free_sig(item.name) + ';'))
+
+def gen_xlate_default_h(item):
+    return line(line(gen_xlate_default_sig(item.name) + ';'))
+
+def gen_xlate_h(item):
+    return gen_xlate_protoc_h(item)    + \
+           gen_xlate_tpg_h(item)       + \
+           gen_xlate_tpg_union_h(item) + \
+           gen_xlate_free_h(item)      + \
+           gen_xlate_tpg_free_h(item)  + \
+           gen_xlate_default_h(item)
+
+def gen_xlate_guard_name(name):
     return 'TPG_XLATE_' + cstringify(name)
 
-def xlate_generate_guard_begin(name):
+def xlate_gen_guard_begin(name):
     return line('#ifndef ' + name)
 
-def xlate_generate_guard_end(name):
+def xlate_gen_guard_end(name):
     return line('#endif /* ' + name + ' */')
 
-def generate_message_type(field):
-    return generate_fwname(extract_field_name(field))
+def gen_message_type(field):
+    return gen_fwname(extract_field_name(field))
 
 def is_type_ptr(t):
     return t == FieldDescriptorProto.TYPE_BYTES or \
@@ -192,18 +223,18 @@ def is_type_ptr(t):
 def is_type_str(t):
     return t == FieldDescriptorProto.TYPE_STRING
 
-def generate_type(field):
+def gen_type(field):
     type_str = {
         FieldDescriptorProto.TYPE_BOOL : 'bool',
         FieldDescriptorProto.TYPE_BYTES : 'char *',
         FieldDescriptorProto.TYPE_DOUBLE : 'double',
-        FieldDescriptorProto.TYPE_ENUM : generate_message_type(field),
+        FieldDescriptorProto.TYPE_ENUM : gen_message_type(field),
         FieldDescriptorProto.TYPE_FIXED32 : 'uint32_t',
         FieldDescriptorProto.TYPE_FIXED64 : 'uint64_t',
         FieldDescriptorProto.TYPE_FLOAT : 'float',
         FieldDescriptorProto.TYPE_INT32 : 'int32_t',
         FieldDescriptorProto.TYPE_INT64 : 'int64_t',
-        FieldDescriptorProto.TYPE_MESSAGE : generate_message_type(field),
+        FieldDescriptorProto.TYPE_MESSAGE : gen_message_type(field),
         FieldDescriptorProto.TYPE_SFIXED32 : 'int32_t',
         FieldDescriptorProto.TYPE_SFIXED64 : 'int64_t',
         FieldDescriptorProto.TYPE_SINT32 : 'int32_t',
@@ -218,30 +249,38 @@ def generate_type(field):
 
     return type_str
 
-def generate_constant_define(name, val):
+def gen_constant_define(name, val):
     return line('#define ' + name + ' ' + val)
 
-def generate_struct_begin(item):
-    return line('typedef struct ' + generate_name(item.name) + ' {')
+def gen_struct_begin(item):
+    return line('typedef struct ' + gen_name(item.name) + ' {')
 
-def generate_struct_end(item):
-    return line(line('} ' + generate_fwname(item.name) + ';'))
+def gen_struct_end(item):
+    return line(line('} ' + gen_fwname(item.name) + ';'))
 
-def generate_union_begin(name):
+def gen_union_begin(name):
     return line('\tunion {')
 
-def generate_union_end(name):
+def gen_union_end(name):
     return line('\t} ' + name + ';')
 
-def generate_return(err = None):
+def gen_decl(decl_type, decl_name):
+    return decl_type + ' ' + decl_name
+
+def gen_var_decl(var_type, var_name, initializer=None):
+    if initializer is None:
+        return gen_decl(var_type, var_name) + ';'
+    return gen_decl(var_type, var_name) + ' = ' + initializer + ';'
+
+def gen_return(err = None):
     if err is None:
         return line('return;')
     return line('return ' + '-' + err + ';')
 
-def generate_assign(dest, src):
+def gen_assign(dest, src):
     return line(dest + ' = ' + src + ';')
 
-def generate_if(cond, true_inst, false_inst = None):
+def gen_if(cond, true_inst, false_inst = None):
     output = \
         [line('if (' + cond + ') {')] + \
         ['\t' + inst for inst in true_inst] + \
@@ -255,7 +294,7 @@ def generate_if(cond, true_inst, false_inst = None):
 
     return output
 
-def generate_for(var, start, end, body_inst = None):
+def gen_for(var, start, end, body_inst = None):
     return \
         [line('for (' + var + ' = ' + start + '; ' + \
                    var + ' < ' + end + '; ' + \
@@ -263,17 +302,28 @@ def generate_for(var, start, end, body_inst = None):
         ['\t' + inst for inst in body_inst] + \
         [line('}')]
 
-def generate_alloc(var, size):
-    return line(var + ' = rte_zmalloc("TPG_RPC_GEN", ' + size + ', 0);')
+def gen_fcall(fname, fargs):
+    return fname + '(' + ', '.join(fargs)  + ')'
 
-def generate_alloc_err(var):
-    return generate_if('!' + var,
-                       true_inst = [generate_return('ENOMEM')])
+def gen_fcall_stmt(fname, fargs):
+    return line(gen_fcall(fname, fargs) + ';')
 
-def generate_free(var):
-    return line ('if (' + var + ') rte_free(' + var + ');')
+def gen_sizeof(name):
+    return gen_fcall('sizeof', [name])
 
-def generate_min(a, b):
+def gen_alloc(var, size):
+    return gen_assign(var,
+                      gen_fcall('rte_zmalloc',
+                                ['"TPG_RPC_GEN"', str(size), '0']))
+
+def gen_alloc_err(var):
+    return gen_if('!' + var,
+                  true_inst = [gen_return('ENOMEM')])
+
+def gen_free(var):
+    return line ('if (' + var + ') ' + gen_fcall('rte_free', [var]) + ';')
+
+def gen_min(a, b):
     return '((' + a + ') <= (' + b + ') ? (' + a + ') : (' + b + '))'
 
 ###############################################################################
@@ -281,319 +331,356 @@ def generate_min(a, b):
 ###############################################################################
 def hdr_f_enter(proto_file, prefix):
     return [
-        generate_guard_begin(generate_h_guard_name(prefix)),
-        generate_standard_includes(),
-        generate_h_include(prefix + '.pb-c.h')
+        gen_guard_begin(gen_h_guard_name(prefix)),
+        gen_standard_includes(),
+        gen_h_include(prefix + '.pb-c.h')
     ]
 
 def hdr_f_leave(proto_file, prefix):
     return [
-        generate_guard_end(generate_h_guard_name(prefix))
+        gen_guard_end(gen_h_guard_name(prefix))
     ]
 
 def hdr_e_constants(item):
     return [
-        generate_constant_define(v.name, str(v.number)) for v in item.value
+        gen_constant_define(v.name, str(v.number)) for v in item.value
     ]
 
 def hdr_e_process(item):
     return [
-        line(line('typedef ' + item.name + ' ' + generate_fwname(item.name) + ';'))
+        line(line('typedef ' + \
+                  gen_decl(item.name, gen_fwname(item.name)) + ';'))
     ]
 
 def hdr_m_enter(item):
-    return [generate_struct_begin(item)]
+    return [gen_struct_begin(item)]
 
 def hdr_u_enter(item, union_name, union_anon):
-    return [generate_union_begin(union_name)]
+    return [gen_union_begin(union_name)]
 
 def hdr_u_leave(union_name, union_anon):
-    return [generate_union_end(union_name if not union_anon else '')]
+    return [gen_union_end(union_name if not union_anon else '')]
 
-def hdr_m_generate_required_field(item, field, field_name):
-    return [line(generate_type(field) + ' ' + field_name + ';')]
+def hdr_m_gen_required_field(item, field, field_name):
+    return [line(gen_type(field) + ' ' + field_name + ';')]
 
-def hdr_m_generate_optional_field(item, field, field_name):
+def hdr_m_gen_optional_field(item, field, field_name):
     if is_type_ptr(field.type):
-        return hdr_m_generate_required_field(item, field, field_name)
+        return hdr_m_gen_required_field(item, field, field_name)
 
     if field.type == FieldDescriptorProto.TYPE_MESSAGE:
-        return [line(generate_message_type(field) + ' *' + field_name + ';')]
+        return [line(gen_var_decl(gen_message_type(field) + '*',
+                                  field_name))]
 
     return \
-        [line('bool has_' + field_name + ';'),
-         line(generate_type(field) + ' ' + field_name + ';')]
+        [line(gen_var_decl('bool', 'has_' + field_name)),
+         line(gen_var_decl(gen_type(field), field_name))]
 
-def hdr_m_generate_repeated_field(item, field, field_name, array_size):
+def hdr_m_gen_repeated_field(item, field, field_name, array_size):
     return [ \
-        line('uint32_t ' + field_name + '_count;'),
-        line(generate_type(field) + ' ' + field_name + '[' + array_size + '];')
+        line(gen_var_decl('uint32_t', field_name + '_count')),
+        line(gen_var_decl(gen_type(field),
+                          field_name + '[' + array_size + ']'))
     ]
 
-def hdr_m_generate_union_field(item, field, field_name, array_size):
-    return ['\t' + l for l in hdr_m_generate_required_field(item, field,
-                                                            field_name)]
+def hdr_m_gen_union_field(item, field, field_name, array_size):
+    return ['\t' + l for l in hdr_m_gen_required_field(item, field, field_name)]
 
-def hdr_m_generate_field(item, field, field_name, array_size):
+def hdr_m_gen_field(item, field, field_name, array_size):
     if field.label == FieldDescriptorProto.LABEL_REQUIRED:
-        return hdr_m_generate_required_field(item, field, field_name)
+        return hdr_m_gen_required_field(item, field, field_name)
     elif field.label == FieldDescriptorProto.LABEL_OPTIONAL:
-        return hdr_m_generate_optional_field(item, field, field_name)
+        return hdr_m_gen_optional_field(item, field, field_name)
     elif field.label == FieldDescriptorProto.LABEL_REPEATED:
-        return hdr_m_generate_repeated_field(item, field, field_name,
-                                             array_size)
+        return hdr_m_gen_repeated_field(item, field, field_name, array_size)
 
 def hdr_m_field(item, field, field_name, union_name, union_anon, array_size):
     if not union_name is None:
         return ['\t' + l for l in
-                    hdr_m_generate_union_field(item, field, field_name,
-                                               array_size)]
+                    hdr_m_gen_union_field(item, field, field_name, array_size)]
     else:
         return ['\t' + l for l in
-                    hdr_m_generate_field(item, field, field_name, array_size)]
+                    hdr_m_gen_field(item, field, field_name, array_size)]
 
 def hdr_m_leave(item):
     return [
-        generate_struct_end(item),
-        generate_xlate_h(item)
+        gen_struct_end(item),
+        gen_xlate_h(item)
     ]
 
 ###############################################################################
 # XLATE PROTOC
 ###############################################################################
-def generate_msg_protoc_xlate(type_name, dst, src):
+def gen_msg_protoc_xlate(type_name, dst, src):
     type_name = extract_name(type_name)
-    return line(generate_xlate_protoc_name(type_name) + \
-                    '(' + src + ', ' + dst + ');')
+    return gen_fcall_stmt(gen_xlate_protoc_name(type_name), [src, dst])
 
 def xlate_protoc_f_enter(proto_file, prefix):
-    return [generate_h_include(proto_file.name + XLATE_H)]
+    return [gen_h_include(proto_file.name + XLATE_H)]
 
 def xlate_protoc_m_enter(item):
     return [ \
-        xlate_generate_guard_begin(generate_xlate_guard_name(item.name)),
-        line(generate_xlate_protoc_sig(item.name)),
+        xlate_gen_guard_begin(gen_xlate_guard_name(item.name)),
+        line(gen_xlate_protoc_sig(item.name)),
         line('{'),
-        line('\tuint32_t i;'),
+        line('\t' + gen_var_decl('uint32_t', 'i')),
+        line(''),
         line('\t(void)i;')
     ]
 
-def xlate_protoc_m_generate_msg_required(item, field, field_name):
-    return [generate_msg_protoc_xlate(field.type_name,
-                                      '&out->' + field_name,
-                                      'in->' + field.name)]
+def xlate_protoc_m_gen_msg_required(item, field, field_name):
 
-def xlate_protoc_m_generate_scalar_required(item, field, field_name):
+    type_name = field.type_name[1:]
+    return gen_if('in->' + field.name + ' != NULL',
+                  true_inst = [gen_msg_protoc_xlate(field.type_name,
+                                                   '&out->' + field_name,
+                                                   'in->' + field.name)],
+                  false_inst = [gen_fcall_stmt(gen_xlate_default_name(type_name),
+                                               ['&out->' + field_name])])
+
+def xlate_protoc_m_gen_scalar_required(item, field, field_name):
     if is_type_str(field.type):
         #TODO: we strdup but we never free!
-        return [generate_assign('out->' + field_name, 'strdup(in->' + field.name + ')')]
-    return [generate_assign('out->' + field_name, 'in->' + field.name)]
+        return [gen_assign('out->' + field_name,
+                           gen_fcall('strdup', ['in->' + field.name]))]
+    return [gen_assign('out->' + field_name, 'in->' + field.name)]
 
-def xlate_protoc_m_generate_required(item, field, field_name):
+def xlate_protoc_m_gen_required(item, field, field_name):
     if field.type == FieldDescriptorProto.TYPE_MESSAGE:
-        return xlate_protoc_m_generate_msg_required(item, field, field_name)
-    return xlate_protoc_m_generate_scalar_required(item, field, field_name)
+        return xlate_protoc_m_gen_msg_required(item, field, field_name)
+    return xlate_protoc_m_gen_scalar_required(item, field, field_name)
 
-def xlate_protoc_m_generate_msg_optional(item, field, field_name, union_name,
-                                         union_anon):
+def xlate_protoc_m_gen_msg_optional(item, field, field_name, union_name,
+                                    union_anon):
+
+    if union_anon or not union_name is None:
+        if not union_anon and not union_name is None:
+            field_name = union_name + '.' + field_name
+
+        return gen_if('in->' + field.name + ' !=  NULL',
+                      true_inst = [gen_msg_protoc_xlate(field.type_name,
+                                                        '&out->' + field_name,
+                                                        'in->' + field.name)])
+
+    return gen_if('in->' + field.name + ' != NULL',
+                  true_inst = [gen_alloc('out->' + field_name,
+                                         gen_sizeof('*out->' + field_name))] + \
+                               gen_alloc_err('out->' + field_name) + \
+                              [gen_msg_protoc_xlate(field.type_name,
+                                                    'out->' + field_name,
+                                                    'in->' + field.name)],
+                  false_inst = [gen_assign('out->' + field_name, 'NULL')])
+
+def xlate_protoc_m_gen_scalar_optional(item, field, field_name, union_name,
+                                       union_anon):
     if not union_anon and not union_name is None:
         field_name = union_name + '.' + field_name
 
-    return generate_if('in->' + field.name + ' !=  NULL',
-                       true_inst = [generate_msg_protoc_xlate(field.type_name,
-                                                             '&out->' + field_name,
-                                                             'in->' + field.name)])
-
-def xlate_protoc_m_generate_scalar_optional(item, field, field_name, union_name,
-                                            union_anon):
-    if not union_anon and not union_name is None:
-        field_name = union_name + '.' + field_name
+    assign_default = None
+    if field.default_value:
+        if is_type_str(field.type):
+            #TODO: we strdup but we never free!
+            assign_default = [gen_assign('out->' + field_name,
+                                         gen_fcall('strdup',
+                                                   [field.default_value]))]
+        elif union_name is None:
+            assign_default = [gen_assign('out->' + field_name,
+                                         field.default_value)]
 
     if is_type_ptr(field.type):
         if is_type_str(field.type):
             #TODO: we strdup but we never free!
-            return [generate_assign('out->' + field_name, 'strdup(in->' + field.name + ')')]
-        return [generate_assign('out->' + field_name, 'in->' + field.name)]
+            assign_inst = [gen_assign('out->' + field_name,
+                                      gen_fcall('strdup',
+                                                ['in->' + field.name]))]
+        else:
+            assign_inst = [gen_assign('out->' + field_name,
+                                      'in->' + field.name)]
+
+        return gen_if('in->' + field.name + ' != NULL',
+                      true_inst = assign_inst,
+                      false_inst = assign_default)
 
     output = []
     if union_name is None:
-        output += [generate_assign('out->has_' + field_name,
-                                   'in->has_' + field.name)]
-    output += generate_if('in->has_' + field.name,
-                          true_inst = [generate_assign('out->' + field_name,
-                                                       'in->' + field.name)])
+        output += [gen_assign('out->has_' + field_name,
+                              'in->has_' + field.name)]
+
+    output += gen_if('in->has_' + field.name,
+                     true_inst = [gen_assign('out->' + field_name,
+                                             'in->' + field.name)],
+                     false_inst = assign_default)
     return output
 
-def xlate_protoc_m_generate_optional(item, field, field_name, union_name,
-                                     union_anon):
+def xlate_protoc_m_gen_optional(item, field, field_name, union_name,
+                                union_anon):
     if field.type == FieldDescriptorProto.TYPE_MESSAGE:
-        return xlate_protoc_m_generate_msg_optional(item, field, field_name,
-                                                    union_name,
-                                                    union_anon)
-    return xlate_protoc_m_generate_scalar_optional(item, field, field_name,
-                                                   union_name,
-                                                   union_anon)
+        return xlate_protoc_m_gen_msg_optional(item, field, field_name,
+                                               union_name,
+                                               union_anon)
+    return xlate_protoc_m_gen_scalar_optional(item, field, field_name,
+                                              union_name,
+                                              union_anon)
 
-def xlate_protoc_m_generate_msg_repeated(item, field, field_name, array_size):
-    return generate_for('i', '0',
-                        generate_min('in->n_' + field.name, array_size),
-                        body_inst = [generate_msg_protoc_xlate(field.type_name,
-                                                               '&out->' + field_name + '[i]',
-                                                               'in->' + field.name + '[i]')])
+def xlate_protoc_m_gen_msg_repeated(item, field, field_name, array_size):
+    return gen_for('i', '0',
+                   gen_min('in->n_' + field.name, array_size),
+                   body_inst = [gen_msg_protoc_xlate(field.type_name,
+                                                     '&out->' + field_name + '[i]',
+                                                     'in->' + field.name + '[i]')])
 
-def xlate_protoc_m_generate_scalar_repeated(item, field, field_name, array_size):
+def xlate_protoc_m_gen_scalar_repeated(item, field, field_name, array_size):
     if is_type_ptr(field.type):
         raise Warp17ParseException('Error: repeated pointer types ' + \
                                    'not supported: ' + field.name)
-    return generate_for('i', '0', 'in->n_' + field.name,
-                        body_inst = [generate_assign('out->' + field_name + '[i]',
-                                                     'in->' + field.name + '[i]')])
+    return gen_for('i', '0', 'in->n_' + field.name,
+                   body_inst = [gen_assign('out->' + field_name + '[i]',
+                                           'in->' + field.name + '[i]')])
 
-def xlate_protoc_m_generate_repeated(item, field, field_name, array_size):
-    output = [generate_assign('out->' + field_name + '_count',
-                              generate_min('in->n_' + field.name, array_size))]
+def xlate_protoc_m_gen_repeated(item, field, field_name, array_size):
+    output = [gen_assign('out->' + field_name + '_count',
+                         gen_min('in->n_' + field.name, array_size))]
     if field.type == FieldDescriptorProto.TYPE_MESSAGE:
-        output += xlate_protoc_m_generate_msg_repeated(item, field, field_name,
-                                                       array_size)
+        output += xlate_protoc_m_gen_msg_repeated(item, field, field_name,
+                                                  array_size)
     else:
-        output += xlate_protoc_m_generate_scalar_repeated(item, field,
-                                                          field_name,
-                                                          array_size)
+        output += xlate_protoc_m_gen_scalar_repeated(item, field, field_name,
+                                                     array_size)
     return output
 
 def xlate_protoc_m_field(item, field, field_name, union_name, union_anon,
                          array_size):
     if field.label == FieldDescriptorProto.LABEL_REQUIRED:
         return ['\t' + l for l in
-                xlate_protoc_m_generate_required(item, field, field_name)]
+                xlate_protoc_m_gen_required(item, field, field_name)]
     elif field.label == FieldDescriptorProto.LABEL_OPTIONAL:
         return ['\t' + l for l in
-                xlate_protoc_m_generate_optional(item, field, field_name,
-                                                 union_name,
-                                                 union_anon)]
+                xlate_protoc_m_gen_optional(item, field, field_name,
+                                            union_name,
+                                            union_anon)]
     elif field.label == FieldDescriptorProto.LABEL_REPEATED:
         return ['\t' + l for l in
-                xlate_protoc_m_generate_repeated(item, field, field_name,
-                                                 array_size)]
+                xlate_protoc_m_gen_repeated(item, field, field_name,
+                                            array_size)]
     else:
         raise Warp17ParseException('Error: Unexpected label type: ' + field.name)
 
 def xlate_protoc_m_leave(item):
     return [ \
+        line('\t' + gen_return('0')),
         line('}'),
-        xlate_generate_guard_end(generate_xlate_guard_name(item.name))   + '\n',
+        xlate_gen_guard_end(gen_xlate_guard_name(item.name))   + '\n',
         '\n'
     ]
 
 ###############################################################################
 # XLATE TPG
 ###############################################################################
-def generate_msg_tpg_xlate(type_name, dst, src):
+def gen_msg_tpg_xlate(type_name, dst, src):
     type_name = extract_name(type_name)
-    return line(generate_xlate_tpg_name(type_name) + \
-           '(' + src + ', ' + dst + ');')
+    return gen_fcall(gen_xlate_tpg_name(type_name), [src, dst])
 
-def generate_msg_tpg_union_xlate(type_name, dst, src):
-    return line(generate_xlate_tpg_union_name(type_name) + \
-           '(' + src + ', ' + dst + ');')
+def gen_msg_tpg_xlate_stmt(type_name, dst, src):
+    return line(gen_msg_tpg_xlate(type_name, dst, src) + ';')
 
-def generate_xlate_tpg_init(item):
-    return generate_assign('*out',
-                           '(' + item.name + ')' + uncamel(item.name).upper() + '__INIT')
+def gen_msg_tpg_union_xlate(type_name, dst, src):
+    return gen_fcall(gen_xlate_tpg_union_name(type_name), [src, dst])
+
+def gen_msg_tpg_union_xlate_stmt(type_name, dst, src):
+    return line(gen_msg_tpg_union_xlate(type_name, dst, src) + ';')
+
+def gen_xlate_tpg_init(item):
+    return gen_assign('*out', gen_protoc_name_init(item.name))
 
 def xlate_tpg_m_enter(item):
     if not item.options.Extensions[warp17_xlate_tpg]: return []
 
     return [
-        xlate_generate_guard_begin(generate_xlate_guard_name(item.name)),
-        line(generate_xlate_tpg_sig(item.name)),
+        xlate_gen_guard_begin(gen_xlate_guard_name(item.name)),
+        line(gen_xlate_tpg_sig(item.name)),
         line('{'),
-        line('\tuint32_t i;'),
-        line('\tint err;'),
+        line('\t' + gen_var_decl('uint32_t', 'i')),
+        line('\t' + gen_var_decl('int', 'err')),
+        line(''),
         line('\t(void)i;'),
         line('\t(void)err;'),
-        '\t' + generate_xlate_tpg_init(item)
+        '\t' + gen_xlate_tpg_init(item)
     ]
 
 def xlate_tpg_u_enter(item, union_name, union_anon):
     if not item.options.Extensions[warp17_xlate_tpg]: return []
 
-    return [generate_assign('err', generate_msg_tpg_union_xlate(item.name,
-                                                                'out',
-                                                                'in'))] + \
-           generate_if('err != 0',
-                       true_inst = ['\t' + generate_return('err')])
+    return [gen_assign('err', gen_msg_tpg_union_xlate(item.name, 'out', 'in'))] + \
+           gen_if('err != 0', true_inst = ['\t' + gen_return('err')])
 
-
-def xlate_tpg_m_generate_msg_required(item, field, field_name):
+def xlate_tpg_m_gen_msg_required(item, field, field_name):
     return \
-        [generate_alloc('out->' + field.name, 'sizeof(*out->' + field.name + ')')] + \
-        generate_alloc_err('out->' + field.name) + \
-        [generate_msg_tpg_xlate(field.type_name, 'out->' + field.name,
+        [gen_alloc('out->' + field.name, gen_sizeof('*out->' + field.name))] + \
+        gen_alloc_err('out->' + field.name) + \
+        [gen_msg_tpg_xlate_stmt(field.type_name, 'out->' + field.name,
                                 '&in->' + field_name)]
 
-def xlate_tpg_m_generate_scalar_required(item, field, field_name):
+def xlate_tpg_m_gen_scalar_required(item, field, field_name):
     return [
-        generate_assign('out->' + field_name, 'in->' + field.name)
+        gen_assign('out->' + field_name, 'in->' + field.name)
     ]
 
-def xlate_tpg_m_generate_required(item, field, field_name):
+def xlate_tpg_m_gen_required(item, field, field_name):
     if field.type == FieldDescriptorProto.TYPE_MESSAGE:
-        return xlate_tpg_m_generate_msg_required(item, field, field_name)
-    return xlate_tpg_m_generate_scalar_required(item, field, field_name)
+        return xlate_tpg_m_gen_msg_required(item, field, field_name)
+    return xlate_tpg_m_gen_scalar_required(item, field, field_name)
 
-def xlate_tpg_m_generate_optional(item, field, field_name, union_name,
-                                  union_anon):
+def xlate_tpg_m_gen_optional(item, field, field_name, union_name, union_anon):
     # Can't translate unions. The user has to provide a function for that..
     if not union_name is None:
         return []
 
     if is_type_ptr(field.type):
-        return xlate_tpg_m_generate_required(item, field, field_name)
+        return xlate_tpg_m_gen_required(item, field, field_name)
 
     if field.type == FieldDescriptorProto.TYPE_MESSAGE:
-        return generate_if('in->' + field_name + ' != NULL',
-                           true_inst = [generate_alloc('out->' + field.name,
-                                                       'sizeof(*out->' + field.name + ')')] + \
-                                        generate_alloc_err('out->' + field.name) + \
-                                       [generate_msg_tpg_xlate(field.type_name,
-                                                              'out->' + field.name,
-                                                              'in->' + field_name)])
+        return gen_if('in->' + field_name + ' != NULL',
+                      true_inst = [gen_alloc('out->' + field.name,
+                                             gen_sizeof('*out->' + field.name))] + \
+                                   gen_alloc_err('out->' + field.name) + \
+                                  [gen_msg_tpg_xlate_stmt(field.type_name,
+                                                          'out->' + field.name,
+                                                          'in->' + field_name)])
 
-    return generate_if('in->has_' + field_name,
-                       true_inst = [generate_assign('out->' + field.name,
-                                                   'in->' + field_name),
-                                    generate_assign('out->has_' + field.name,
-                                                    'in->has_' + field_name)])
+    return gen_if('in->has_' + field_name,
+                  true_inst = [gen_assign('out->' + field.name,
+                                          'in->' + field_name),
+                               gen_assign('out->has_' + field.name,
+                                          'in->has_' + field_name)])
 
-def xlate_tpg_m_generate_msg_repeated(item, field, field_name, array_size):
-    return generate_for('i', '0', 'in->' + field_name + '_count',
-                        body_inst = \
-                            [generate_alloc('out->' + field.name + '[i]',
-                                           'sizeof(*out->' + field.name + '[i])')] + \
-                             generate_alloc_err('out->' + field.name + '[i]') + \
-                            [generate_msg_tpg_xlate(field.type_name,
-                                                    'out->' + field.name + '[i]',
-                                                    '&in->' + field_name + '[i]')])
+def xlate_tpg_m_gen_msg_repeated(item, field, field_name, array_size):
+    return gen_for('i', '0', 'in->' + field_name + '_count',
+                   body_inst = \
+                       [gen_alloc('out->' + field.name + '[i]',
+                                  gen_sizeof('*out->' + field.name + '[i]'))] + \
+                        gen_alloc_err('out->' + field.name + '[i]') + \
+                       [gen_msg_tpg_xlate_stmt(field.type_name,
+                                               'out->' + field.name + '[i]',
+                                               '&in->' + field_name + '[i]')])
 
-def xlate_tpg_m_generate_scalar_repeated(item, field, field_name, array_size):
-    return generate_for('i', '0', 'in->' + field_name + '_count',
-                        body_inst = [generate_assign('out->' + field.name + '[i]',
-                                                     'in->' + field_name + '[i]')])
+def xlate_tpg_m_gen_scalar_repeated(item, field, field_name, array_size):
+    return gen_for('i', '0', 'in->' + field_name + '_count',
+                   body_inst = [gen_assign('out->' + field.name + '[i]',
+                                           'in->' + field_name + '[i]')])
 
-def xlate_tpg_m_generate_repeated(item, field, field_name, array_size):
-    output =  [generate_alloc('out->' + field.name,
-                              array_size + ' * sizeof(*out->' + field.name + ')')]
-    output +=  generate_alloc_err('out->' + field.name)
-    output += [generate_assign('out->n_' + field.name,
-                               'in->' + field_name + '_count')]
+def xlate_tpg_m_gen_repeated(item, field, field_name, array_size):
+    output =  [gen_alloc('out->' + field.name,
+                         array_size + ' * ' + gen_sizeof('*out->' + field.name))]
+    output +=  gen_alloc_err('out->' + field.name)
+    output += [gen_assign('out->n_' + field.name,
+                          'in->' + field_name + '_count')]
 
     if field.type == FieldDescriptorProto.TYPE_MESSAGE:
-        output += xlate_tpg_m_generate_msg_repeated(item, field, field_name,
-                                                    array_size)
+        output += xlate_tpg_m_gen_msg_repeated(item, field, field_name,
+                                               array_size)
     else:
-        output += xlate_tpg_m_generate_scalar_repeated(item, field, field_name,
-                                                       array_size)
+        output += xlate_tpg_m_gen_scalar_repeated(item, field, field_name,
+                                                  array_size)
 
     return output
 
@@ -603,16 +690,14 @@ def xlate_tpg_m_field(item, field, field_name, union_name, union_anon,
 
     if field.label == FieldDescriptorProto.LABEL_REQUIRED:
         return ['\t' + l for l in
-                xlate_tpg_m_generate_required(item, field, field_name)]
+                xlate_tpg_m_gen_required(item, field, field_name)]
     elif field.label == FieldDescriptorProto.LABEL_OPTIONAL:
         return ['\t' + l for l in
-                xlate_tpg_m_generate_optional(item, field, field_name,
-                                              union_name,
-                                              union_anon)]
+                xlate_tpg_m_gen_optional(item, field, field_name, union_name,
+                                         union_anon)]
     elif field.label == FieldDescriptorProto.LABEL_REPEATED:
         return ['\t' + l for l in
-                xlate_tpg_m_generate_repeated(item, field, field_name,
-                                              array_size)]
+                xlate_tpg_m_gen_repeated(item, field, field_name, array_size)]
     else:
         raise Warp17ParseException('Error: Unexpected label type: ' + field.name)
 
@@ -620,9 +705,9 @@ def xlate_tpg_m_leave(item):
     if not item.options.Extensions[warp17_xlate_tpg]: return []
 
     return [ \
-        '\t' + generate_return('0'),
+        '\t' + gen_return('0'),
         line('}'),
-        xlate_generate_guard_end(generate_xlate_guard_name(item.name))   + '\n',
+        xlate_gen_guard_end(gen_xlate_guard_name(item.name))   + '\n',
         '\n'
     ]
 
@@ -631,17 +716,22 @@ def xlate_tpg_m_leave(item):
 ###############################################################################
 def xlate_free_m_enter(item):
     return [
-        xlate_generate_guard_begin(generate_xlate_guard_name(item.name)),
-        line(generate_xlate_free_sig(item.name)),
+        xlate_gen_guard_begin(gen_xlate_guard_name(item.name)),
+        line(gen_xlate_free_sig(item.name)),
         line('{'),
-        line('\tuint32_t i;'),
+        line('\t' + gen_var_decl('uint32_t', 'i')),
+        line(''),
         line('\t(void)i;'),
         line('\t(void)ptr;')
     ]
 
 def xlate_free_m_msg_repeated(item, field, field_name, array_size):
-    return generate_for('i', '0', 'ptr->n_' + field.name,
-                        body_inst = [generate_free('ptr->' + field.name + '[i]')])
+    type_name = field.type_name[1:]
+    return gen_for('i', '0', 'ptr->n_' + field.name,
+                   body_inst = gen_if('ptr->' + field.name + '[i]',
+                                      true_inst=[gen_fcall_stmt(gen_xlate_free_name(type_name),
+                                                                ['ptr->' + field.name + '[i]']),
+                                                 gen_fcall_stmt('rte_free', ['ptr->' + field.name + '[i]'])]))
 
 def xlate_free_m_scalar_repeated(item, field, field_name, array_size):
     return []
@@ -653,7 +743,7 @@ def xlate_free_m_repeated(item, field, field_name, array_size):
         output = xlate_free_m_scalar_repeated(item, field, field_name,
                                               array_size)
     return output + [
-        generate_free('ptr->' + field.name)
+        gen_free('ptr->' + field.name)
     ]
 
 def xlate_free_m_optional(item, field, field_name):
@@ -661,7 +751,7 @@ def xlate_free_m_optional(item, field, field_name):
         return []
 
     return [
-        generate_free('ptr->' + field.name)
+        gen_free('ptr->' + field.name)
     ]
 
 def xlate_free_m_field(item, field, field_name, union_name, union_anon,
@@ -679,7 +769,91 @@ def xlate_free_m_field(item, field, field_name, union_name, union_anon,
 def xlate_free_m_leave(item):
     return [
         line('}'),
-        xlate_generate_guard_end(generate_xlate_guard_name(item.name)),
+        xlate_gen_guard_end(gen_xlate_guard_name(item.name)),
+        '\n'
+    ]
+
+###############################################################################
+# XLATE TPG Free
+###############################################################################
+def xlate_tpg_free_m_enter(item):
+    return [
+        xlate_gen_guard_begin(gen_xlate_guard_name(item.name)),
+        line(gen_xlate_tpg_free_sig(item.name)),
+        line('{'),
+        line('\t' + gen_var_decl('uint32_t', 'i')),
+        line(''),
+        line('\t(void)i;'),
+        line('\t(void)ptr;')
+    ]
+
+def xlate_tpg_free_m_msg_repeated(item, field, field_name, array_size):
+    type_name = field.type_name[1:]
+    return gen_for('i', '0', 'ptr->' + field.name + '_count',
+                        body_inst = [gen_fcall_stmt(gen_xlate_tpg_free_name(type_name),
+                                                    ['&ptr->' + field.name + '[i]'])])
+
+def xlate_tpg_free_m_scalar_repeated(item, field, field_name, array_size):
+    return []
+
+def xlate_tpg_free_m_repeated(item, field, field_name, array_size):
+    if field.type == FieldDescriptorProto.TYPE_MESSAGE:
+        return xlate_tpg_free_m_msg_repeated(item, field, field_name,
+                                             array_size)
+    else:
+        return xlate_tpg_free_m_scalar_repeated(item, field, field_name,
+                                                array_size)
+
+def xlate_tpg_free_m_optional(item, field, field_name, union_name, union_anon):
+    if field.type != FieldDescriptorProto.TYPE_MESSAGE:
+        return []
+
+    if not union_name is None or union_anon:
+        return []
+
+    return [
+        gen_free('ptr->' + field.name)
+    ]
+
+def xlate_tpg_free_m_field(item, field, field_name, union_name, union_anon,
+                           array_size):
+    if field.label == FieldDescriptorProto.LABEL_REPEATED:
+        return ['\t' + l for l in
+                    xlate_tpg_free_m_repeated(item, field, field_name, array_size)]
+
+    if field.label == FieldDescriptorProto.LABEL_OPTIONAL:
+        return ['\t' + l for l in
+                    xlate_tpg_free_m_optional(item, field, field_name,
+                                              union_name,
+                                              union_anon)]
+
+    return []
+
+def xlate_tpg_free_m_leave(item):
+    return [
+        line('}'),
+        xlate_gen_guard_end(gen_xlate_guard_name(item.name)),
+        '\n'
+    ]
+
+###############################################################################
+# XLATE Default
+###############################################################################
+def xlate_default_m_enter(item):
+    return [
+        xlate_gen_guard_begin(gen_xlate_guard_name(item.name)),
+        line(gen_xlate_default_sig(item.name)),
+        line('{'),
+        line('\t' + gen_var_decl(item.name, 'defaults',
+                                 initializer=gen_protoc_name_init(item.name))),
+        line(''),
+        line('\t' + gen_xlate_protoc_name(item.name) + '(&defaults, out);')
+    ]
+
+def xlate_default_m_leave(item):
+    return [
+        line('}'),
+        xlate_gen_guard_end(gen_xlate_guard_name(item.name)),
         '\n'
     ]
 
@@ -715,23 +889,32 @@ def generate(request, response):
         f_c = response.file.add()
         f_c.name = filename + XLATE_C
 
-        xlate_protoc_ops = WalkerOps(f_enter   = xlate_protoc_f_enter,
-                                     m_enter   = xlate_protoc_m_enter,
-                                     m_field   = xlate_protoc_m_field,
-                                     m_leave   = xlate_protoc_m_leave)
+        xlate_protoc_ops = WalkerOps(f_enter = xlate_protoc_f_enter,
+                                     m_enter = xlate_protoc_m_enter,
+                                     m_field = xlate_protoc_m_field,
+                                     m_leave = xlate_protoc_m_leave)
 
         f_c.content = ''.join(xlate_file_walk(proto_file, xlate_protoc_ops))
 
-        xlate_tpg_ops = WalkerOps(m_enter   = xlate_tpg_m_enter,
-                                  u_enter   = xlate_tpg_u_enter,
-                                  m_field   = xlate_tpg_m_field,
-                                  m_leave   = xlate_tpg_m_leave)
+        xlate_tpg_ops = WalkerOps(m_enter = xlate_tpg_m_enter,
+                                  u_enter = xlate_tpg_u_enter,
+                                  m_field = xlate_tpg_m_field,
+                                  m_leave = xlate_tpg_m_leave)
         f_c.content += ''.join(xlate_file_walk(proto_file, xlate_tpg_ops))
 
-        xlate_free_ops = WalkerOps(m_enter   = xlate_free_m_enter,
-                                   m_field   = xlate_free_m_field,
-                                   m_leave   = xlate_free_m_leave)
+        xlate_free_ops = WalkerOps(m_enter = xlate_free_m_enter,
+                                   m_field = xlate_free_m_field,
+                                   m_leave = xlate_free_m_leave)
         f_c.content += ''.join(xlate_file_walk(proto_file, xlate_free_ops))
+
+        xlate_tpg_free_ops = WalkerOps(m_enter = xlate_tpg_free_m_enter,
+                                       m_field = xlate_tpg_free_m_field,
+                                       m_leave = xlate_tpg_free_m_leave)
+        f_c.content += ''.join(xlate_file_walk(proto_file, xlate_tpg_free_ops))
+
+        xlate_default_ops = WalkerOps(m_enter = xlate_default_m_enter,
+                                      m_leave = xlate_default_m_leave)
+        f_c.content += ''.join(xlate_file_walk(proto_file, xlate_default_ops))
 
 if __name__ == '__main__':
     # Read request message from stdin

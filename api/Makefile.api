@@ -84,6 +84,7 @@ PROTO-SRCS += warp17-app-http.proto
 PROTO-SRCS += warp17-client.proto
 PROTO-SRCS += warp17-server.proto
 PROTO-SRCS += warp17-test-case.proto
+PROTO-SRCS += warp17-sockopt.proto
 PROTO-SRCS += warp17-service.proto
 
 PROTO-OBJS-H        = $(addprefix $(GEN-DIR-C)/, $(PROTO-SRCS:.proto=.pb-c.h))

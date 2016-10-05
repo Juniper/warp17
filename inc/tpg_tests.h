@@ -141,7 +141,9 @@ typedef TAILQ_HEAD(tcp_test_cb_list_s, l4_control_block_s) tlkp_test_cb_list_t;
 
 #define TEST_CBQ_EMPTY(list) TAILQ_EMPTY((list))
 
-#define TEST_CBQ_FIRST(list, type) ((__typeof__(type) *)TAILQ_FIRST((list)))
+/* WARNING: Should never be called with an empty list! */
+#define TEST_CBQ_FIRST(list, type, member) \
+    (container_of(TAILQ_FIRST((list)), type, member))
 
 #define TEST_CBQ_ADD_TO_OPEN(ts, cb)                                            \
     do {                                                                        \
@@ -191,6 +193,8 @@ typedef struct test_case_init_msg_s {
         tpg_client_t     tcim_client;
         tpg_server_t     tcim_server;
     };
+
+    sockopt_t            tcim_sockopt;
 
 } __tpg_msg test_case_init_msg_t;
 

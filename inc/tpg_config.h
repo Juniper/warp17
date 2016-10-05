@@ -132,7 +132,7 @@ enum {
 #define GCFG_MBUF_POOL_NAME            "global_pkt_mbuf"
 #define GCFG_MBUF_POOLSIZE_DEFAULT     (768 * 1024)
 #define GCFG_MBUF_CACHE_SIZE           (512)
-#define GCFG_MBUF_PACKET_FRAGMENT_SIZE (1024 + 512)
+#define GCFG_MBUF_PACKET_FRAGMENT_SIZE (2048)
 #define GCFG_MBUF_SIZE                 (GCFG_MBUF_PACKET_FRAGMENT_SIZE + \
                                         sizeof(struct rte_mbuf) +        \
                                         RTE_PKTMBUF_HEADROOM)
@@ -175,7 +175,7 @@ enum {
  * Since for now it's used only for control messages we don't need to many
  * elements. The size can be increased later if needed.
  */
-#define GCFG_MSGQ_NAME                 "tpg_per_core_mqueue_lcore"
+#define GCFG_MSGQ_NAME                 "tpg_mqueue_lcore"
 #define GCFG_MSGQ_SIZE                 (4096)
 
 /*
@@ -183,13 +183,9 @@ enum {
  */
 #define GCFG_SLOW_TMR_MAX              (60 * 1000000) /* 1 min */
 #define GCFG_SLOW_TMR_STEP             100000   /* 100ms */
-#define GCFG_ORPHAN_TMR_DEFAULT        100000   /* 100ms */
-#define GCFG_FIN_TIMEOUT_TMR_DEFAULT   100000   /* 100ms */
-#define GCFG_TIME_WAIT_TMR_DEFAULT     500000   /* 500ms */
 
 #define GCFG_RTO_TMR_MAX               (30 * 1000000) /* 30s */
 #define GCFG_RTO_TMR_STEP              50        /* 50us */
-#define GCFG_RTO_TMR_DEFAULT           50000     /* 50ms */
 
 #define GCFG_TEST_TMR_MAX              (30 * 60 * 1000000) /* 30 min */
 #define GCFG_TEST_TMR_STEP             100       /* 100us */
@@ -197,11 +193,6 @@ enum {
 #define GCFG_TMR_MAX_RUN_US            10000     /* 10ms */
 #define GCFG_TMR_MAX_RUN_CNT           10000     /* max 10K tcb timers in one shot */
 #define GCFG_TMR_STEP_ADVANCE          25        /* us */
-
-#define GCFG_TCP_SYN_RETRY_CNT         24
-#define GCFG_TCP_SYNACK_RETRY_CNT      24
-#define GCFG_TCP_DATA_RETRY_CNT        128       /* try to make data less aggressive */
-#define GCFG_TCP_RETRY_CNT             12
 
 /*
  * The default values for TCP Data processing.

@@ -150,21 +150,25 @@ available, details can be found in the respective [documentation](ovf/README.md)
 sudo apt-get install build-essential python ncurses-dev
 ```
 
-### Install DPDK 16.04
+### Install DPDK 16.07
 
-* Download [DPDK 16.04](http://dpdk.org/browse/dpdk/refs/).
+* Download [DPDK 16.07](http://dpdk.org/browse/dpdk/refs/)
+
+	```
+	tar xf dpdk-16.07.tar.xz
+	cd dpdk-16.07
+
+	```
 
 * Install DPDK:
 
 	```
-	tar xf dpdk-16.04.tar.gz
-	cd dpdk-16.04
 	make install T=x86_64-native-linuxapp-gcc
 	```
 
 * Load the `igb_uio` DPDK module, either as shown below or by running the
   `$RTE_SDK/tools/setup.sh` script and selecting option
-  `[17] Insert IGB UIO module`:
+  `[18] Insert IGB UIO module`:
 
 	```
 	sudo modprobe uio
@@ -209,7 +213,7 @@ the [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/sys_reqs.html)):
 RTE_SDK. For example:
 
 	```
-	export RTE_SDK=/home/<user>/src/dpdk-16.04
+	export RTE_SDK=/home/<user>/src/dpdk-16.07
 	```
 
 * Export the target of the DPDK SDK into the variable RTE_TARGET. For example:
@@ -245,23 +249,17 @@ RTE_SDK. For example:
  * Install [libprotobuf8](http://packages.ubuntu.com/trusty/amd64/libprotobuf8/download)
    from Ubuntu 14.04LTS:
 
-		```
 		sudo dpkg -i libprotobuf8_2.5.0-9ubuntu1_amd64.deb
-		```
 
  * Install [libprotoc8](http://packages.ubuntu.com/trusty/amd64/libprotoc8/download)
    from Ubuntu 14.04LTS:
 
-		```
 		sudo dpkg -i libprotoc8_2.5.0-9ubuntu1_amd64.deb
-		```
 
  * Install [protobuf-c-compiler](http://packages.ubuntu.com/trusty/amd64/protobuf-c-compiler/download)
    from ubuntu 14.04LTS:
 
-		```
 		sudo dpkg -i protobuf-c-compiler_0.15-1build1_amd64.deb
-		```
 
 ## Get WARP17
 Get the `warp17-<ver>.tgz` archive or clone the desired release.
@@ -300,9 +298,9 @@ deactivate
 
 ## Configure DPDK ports
 
-Use the `$RTE_SDK/tools/setup.sh` script (as described in the
+Use the `$RTE_SDK/tools/dpdk-setup.sh` script (as described in the
 [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/quick_start.html)). Select
-which ports to be controlled by the IGB UIO module: option `[23] Bind Ethernet
+which ports to be controlled by the IGB UIO module: option `[24] Bind Ethernet
 device to IGB UIO module`.
 
 # How to run
@@ -347,7 +345,7 @@ __NOTE: For now WARP17 supports at most 64 cores.__
 ### WARP17 command-line arguments
 
 * `--qmap <port>.<hex_mask>`: bitmask specifying which physical cores will
-  control the physical port <port>.
+  control the physical port <eth_port>.
 * `--qmap-default max-c`: maximize the number of independent cores handling
   each physical port.
 * `--qmap-default max-q`: maximize the number of transmit queues per physical
@@ -502,6 +500,12 @@ rejected.__
 
 __NOTE: Only IPv4 is supported for now!__
 
+* __Configure Ethernet Port MTU__:
+
+	```
+	set tests mtu port <eth_port> <mtu-value>
+	```
+
 * __Add L3 interfaces__: configure an IP interface with the specified `ip`
   address and `mask`. Currently only 10 IP interfaces are supported per port.
 
@@ -634,7 +638,7 @@ __NOTE: Only IPv4 is supported for now!__
   configured test case without waiting for the current one to finish.
 
 	```
-	set tests async port <port> test-case-id <tcid>
+	set tests async port <eth_port> test-case-id <tcid>
 	```
 
 * __Delete test cases__: delete a configured test case with ID `tcid` from port
@@ -661,6 +665,79 @@ __NOTE: Only IPv4 is supported for now!__
 	stop tests port <eth_port>
 	```
 
+* __Customize TCP stack settings__: customize the behavior of the TCP stack
+  running on test case with ID `tcid` on port `eth_port`. The following
+  settings are customizable:
+
+  	- `win-size`: the size of the TCP send window.
+
+		```
+		set tests tcp-options port <eth_port> test-case-id <tcid> win-size <size>
+		```
+
+  	- `syn-retry`: number of times to retry sending `SYN` packets before
+  	  aborting the connection.
+
+		```
+		set tests tcp-options port <eth_port> test-case-id <tcid> syn-retry <cnt>
+		```
+
+  	- `syn-ack-retry`: number of times to retry sending `SYN + ACK` packets
+  	  before aborting the connection.
+
+		```
+		set tests tcp-options port <eth_port> test-case-id <tcid> syn-ack-retry <cnt>
+		```
+
+  	- `data-retry`: number of times to retry sending data packets before
+  	  aborting the connection.
+
+		```
+		set tests tcp-options port <eth_port> test-case-id <tcid> data-retry <cnt>
+		```
+
+  	- `retry`: number of times to retry sending other control packets before
+  	  aborting the connection.
+
+		```
+		set tests tcp-options port <eth_port> test-case-id <tcid> retry <cnt>
+		```
+
+  	- `rto`: retransmission timeout (in ms) to be used before retransmitting
+  	  a packet.
+
+		```
+		set tests tcp-options port <eth_port> test-case-id <tcid> rto <rto_ms>
+		```
+
+  	- `fin-to`: `FIN` timeout (in ms) in order to avoid staying in state
+  	  `FIN-WAIT-II` forever.
+
+		```
+		set tests tcp-options port <eth_port> test-case-id <tcid> fin-to <fin_to_ms>
+		```
+
+  	- `twait-to`: `TIME-WAIT` timeout (in ms) to wait before cleaning up the
+  	  connection.
+
+		```
+		set tests tcp-options port <eth_port> test-case-id <tcid> twait-to <twait_to_ms>
+		```
+
+    - `orphan-to`: `ORPHAN` timeout (in ms) in order to avoid staying in state
+      `FIN-WAIT-I` forever.
+
+		```
+		set tests tcp-options port <eth_port> test-case-id <tcid> orphan-to <orphan_to_us>
+		```
+
+    - `twait_skip`: boolean to decide if state `TIME-WAIT` should be skipped or
+      not.
+
+		```
+		set tests tcp-options port <eth_port> test-case-id <tcid> twait-skip <true|false>
+		```
+
 ## Application configuration and statistics commands
 
 Currently only _RAW TCP_ (L5-L7 payload is random) and a sub-set of _HTTP 1.1_
@@ -677,14 +754,15 @@ defined the client or server test cases.
       the size of the body of the HTTP request.
 
 		```
-		set tests client http port <port> test-case-id <tcid> GET|HEAD <host-name> <obj-name> req-size <req-size>
+		set tests client http port <eth_port> test-case-id <tcid> GET|HEAD <host-name> <obj-name> req-size <req-size>
 		```
+
     - __HTTP 1.1 server configuration__: _200 OK_/_404 NOT FOUND_ responses are
       supported. A `resp-size` must also be specified (0 is also valid) in order
       to define the size of the body of the HTTP response.
 
 		```
-		set tests server http port <port> test-case-id <tcid> 200-OK|404-NOT-FOUND resp-size <resp-size>
+		set tests server http port <eth_port> test-case-id <tcid> 200-OK|404-NOT-FOUND resp-size <resp-size>
 		```
 
     - __HTTP 1.1 global stats__: display (detailed) statistics for the ethernet ports

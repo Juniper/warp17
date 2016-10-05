@@ -388,15 +388,15 @@ static void cmd_show_memory_statistics_mempool(struct cmdline *cl,
 
         mempool = mempools[core];
 
-        alloc_cnt += rte_mempool_free_count(mempool);
-        free_cnt += rte_mempool_count(mempool);
+        alloc_cnt += rte_mempool_in_use_count(mempool);
+        free_cnt += rte_mempool_avail_count(mempool);
 
         if (option == 'd') {
             cmdline_printf(cl, "  Core %"PRIu32":\n", core);
             cmdline_printf(cl, "    Allocated: %"PRIu32"\n",
-                           rte_mempool_free_count(mempool));
+                           rte_mempool_in_use_count(mempool));
             cmdline_printf(cl, "    Free     : %"PRIu32"\n",
-                           rte_mempool_count(mempool));
+                           rte_mempool_avail_count(mempool));
             cmdline_printf(cl, "\n");
         }
     }

@@ -175,6 +175,8 @@ static const char *eventNames[TE_MAX_EVENT] = {
  ****************************************************************************/
 static void tsm_schedule_retransmission(tcp_control_block_t *tcb)
 {
+    tcp_sockopt_t *tcp_opts;
+
     TCB_CHECK(tcb);
 
     if (tcb->tcb_snd.una == tcb->tcb_snd.nxt &&
@@ -186,7 +188,8 @@ static void tsm_schedule_retransmission(tcp_control_block_t *tcb)
     if (TCB_RTO_TMR_IS_SET(tcb))
         return;
 
-    tcp_timer_rto_set(&tcb->tcb_l4, GCFG_RTO_TMR_DEFAULT);
+    tcp_opts = tcp_get_sockopt(&tcb->tcb_l4.l4cb_sockopt);
+    tcp_timer_rto_set(&tcb->tcb_l4, tcp_opts->tcpo_rto);
 }
 
 /*****************************************************************************
@@ -534,7 +537,9 @@ inline void tsm_initialize_minimal_statemachine(tcp_control_block_t *tcb,
  ****************************************************************************/
 void tsm_initialize_statemachine(tcp_control_block_t *tcb, bool active)
 {
-    if (tcb == NULL)
+    tcp_sockopt_t *tcp_opts;
+
+    if (unlikely(tcb == NULL))
         return;
 
     TCB_CHECK(tcb);
@@ -546,7 +551,9 @@ void tsm_initialize_statemachine(tcp_control_block_t *tcb, bool active)
     bzero(&tcb->tcb_snd, sizeof(tcb_snd_t));
 
     bzero(&tcb->tcb_rcv, sizeof(tcb_rcv_t));
-    tcb->tcb_rcv.wnd = TCP_DEFAULT_WINDOW_SIZE;
+
+    tcp_opts = tcp_get_sockopt(&tcb->tcb_l4.l4cb_sockopt);
+    tcb->tcb_rcv.wnd = tcp_opts->tcpo_win_size;
 
     tcb->tcb_retrans_cnt = 0;
 
@@ -772,6 +779,8 @@ static int tsm_SF_listen(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
                            void *tsm_arg)
 {
+    tcp_sockopt_t *tcp_opts;
+
     switch (event) {
     case TE_ENTER_STATE:
         /* Starting here on we need to do retrans. */
@@ -932,7 +941,9 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_USER_TIMEOUT:
         break;
     case TE_RETRANSMISSION_TIMEOUT:
-        if (TCP_TOO_MANY_RETRIES(tcb, GCFG_TCP_SYN_RETRY_CNT, tsms_syn_to)) {
+        tcp_opts = tcp_get_sockopt(&tcb->tcb_l4.l4cb_sockopt);
+        if (TCP_TOO_MANY_RETRIES(tcb, tcp_opts->tcpo_syn_retry_cnt,
+                                 tsms_syn_to)) {
             /*
              * Buffers are cleaned up upon close.
              */
@@ -961,6 +972,8 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
                            void *tsm_arg)
 {
+    tcp_sockopt_t *tcp_opts;
+
     switch (event) {
     case TE_ENTER_STATE:
         /* Starting here on we need to do retrans. */
@@ -1130,7 +1143,9 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_USER_TIMEOUT:
         break;
     case TE_RETRANSMISSION_TIMEOUT:
-        if (TCP_TOO_MANY_RETRIES(tcb, GCFG_TCP_SYNACK_RETRY_CNT,
+        tcp_opts = tcp_get_sockopt(&tcb->tcb_l4.l4cb_sockopt);
+        if (TCP_TOO_MANY_RETRIES(tcb,
+                                 tcp_opts->tcpo_syn_ack_retry_cnt,
                                  tsms_synack_to)) {
             /*
              * The user is informed of the state change through a
@@ -1161,6 +1176,8 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
                         void *tsm_arg)
 {
+    tcp_sockopt_t *tcp_opts;
+
     switch (event) {
     case TE_ENTER_STATE:
         break;
@@ -1322,7 +1339,9 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_USER_TIMEOUT:
         break;
     case TE_RETRANSMISSION_TIMEOUT:
-        if (TCP_TOO_MANY_RETRIES(tcb, GCFG_TCP_DATA_RETRY_CNT, tsms_retry_to)) {
+        tcp_opts = tcp_get_sockopt(&tcb->tcb_l4.l4cb_sockopt);
+        if (TCP_TOO_MANY_RETRIES(tcb, tcp_opts->tcpo_data_retry_cnt,
+                                 tsms_retry_to)) {
             /*
              * The user is informed of the state change through a
              * notification.
@@ -1352,6 +1371,8 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
                              void *tsm_arg)
 {
+    tcp_sockopt_t *tcp_opts;
+
     switch (event) {
     case TE_ENTER_STATE:
         /* Send the FIN. */
@@ -1364,7 +1385,8 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
         tsm_schedule_retransmission(tcb);
 
         /* Schedule the orphan timer so we don't stay in FIN-WAIT-I forever. */
-        tcp_timer_slow_set(&tcb->tcb_l4, GCFG_ORPHAN_TMR_DEFAULT);
+        tcp_opts = tcp_get_sockopt(&tcb->tcb_l4.l4cb_sockopt);
+        tcp_timer_slow_set(&tcb->tcb_l4, tcp_opts->tcpo_orphan_to);
         break;
 
     case TE_OPEN:
@@ -1564,7 +1586,9 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_USER_TIMEOUT:
         break;
     case TE_RETRANSMISSION_TIMEOUT:
-        if (TCP_TOO_MANY_RETRIES(tcb, GCFG_TCP_RETRY_CNT, tsms_retry_to)) {
+        tcp_opts = tcp_get_sockopt(&tcb->tcb_l4.l4cb_sockopt);
+        if (TCP_TOO_MANY_RETRIES(tcb, tcp_opts->tcpo_retry_cnt,
+                                 tsms_retry_to)) {
             /* Cancel the orphan timer first. */
             tcp_timer_slow_cancel(&tcb->tcb_l4);
 
@@ -1613,12 +1637,15 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
                               void *tsm_arg)
 {
+    tcp_sockopt_t *tcp_opts;
+
     switch (event) {
     case TE_ENTER_STATE:
         /* Schedule the fin timeout timer so we don't stay in FIN-WAIT-II
          * forever.
          */
-        tcp_timer_slow_set(&tcb->tcb_l4, GCFG_FIN_TIMEOUT_TMR_DEFAULT);
+        tcp_opts = tcp_get_sockopt(&tcb->tcb_l4.l4cb_sockopt);
+        tcp_timer_slow_set(&tcb->tcb_l4, tcp_opts->tcpo_fin_to);
         break;
 
     case TE_OPEN:
@@ -1799,6 +1826,8 @@ static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_last_ack(tcp_control_block_t *tcb, tcpEvent_t event,
                            void *tsm_arg)
 {
+    tcp_sockopt_t *tcp_opts;
+
     switch (event) {
     case TE_ENTER_STATE:
         /* Schedule retransmission of the packets from the CLOSE-WAIT state. */
@@ -1881,7 +1910,9 @@ static int tsm_SF_last_ack(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_USER_TIMEOUT:
         break;
     case TE_RETRANSMISSION_TIMEOUT:
-        if (TCP_TOO_MANY_RETRIES(tcb, GCFG_TCP_RETRY_CNT, tsms_retry_to)) {
+        tcp_opts = tcp_get_sockopt(&tcb->tcb_l4.l4cb_sockopt);
+        if (TCP_TOO_MANY_RETRIES(tcb, tcp_opts->tcpo_retry_cnt,
+                                 tsms_retry_to)) {
             /*
              * The user is informed of the state change through a
              * notification.
@@ -1913,6 +1944,8 @@ static int tsm_SF_last_ack(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_closing(tcp_control_block_t *tcb, tcpEvent_t event,
                           void *tsm_arg)
 {
+    tcp_sockopt_t *tcp_opts;
+
     switch (event) {
     case TE_ENTER_STATE:
         /* Schedule retransmission of the control packets from FIN-WAIT-1. */
@@ -2039,7 +2072,9 @@ static int tsm_SF_closing(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_USER_TIMEOUT:
         break;
     case TE_RETRANSMISSION_TIMEOUT:
-        if (TCP_TOO_MANY_RETRIES(tcb, GCFG_TCP_RETRY_CNT, tsms_retry_to)) {
+        tcp_opts = tcp_get_sockopt(&tcb->tcb_l4.l4cb_sockopt);
+        if (TCP_TOO_MANY_RETRIES(tcb, tcp_opts->tcpo_retry_cnt,
+                                 tsms_retry_to)) {
             /*
              * The user is informed of the state change through a
              * notification.
@@ -2069,6 +2104,8 @@ static int tsm_SF_closing(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_time_wait(tcp_control_block_t *tcb, tcpEvent_t event,
                             void *tsm_arg)
 {
+    tcp_sockopt_t *tcp_opts;
+
     switch (event) {
     case TE_ENTER_STATE:
         /* On entering Time Wait we cancel all timers and start the TIME_WAIT
@@ -2080,10 +2117,11 @@ static int tsm_SF_time_wait(tcp_control_block_t *tcb, tcpEvent_t event,
         if (TCB_SLOW_TMR_IS_SET(tcb))
             tcp_timer_slow_cancel(&tcb->tcb_l4);
 
-        if (tcb->tcb_no_timewait)
+        tcp_opts = tcp_get_sockopt(&tcb->tcb_l4.l4cb_sockopt);
+        if (tcp_opts->tcpo_skip_timewait)
             return tsm_enter_state(tcb, TS_CLOSED, NULL);
         else
-            tcp_timer_slow_set(&tcb->tcb_l4, GCFG_TIME_WAIT_TMR_DEFAULT);
+            tcp_timer_slow_set(&tcb->tcb_l4, tcp_opts->tcpo_twait_to);
         break;
 
     case TE_OPEN:
@@ -2143,9 +2181,12 @@ static int tsm_SF_time_wait(tcp_control_block_t *tcb, tcpEvent_t event,
              * restart the 2MSL timeout. [73]
              */
             tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
+
             assert(TCB_SLOW_TMR_IS_SET(tcb));
+
+            tcp_opts = tcp_get_sockopt(&tcb->tcb_l4.l4cb_sockopt);
             tcp_timer_slow_cancel(&tcb->tcb_l4);
-            tcp_timer_slow_set(&tcb->tcb_l4, GCFG_TIME_WAIT_TMR_DEFAULT);
+            tcp_timer_slow_set(&tcb->tcb_l4, tcp_opts->tcpo_twait_to);
         }
         break;
 
@@ -2172,6 +2213,8 @@ static int tsm_SF_time_wait(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_close_wait(tcp_control_block_t *tcb, tcpEvent_t event,
                              void *tsm_arg)
 {
+    tcp_sockopt_t *tcp_opts;
+
     switch (event) {
     case TE_ENTER_STATE:
         if (tcb->tcb_consume_all_data) {
@@ -2295,7 +2338,9 @@ static int tsm_SF_close_wait(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_USER_TIMEOUT:
         break;
     case TE_RETRANSMISSION_TIMEOUT:
-        if (TCP_TOO_MANY_RETRIES(tcb, GCFG_TCP_RETRY_CNT, tsms_retry_to)) {
+        tcp_opts = tcp_get_sockopt(&tcb->tcb_l4.l4cb_sockopt);
+        if (TCP_TOO_MANY_RETRIES(tcb, tcp_opts->tcpo_retry_cnt,
+                                 tsms_retry_to)) {
             /*
              * User will be notified of the state change.
              * Buffers are cleaned up upon close.

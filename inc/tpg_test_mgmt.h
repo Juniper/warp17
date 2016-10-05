@@ -145,8 +145,14 @@ struct test_env_s {
 
     tpg_port_cfg_t        te_port_cfg;
 
-    tpg_test_case_t       te_test_cases[TPG_TEST_MAX_ENTRIES];
-    test_env_oper_state_t te_states[TPG_TEST_MAX_ENTRIES];
+    struct {
+
+        tpg_test_case_t        cfg;
+        test_env_oper_state_t  state;
+        sockopt_t              sockopt;
+
+    } te_test_cases[TPG_TEST_MAX_ENTRIES];
+
     uint32_t              te_test_cases_count;
 
     uint32_t              te_test_running       : 1;
@@ -160,13 +166,11 @@ struct test_env_s {
 /*****************************************************************************
  * Test suites helpers
  ****************************************************************************/
-#define TEST_CASE_FOREACH_START(tenv, tcid, tc, op_state) \
-    for ((tcid) = 0,                                      \
-            (tc) = &tenv->te_test_cases[0],               \
-            (op_state) = &tenv->te_states[0];             \
-         (tcid) < TPG_TEST_MAX_ENTRIES;                   \
-         (tcid)++, (tc)++, (op_state)++) {                \
-        if (!(op_state)->teos_configured)                 \
+#define TEST_CASE_FOREACH_START(tenv, tcid, tc, op_state)       \
+    for ((tcid) = 0; (tcid) < TPG_TEST_MAX_ENTRIES; (tcid)++) { \
+        (tc) = &tenv->te_test_cases[(tcid)].cfg;                \
+        (op_state) = &tenv->te_test_cases[(tcid)].state;        \
+        if (!(op_state)->teos_configured)                       \
             continue;
 
 #define TEST_CASE_FOREACH_END()                           \
@@ -177,8 +181,8 @@ static inline tpg_test_case_t *test_mgmt_test_case_first(test_env_t *tenv)
     uint32_t tcid;
 
     for (tcid = 0; tcid < TPG_TEST_MAX_ENTRIES; tcid++) {
-        if (tenv->te_states[tcid].teos_configured)
-            return &tenv->te_test_cases[tcid];
+        if (tenv->te_test_cases[tcid].state.teos_configured)
+            return &tenv->te_test_cases[tcid].cfg;
     }
     return NULL;
 }

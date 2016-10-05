@@ -91,21 +91,15 @@ typedef struct timer_statistics_s {
 /*****************************************************************************
  * Timer definitions
  ****************************************************************************/
-
-typedef struct l4_control_block_s l4_control_block_t;
-
 typedef struct tmr_list_head_s {
-
-    l4_control_block_t *tlh_first;
-
+    void *tlh_first;
 } tmr_list_head_t;
 
-typedef struct tmr_list_entry_s {
-
-    l4_control_block_t  *tle_next;
-    l4_control_block_t **tle_prev;
-
-} tmr_list_entry_t;
+#define tmr_list_entry(type)                \
+    struct {                                \
+        __typeof__(struct type)  *tle_next; \
+        __typeof__(struct type) **tle_prev; \
+    }
 
 #define TMR_LIST_INIT(head) \
     ((head)->tlh_first = NULL)
@@ -119,7 +113,8 @@ typedef struct tmr_list_entry_s {
         if (ctr->field.tle_next != NULL)                           \
             head_ctr->field.tle_prev = &ctr->field.tle_next;       \
         (head)->tlh_first = (elm);                                 \
-        ctr->field.tle_prev = &(head)->tlh_first;                  \
+        ctr->field.tle_prev =                                      \
+            ((__typeof__(ctr_type) **)(&(head)->tlh_first));       \
 } while (0)
 
 #define TMR_LIST_REMOVE(ctr_type, elm, field)                      \

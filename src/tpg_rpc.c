@@ -93,8 +93,11 @@
             closure(&(result), closure_data);                           \
     } while (0)
 
-#define RPC_CLEANUP(result_type, result, err_fld) \
-    tpg_xlate_free_##result_type(&(result))
+#define RPC_CLEANUP(in_rpc_type, tpg_input, out_rpc_type, result) \
+    do {                                                          \
+        tpg_xlate_tpg_free_##in_rpc_type(&(tpg_input));           \
+        tpg_xlate_free_##out_rpc_type(&(result));                 \
+    } while (0)
 
 /*****************************************************************************
  * Forward declarations
@@ -138,25 +141,10 @@ static void tpg_rpc__del_test_case(Warp17_Service *service,
                                    Error_Closure closure,
                                    void *closure_data);
 
-static void tpg_rpc__update_test_case_rate(Warp17_Service *service,
-                                           const UpdRateArg *input,
-                                           Error_Closure closure,
-                                           void *closure_data);
-
-static void tpg_rpc__update_test_case_delay(Warp17_Service *service,
-                                            const UpdDelayArg *input,
-                                            Error_Closure closure,
-                                            void *closure_data);
-
-static void tpg_rpc__update_test_case_criteria(Warp17_Service *service,
-                                               const UpdCritArg *input,
-                                               Error_Closure closure,
-                                               void *closure_data);
-
-static void tpg_rpc__update_test_case_async(Warp17_Service *service,
-                                            const UpdAsyncArg *input,
-                                            Error_Closure closure,
-                                            void *closure_data);
+static void tpg_rpc__update_test_case(Warp17_Service *service,
+                                      const UpdateArg *input,
+                                      Error_Closure closure,
+                                      void *closure_data);
 
 static void tpg_rpc__get_test_case_app_client(Warp17_Service *service,
                                               const TestCaseArg *input,
@@ -177,6 +165,26 @@ static void tpg_rpc__update_test_case_app_server(Warp17_Service *service,
                                                  const UpdServerArg *input,
                                                  Error_Closure closure,
                                                  void *closure_data);
+
+static void tpg_rpc__set_port_options(Warp17_Service *service,
+                                      const PortOptionsArg *input,
+                                      Error_Closure closure,
+                                      void *closure_data);
+
+static void tpg_rpc__get_port_options(Warp17_Service *service,
+                                      const PortArg *input,
+                                      PortOptionsResult_Closure closure,
+                                      void *closure_data);
+
+static void tpg_rpc__set_tcp_sockopt(Warp17_Service *service,
+                                     const TcpSockoptArg *input,
+                                     Error_Closure closure,
+                                     void *closure_data);
+
+static void tpg_rpc__get_tcp_sockopt(Warp17_Service *service,
+                                     const TestCaseArg *input,
+                                     TcpSockoptResult_Closure closure,
+                                     void *closure_data);
 
 static void tpg_rpc__port_start(Warp17_Service *service,
                                 const PortArg *input,
@@ -598,12 +606,14 @@ static void tpg_rpc__configure_port(Warp17_Service *service __rte_unused,
     tpg_error_t    tpg_result;
     Error          protoc_result;
 
-    RPC_REQUEST_INIT(PortCfg, input, &port_cfg);
+    if (RPC_REQUEST_INIT(PortCfg, input, &port_cfg))
+        return;
+
     RPC_STORE_RETCODE(tpg_result,
                       test_mgmt_add_port_cfg(port_cfg.pc_eth_port, &port_cfg,
                                              NULL));
     RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
-    RPC_CLEANUP(Error, protoc_result, tpg_result);
+    RPC_CLEANUP(PortCfg, port_cfg, Error, protoc_result);
 }
 
 /*****************************************************************************
@@ -619,7 +629,9 @@ static void tpg_rpc__get_port_cfg(Warp17_Service *service __rte_unused,
     PortCfgResult          protoc_result;
     const tpg_port_cfg_t  *port_cfg;
 
-    RPC_REQUEST_INIT(PortArg, input, &port_arg);
+    if (RPC_REQUEST_INIT(PortArg, input, &port_arg))
+        return;
+
     port_cfg = test_mgmt_get_port_cfg(port_arg.pa_eth_port, NULL);
     if (port_cfg) {
         RPC_STORE_RETCODE(tpg_result.pcr_error, 0);
@@ -629,7 +641,7 @@ static void tpg_rpc__get_port_cfg(Warp17_Service *service __rte_unused,
     }
     RPC_REPLY(PortCfgResult, protoc_result, PORT_CFG_RESULT__INIT,
               tpg_result);
-    RPC_CLEANUP(PortCfgResult, protoc_result, tpg_result);
+    RPC_CLEANUP(PortArg, port_arg, PortCfgResult, protoc_result);
 }
 
 /*****************************************************************************
@@ -644,13 +656,15 @@ static void tpg_rpc__configure_l3_intf(Warp17_Service *service __rte_unused,
     tpg_error_t       tpg_result;
     Error             protoc_result;
 
-    RPC_REQUEST_INIT(L3IntfArg, input, &l3_intf_arg);
+    if (RPC_REQUEST_INIT(L3IntfArg, input, &l3_intf_arg))
+        return;
+
     RPC_STORE_RETCODE(tpg_result,
                       test_mgmt_add_port_cfg_l3_intf(l3_intf_arg.lia_eth_port,
                                                      &l3_intf_arg.lia_l3_intf,
                                                      NULL));
     RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
-    RPC_CLEANUP(Error, protoc_result, tpg_result);
+    RPC_CLEANUP(L3IntfArg, l3_intf_arg, Error, protoc_result);
 }
 
 
@@ -666,111 +680,42 @@ static void tpg_rpc__configure_l3_gw(Warp17_Service *service __rte_unused,
     tpg_error_t     tpg_result;
     Error           protoc_result;
 
-    RPC_REQUEST_INIT(L3GwArg, input, &l3_gw_arg);
+    if (RPC_REQUEST_INIT(L3GwArg, input, &l3_gw_arg))
+        return;
+
     RPC_STORE_RETCODE(tpg_result,
                       test_mgmt_add_port_cfg_l3_gw(l3_gw_arg.lga_eth_port,
                                                    &l3_gw_arg.lga_gw,
                                                    NULL));
     RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
-    RPC_CLEANUP(Error, protoc_result, tpg_result);
+    RPC_CLEANUP(L3GwArg, l3_gw_arg, Error, protoc_result);
 }
 
 /*****************************************************************************
- * tpg_rpc__update_test_case_rate()
+ * tpg_rpc__update_test_case()
  ****************************************************************************/
-static void tpg_rpc__update_test_case_rate(Warp17_Service *service __rte_unused,
-                                           const UpdRateArg *input,
-                                           Error_Closure closure,
-                                           void *closure_data)
+static void tpg_rpc__update_test_case(Warp17_Service *service __rte_unused,
+                                      const UpdateArg *input,
+                                      Error_Closure closure,
+                                      void *closure_data)
 {
-    tpg_upd_rate_arg_t upd_rate_arg;
-    tpg_error_t        tpg_result;
-    Error              protoc_result;
-    int                err;
+    tpg_update_arg_t upd_arg;
+    tpg_error_t      tpg_result;
+    Error            protoc_result;
+    int              err;
 
-    RPC_REQUEST_INIT(UpdRateArg, input, &upd_rate_arg);
-    err = test_mgmt_update_test_case_rate(upd_rate_arg.ura_tc_arg.tca_eth_port,
-                                          upd_rate_arg.ura_tc_arg.tca_test_case_id,
-                                          upd_rate_arg.ura_rate_type,
-                                          &upd_rate_arg.ura_rate,
-                                          NULL);
+    if (RPC_REQUEST_INIT(UpdateArg, input, &upd_arg))
+        return;
+
+    err = test_mgmt_update_test_case(upd_arg.ua_tc_arg.tca_eth_port,
+                                     upd_arg.ua_tc_arg.tca_test_case_id,
+                                     &upd_arg,
+                                     NULL);
+
     RPC_STORE_RETCODE(tpg_result, err);
 
     RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
-    RPC_CLEANUP(Error, protoc_result, tpg_result);
-}
-
-/*****************************************************************************
- * tpg_rpc__update_test_case_delay()
- ****************************************************************************/
-static void tpg_rpc__update_test_case_delay(Warp17_Service *service __rte_unused,
-                                            const UpdDelayArg *input,
-                                            Error_Closure closure,
-                                            void *closure_data)
-{
-    tpg_upd_delay_arg_t upd_delay_arg;
-    tpg_error_t         tpg_result;
-    Error               protoc_result;
-    int                 err;
-
-    RPC_REQUEST_INIT(UpdDelayArg, input, &upd_delay_arg);
-    err = test_mgmt_update_test_case_timeout(upd_delay_arg.uda_tc_arg.tca_eth_port,
-                                             upd_delay_arg.uda_tc_arg.tca_test_case_id,
-                                             upd_delay_arg.uda_delay_type,
-                                             &upd_delay_arg.uda_delay,
-                                             NULL);
-    RPC_STORE_RETCODE(tpg_result, err);
-
-    RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
-    RPC_CLEANUP(Error, protoc_result, tpg_result);
-}
-
-/*****************************************************************************
- * tpg_rpc__update_test_case_criteria()
- ****************************************************************************/
-static void tpg_rpc__update_test_case_criteria(Warp17_Service *service __rte_unused,
-                                               const UpdCritArg *input,
-                                               Error_Closure closure,
-                                               void *closure_data)
-{
-    tpg_upd_crit_arg_t upd_crit_arg;
-    tpg_error_t        tpg_result;
-    Error              protoc_result;
-    int                err;
-
-    RPC_REQUEST_INIT(UpdCritArg, input, &upd_crit_arg);
-    err = test_mgmt_update_test_case_criteria(upd_crit_arg.uca_tc_arg.tca_eth_port,
-                                              upd_crit_arg.uca_tc_arg.tca_test_case_id,
-                                              &upd_crit_arg.uca_criteria,
-                                              NULL);
-    RPC_STORE_RETCODE(tpg_result, err);
-
-    RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
-    RPC_CLEANUP(Error, protoc_result, tpg_result);
-}
-
-/*****************************************************************************
- * tpg_rpc__update_test_case_async()
- ****************************************************************************/
-static void tpg_rpc__update_test_case_async(Warp17_Service *service __rte_unused,
-                                            const UpdAsyncArg *input,
-                                            Error_Closure closure,
-                                            void *closure_data)
-{
-    tpg_upd_async_arg_t upd_async_arg;
-    tpg_error_t         tpg_result;
-    Error               protoc_result;
-    int                 err;
-
-    RPC_REQUEST_INIT(UpdAsyncArg, input, &upd_async_arg);
-    err = test_mgmt_update_test_case_async(upd_async_arg.uaa_tc_arg.tca_eth_port,
-                                           upd_async_arg.uaa_tc_arg.tca_test_case_id,
-                                           &upd_async_arg.uaa_async,
-                                           NULL);
-    RPC_STORE_RETCODE(tpg_result, err);
-
-    RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
-    RPC_CLEANUP(Error, protoc_result, tpg_result);
+    RPC_CLEANUP(UpdateArg, upd_arg, Error, protoc_result);
 }
 
 /*****************************************************************************
@@ -786,7 +731,9 @@ static void tpg_rpc__get_test_case_app_client(Warp17_Service *service __rte_unus
     TestCaseClientResult          protoc_result;
     int                           err;
 
-    RPC_REQUEST_INIT(TestCaseArg, input, &tc_arg);
+    if (RPC_REQUEST_INIT(TestCaseArg, input, &tc_arg))
+        return;
+
     err = test_mgmt_get_test_case_app_client_cfg(tc_arg.tca_eth_port,
                                                  tc_arg.tca_test_case_id,
                                                  &tpg_result.tccr_cl_app,
@@ -797,7 +744,7 @@ static void tpg_rpc__get_test_case_app_client(Warp17_Service *service __rte_unus
     RPC_REPLY(TestCaseClientResult, protoc_result,
               TEST_CASE_CLIENT_RESULT__INIT,
               tpg_result);
-    RPC_CLEANUP(TestCaseClientResult, protoc_result, tpg_result);
+    RPC_CLEANUP(TestCaseArg, tc_arg, TestCaseClientResult, protoc_result);
 }
 
 /*****************************************************************************
@@ -813,7 +760,9 @@ static void tpg_rpc__get_test_case_app_server(Warp17_Service *service __rte_unus
     TestCaseServerResult          protoc_result;
     int                           err;
 
-    RPC_REQUEST_INIT(TestCaseArg, input, &tc_arg);
+    if (RPC_REQUEST_INIT(TestCaseArg, input, &tc_arg))
+        return;
+
     err = test_mgmt_get_test_case_app_server_cfg(tc_arg.tca_eth_port,
                                                  tc_arg.tca_test_case_id,
                                                  &tpg_result.tcsr_srv_app,
@@ -824,7 +773,7 @@ static void tpg_rpc__get_test_case_app_server(Warp17_Service *service __rte_unus
     RPC_REPLY(TestCaseServerResult, protoc_result,
               TEST_CASE_SERVER_RESULT__INIT,
               tpg_result);
-    RPC_CLEANUP(TestCaseServerResult, protoc_result, tpg_result);
+    RPC_CLEANUP(TestCaseArg, tc_arg, TestCaseServerResult, protoc_result);
 }
 
 /*****************************************************************************
@@ -840,7 +789,9 @@ static void tpg_rpc__update_test_case_app_client(Warp17_Service *service __rte_u
     Error                protoc_result;
     int                  err;
 
-    RPC_REQUEST_INIT(UpdClientArg, input, &client_arg);
+    if (RPC_REQUEST_INIT(UpdClientArg, input, &client_arg))
+        return;
+
     err = test_mgmt_update_test_case_app_client(client_arg.uca_tc_arg.tca_eth_port,
                                                 client_arg.uca_tc_arg.tca_test_case_id,
                                                 &client_arg.uca_cl_app,
@@ -849,7 +800,7 @@ static void tpg_rpc__update_test_case_app_client(Warp17_Service *service __rte_u
     RPC_STORE_RETCODE(tpg_result, err);
 
     RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
-    RPC_CLEANUP(Error, protoc_result, tpg_result);
+    RPC_CLEANUP(UpdClientArg, client_arg, Error, protoc_result);
 }
 
 /*****************************************************************************
@@ -865,7 +816,9 @@ static void tpg_rpc__update_test_case_app_server(Warp17_Service *service __rte_u
     Error                protoc_result;
     int                  err;
 
-    RPC_REQUEST_INIT(UpdServerArg, input, &server_arg);
+    if (RPC_REQUEST_INIT(UpdServerArg, input, &server_arg))
+        return;
+
     err = test_mgmt_update_test_case_app_server(server_arg.usa_tc_arg.tca_eth_port,
                                                 server_arg.usa_tc_arg.tca_test_case_id,
                                                 &server_arg.usa_srv_app,
@@ -874,7 +827,7 @@ static void tpg_rpc__update_test_case_app_server(Warp17_Service *service __rte_u
     RPC_STORE_RETCODE(tpg_result, err);
 
     RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
-    RPC_CLEANUP(Error, protoc_result, tpg_result);
+    RPC_CLEANUP(UpdServerArg, server_arg, Error, protoc_result);
 }
 
 /*****************************************************************************
@@ -889,14 +842,15 @@ static void tpg_rpc__configure_test_case(Warp17_Service *service __rte_unused,
     tpg_error_t     tpg_result;
     Error           protoc_result;
 
-    RPC_REQUEST_INIT(TestCase, input, &test_case);
+    if (RPC_REQUEST_INIT(TestCase, input, &test_case))
+        return;
 
     RPC_STORE_RETCODE(tpg_result,
                       test_mgmt_add_test_case(test_case.tc_eth_port,
                                               &test_case,
                                               NULL));
     RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
-    RPC_CLEANUP(Error, protoc_result, tpg_result);
+    RPC_CLEANUP(TestCase, test_case, Error, protoc_result);
 }
 
 /*****************************************************************************
@@ -912,7 +866,9 @@ static void tpg_rpc__get_test_case(Warp17_Service *service __rte_unused,
     TestCaseResult         protoc_result;
     int                    err;
 
-    RPC_REQUEST_INIT(TestCaseArg, input, &tc_cfg_get);
+    if (RPC_REQUEST_INIT(TestCaseArg, input, &tc_cfg_get))
+        return;
+
     err = test_mgmt_get_test_case_cfg(tc_cfg_get.tca_eth_port,
                                       tc_cfg_get.tca_test_case_id,
                                       &tpg_result.tcr_cfg,
@@ -922,7 +878,7 @@ static void tpg_rpc__get_test_case(Warp17_Service *service __rte_unused,
 
     RPC_REPLY(TestCaseResult, protoc_result, TEST_CASE_RESULT__INIT,
               tpg_result);
-    RPC_CLEANUP(TestCaseResult, protoc_result, tpg_result);
+    RPC_CLEANUP(TestCaseArg, tc_cfg_get, TestCaseResult, protoc_result);
 }
 
 /*****************************************************************************
@@ -937,13 +893,115 @@ static void tpg_rpc__del_test_case(Warp17_Service *service __rte_unused,
     tpg_error_t         tpg_result;
     Error               protoc_result;
 
-    RPC_REQUEST_INIT(TestCaseArg, input, &msg);
+    if (RPC_REQUEST_INIT(TestCaseArg, input, &msg))
+        return;
+
     RPC_STORE_RETCODE(tpg_result,
                       test_mgmt_del_test_case(msg.tca_eth_port,
                                               msg.tca_test_case_id,
                                               NULL));
     RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
-    RPC_CLEANUP(Error, protoc_result, tpg_result);
+    RPC_CLEANUP(TestCaseArg, msg, Error, protoc_result);
+}
+
+/*****************************************************************************
+ * tpg_rpc__set_port_options()
+ ****************************************************************************/
+static void tpg_rpc__set_port_options(Warp17_Service *service __rte_unused,
+                                      const PortOptionsArg *input,
+                                      Error_Closure closure,
+                                      void *closure_data)
+{
+    tpg_port_options_arg_t msg;
+    tpg_error_t            tpg_result;
+    Error                  protoc_result;
+
+    if (RPC_REQUEST_INIT(PortOptionsArg, input, &msg))
+        return;
+
+    RPC_STORE_RETCODE(tpg_result,
+                      test_mgmt_set_port_options(msg.poa_port.pa_eth_port,
+                                                 &msg.poa_opts,
+                                                 NULL));
+    RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
+    RPC_CLEANUP(PortOptionsArg, msg, Error, protoc_result);
+}
+
+/*****************************************************************************
+ * tpg_rpc__get_port_options()
+ ****************************************************************************/
+static void tpg_rpc__get_port_options(Warp17_Service *service __rte_unused,
+                                      const PortArg *input,
+                                      PortOptionsResult_Closure closure,
+                                      void *closure_data)
+{
+    tpg_port_arg_t            port_arg;
+    tpg_port_options_result_t tpg_result;
+    PortOptionsResult         protoc_result;
+    int                       err;
+
+    if (RPC_REQUEST_INIT(PortArg, input, &port_arg))
+        return;
+
+    err = test_mgmt_get_port_options(port_arg.pa_eth_port,
+                                     &tpg_result.por_opts,
+                                     NULL);
+    RPC_STORE_RETCODE(tpg_result.por_error, err);
+
+    RPC_REPLY(PortOptionsResult, protoc_result, PORT_OPTIONS_RESULT__INIT,
+              tpg_result);
+    RPC_CLEANUP(PortArg, port_arg, PortOptionsResult, protoc_result);
+}
+
+/*****************************************************************************
+ * tpg_rpc__set_tcp_sockopt()
+ ****************************************************************************/
+static void tpg_rpc__set_tcp_sockopt(Warp17_Service *service __rte_unused,
+                                     const TcpSockoptArg *input,
+                                     Error_Closure closure,
+                                     void *closure_data)
+{
+    tpg_tcp_sockopt_arg_t msg;
+    tpg_error_t           tpg_result;
+    Error                 protoc_result;
+
+    if (RPC_REQUEST_INIT(TcpSockoptArg, input, &msg))
+        return;
+
+    RPC_STORE_RETCODE(tpg_result,
+                      test_mgmt_set_tcp_sockopt(msg.toa_tc_arg.tca_eth_port,
+                                                msg.toa_tc_arg.tca_test_case_id,
+                                                &msg.toa_opts,
+                                                NULL));
+    RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
+    RPC_CLEANUP(TcpSockoptArg, msg, Error, protoc_result);
+}
+
+/*****************************************************************************
+ * tpg_rpc__get_tcp_sockopt()
+ ****************************************************************************/
+static void tpg_rpc__get_tcp_sockopt(Warp17_Service *service __rte_unused,
+                                     const TestCaseArg *input,
+                                     TcpSockoptResult_Closure closure,
+                                     void *closure_data)
+{
+    tpg_test_case_arg_t      tc_arg;
+    tpg_tcp_sockopt_result_t tpg_result;
+    TcpSockoptResult         protoc_result;
+    int                      err;
+
+    if (RPC_REQUEST_INIT(TestCaseArg, input, &tc_arg))
+        return;
+
+    err = test_mgmt_get_tcp_sockopt(tc_arg.tca_eth_port,
+                                    tc_arg.tca_test_case_id,
+                                    &tpg_result.tor_opts,
+                                    NULL);
+    RPC_STORE_RETCODE(tpg_result.tor_error, err);
+
+    RPC_REPLY(TcpSockoptResult, protoc_result, TCP_SOCKOPT_RESULT__INIT,
+              tpg_result);
+    RPC_CLEANUP(TestCaseArg, tc_arg, TcpSockoptResult, protoc_result);
 }
 
 /*****************************************************************************
@@ -958,12 +1016,13 @@ static void tpg_rpc__port_start(Warp17_Service *service __rte_unused,
     tpg_error_t    tpg_result;
     Error          protoc_result;
 
-    RPC_REQUEST_INIT(PortArg, input, &port_arg);
+    if (RPC_REQUEST_INIT(PortArg, input, &port_arg))
+        return;
 
     RPC_STORE_RETCODE(tpg_result,
                       test_mgmt_start_port(port_arg.pa_eth_port, NULL));
     RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
-    RPC_CLEANUP(Error, protoc_result, tpg_result);
+    RPC_CLEANUP(PortArg, port_arg, Error, protoc_result);
 }
 
 /*****************************************************************************
@@ -978,12 +1037,13 @@ static void tpg_rpc__port_stop(Warp17_Service *service __rte_unused,
     tpg_error_t    tpg_result;
     Error          protoc_result;
 
-    RPC_REQUEST_INIT(PortArg, input, &port_arg);
+    if (RPC_REQUEST_INIT(PortArg, input, &port_arg))
+        return;
 
     RPC_STORE_RETCODE(tpg_result, test_mgmt_stop_port(port_arg.pa_eth_port,
                                                       NULL));
     RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
-    RPC_CLEANUP(Error, protoc_result, tpg_result);
+    RPC_CLEANUP(PortArg, port_arg, Error, protoc_result);
 }
 
 /*****************************************************************************
@@ -1005,7 +1065,8 @@ static void tpg_rpc__get_test_status(Warp17_Service *service __rte_unused,
     ipv4_statistics_t        ipv4_stats;
     int                      err = 0;
 
-    RPC_REQUEST_INIT(TestCaseArg, input, &test_case_arg);
+    if (RPC_REQUEST_INIT(TestCaseArg, input, &test_case_arg))
+        return;
 
     err = test_mgmt_get_test_case_cfg(test_case_arg.tca_eth_port,
                                       test_case_arg.tca_test_case_id,
@@ -1079,6 +1140,6 @@ done:
     RPC_STORE_RETCODE(tpg_result.tsr_error, err);
     RPC_REPLY(TestStatusResult, protoc_result, TEST_STATUS_RESULT__INIT,
               tpg_result);
-    RPC_CLEANUP(TestStatusResult, protoc_result, tpg_result);
+    RPC_CLEANUP(TestCaseArg, test_case_arg, TestStatusResult, protoc_result);
 }
 

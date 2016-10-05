@@ -144,7 +144,7 @@ extern notif_cb_t udp_notif_cb;
 /* TODO: doesn't include any potential options (IP+TCP). */
 #define UCB_MIN_HDRS_SZ                                   \
     (sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr) + \
-     sizeof(struct udp_hdr))
+     sizeof(struct udp_hdr) + ETHER_CRC_LEN)
 
 #define UCB_MTU(ucb) \
     (port_dev_info[(ucb)->ucb_l4.l4cb_interface].pi_mtu - UCB_MIN_HDRS_SZ)
@@ -162,12 +162,12 @@ extern int              udp_open_v4_connection(udp_control_block_t **ucb, uint32
                                                uint32_t src_ip_addr, uint16_t src_port,
                                                uint32_t dst_ip_addr, uint16_t dst_port,
                                                uint32_t test_case_id, tpg_app_proto_t app_id,
-                                               uint32_t flags);
+                                               sockopt_t *sockopt, uint32_t flags);
 
 extern int              udp_listen_v4(udp_control_block_t **ucb, uint32_t eth_port,
                                       uint32_t local_ip_addr, uint16_t local_port,
                                       uint32_t test_case_id, tpg_app_proto_t app_id,
-                                      uint32_t flags);
+                                      sockopt_t *sockopt, uint32_t flags);
 
 extern void             udp_connection_cleanup(udp_control_block_t *ucb);
 

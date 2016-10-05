@@ -234,6 +234,7 @@ void tlkp_init_cb(l4_control_block_t *l4_cb, uint32_t local_addr,
                   uint32_t cb_interface,
                   uint32_t test_case_id,
                   tpg_app_proto_t app_id,
+                  sockopt_t *sockopt,
                   uint32_t flags)
 {
     l4_cb->l4cb_src_addr.ip_v4 = local_addr;
@@ -247,6 +248,9 @@ void tlkp_init_cb(l4_control_block_t *l4_cb, uint32_t local_addr,
     l4_cb->l4cb_test_case_id = test_case_id;
 
     l4_cb->l4cb_app_data.ad_type = app_id;
+
+    /* Struct copy! */
+    l4_cb->l4cb_sockopt = *sockopt;
 
     if (flags & TPG_CB_USE_L4_HASH_FLAG)
         l4_cb->l4cb_rx_hash = l4_hash;
@@ -263,6 +267,7 @@ void tlkp_init_cb(l4_control_block_t *l4_cb, uint32_t local_addr,
                                   l4_cb->l4cb_dst_addr.ip_v4,
                                   l4_cb->l4cb_src_port,
                                   l4_cb->l4cb_dst_port);
+
 #endif /* defined(TPG_L4_CB_TX_HASH) */
 }
 

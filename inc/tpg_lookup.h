@@ -100,7 +100,7 @@ typedef struct l4_control_block_s {
     /*
      * TPG test timer linkage.
      */
-    tmr_list_entry_t l4cb_test_tmr_entry;
+    tmr_list_entry(l4_control_block_s) l4cb_test_tmr_entry;
 
     /*
      * Address information
@@ -127,6 +127,9 @@ typedef struct l4_control_block_s {
     uint32_t         l4cb_valid            :1; /* Only with TPG_L4_CB_DEBUG */
 
     /* uint32_t      l4cb_unused           :14; */
+
+    /* Socket options. */
+    sockopt_t        l4cb_sockopt;
 
     /* Application level state storage. */
     app_data_t       l4cb_app_data;
@@ -173,6 +176,7 @@ extern void tlkp_init_cb(l4_control_block_t *l4_cb,
                          uint32_t l4_hash, uint32_t cb_interface,
                          uint32_t test_case_id,
                          tpg_app_proto_t app_id,
+                         sockopt_t *sockopt,
                          uint32_t flags);
 
 /*****************************************************************************
@@ -263,7 +267,8 @@ static_assert(GCFG_TCB_POOL_SIZE < TPG_MAX_CB_DEBUG,
  ****************************************************************************/
 static inline __attribute__((__always_inline__))
 void l4_cb_mempool_init(struct rte_mempool **mempools, rte_atomic16_t **mask,
-                        uint32_t *max_id)
+                        uint32_t *max_id,
+                        size_t l4_cb_offset)
 {
     void                *entry;
     tlkp_test_cb_list_t  tq;
@@ -271,15 +276,15 @@ void l4_cb_mempool_init(struct rte_mempool **mempools, rte_atomic16_t **mask,
     uint32_t             id = 0;
     uint32_t             core;
 
-
     RTE_LCORE_FOREACH_SLAVE(core) {
         if (!cfg_is_pkt_core(core))
             continue;
 
         TAILQ_INIT(&tq);
 
-        while (rte_mempool_sc_get(mempools[core], &entry) == 0) {
-            l4_cb = entry;
+        while (rte_mempool_generic_get(mempools[core], &entry, 1, NULL,
+                                       MEMPOOL_F_SC_GET) == 0) {
+            l4_cb = (l4_control_block_t *)(((char *)entry) + l4_cb_offset);
 
             l4_cb->l4cb_id = id++;
             l4_cb->l4cb_valid = false;
@@ -288,9 +293,11 @@ void l4_cb_mempool_init(struct rte_mempool **mempools, rte_atomic16_t **mask,
 
         while (!TAILQ_EMPTY(&tq)) {
             l4_cb = (l4_control_block_t *)TAILQ_FIRST(&tq);
+            entry = (((char *)l4_cb) - l4_cb_offset);
 
             TAILQ_REMOVE(&tq, l4_cb, l4cb_test_list_entry);
-            rte_mempool_sp_put(mempools[core], l4_cb);
+            rte_mempool_generic_put(mempools[core], &entry, 1, NULL,
+                                    MEMPOOL_F_SP_PUT);
         }
     }
 
@@ -323,8 +330,8 @@ void l4_cb_check(l4_control_block_t *cb)
     l4_cb_alloc_init((cb), (mask), (max))
 #define L4_CB_FREE_DEINIT(cb, mask, max) \
     l4_cb_free_deinit((cb), (mask), (max))
-#define L4_CB_MPOOL_INIT(mpool, mask, max) \
-    l4_cb_mempool_init((mpool), (mask), (max))
+#define L4_CB_MPOOL_INIT(mpool, mask, max, l4_cb_offset) \
+    l4_cb_mempool_init((mpool), (mask), (max), (l4_cb_offset))
 #define L4_CB_CHECK(cb) \
     l4_cb_check((cb))
 
@@ -335,7 +342,7 @@ void l4_cb_check(l4_control_block_t *cb)
 #define L4_CB_VALID(cb) true
 #define L4_CB_ALLOC_INIT(cb, mask, max)
 #define L4_CB_FREE_DEINIT(cb, mask, max)
-#define L4_CB_MPOOL_INIT(mpool, mask, max)
+#define L4_CB_MPOOL_INIT(mpool, mask, max, l4_cb_offset)
 #define L4_CB_CHECK(cb) (void)0
 
 #endif /* defined(TPG_L4_CB_DEBUG) */
@@ -438,8 +445,7 @@ static inline void l4_cb_calc_connection_hash(l4_control_block_t *cb)
 #define TCG_CB_REUSE_CB                 0x00000002
 /* Flags. */
 #define TCG_CB_CONSUME_ALL_DATA         0x00000004
-#define TCG_CB_NO_TIMEWAIT              0x00000008
-#define TCG_CB_MALLOCED                 0x00000010
+#define TCG_CB_MALLOCED                 0x00000008
 
 #endif /* _H_TPG_LOOKUP_ */
 

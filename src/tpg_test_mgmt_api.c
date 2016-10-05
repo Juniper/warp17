@@ -130,6 +130,62 @@ static void test_init_client_defaults(tpg_test_case_t *cfg)
 }
 
 /*****************************************************************************
+ * test_init_server_sockopt_defaults()
+ ****************************************************************************/
+static void test_init_server_sockopt_defaults(sockopt_t *sockopt,
+                                              const tpg_server_t *server_cfg)
+{
+    tpg_tcp_sockopt_t default_tcp_sockopt;
+
+    switch (server_cfg->srv_l4.l4s_proto) {
+    case L4_PROTO__TCP:
+        tpg_xlate_default_TcpSockopt(&default_tcp_sockopt);
+        tcp_store_sockopt(&sockopt->so_tcp, &default_tcp_sockopt);
+        break;
+    default:
+        bzero(sockopt, sizeof(*sockopt));
+        return;
+    }
+}
+
+/*****************************************************************************
+ * test_init_client_sockopt_defaults()
+ ****************************************************************************/
+static void test_init_client_sockopt_defaults(sockopt_t *sockopt,
+                                              const tpg_client_t *client_cfg)
+{
+    tpg_tcp_sockopt_t default_tcp_sockopt;
+
+    switch (client_cfg->cl_l4.l4c_proto) {
+    case L4_PROTO__TCP:
+        tpg_xlate_default_TcpSockopt(&default_tcp_sockopt);
+        tcp_store_sockopt(&sockopt->so_tcp, &default_tcp_sockopt);
+        break;
+    default:
+        bzero(sockopt, sizeof(*sockopt));
+        return;
+    }
+}
+
+/*****************************************************************************
+ * test_init_sockopt_defaults()
+ ****************************************************************************/
+static void test_init_sockopt_defaults(sockopt_t *sockopt,
+                                       const tpg_test_case_t *te)
+{
+    switch (te->tc_type) {
+    case TEST_CASE_TYPE__SERVER:
+        test_init_server_sockopt_defaults(sockopt, &te->tc_server);
+        break;
+    case TEST_CASE_TYPE__CLIENT:
+        test_init_client_sockopt_defaults(sockopt, &te->tc_client);
+        break;
+    default:
+        return;
+    }
+}
+
+/*****************************************************************************
  * Static Test case validate* functions.
  ****************************************************************************/
 /*****************************************************************************
@@ -338,6 +394,95 @@ test_mgmt_validate_test_case(const tpg_test_case_t *cfg,
 }
 
 /*****************************************************************************
+ * test_mgmt_validate_port_options()
+ ****************************************************************************/
+static bool test_mgmt_validate_port_options(const tpg_port_options_t *options,
+                                            printer_arg_t *printer_arg)
+{
+    if (options->po_mtu < PORT_MIN_MTU || options->po_mtu > PORT_MAX_MTU) {
+        tpg_printf(printer_arg,
+                   "ERROR: Invalid MTU value. Supported range: %u -> %u\n",
+                   PORT_MIN_MTU,
+                   PORT_MAX_MTU);
+        return false;
+    }
+
+    return true;
+}
+
+/*****************************************************************************
+ * test_mgmt_validate_tcp_sockopt()
+ ****************************************************************************/
+static bool test_mgmt_validate_tcp_sockopt(const tpg_tcp_sockopt_t *options,
+                                           printer_arg_t *printer_arg)
+{
+    if (options->to_win_size > TCP_MAX_WINDOW_SIZE) {
+        tpg_printf(printer_arg,
+                   "ERROR: Invalid TCP window size. Max allowed: %u\n",
+                   TCP_MAX_WINDOW_SIZE);
+        return false;
+    }
+
+    if (options->to_syn_retry_cnt > TCP_MAX_RETRY_CNT) {
+        tpg_printf(printer_arg,
+                   "ERROR: Invalid TCP SYN retry count. Max allowed: %u\n",
+                   TCP_MAX_RETRY_CNT);
+        return false;
+    }
+
+    if (options->to_syn_ack_retry_cnt > TCP_MAX_RETRY_CNT) {
+        tpg_printf(printer_arg,
+                   "ERROR: Invalid TCP SYN/ACK retry count. Max allowed: %u\n",
+                   TCP_MAX_RETRY_CNT);
+        return false;
+    }
+
+    if (options->to_data_retry_cnt > TCP_MAX_RETRY_CNT) {
+        tpg_printf(printer_arg,
+                   "ERROR: Invalid TCP DATA retry count. Max allowed: %u\n",
+                   TCP_MAX_RETRY_CNT);
+        return false;
+    }
+
+    if (options->to_retry_cnt > TCP_MAX_RETRY_CNT) {
+        tpg_printf(printer_arg,
+                   "ERROR: Invalid TCP retry count. Max allowed: %u\n",
+                   TCP_MAX_RETRY_CNT);
+        return false;
+    }
+
+    if (options->to_rto > TCP_MAX_RTO_MS) {
+        tpg_printf(printer_arg,
+                   "ERROR: Invalid TCP retransmission timeout. Max allowed: %ums\n",
+                   TCP_MAX_RTO_MS);
+        return false;
+    }
+
+    if (options->to_fin_to > TCP_MAX_FIN_TO_MS) {
+        tpg_printf(printer_arg,
+                   "ERROR: Invalid TCP FIN timeout. Max allowed: %ums\n",
+                   TCP_MAX_FIN_TO_MS);
+        return false;
+    }
+
+    if (options->to_twait_to > TCP_MAX_TWAIT_TO_MS) {
+        tpg_printf(printer_arg,
+                   "ERROR: Invalid TCP TIME_WAIT timeout. Max allowed: %ums\n",
+                   TCP_MAX_TWAIT_TO_MS);
+        return false;
+    }
+
+    if (options->to_orphan_to > TCP_MAX_ORPHAN_TO_MS) {
+        tpg_printf(printer_arg,
+                   "ERROR: Invalid TCP orphan timeout. Max allowed: %ums\n",
+                   TCP_MAX_ORPHAN_TO_MS);
+        return false;
+    }
+
+    return true;
+}
+
+/*****************************************************************************
  * Static functions for checking API params.
  ****************************************************************************/
 /*****************************************************************************
@@ -377,7 +522,7 @@ static int test_mgmt_add_test_case_check(uint32_t eth_port,
     if ((*tenv)->te_test_running)
         return -EALREADY;
 
-    if ((*tenv)->te_states[test_case_id].teos_configured)
+    if ((*tenv)->te_test_cases[test_case_id].state.teos_configured)
         return -EEXIST;
 
     return 0;
@@ -401,7 +546,7 @@ static int test_mgmt_del_test_case_check(uint32_t eth_port,
     if ((*tenv)->te_test_running)
         return -EALREADY;
 
-    if (!(*tenv)->te_states[test_case_id].teos_configured)
+    if (!(*tenv)->te_test_cases[test_case_id].state.teos_configured)
         return -ENOENT;
 
     return 0;
@@ -429,7 +574,7 @@ static int test_mgmt_update_test_case_check(uint32_t eth_port,
         return -EALREADY;
     }
 
-    if (!(*tenv)->te_states[test_case_id].teos_configured) {
+    if (!(*tenv)->te_test_cases[test_case_id].state.teos_configured) {
         tpg_printf(printer_arg,
                    "ERROR: Test case %"PRIu32
                    " not configured on port %"PRIu32"!\n",
@@ -439,7 +584,7 @@ static int test_mgmt_update_test_case_check(uint32_t eth_port,
     }
 
     if (tc_type != TEST_CASE_TYPE__MAX &&
-            (*tenv)->te_test_cases[test_case_id].tc_type != tc_type) {
+            (*tenv)->te_test_cases[test_case_id].cfg.tc_type != tc_type) {
         tpg_printf(printer_arg,
                    "ERROR: Update not supported for %s test type!\n",
                    test_case_type_names[tc_type]);
@@ -465,7 +610,7 @@ static int test_mgmt_get_test_case_check(uint32_t eth_port,
         return -EINVAL;
 
     *tenv = test_mgmt_get_port_env(eth_port);
-    if (!(*tenv)->te_states[test_case_id].teos_configured) {
+    if (!(*tenv)->te_test_cases[test_case_id].state.teos_configured) {
         tpg_printf(printer_arg,
                    "ERROR: Test case %"PRIu32
                    " not configured on port %"PRIu32"!\n",
@@ -475,7 +620,7 @@ static int test_mgmt_get_test_case_check(uint32_t eth_port,
     }
 
     if (tc_type != TEST_CASE_TYPE__MAX &&
-            (*tenv)->te_test_cases[test_case_id].tc_type != tc_type) {
+            (*tenv)->te_test_cases[test_case_id].cfg.tc_type != tc_type) {
         tpg_printf(printer_arg, "ERROR: Unexpected %s test type!\n",
                    test_case_type_names[tc_type]);
         return -EINVAL;
@@ -506,6 +651,29 @@ static void test_mgmt_app_del_test_case(const tpg_test_case_t *cfg)
     }
 }
 
+/*****************************************************************************
+ * test_mgmt_get_sockopt()
+ ****************************************************************************/
+static int test_mgmt_get_sockopt(uint32_t eth_port, uint32_t test_case_id,
+                                 sockopt_t **out,
+                                 test_env_t **tenv,
+                                 printer_arg_t *printer_arg)
+{
+    int err;
+
+    if (!out)
+        return -EINVAL;
+
+    err = test_mgmt_get_test_case_check(eth_port, test_case_id,
+                                        TEST_CASE_TYPE__MAX,
+                                        tenv,
+                                        printer_arg);
+    if (err != 0)
+        return err;
+
+    *out = &(*tenv)->te_test_cases[test_case_id].sockopt;
+    return 0;
+}
 
 /*****************************************************************************
  * API Implementation
@@ -648,9 +816,10 @@ int test_mgmt_add_test_case(uint32_t eth_port, const tpg_test_case_t *cfg,
         return -EINVAL;
 
     /* Struct copy. */
-    tenv->te_test_cases[cfg->tc_id] = *cfg;
+    tenv->te_test_cases[cfg->tc_id].cfg = *cfg;
 
-    tenv->te_states[cfg->tc_id].teos_configured = true;
+    tenv->te_test_cases[cfg->tc_id].state.teos_configured = true;
+    test_init_sockopt_defaults(&tenv->te_test_cases[cfg->tc_id].sockopt, cfg);
     tenv->te_test_cases_count++;
     return 0;
 }
@@ -673,141 +842,65 @@ test_mgmt_del_test_case(uint32_t eth_port, uint32_t test_case_id,
     /* Call the application delete callback to cleanup any memory that was
      * allocated for the application config.
      */
-    test_mgmt_app_del_test_case(&tenv->te_test_cases[test_case_id]);
+    test_mgmt_app_del_test_case(&tenv->te_test_cases[test_case_id].cfg);
 
     /* Unconfigure means just resetting the bit.. */
-    tenv->te_states[test_case_id].teos_configured = false;
+    tenv->te_test_cases[test_case_id].state.teos_configured = false;
     tenv->te_test_cases_count--;
     return 0;
 }
 
 /*****************************************************************************
- * test_mgmt_update_test_case_rate()
+ * test_mgmt_update_test_case()
  ****************************************************************************/
-int test_mgmt_update_test_case_rate(uint32_t eth_port,
-                                    uint32_t test_case_id,
-                                    tpg_rate_type_t rate_type,
-                                    const tpg_rate_t *rate,
-                                    printer_arg_t *printer_arg)
+int test_mgmt_update_test_case(uint32_t eth_port, uint32_t test_case_id,
+                               const tpg_update_arg_t *arg,
+                               printer_arg_t *printer_arg)
 {
-    test_env_t        *tenv;
-    tpg_rate_client_t *app_rate_client;
-    int                err;
+    test_env_t           *tenv;
+    tpg_test_case_type_t  tc_type = TEST_CASE_TYPE__MAX;
+    tpg_test_case_t      *test_case;
+    int                   err;
 
-    if (!rate)
+    if (!arg)
         return -EINVAL;
 
-    err = test_mgmt_update_test_case_check(eth_port, test_case_id,
-                                           TEST_CASE_TYPE__CLIENT,
+    if (arg->ua_rate_open || arg->ua_rate_send || arg->ua_rate_close ||
+            arg->ua_init_delay || arg->ua_uptime || arg->ua_downtime)
+        tc_type = TEST_CASE_TYPE__CLIENT;
+
+    err = test_mgmt_update_test_case_check(eth_port, test_case_id, tc_type,
                                            &tenv,
                                            printer_arg);
     if (err != 0)
         return err;
 
-    app_rate_client = &tenv->te_test_cases[test_case_id].tc_client.cl_rates;
+    test_case = &tenv->te_test_cases[test_case_id].cfg;
 
-    switch (rate_type) {
-    case RATE_TYPE__OPEN:
-        app_rate_client->rc_open_rate = *rate;
-        break;
-    case RATE_TYPE__SEND:
-        app_rate_client->rc_send_rate = *rate;
-        break;
-    case RATE_TYPE__CLOSE:
-        app_rate_client->rc_close_rate = *rate;
-        break;
-    default:
-        return -EINVAL;
-    }
+    if (arg->ua_rate_open)
+        test_case->tc_client.cl_rates.rc_open_rate = *arg->ua_rate_open;
 
-    return 0;
-}
+    if (arg->ua_rate_send)
+        test_case->tc_client.cl_rates.rc_send_rate = *arg->ua_rate_send;
 
-/*****************************************************************************
- * test_mgmt_update_test_case_timeout()
- ****************************************************************************/
-int test_mgmt_update_test_case_timeout(uint32_t eth_port,
-                                       uint32_t test_case_id,
-                                       tpg_delay_type_t timeout_type,
-                                       const tpg_delay_t *timeout,
-                                       printer_arg_t *printer_arg)
-{
-    test_env_t         *tenv;
-    tpg_delay_client_t *app_delay_client;
-    int                 err;
+    if (arg->ua_rate_close)
+        test_case->tc_client.cl_rates.rc_close_rate = *arg->ua_rate_close;
 
-    if (!timeout)
-        return -EINVAL;
+    if (arg->ua_init_delay)
+        test_case->tc_client.cl_delays.dc_init_delay = *arg->ua_init_delay;
 
-    err = test_mgmt_update_test_case_check(eth_port, test_case_id,
-                                           TEST_CASE_TYPE__CLIENT,
-                                           &tenv,
-                                           printer_arg);
-    if (err != 0)
-        return err;
+    if (arg->ua_uptime)
+        test_case->tc_client.cl_delays.dc_uptime = *arg->ua_uptime;
 
-    app_delay_client = &tenv->te_test_cases[test_case_id].tc_client.cl_delays;
+    if (arg->ua_downtime)
+        test_case->tc_client.cl_delays.dc_downtime = *arg->ua_downtime;
 
-    switch (timeout_type) {
-    case DELAY_TYPE__INIT:
-        app_delay_client->dc_init_delay = *timeout;
-        break;
-    case DELAY_TYPE__UPTIME:
-        app_delay_client->dc_uptime = *timeout;
-        break;
-    case DELAY_TYPE__DOWNTIME:
-        app_delay_client->dc_downtime = *timeout;
-        break;
-    default:
-        return -EINVAL;
-    }
+    if (arg->ua_criteria)
+        test_case->tc_criteria = *arg->ua_criteria;
 
-    return 0;
-}
+    if (arg->has_ua_async)
+        test_case->tc_async = arg->ua_async;
 
-/*****************************************************************************
- * test_mgmt_update_test_case_criteria()
- ****************************************************************************/
-int
-test_mgmt_update_test_case_criteria(uint32_t eth_port, uint32_t test_case_id,
-                                    const tpg_test_criteria_t *criteria,
-                                    printer_arg_t *printer_arg)
-{
-    test_env_t *tenv;
-    int         err;
-
-    err = test_mgmt_update_test_case_check(eth_port, test_case_id,
-                                           TEST_CASE_TYPE__MAX,
-                                           &tenv,
-                                           printer_arg);
-    if (err != 0)
-        return err;
-
-    /* Struct copy. */
-    tenv->te_test_cases[test_case_id].tc_criteria = *criteria;
-
-    return 0;
-}
-
-/*****************************************************************************
- * test_mgmt_update_test_case_async()
- ****************************************************************************/
-int test_mgmt_update_test_case_async(uint32_t eth_port, uint32_t test_case_id,
-                                     bool async,
-                                     printer_arg_t *printer_arg)
-{
-    test_env_t *tenv;
-    int         err;
-
-    err = test_mgmt_update_test_case_check(eth_port, test_case_id,
-                                           TEST_CASE_TYPE__MAX,
-                                           &tenv,
-                                           printer_arg);
-    if (err != 0)
-        return err;
-
-
-    tenv->te_test_cases[test_case_id].tc_async = async;
     return 0;
 }
 
@@ -832,7 +925,7 @@ test_mgmt_get_test_case_cfg(uint32_t eth_port, uint32_t test_case_id,
     if (err != 0)
         return err;
 
-    *out = tenv->te_test_cases[test_case_id];
+    *out = tenv->te_test_cases[test_case_id].cfg;
     return 0;
 }
 
@@ -857,7 +950,7 @@ int test_mgmt_get_test_case_app_client_cfg(uint32_t eth_port,
     if (err != 0)
         return err;
 
-    *out = tenv->te_test_cases[test_case_id].tc_client.cl_app;
+    *out = tenv->te_test_cases[test_case_id].cfg.tc_client.cl_app;
     return 0;
 }
 
@@ -882,7 +975,7 @@ int test_mgmt_get_test_case_app_server_cfg(uint32_t eth_port,
     if (err != 0)
         return err;
 
-    *out = tenv->te_test_cases[test_case_id].tc_server.srv_app;
+    *out = tenv->te_test_cases[test_case_id].cfg.tc_server.srv_app;
     return 0;
 }
 
@@ -909,7 +1002,7 @@ int test_mgmt_update_test_case_app_client(uint32_t eth_port,
         return err;
 
     /* Struct copy. */
-    tmp_cfg = tenv->te_test_cases[test_case_id];
+    tmp_cfg = tenv->te_test_cases[test_case_id].cfg;
     tmp_cfg.tc_client.cl_app = *app_cl_cfg;
 
     if (!test_mgmt_validate_test_case_client(&tmp_cfg, printer_arg))
@@ -918,10 +1011,10 @@ int test_mgmt_update_test_case_app_client(uint32_t eth_port,
     /* Call the application delete callback to cleanup any memory that was
      * allocated for the application config.
      */
-    test_mgmt_app_del_test_case(&tenv->te_test_cases[test_case_id]);
+    test_mgmt_app_del_test_case(&tenv->te_test_cases[test_case_id].cfg);
 
     /* Struct copy. */
-    tenv->te_test_cases[test_case_id].tc_client.cl_app = *app_cl_cfg;
+    tenv->te_test_cases[test_case_id].cfg.tc_client.cl_app = *app_cl_cfg;
 
     return 0;
 }
@@ -949,7 +1042,7 @@ int test_mgmt_update_test_case_app_server(uint32_t eth_port,
         return err;
 
     /* Struct copy. */
-    tmp_cfg = tenv->te_test_cases[test_case_id];
+    tmp_cfg = tenv->te_test_cases[test_case_id].cfg;
     tmp_cfg.tc_server.srv_app = *app_srv_cfg;
 
     if (!test_mgmt_validate_test_case_server(&tmp_cfg, printer_arg))
@@ -958,10 +1051,10 @@ int test_mgmt_update_test_case_app_server(uint32_t eth_port,
     /* Call the application delete callback to cleanup any memory that was
      * allocated for the application config.
      */
-    test_mgmt_app_del_test_case(&tenv->te_test_cases[test_case_id]);
+    test_mgmt_app_del_test_case(&tenv->te_test_cases[test_case_id].cfg);
 
     /* Struct copy. */
-    tenv->te_test_cases[test_case_id].tc_server.srv_app = *app_srv_cfg;
+    tenv->te_test_cases[test_case_id].cfg.tc_server.srv_app = *app_srv_cfg;
 
     return 0;
 }
@@ -999,7 +1092,165 @@ test_mgmt_get_test_case_state(uint32_t eth_port, uint32_t test_case_id,
     if (err != 0)
         return err;
 
-    *out = tenv->te_states[test_case_id];
+    *out = tenv->te_test_cases[test_case_id].state;
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_set_port_options()
+ ****************************************************************************/
+int
+test_mgmt_set_port_options(uint32_t eth_port, tpg_port_options_t *opts,
+                           printer_arg_t *printer_arg)
+{
+    tpg_port_options_t old_opts;
+    int                err;
+
+    if (!opts)
+        return -EINVAL;
+
+    err = test_mgmt_add_port_cfg_check(eth_port, printer_arg);
+    if (err != 0)
+        return err;
+
+    port_get_conn_options(eth_port, &old_opts);
+
+    if (opts->has_po_mtu)
+        old_opts.po_mtu = opts->po_mtu;
+
+    if (!test_mgmt_validate_port_options(opts, printer_arg))
+        return -EINVAL;
+
+    err = port_set_conn_options(eth_port, opts);
+    if (err != 0)
+        return err;
+
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_get_port_options()
+ ****************************************************************************/
+int test_mgmt_get_port_options(uint32_t eth_port, tpg_port_options_t *out,
+                               printer_arg_t *printer_arg)
+{
+    if (!out)
+        return -EINVAL;
+
+    if (!test_mgmt_validate_port_id(eth_port, printer_arg))
+        return -EINVAL;
+
+    port_get_conn_options(eth_port, out);
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_set_tcp_sockopt()
+ ****************************************************************************/
+int
+test_mgmt_set_tcp_sockopt(uint32_t eth_port, uint32_t test_case_id,
+                          const tpg_tcp_sockopt_t *opts,
+                          printer_arg_t *printer_arg)
+{
+    tpg_tcp_sockopt_t  old_opts;
+    test_env_t        *tenv;
+    tpg_test_case_t   *te_cfg;
+    int                err;
+
+    if (!opts)
+        return -EINVAL;
+
+    err = test_mgmt_update_test_case_check(eth_port, test_case_id,
+                                           TEST_CASE_TYPE__MAX,
+                                           &tenv,
+                                           printer_arg);
+    if (err != 0)
+        return err;
+
+    te_cfg = &tenv->te_test_cases[test_case_id].cfg;
+
+    /* Only valid for TCP. */
+    if ((te_cfg->tc_type == TEST_CASE_TYPE__SERVER &&
+            te_cfg->tc_server.srv_l4.l4s_proto != L4_PROTO__TCP) ||
+        (te_cfg->tc_type == TEST_CASE_TYPE__CLIENT &&
+            te_cfg->tc_client.cl_l4.l4c_proto != L4_PROTO__TCP)) {
+        tpg_printf(printer_arg, "ERROR: Test case L4 type is not TCP!\n");
+        return -EINVAL;
+    }
+
+    tcp_load_sockopt(&old_opts,
+                     &tenv->te_test_cases[test_case_id].sockopt.so_tcp);
+
+    if (opts->has_to_win_size)
+        old_opts.to_win_size = opts->to_win_size;
+
+    if (opts->has_to_syn_retry_cnt)
+        old_opts.to_syn_retry_cnt = opts->to_syn_retry_cnt;
+
+    if (opts->has_to_syn_ack_retry_cnt)
+        old_opts.to_syn_ack_retry_cnt = opts->to_syn_ack_retry_cnt;
+
+    if (opts->has_to_data_retry_cnt)
+        old_opts.to_data_retry_cnt = opts->to_data_retry_cnt;
+
+    if (opts->has_to_retry_cnt)
+        old_opts.to_retry_cnt = opts->to_retry_cnt;
+
+    if (opts->has_to_rto)
+        old_opts.to_rto = opts->to_rto;
+
+    if (opts->has_to_fin_to)
+        old_opts.to_fin_to = opts->to_fin_to;
+
+    if (opts->has_to_twait_to)
+        old_opts.to_twait_to = opts->to_twait_to;
+
+    if (opts->has_to_orphan_to)
+        old_opts.to_orphan_to = opts->to_orphan_to;
+
+    if (opts->has_to_skip_timewait)
+        old_opts.to_skip_timewait = opts->to_skip_timewait;
+
+    if (!test_mgmt_validate_tcp_sockopt(&old_opts, printer_arg))
+        return -EINVAL;
+
+    tcp_store_sockopt(&tenv->te_test_cases[test_case_id].sockopt.so_tcp,
+                      &old_opts);
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_get_tcp_sockopt()
+ ****************************************************************************/
+int test_mgmt_get_tcp_sockopt(uint32_t eth_port, uint32_t test_case_id,
+                              tpg_tcp_sockopt_t *out,
+                              printer_arg_t *printer_arg)
+{
+    test_env_t      *tenv;
+    tpg_test_case_t *te_cfg;
+    sockopt_t       *sockopt;
+    int              err;
+
+    if (!out)
+        return -EINVAL;
+
+    err = test_mgmt_get_sockopt(eth_port, test_case_id, &sockopt, &tenv,
+                                printer_arg);
+    if (err != 0)
+        return err;
+
+    te_cfg = &tenv->te_test_cases[test_case_id].cfg;
+
+    /* Only valid for TCP. */
+    if ((te_cfg->tc_type == TEST_CASE_TYPE__SERVER &&
+            te_cfg->tc_server.srv_l4.l4s_proto != L4_PROTO__TCP) ||
+        (te_cfg->tc_type == TEST_CASE_TYPE__CLIENT &&
+            te_cfg->tc_client.cl_l4.l4c_proto != L4_PROTO__TCP)) {
+        tpg_printf(printer_arg, "ERROR: Test case L4 type is not TCP!\n");
+        return -EINVAL;
+    }
+
+    tcp_load_sockopt(out, &sockopt->so_tcp);
     return 0;
 }
 

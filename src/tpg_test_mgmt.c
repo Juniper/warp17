@@ -232,6 +232,7 @@ static void test_init_rate_per_core(tpg_rate_t *rate, uint32_t core_cnt,
  * test_init_test_case()
  ****************************************************************************/
 static void test_init_msg(const tpg_test_case_t *entry,
+                          const sockopt_t *sockopt,
                           test_case_init_msg_t *msg,
                           uint32_t core_no,
                           uint32_t core_total)
@@ -269,12 +270,16 @@ static void test_init_msg(const tpg_test_case_t *entry,
         assert(false);
         break;
     }
+
+    /* Struct copy. */
+    msg->tcim_sockopt = *sockopt;
 }
 
 /*****************************************************************************
  * test_init_test_case()
  ****************************************************************************/
-static void test_init_test_case(tpg_test_case_t *entry)
+static void test_init_test_case(tpg_test_case_t *entry,
+                                sockopt_t *sockopt)
 {
     uint32_t core;
     int      error;
@@ -297,7 +302,8 @@ static void test_init_test_case(tpg_test_case_t *entry)
             return;
         }
 
-        test_init_msg(entry, MSG_INNER(test_case_init_msg_t, msgp), core_cnt,
+        test_init_msg(entry, sockopt, MSG_INNER(test_case_init_msg_t, msgp),
+                      core_cnt,
                       core_total);
 
         /* Send the message and forget about it! */
@@ -490,8 +496,8 @@ static void test_entry_tmr_cb(struct rte_timer *tmr, void *arg)
     test_env_t            *tenv     = tmr_arg->teta_test_env;
     uint32_t               eth_port = tmr_arg->teta_eth_port;
     uint32_t               tcid     = tmr_arg->teta_test_case_id;
-    tpg_test_case_t       *entry    = &tenv->te_test_cases[tcid];
-    test_env_oper_state_t *state    = &tenv->te_states[tcid];
+    tpg_test_case_t       *entry    = &tenv->te_test_cases[tcid].cfg;
+    test_env_oper_state_t *state    = &tenv->te_test_cases[tcid].state;
 
     done = test_check_tc_status(entry, state, &passed);
 
@@ -526,7 +532,7 @@ static void test_entry_tmr_cb(struct rte_timer *tmr, void *arg)
         }
     }
 
-    if (done || tenv->te_test_cases[tcid].tc_async) {
+    if (done || tenv->te_test_cases[tcid].cfg.tc_async) {
         /* Check if we need to start another test entry. */
         if (tenv->te_test_case_to_start && tcid == tenv->te_test_case_next - 1)
             test_start_test_case(eth_port, tenv);
@@ -559,7 +565,7 @@ static void test_start_test_case(uint32_t eth_port, test_env_t *tenv)
     test_env_oper_state_t *state;
 
     tcid  = tenv->te_test_case_next;
-    entry = &tenv->te_test_cases[tcid];
+    entry = &tenv->te_test_cases[tcid].cfg;
 
     FOREACH_CORE_IN_PORT_START(core, eth_port) {
         msg_t                 *msgp;
@@ -598,16 +604,16 @@ static void test_start_test_case(uint32_t eth_port, test_env_t *tenv)
      * The start_time is just a reference for now. It will get updated once the
      * packet cores process the START message.
      */
-    tenv->te_states[tcid].teos_start_time = rte_get_timer_cycles();
-    tenv->te_states[tcid].teos_stop_time = 0;
+    state = &tenv->te_test_cases[tcid].state;
+    state->teos_start_time = rte_get_timer_cycles();
+    state->teos_stop_time = 0;
 
-    tenv->te_states[tcid].teos_test_case_state = TEST_CASE_STATE__RUNNING;
-    rte_timer_reset(&tenv->te_states[tcid].teos_timer,
-                    GCFG_TEST_MGMT_TMR_TO * cycles_per_us,
+    state->teos_test_case_state = TEST_CASE_STATE__RUNNING;
+    rte_timer_reset(&state->teos_timer, GCFG_TEST_MGMT_TMR_TO * cycles_per_us,
                     PERIODICAL,
                     rte_lcore_id(),
                     test_entry_tmr_cb,
-                    &tenv->te_states[tcid].teos_timer_arg);
+                    &state->teos_timer_arg);
 
     /* Mark if we need to start more tests later. */
     TEST_CASE_FOREACH_START(tenv, tcid_next, entry, state) {
@@ -733,10 +739,11 @@ static int test_start_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
 
     /* Initialize test entry timers. */
     for (i = 0; i < TPG_TEST_MAX_ENTRIES; i++) {
-        rte_timer_init(&tenv->te_states[i].teos_timer);
-        tenv->te_states[i].teos_timer_arg.teta_eth_port = start_msg->tssm_eth_port;
-        tenv->te_states[i].teos_timer_arg.teta_test_case_id = i;
-        tenv->te_states[i].teos_timer_arg.teta_test_env = tenv;
+        state = &tenv->te_test_cases[i].state;
+        rte_timer_init(&state->teos_timer);
+        state->teos_timer_arg.teta_eth_port = start_msg->tssm_eth_port;
+        state->teos_timer_arg.teta_test_case_id = i;
+        state->teos_timer_arg.teta_test_env = tenv;
     }
 
     /* Send INIT for all test cases and wait for it to be processed. */
@@ -756,7 +763,7 @@ static int test_start_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
         app_stats = TEST_CASE_APP_STATS_GET(start_msg->tssm_eth_port, i);
         bzero(app_stats, sizeof(*app_stats));
 
-        test_init_test_case(entry);
+        test_init_test_case(entry, &tenv->te_test_cases[i].sockopt);
 
     } TEST_CASE_FOREACH_END()
 
