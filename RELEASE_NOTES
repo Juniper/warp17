@@ -1,3 +1,21 @@
+v1.3:
+-----
+FEATURES:
+- Upgrade to DPDK 16.07.
+- Add MTU configuration.
+- Add TCP stack customization.
+
+FIXED ISSUES:
+- Fixed L3 IP initialization from the CLI.
+
+KNOWN ISSUES:
+- See v1.2
+
+API CHANGES:
+- Aggregated Update* RPC APIs in a single UpdateTestCase API.
+- Added SetPortOptions/GetPortOptions and SetTcpSockopt/GetTcpSockopt RPC APIs
+  for configuring Port related options (MTU) and TCP Stack related options.
+
 v1.2:
 -----
 FEATURES:
