@@ -42,7 +42,7 @@
  *     tpg_ring_if.c
  *
  * Description:
- *     Ring based interface supoort for running WARP17 without any eth
+ *     Ring based interface support for running WARP17 without any eth
  *     interface.
  *
  * Author:

@@ -76,6 +76,14 @@ all-ring-if:
 	$(Q)$(MAKE) -C $(APIDIR) -f $(MKAPI) -j1 all Q=$(Q)
 	$(Q)+$(MAKE) -f $(MKDPDK) M=$(MKDPDK) WARP17_RING_IF=1
 
+all-kni-if:
+	$(Q)$(MAKE) -C $(APIDIR) -f $(MKAPI) -j1 all Q=$(Q)
+	$(Q)+$(MAKE) -f $(MKDPDK) M=$(MKDPDK) WARP17_KNI_IF=1
+
+all-ring-kni-if:
+	$(Q)$(MAKE) -C $(APIDIR) -f $(MKAPI) -j1 all Q=$(Q)
+	$(Q)+$(MAKE) -f $(MKDPDK) M=$(MKDPDK) WARP17_RING_IF=1 WARP17_KNI_IF=1
+
 clean: pyclean
 	$(Q)+$(MAKE) -C $(APIDIR) -f $(MKAPI) clean Q=$(Q)
 	$(Q)+$(MAKE) -C $(UTDIR) -f $(MKUT) clean Q=$(Q)

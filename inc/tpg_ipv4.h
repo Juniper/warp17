@@ -88,11 +88,127 @@ typedef struct ipv4_statistics_s {
 } ipv4_statistics_t;
 
 /*****************************************************************************
+ * General IPv4 L4 checksum functions for scattered mbufs.
+ *
+ * - mbuf       Pointer to mbuf chain
+ * - hdr        IPv4 header needed to calculate pseudo header, uses src/dst
+ *              IP, and protocol fields
+ * - l4_offset  Offset in first mbuf where l4 data starts
+ * - l4_length  Total l4 data length to calculate checksum for
+ *
+ ****************************************************************************/
+static inline uint16_t ipv4_general_l4_cksum(struct rte_mbuf *mbuf,
+                                             struct ipv4_hdr *hdr,
+                                             uint16_t l4_offset,
+                                             uint16_t l4_length)
+{
+    struct ipv4_psd_header {
+            uint32_t src_addr;
+            uint32_t dst_addr;
+            uint8_t  zero;
+            uint8_t  proto;
+            uint16_t len;
+    } __attribute__((__packed__)) ip_psd_hdr;
+
+    uint32_t         cksum = 0;
+    struct rte_mbuf *mbuf_frag;
+    unsigned int     bytes_left = l4_length;
+    unsigned int     mbuf_data_len;
+
+    /*
+     * Checksum pseudo header, and data in first fragment
+     */
+    ip_psd_hdr.src_addr = hdr->src_addr;
+    ip_psd_hdr.dst_addr = hdr->dst_addr;
+    ip_psd_hdr.zero = 0;
+    ip_psd_hdr.proto = hdr->next_proto_id;
+    ip_psd_hdr.len = rte_cpu_to_be_16(bytes_left);
+    cksum = rte_raw_cksum(&ip_psd_hdr, sizeof(ip_psd_hdr));
+
+    mbuf_data_len = rte_pktmbuf_data_len(mbuf) - l4_offset;
+    if (bytes_left < mbuf_data_len)
+        mbuf_data_len = bytes_left;
+
+    cksum += rte_raw_cksum(rte_pktmbuf_mtod(mbuf, uint8_t *) + l4_offset,
+                           mbuf_data_len);
+    bytes_left -= mbuf_data_len;
+
+    /*
+     * Checksum additional fragments
+     */
+    mbuf_frag = mbuf->next;
+    while (mbuf_frag != NULL && bytes_left > 0) {
+
+        mbuf_data_len = rte_pktmbuf_data_len(mbuf_frag);
+        if (bytes_left < mbuf_data_len)
+            mbuf_data_len = bytes_left;
+
+        cksum += rte_raw_cksum(rte_pktmbuf_mtod(mbuf_frag, uint8_t *),
+                               mbuf_data_len);
+        bytes_left -= mbuf_data_len;
+
+        mbuf_frag = mbuf_frag->next;
+    }
+
+    /*
+     * Wrap back to 16 bits
+     */
+
+    cksum = ((cksum >> 16) & 0xffff) + (cksum & 0xffff);
+    cksum = (~cksum) & 0xffff;
+    if (cksum == 0)
+        cksum = 0xffff;
+
+    return cksum;
+}
+
+/*****************************************************************************
+ * General IPv4 L4 checksum functions for scattered mbufs.
+ *
+ * - cksum_in   Current checksum returned by ipv4_general_l4_cksum()
+ * - mbuf       Pointer to data mbuf chain
+ *
+ ****************************************************************************/
+static inline uint16_t ipv4_update_general_l4_cksum(uint16_t cksum_in,
+                                                    struct rte_mbuf *mbuf)
+{
+    uint32_t         cksum;
+    unsigned int     mbuf_data_len;
+    unsigned int     bytes_left = mbuf->pkt_len;
+
+    cksum = (~cksum_in) & 0xffff;
+    /* Add missing length for data segment in pseudo header */
+    cksum += rte_cpu_to_be_16(bytes_left);
+
+    while (mbuf != NULL && bytes_left > 0) {
+
+        mbuf_data_len = rte_pktmbuf_data_len(mbuf);
+        if (bytes_left < mbuf_data_len)
+            mbuf_data_len = bytes_left;
+
+        cksum += rte_raw_cksum(rte_pktmbuf_mtod(mbuf, uint8_t *),
+                               mbuf_data_len);
+
+        bytes_left -= mbuf_data_len;
+
+        mbuf = mbuf->next;
+    }
+
+    cksum = ((cksum >> 16) & 0xffff) + (cksum & 0xffff);
+    cksum = (~cksum) & 0xffff;
+    if (cksum == 0)
+        cksum = 0xffff;
+
+    return cksum;
+}
+
+/*****************************************************************************
  * External's for tpg_ipv4.c
  ****************************************************************************/
 extern bool             ipv4_init(void);
 extern void             ipv4_lcore_init(uint32_t lcore_id);
-extern int              ipv4_build_ipv4_hdr(struct rte_mbuf *mbuf,
+extern int              ipv4_build_ipv4_hdr(sockopt_t *sockopt,
+                                            struct rte_mbuf *mbuf,
                                             uint32_t src_addr,
                                             uint32_t dst_addr,
                                             uint8_t protocol,
@@ -104,4 +220,3 @@ extern void             ipv4_total_stats_get(uint32_t port,
                                              ipv4_statistics_t *total_ipv4_stats);
 
 #endif /* _H_TPG_IPV4_ */
-

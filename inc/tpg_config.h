@@ -134,7 +134,6 @@ enum {
 #define GCFG_MBUF_CACHE_SIZE           (512)
 #define GCFG_MBUF_PACKET_FRAGMENT_SIZE (2048)
 #define GCFG_MBUF_SIZE                 (GCFG_MBUF_PACKET_FRAGMENT_SIZE + \
-                                        sizeof(struct rte_mbuf) +        \
                                         RTE_PKTMBUF_HEADROOM)
 
 #define GCFG_MBUF_POOL_HDR_NAME        "global_pkt_mbuf_tx_hdr"

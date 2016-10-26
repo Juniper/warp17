@@ -843,7 +843,7 @@ int test_mgmt_loop(void *arg __rte_unused)
     int lcore_index = rte_lcore_index(lcore_id);
     int error;
 
-    RTE_LOG(ERR, USER1, "Starting test management loop on lcore %d, core index %d\n",
+    RTE_LOG(INFO, USER1, "Starting test management loop on lcore %d, core index %d\n",
             lcore_id, lcore_index);
 
     /*
@@ -861,6 +861,11 @@ int test_mgmt_loop(void *arg __rte_unused)
 
         /* Check for the RTE timers too. That's how we actually manage the tests. */
         rte_timer_manage();
+
+        /* Check for status updates on KNI interfaces*/
+#if defined(TPG_KNI_IF)
+        kni_handle_kernel_status_requests();
+#endif
     }
 
     return 0;

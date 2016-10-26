@@ -138,6 +138,7 @@ typedef struct port_info_s {
 
     /* True if the port is a ring interface. */
     uint16_t                pi_ring_if : 1;
+    uint16_t                pi_kni_if  : 1;
 
 } port_info_t;
 

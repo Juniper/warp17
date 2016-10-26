@@ -270,7 +270,7 @@ bool mem_init(void)
         mbuf_pool[core] =
             mem_create_local_pool(GCFG_MBUF_POOL_NAME, core,
                                   cfg->gcfg_mbuf_poolsize / core_divider,
-                                  cfg->gcfg_mbuf_size,
+                                  cfg->gcfg_mbuf_size + sizeof(struct rte_mbuf),
                                   cfg->gcfg_mbuf_cache_size,
                                   sizeof(struct rte_pktmbuf_pool_private),
                                   rte_pktmbuf_pool_init,

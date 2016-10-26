@@ -289,11 +289,11 @@ void ipv4_lcore_init(uint32_t lcore_id)
     }
 }
 
-
 /*****************************************************************************
- * ipv4_init()
+ * ipv4_build_ipv4_hdr()
  ****************************************************************************/
-int ipv4_build_ipv4_hdr(struct rte_mbuf *mbuf, uint32_t src_addr,
+int ipv4_build_ipv4_hdr(sockopt_t *sockopt __rte_unused,
+                        struct rte_mbuf *mbuf, uint32_t src_addr,
                         uint32_t dst_addr, uint8_t protocol,
                         uint16_t l4_len,
                         struct ipv4_hdr *hdr)
@@ -323,15 +323,19 @@ int ipv4_build_ipv4_hdr(struct rte_mbuf *mbuf, uint32_t src_addr,
     ip_hdr->src_addr = rte_cpu_to_be_32(src_addr);
     ip_hdr->dst_addr = rte_cpu_to_be_32(dst_addr);
 
+#if !defined(TPG_SW_CHECKSUMMING)
     if (true) {
+#else
+    if (sockopt->so_eth.ethso_tx_offload_ipv4_cksum) {
+#endif
         /*
          * We assume hardware checksum calculation
          */
         mbuf->l3_len = ip_hdr_len;
         mbuf->ol_flags |= PKT_TX_IP_CKSUM;
-        ip_hdr->hdr_checksum = rte_cpu_to_be_16(0);
+        ip_hdr->hdr_checksum = 0;
     } else {
-        ip_hdr->hdr_checksum = rte_cpu_to_be_16(0);
+        ip_hdr->hdr_checksum = 0;
         /* TODO: This call does not work if options are present!! */
         ip_hdr->hdr_checksum = rte_ipv4_cksum(ip_hdr);
     }
@@ -480,10 +484,12 @@ struct rte_mbuf *ipv4_receive_pkt(packet_control_block_t *pcb,
      * Handle checksum...
      */
 
-    if (true) { /* TODO: For now assume we have hardware support, we might need
-                 *       to determine this at startup to support all kind of HW.
-                 */
-
+#if !defined(TPG_SW_CHECKSUMMING)
+    if (true) {
+#else
+    if ((RTE_PER_LCORE(local_port_dev_info)[pcb->pcb_port].pi_dev_info.rx_offload_capa &
+         DEV_RX_OFFLOAD_IPV4_CKSUM) != 0) {
+#endif
         if (unlikely((mbuf->ol_flags & PKT_RX_IP_CKSUM_BAD) != 0)) {
             RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Invalid IPv4 checksum 0x%2.2X!\n",
                     pcb->pcb_core_index, __func__, ip_hdr->hdr_checksum);

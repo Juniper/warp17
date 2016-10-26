@@ -57,21 +57,13 @@
 /*****************************************************************************
  * Include files
  ****************************************************************************/
-#include <rte_arp.h>
-
 #include "tcp_generator.h"
+
+#include <rte_arp.h>
 
 /*****************************************************************************
  * Definitions
  ****************************************************************************/
-/* Information about a port + queue that would be polled by the local core. */
-typedef struct local_port_info_s {
-
-    uint32_t     lpi_port_id;
-    uint32_t     lpi_queue_id;
-    port_info_t *lpi_port_info;
-
-} local_port_info_t;
 
 
 /*****************************************************************************
@@ -88,6 +80,10 @@ static RTE_DEFINE_PER_LCORE(uint32_t, pkt_tx_q_len)[TPG_ETH_DEV_MAX];
 
 /* Drop one packet at tx every 'pkt_send_simulate_drop_rate' sends. */
 static RTE_DEFINE_PER_LCORE(uint32_t, pkt_send_simulate_drop_rate);
+
+/* Local per packet core port info array indexed by queue idx. */
+RTE_DEFINE_PER_LCORE(local_port_info_t *, pktloop_port_info);
+RTE_DEFINE_PER_LCORE(port_info_t *, local_port_dev_info);
 
 /*****************************************************************************
  * pkt_trace_tx()
@@ -373,9 +369,6 @@ int pkt_receive_loop(void *arg __rte_unused)
     port_statistics_t      *port_stats;
     packet_control_block_t *pcb;
     uint32_t                port;
-
-    /* Local port info array indexed by queue idx. */
-    local_port_info_t      *local_port_info;
     uint32_t                local_port_count;
 
     cfg = cfg_get_config();
@@ -437,25 +430,37 @@ int pkt_receive_loop(void *arg __rte_unused)
     if (pcb == NULL)
         TPG_ERROR_ABORT("[%d] Cannot allocate pcb!\n", lcore_index);
 
-    local_port_info = rte_zmalloc_socket("local_port_info_pktloop",
-                                         rte_eth_dev_count() *
-                                            sizeof(*local_port_info),
-                                         RTE_CACHE_LINE_SIZE,
-                                         rte_lcore_to_socket_id(lcore_id));
+    RTE_PER_LCORE(pktloop_port_info) = rte_zmalloc_socket("pktloop_port_info_pktloop",
+                                                          rte_eth_dev_count() *
+                                                          sizeof(local_port_info_t),
+                                                          RTE_CACHE_LINE_SIZE,
+                                                          rte_lcore_to_socket_id(lcore_id));
 
-    if (local_port_info == NULL)
+    if (RTE_PER_LCORE(pktloop_port_info) == NULL)
         TPG_ERROR_ABORT("[%d] Cannot allocate pktloop port info!\n",
+                        lcore_index);
+
+    RTE_PER_LCORE(local_port_dev_info) = rte_zmalloc_socket("global_port_info_pktloop",
+                                                            rte_eth_dev_count() *
+                                                            sizeof(port_info_t),
+                                                            RTE_CACHE_LINE_SIZE,
+                                                            rte_lcore_to_socket_id(lcore_id));
+
+    if (RTE_PER_LCORE(local_port_dev_info) == NULL)
+        TPG_ERROR_ABORT("[%d] Cannot allocate pktloop global port info!\n",
                         lcore_index);
 
     local_port_count = 0;
     for (port = 0; port < rte_eth_dev_count(); port++) {
         queue_id = port_get_rx_queue_id(lcore_id, port);
         if (queue_id != CORE_PORT_QINVALID) {
-            local_port_info_t *pi = &local_port_info[local_port_count];
+            local_port_info_t *pi = &RTE_PER_LCORE(pktloop_port_info)[local_port_count];
+
+            RTE_PER_LCORE(local_port_dev_info)[port] = port_dev_info[port];
 
             pi->lpi_port_id = port;
             pi->lpi_queue_id = queue_id;
-            pi->lpi_port_info = &port_dev_info[port];
+            pi->lpi_port_info = &RTE_PER_LCORE(local_port_dev_info)[port];
             local_port_count++;
         }
     }
@@ -487,11 +492,11 @@ int pkt_receive_loop(void *arg __rte_unused)
                     rte_strerror(-error), -error);
 
         for (qidx = 0; qidx < local_port_count; qidx++) {
-            port = local_port_info[qidx].lpi_port_id;
-            queue_id = local_port_info[qidx].lpi_queue_id;
+            port = RTE_PER_LCORE(pktloop_port_info)[qidx].lpi_port_id;
+            queue_id = RTE_PER_LCORE(pktloop_port_info)[qidx].lpi_queue_id;
 
             no_rx_buffers = pkt_rx_burst(port, queue_id, buf, TPG_RX_BURST_SIZE,
-                                         local_port_info[qidx].lpi_port_info,
+                                         RTE_PER_LCORE(pktloop_port_info)[qidx].lpi_port_info,
                                          &port_stats[port]);
             if (unlikely(no_rx_buffers <= 0)) {
                 /* Flush the bulk tx queue in case we have packets pending. */
@@ -561,6 +566,30 @@ static int pkt_loop_init_wait_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 }
 
 /*****************************************************************************
+ * pkt_loop_init_wait_cb()
+ ****************************************************************************/
+static int pkt_loop_update_port_dev_info_cb(uint16_t msgid,
+                                            uint16_t lcore __rte_unused,
+                                            void *msg)
+{
+    int port;
+    int lcore_id = rte_lcore_id();
+
+    if (MSG_INVALID(msgid, msg, MSG_PKTLOOP_UPDATE_PORT_DEV_INFO))
+        return -EINVAL;
+
+    for (port = 0; port < rte_eth_dev_count(); port++) {
+
+        int32_t queue_id = port_get_rx_queue_id(lcore_id, port);
+
+        if (queue_id != CORE_PORT_QINVALID)
+            RTE_PER_LCORE(local_port_dev_info)[port] = port_dev_info[port];
+    }
+
+    return 0;
+}
+
+/*****************************************************************************
  * pkt_handle_cmdline_opt()
  * --pkt-send-drop-rate - if set then one packet every 'pkt-send-drop-rate' will
  *      be dropped at TX. (per lcore)
@@ -599,6 +628,14 @@ bool pkt_loop_init(void)
         return false;
     }
 
+    error = msg_register_handler(MSG_PKTLOOP_UPDATE_PORT_DEV_INFO,
+                                 pkt_loop_update_port_dev_info_cb);
+    if (error) {
+        RTE_LOG(ERR, USER1,
+                "Failed to register PktLoop device info msg handler: %s(%d)\n",
+                rte_strerror(-error), -error);
+        return false;
+    }
+
     return true;
 }
-

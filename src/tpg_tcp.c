@@ -375,19 +375,20 @@ void tcp_load_sockopt(tpg_tcp_sockopt_t *dest, const tcp_sockopt_t *options)
 /*****************************************************************************
  * tcp_build_tcp_hdr()
  ****************************************************************************/
-int tcp_build_tcp_hdr(struct rte_mbuf *mbuf, tcp_control_block_t *tcb,
-                      struct ipv4_hdr *ipv4_hdr,
-                      uint32_t sseq,
-                      uint32_t flags)
+struct tcp_hdr *tcp_build_tcp_hdr(struct rte_mbuf *mbuf, tcp_control_block_t *tcb,
+                                  struct ipv4_hdr *ipv4_hdr,
+                                  uint32_t sseq,
+                                  uint32_t flags)
 {
     uint16_t        tcp_hdr_len = sizeof(struct tcp_hdr);
+    uint16_t        tcp_hdr_offset = rte_pktmbuf_data_len(mbuf);
     struct tcp_hdr *tcp_hdr;
 
     /* TODO: Support options, we need more room */
     tcp_hdr = (struct tcp_hdr *) rte_pktmbuf_append(mbuf, tcp_hdr_len);
 
     if (tcp_hdr == NULL)
-        return -ENOMEM;
+        return NULL;
 
     tcp_hdr->src_port = rte_cpu_to_be_16(tcb->tcb_l4.l4cb_src_port);
     tcp_hdr->dst_port = rte_cpu_to_be_16(tcb->tcb_l4.l4cb_dst_port);
@@ -406,10 +407,11 @@ int tcp_build_tcp_hdr(struct rte_mbuf *mbuf, tcp_control_block_t *tcb,
      *       calculating the checksum!
      */
 
-    if (true) { /* TODO: For now assume we have hardware support, we might need
-                 *       to determine this at startup to support all kind of HW.
-                 */
-
+#if !defined(TPG_SW_CHECKSUMMING)
+    if (true) {
+#else
+    if (tcb->tcb_l4.l4cb_sockopt.so_eth.ethso_tx_offload_tcp_cksum) {
+#endif
         mbuf->ol_flags |= PKT_TX_TCP_CKSUM | PKT_TX_IPV4;
         mbuf->l4_len = tcp_hdr_len;
 
@@ -417,19 +419,18 @@ int tcp_build_tcp_hdr(struct rte_mbuf *mbuf, tcp_control_block_t *tcb,
 
     } else {
         /*
-         * No HW checksum support do it manually...
+         * No HW checksum support do it manually, however up to here we can only
+         * calculate the header checksum, so we do...
          */
-
-        /* TODO: Add manual TCP checksum support, make sure we handle mbuf scattering,
-         *       we only assume individual ip and tcp headers (including options) to be
-         *       in contiguous memory so the pointers in the pcb can be used.
-         */
-        tcp_hdr->cksum = rte_cpu_to_be_16(0);
+        tcp_hdr->cksum = 0;
+        tcp_hdr->cksum = ipv4_general_l4_cksum(mbuf,
+                                               ipv4_hdr,
+                                               tcp_hdr_offset,
+                                               tcp_hdr_len);
     }
 
-    return sizeof(struct tcp_hdr);
+    return tcp_hdr;
 }
-
 
 /*****************************************************************************
  * tcp_receive_pkt()
@@ -531,10 +532,12 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
      * Handle checksum...
      */
 
-    if (true) { /* TODO: For now assume we have hardware support, we might need
-                 *       to determine this at startup to support all kind of HW.
-                 */
-
+#if !defined(TPG_SW_CHECKSUMMING)
+    if (true) {
+#else
+    if ((RTE_PER_LCORE(local_port_dev_info)[pcb->pcb_port].pi_dev_info.rx_offload_capa &
+         DEV_RX_OFFLOAD_TCP_CKSUM) != 0) {
+#endif
         if (unlikely((mbuf->ol_flags & PKT_RX_L4_CKSUM_BAD) != 0)) {
             RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Invalid TCP checksum!\n",
                     pcb->pcb_core_index, __func__);
@@ -547,10 +550,14 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
          * No HW checksum support do it manually...
          */
 
-        /* TODO: Add manual TCP checksum support, make sure we handle mbuf scattering,
-         *       we only assume individual ip and tcp headers (including options) to be
-         *       in contiguous memory so the pointers in the pcb can be used.
-         */
+        if (unlikely(ipv4_general_l4_cksum(mbuf, pcb->pcb_ipv4, 0,
+                                           pcb->pcb_l4_len) != 0xffff)) {
+            RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Invalid TCP checksum!\n",
+                    pcb->pcb_core_index, __func__);
+
+            INC_STATS(stats, ts_invalid_checksum);
+            return mbuf;
+        }
     }
 
     /*
@@ -560,7 +567,7 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
      *   https://msdn.microsoft.com/en-us/library/windows/hardware/ff567236(v=vs.85).aspx
      */
 
-    if ((mbuf->ol_flags & PKT_RX_RSS_HASH) != 0) {
+    if (likely((mbuf->ol_flags & PKT_RX_RSS_HASH) != 0)) {
         pcb->pcb_hash = mbuf->hash.rss;
         pcb->pcb_hash_valid = true;
     } else {
@@ -664,7 +671,8 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
  ****************************************************************************/
 static struct rte_mbuf *tcp_build_tcp_hdr_mbuf(tcp_control_block_t *tcb,
                                                uint32_t sseq, uint32_t flags,
-                                               uint16_t l4_len)
+                                               uint16_t l4_len,
+                                               struct tcp_hdr **tcp_hdr)
 {
     int              next_header_offset;
     struct rte_mbuf *hdr;
@@ -701,7 +709,7 @@ static struct rte_mbuf *tcp_build_tcp_hdr_mbuf(tcp_control_block_t *tcb,
         return NULL;
     }
 
-        /*
+    /*
      * Build ethernet header
      */
     next_header_offset = eth_build_eth_hdr(hdr, nh_mac, TPG_USE_PORT_MAC,
@@ -723,7 +731,8 @@ static struct rte_mbuf *tcp_build_tcp_hdr_mbuf(tcp_control_block_t *tcb,
 
         ipv4 = (struct ipv4_hdr *) (rte_pktmbuf_mtod(hdr, uint8_t *) + next_header_offset);
 
-        if (ipv4_build_ipv4_hdr(hdr, tcb->tcb_l4.l4cb_src_addr.ip_v4,
+        if (ipv4_build_ipv4_hdr(&tcb->tcb_l4.l4cb_sockopt,
+                                hdr, tcb->tcb_l4.l4cb_src_addr.ip_v4,
                                 tcb->tcb_l4.l4cb_dst_addr.ip_v4,
                                 IPPROTO_TCP,
                                 sizeof(struct tcp_hdr) + l4_len,
@@ -736,7 +745,10 @@ static struct rte_mbuf *tcp_build_tcp_hdr_mbuf(tcp_control_block_t *tcb,
     /*
      * Build TCP header
      */
-    if (tcp_build_tcp_hdr(hdr, tcb, ipv4, sseq, flags) <= 0) {
+
+    *tcp_hdr = tcp_build_tcp_hdr(hdr, tcb, ipv4, sseq, flags);
+
+    if (*tcp_hdr == NULL) {
         rte_pktmbuf_free(hdr);
         return NULL;
     }
@@ -751,6 +763,7 @@ bool tcp_send_data_pkt(tcp_control_block_t *tcb, uint32_t sseq, uint32_t flags,
                        struct rte_mbuf *data)
 {
     struct rte_mbuf  *hdr;
+    struct tcp_hdr   *tcp_hdr;
     tcp_statistics_t *stats;
     uint32_t          pkt_len;
 
@@ -761,7 +774,7 @@ bool tcp_send_data_pkt(tcp_control_block_t *tcb, uint32_t sseq, uint32_t flags,
 
     stats = STATS_LOCAL(tcp_statistics_t, tcb->tcb_l4.l4cb_interface);
 
-    hdr = tcp_build_tcp_hdr_mbuf(tcb, sseq, flags, data->pkt_len);
+    hdr = tcp_build_tcp_hdr_mbuf(tcb, sseq, flags, data->pkt_len, &tcp_hdr);
     if (unlikely(!hdr)) {
         INC_STATS(STATS_LOCAL(tcp_statistics_t, tcb->tcb_l4.l4cb_interface),
                   ts_failed_data_pkts);
@@ -775,6 +788,12 @@ bool tcp_send_data_pkt(tcp_control_block_t *tcb, uint32_t sseq, uint32_t flags,
     hdr->nb_segs += data->nb_segs;
 
     pkt_len = hdr->pkt_len;
+
+    /* We need to update the checksum in the TCP part now the data has been added */
+#if defined(TPG_SW_CHECKSUMMING)
+    if (!tcb->tcb_l4.l4cb_sockopt.so_eth.ethso_tx_offload_tcp_cksum)
+        tcp_hdr->cksum = ipv4_update_general_l4_cksum(tcp_hdr->cksum, data);
+#endif
 
     /*
      * Send the packet!!
@@ -804,6 +823,7 @@ bool tcp_send_data_pkt(tcp_control_block_t *tcb, uint32_t sseq, uint32_t flags,
 bool tcp_send_ctrl_pkt(tcp_control_block_t *tcb, uint32_t flags)
 {
     struct rte_mbuf  *hdr;
+    struct tcp_hdr   *tcp_hdr;
     tcp_statistics_t *stats;
     uint32_t          pkt_len;
 
@@ -811,7 +831,7 @@ bool tcp_send_ctrl_pkt(tcp_control_block_t *tcb, uint32_t flags)
 
     stats = STATS_LOCAL(tcp_statistics_t, tcb->tcb_l4.l4cb_interface);
 
-    hdr = tcp_build_tcp_hdr_mbuf(tcb, tcb->tcb_snd.nxt, flags, 0);
+    hdr = tcp_build_tcp_hdr_mbuf(tcb, tcb->tcb_snd.nxt, flags, 0, &tcp_hdr);
     if (unlikely(!hdr)) {
         INC_STATS(stats, ts_failed_ctrl_pkts);
         return false;
@@ -1062,4 +1082,3 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_show_tcp_statistics_details,
     NULL,
 };
-

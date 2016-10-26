@@ -668,7 +668,7 @@ cmdline_parse_inst_t cmd_tests_add_tcp_udp_server = {
     .f = cmd_tests_add_tcp_udp_server_parsed,
     .data = NULL,
     .help_str = "add tests server tcp|udp port <eth_port> "
-                "src <ip_range> sport <port_range>",
+                "test-case-id <tcid> src <ip_range> sport <port_range>",
     .tokens = {
         (void *)&cmd_tests_add_server_T_add,
         (void *)&cmd_tests_add_server_T_tests,

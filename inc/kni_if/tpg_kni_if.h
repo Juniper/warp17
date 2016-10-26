@@ -39,16 +39,17 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  * File name:
- *     tpg_pktloop.h
+ *     tpg_kni_if.h
  *
  * Description:
- *     Packet receive/send functions / loop.
+ *     Kernel Networking Interface interface support for running WARP17 with a
+ *     interface into the underlying linux kernel.
  *
  * Author:
  *     Dumitru Ceara, Eelco Chaudron
  *
  * Initial Created:
- *     06/29/2015
+ *     10/12/2016
  *
  * Notes:
  *
@@ -57,85 +58,36 @@
 /*****************************************************************************
  * Multiple include protection
  ****************************************************************************/
-#ifndef _H_TPG_PKTLOOP_
-#define _H_TPG_PKTLOOP_
+#ifndef _H_TPG_KNI_IF_
+#define _H_TPG_KNI_IF_
 
 /*****************************************************************************
  * Definitions
  ****************************************************************************/
-#define PKTLOOP_CMDLINE_OPTIONS() \
-    CMDLINE_OPT_ARG("pkt-send-drop-rate", true)
+#define KNI_IF_CMDLINE_OPTIONS() \
+    CMDLINE_OPT_ARG("kni-ifs", true)
 
-#define PKTLOOP_CMDLINE_PARSER() \
-    CMDLINE_ARG_PARSER(pkt_handle_cmdline_opt, NULL)
-
-/*****************************************************************************
- * Pkt loop module message type codes.
- ****************************************************************************/
-enum pktloop_msg_types {
-
-    MSG_TYPE_DEF_START_MARKER(PKTLOOP),
-    MSG_PKTLOOP_INIT_WAIT,
-    MSG_PKTLOOP_UPDATE_PORT_DEV_INFO,
-    MSG_TYPE_DEF_END_MARKER(PKTLOOP),
-
-};
-
-MSG_TYPE_MAX_CHECK(PKTLOOP);
+#define KNI_IF_CMDLINE_PARSER() \
+    CMDLINE_ARG_PARSER(kni_if_handle_cmdline_opt, NULL)
 
 /*****************************************************************************
- * Information about a port + queue that would be polled by the local core.
+ * Externals for tpg_kni_if.c
  ****************************************************************************/
-typedef struct local_port_info_s {
-
-    uint32_t     lpi_port_id;
-    uint32_t     lpi_queue_id;
-    port_info_t *lpi_port_info;
-
-} local_port_info_t;
+extern uint32_t kni_if_get_count(void);
+extern void     kni_handle_kernel_status_requests(void);
+extern bool     kni_if_handle_cmdline_opt(const char *opt_name,
+                                          char *opt_arg);
+extern bool     kni_if_init(void);
+extern uint32_t kni_get_first_kni_interface(void);
 
 
 /*****************************************************************************
- * Global variables
+ * Externals for tpg_kni_pdm.c
  ****************************************************************************/
-RTE_DECLARE_PER_LCORE(local_port_info_t *, pktloop_port_info);
-RTE_DECLARE_PER_LCORE(port_info_t *, local_port_dev_info);
+extern bool kni_eth_from_kni(const char *kni_name, struct rte_kni *kni,
+                             const unsigned int numa_node);
 
 /*****************************************************************************
- * External's for tpg_pktloop.c
+ * End of include file
  ****************************************************************************/
-extern int  pkt_send(uint32_t port, struct rte_mbuf *mbuf, bool trace);
-extern void pkt_flush_tx_q(uint32_t port, port_statistics_t *stats);
-extern int  pkt_receive_loop(void *arg __rte_unused);
-
-extern bool pkt_handle_cmdline_opt(const char *opt_name, char *opt_arg);
-extern bool pkt_loop_init(void);
-
-/*****************************************************************************
- * Static inlines
- ****************************************************************************/
-/*****************************************************************************
- * pkt_send_with_hash()
- ****************************************************************************/
-static inline bool pkt_send_with_hash(uint32_t interface,
-                                      struct rte_mbuf *pkt,
-                                      uint32_t rss_hash,
-                                      bool trace)
-{
-    /*
-     * Slap the destination RSS hash if we're doing it ourselves.
-     * Also mark that the RSS has been set.
-     */
-#if defined(TPG_EXPLICIT_RX_HASH)
-    pkt->ol_flags |= PKT_RX_RSS_HASH;
-    pkt->hash.rss = rss_hash;
-#else /* defined(TPG_EXPLICIT_RX_HASH) */
-    (void)rss_hash;
-#endif /* defined(TPG_EXPLICIT_RX_HASH) */
-
-    return pkt_send(interface, pkt, trace);
-}
-
-
-#endif /* _H_TPG_PKTLOOP_ */
-
+#endif /* _H_TPG_KNI_IF_ */

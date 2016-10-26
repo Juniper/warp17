@@ -70,6 +70,7 @@ VERSION = \"$(shell cat $(SRCDIR)/VERSION)\"
 # Include sec, and 3rd party source directory in build process
 VPATH := $(SRCDIR)/src
 VPATH += $(SRCDIR)/src/appl
+VPATH += $(SRCDIR)/src/kni_if
 VPATH += $(SRCDIR)/src/ring_if
 VPATH += $(SRCDIR)/api/generated/c
 VPATH += $(SRCDIR)/api/generated/xlate
@@ -81,6 +82,8 @@ SRCS-y += tpg_cli.c
 SRCS-y += tpg_config.c
 SRCS-y += tpg_ethernet.c
 SRCS-y += tpg_ipv4.c
+SRCS-y += tpg_kni_if.c
+SRCS-y += tpg_kni_pmd.c
 SRCS-y += tpg_lookup.c
 SRCS-y += tpg_main.c
 SRCS-y += tpg_memory.c
@@ -119,8 +122,9 @@ SRCS-y += warp17.xlate.c
 CFLAGS += -O3
 CFLAGS += -I$(SRCDIR)/inc
 CFLAGS += -I$(SRCDIR)/inc/appl
-CFLAGS += -I$(SRCDIR)/inc/sock
+CFLAGS += -I$(SRCDIR)/inc/kni_if
 CFLAGS += -I$(SRCDIR)/inc/ring_if
+CFLAGS += -I$(SRCDIR)/inc/sock
 CFLAGS += -I$(SRCDIR)/api/generated/c
 CFLAGS += -I$(SRCDIR)/api/generated/xlate
 CFLAGS += -I$(SRCDIR)/3rdparty
@@ -155,6 +159,10 @@ endif
 
 ifneq ($(WARP17_RING_IF),)
 CFLAGS += -DTPG_RING_IF -DTPG_L4_CB_TX_HASH -DTPG_EXPLICIT_RX_HASH
+endif
+
+ifneq ($(WARP17_KNI_IF),)
+CFLAGS += -DTPG_KNI_IF -DTPG_SW_CHECKSUMMING
 endif
 
 LDFLAGS += -lncurses
