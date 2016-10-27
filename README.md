@@ -167,7 +167,7 @@ sudo apt-get install build-essential python ncurses-dev
 	```
 
 * Load the `igb_uio` DPDK module, either as shown below or by running the
-  `$RTE_SDK/tools/setup.sh` script and selecting option
+  `$RTE_SDK/tools/dpdk-setup.sh` script and selecting option
   `[18] Insert IGB UIO module`:
 
 	```
@@ -540,6 +540,14 @@ The following example will show how to use the KNI interface to get some HTTP
 data from the built in HTTP server trough Linux. We assume no physical ports
 are configured, if you have them make sure you increase all the referenced
 ports:
+
+* Load the `rte_kni` DPDK module, either as shown below or by running the
+  `$RTE_SDK/tools/dpdk-setup.sh` script and selecting option
+  `[20] Insert KNI module`:
+
+```
+sudo insmod $RTE_SDK/x86_64-native-linuxapp-gcc/kmod/rte_kni.ko
+```
 
 * Start WARP17:
 
