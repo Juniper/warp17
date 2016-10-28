@@ -91,6 +91,9 @@ typedef struct port_port_cfg_s {
 #define PORT_ADD_CORE_TO_MASK(mask, core) \
     ((mask) |= ((uint64_t) 1 << (core)))
 
+#define PORT_DEL_CORE_FROM_MASK(mask, core) \
+    ((mask) &= (~((uint64_t) 1 << (core))))
+
 #define PORT_QCNT(port) \
     (port_port_cfg[port].ppc_q_cnt)
 

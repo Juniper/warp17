@@ -199,7 +199,7 @@ static inline bool port_pre_init_is_kni_port(uint32_t port)
 static bool port_pre_init_all_kni_ports(void)
 {
     uint32_t port;
-    uint32_t total_ports = rte_eth_dev_count();
+    uint32_t total_ports = port_get_pre_init_port_count();
 
     for (port = 0; port < total_ports; port++) {
         if (!port_pre_init_is_kni_port(port))
@@ -207,6 +207,19 @@ static bool port_pre_init_all_kni_ports(void)
     }
     return true;
 }
+
+/*****************************************************************************
+ * port_pre_init_is_ring_port()
+ ****************************************************************************/
+static bool port_pre_init_is_ring_port(uint32_t port)
+{
+    if (port >= rte_eth_dev_count() &&
+        port < (rte_eth_dev_count() + ring_if_get_count()))
+        return true;
+
+    return false;
+}
+
 /*****************************************************************************
  * port_request_update_local_port_dev_info()
  ****************************************************************************/
@@ -703,6 +716,7 @@ static void port_handle_cmdline_opt_qmap_maxc(uint64_t *pcore_mask)
     uint32_t pkt_core_count = cfg_pkt_core_count();
     uint32_t max            = ((port_count >= pkt_core_count) ?
                                port_count : pkt_core_count);
+    uint32_t cores_per_port[port_count];
     uint32_t port;
     uint32_t core;
     uint32_t i;
@@ -712,6 +726,7 @@ static void port_handle_cmdline_opt_qmap_maxc(uint64_t *pcore_mask)
 
     port = 0;
     core = 0;
+    bzero(&cores_per_port[0], port_count * sizeof(cores_per_port[0]));
 
     /* Start with the first packet core. */
     while (!cfg_is_pkt_core(core))
@@ -719,6 +734,7 @@ static void port_handle_cmdline_opt_qmap_maxc(uint64_t *pcore_mask)
 
     for (i = 0; i < max; i++) {
         PORT_ADD_CORE_TO_MASK(pcore_mask[port], core);
+        cores_per_port[port]++;
 
         /*
          * Advance port and core ("modulo" port count and pkt core count)
@@ -740,6 +756,41 @@ static void port_handle_cmdline_opt_qmap_maxc(uint64_t *pcore_mask)
         do {
             core = rte_get_next_lcore(core, true, true);
         } while (!cfg_is_pkt_core(core));
+    }
+
+    /* WARNING: HACK! Check if both members of the RING interfaces pairs get
+     * assigned the same number of cores. If not then adjust the masks.
+     * In the future this should be properly taken care of by having an
+     * abstraction layer to provide all the capabilities of physical AND
+     * virtual interfaces. Also, we could start with the current
+     * rte_eth_dev_count() as we know RING interfaces are added starting with
+     * that value but we try not to make it even hackier..
+     */
+    for (port = 0;
+         port < port_count && !port_pre_init_is_ring_port(port);
+         port++)
+        ;
+
+    if (port == port_count)
+        return;
+
+    for (; port < port_count && port_pre_init_is_ring_port(port); port += 2) {
+        if (cores_per_port[port] != cores_per_port[port + 1]) {
+            if (cores_per_port[port] != (cores_per_port[port + 1] + 1))
+                TPG_ERROR_ABORT("ERROR: BUG in assiging default max-c qmap!");
+
+            RTE_LOG(WARNING, USER1,
+                    "WARNING: RING interfaces %u and %u would be assigned different number of cores. Leaving one core unused! Please consider adjusting total number of cores!\n",
+                    port, port + 1);
+
+            /* Remove one core from the first pcore_mask. */
+            RTE_LCORE_FOREACH_SLAVE(core) {
+                if (PORT_COREID_IN_MASK(pcore_mask[port], core)) {
+                    PORT_DEL_CORE_FROM_MASK(pcore_mask[port], core);
+                    break;
+                }
+            }
+        }
     }
 }
 
