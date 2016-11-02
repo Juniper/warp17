@@ -124,9 +124,9 @@ void raw_client_print_cfg(const tpg_test_case_t *cfg,
                           printer_arg_t *printer_arg)
 {
     tpg_printf(printer_arg, "RAW CLIENT:\n");
-    tpg_printf(printer_arg, "%-12s : %"PRIu32"\n", "Request Len",
+    tpg_printf(printer_arg, "%-16s : %"PRIu32"\n", "Request Len",
                cfg->tc_client.cl_app.ac_raw.rc_req_plen);
-    tpg_printf(printer_arg, "%-12s : %"PRIu32"\n", "Response Len",
+    tpg_printf(printer_arg, "%-16s : %"PRIu32"\n", "Response Len",
                cfg->tc_client.cl_app.ac_raw.rc_resp_plen);
 }
 
@@ -137,9 +137,9 @@ void raw_server_print_cfg(const tpg_test_case_t *cfg,
                           printer_arg_t *printer_arg)
 {
     tpg_printf(printer_arg, "RAW SERVER:\n");
-    tpg_printf(printer_arg, "%-12s : %"PRIu32"\n", "Request Len",
+    tpg_printf(printer_arg, "%-16s : %"PRIu32"\n", "Request Len",
                cfg->tc_server.srv_app.as_raw.rs_req_plen);
-    tpg_printf(printer_arg, "%-12s : %"PRIu32"\n", "Response Len",
+    tpg_printf(printer_arg, "%-16s : %"PRIu32"\n", "Response Len",
                cfg->tc_server.srv_app.as_raw.rs_resp_plen);
 }
 
