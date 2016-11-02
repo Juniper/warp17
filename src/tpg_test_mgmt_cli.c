@@ -1793,6 +1793,33 @@ cmdline_parse_inst_t cmd_tests_show_tcp_opts = {
     },
 };
 
+/****************************************************************************
+ * - "exit"
+ ****************************************************************************/
+struct cmd_exit_result {
+    cmdline_fixed_string_t exit;
+};
+
+static cmdline_parse_token_string_t cmd_exit_T_exit =
+    TOKEN_STRING_INITIALIZER(struct cmd_exit_result, exit, "exit");
+
+static void cmd_exit_parsed(void *parsed_result __rte_unused,
+                            struct cmdline *cl,
+                            void *data __rte_unused)
+{
+    cmdline_quit(cl);
+}
+
+cmdline_parse_inst_t cmd_exit = {
+    .f = cmd_exit_parsed,
+    .data = NULL,
+    .help_str = "exit",
+    .tokens = {
+        (void *)&cmd_exit_T_exit,
+        NULL,
+    },
+};
+
 /*****************************************************************************
  * Main menu context
  ****************************************************************************/
@@ -1827,6 +1854,7 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_set_tcp_opts_orphan_to,
     &cmd_tests_set_tcp_opts_twait_skip,
     &cmd_tests_show_tcp_opts,
+    &cmd_exit,
     NULL,
 };
 
