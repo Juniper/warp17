@@ -299,6 +299,9 @@ extern bool             tcp_send_data_pkt(tcp_control_block_t *tcb,
                                           struct rte_mbuf *data);
 extern bool             tcp_send_ctrl_pkt(tcp_control_block_t *tcb,
                                           uint32_t flags);
+extern bool             tcp_send_ctrl_pkt_with_sseq(tcp_control_block_t *tcb,
+                                                    uint32_t sseq,
+                                                    uint32_t flags);
 extern int              tcp_open_v4_connection(tcp_control_block_t **tcb,
                                                uint32_t eth_port,
                                                uint32_t src_ip_addr,

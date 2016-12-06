@@ -818,9 +818,10 @@ bool tcp_send_data_pkt(tcp_control_block_t *tcb, uint32_t sseq, uint32_t flags,
 }
 
 /*****************************************************************************
- * tcp_send_ctrl_pkt()
+ * tcp_send_ctrl_pkt_with_sseq()
  ****************************************************************************/
-bool tcp_send_ctrl_pkt(tcp_control_block_t *tcb, uint32_t flags)
+inline bool tcp_send_ctrl_pkt_with_sseq(tcp_control_block_t *tcb, uint32_t sseq,
+                                        uint32_t flags)
 {
     struct rte_mbuf  *hdr;
     struct tcp_hdr   *tcp_hdr;
@@ -831,7 +832,7 @@ bool tcp_send_ctrl_pkt(tcp_control_block_t *tcb, uint32_t flags)
 
     stats = STATS_LOCAL(tcp_statistics_t, tcb->tcb_l4.l4cb_interface);
 
-    hdr = tcp_build_tcp_hdr_mbuf(tcb, tcb->tcb_snd.nxt, flags, 0, &tcp_hdr);
+    hdr = tcp_build_tcp_hdr_mbuf(tcb, sseq, flags, 0, &tcp_hdr);
     if (unlikely(!hdr)) {
         INC_STATS(stats, ts_failed_ctrl_pkts);
         return false;
@@ -859,6 +860,14 @@ bool tcp_send_ctrl_pkt(tcp_control_block_t *tcb, uint32_t flags)
     INC_STATS(stats, ts_sent_ctrl_pkts);
     INC_STATS_VAL(stats, ts_sent_ctrl_bytes, pkt_len);
     return true;
+}
+
+/*****************************************************************************
+ * tcp_send_ctrl_pkt()
+ ****************************************************************************/
+bool tcp_send_ctrl_pkt(tcp_control_block_t *tcb, uint32_t flags)
+{
+    return tcp_send_ctrl_pkt_with_sseq(tcb, tcb->tcb_snd.nxt, flags);
 }
 
 /*****************************************************************************
