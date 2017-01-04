@@ -306,7 +306,7 @@ static int port_set_conn_options_internal(uint32_t port,
     } else if (strncmp(driver_name, "rte_ixgbe_pmd",
                        strlen("rte_ixgbe_pmd") + 1) == 0 ||
                strncmp(driver_name, "rte_igb_pmd",
-                       strlen("rte_ixgbe_pmd") + 1) == 0) {
+                       strlen("rte_igb_pmd") + 1) == 0) {
 
         /* For igb and ixgbe we can reconfigure MTU on the fly. */
         rc = port_set_hw_conn_options_internal(port, options);
