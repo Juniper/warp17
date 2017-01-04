@@ -573,7 +573,7 @@ test_display_stats_hdr(ui_win_t *ui_win, int line, uint32_t port,
     double    usage_rx;
     uint64_t  link_speed_bytes;
 
-    link_speed_bytes = (uint64_t)link_info->link_speed * 1024 * 1024 / 8;
+    link_speed_bytes = (uint64_t)link_info->link_speed * 1000 * 1000 / 8;
 
     if (link_info->link_status) {
         usage_tx = (double)link_rate_stats->obytes * 100 / link_speed_bytes;
