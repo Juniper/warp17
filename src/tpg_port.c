@@ -161,6 +161,108 @@ static void port_setup_reta_table(uint8_t port, int nr_of_queus)
     rte_free(reta_data);
 }
 
+
+/*****************************************************************************
+ * port_get_pre_init_port_count()
+ ****************************************************************************/
+static inline uint32_t port_get_pre_init_port_count(void)
+{
+    /*
+     * This gets the total number of potential ports in the system,
+     * total physical ports, plus potential virtual ports.
+     */
+    return rte_eth_dev_count() + ring_if_get_count() + kni_if_get_count();
+}
+/*****************************************************************************
+ * port_is_kni_port()
+ ****************************************************************************/
+static inline bool port_is_kni_port(uint32_t port)
+{
+    return port_dev_info[port].pi_kni_if;
+}
+
+/*****************************************************************************
+ * port_pre_init_is_kni_port()
+ ****************************************************************************/
+static inline bool port_pre_init_is_kni_port(uint32_t port)
+{
+    if (port >= (rte_eth_dev_count() + ring_if_get_count()) &&
+        port < (rte_eth_dev_count() + ring_if_get_count() + kni_if_get_count()))
+        return true;
+
+    return false;
+}
+
+/*****************************************************************************
+ * port_pre_init_all_kni_ports()
+ ****************************************************************************/
+static bool port_pre_init_all_kni_ports(void)
+{
+    uint32_t port;
+    uint32_t total_ports = port_get_pre_init_port_count();
+
+    for (port = 0; port < total_ports; port++) {
+        if (!port_pre_init_is_kni_port(port))
+            return false;
+    }
+    return true;
+}
+
+/*****************************************************************************
+ * port_pre_init_is_ring_port()
+ ****************************************************************************/
+static bool port_pre_init_is_ring_port(uint32_t port)
+{
+    if (port >= rte_eth_dev_count() &&
+        port < (rte_eth_dev_count() + ring_if_get_count()))
+        return true;
+
+    return false;
+}
+
+/*****************************************************************************
+ * port_request_update()
+ ****************************************************************************/
+static void port_request_update(uint32_t port, enum pktloop_msg_types req_type)
+{
+    uint32_t  core;
+    msg_t    *msgp;
+    MSG_LOCAL_DEFINE(port_req_msg_t, port_msg);
+
+    msgp = MSG_LOCAL(port_msg);
+    MSG_INNER(port_req_msg_t, msgp)->prm_port_id = port;
+
+    FOREACH_CORE_IN_PORT_START(core, port) {
+
+        msg_init(msgp, req_type, core, 0);
+        msg_send(msgp, 0);
+
+    } FOREACH_CORE_IN_PORT_END()
+}
+
+/*****************************************************************************
+ * port_dev_start()
+ ****************************************************************************/
+static int port_dev_start(uint32_t port)
+{
+    int rc = rte_eth_dev_start(port);
+
+    /* Tell the packet cores to start polling the port. */
+    port_request_update(port, MSG_PKTLOOP_START_PORT);
+    return rc;
+}
+
+/*****************************************************************************
+ * port_dev_stop()
+ ****************************************************************************/
+static void port_dev_stop(uint32_t port)
+{
+    /* Tell the packet cores to stop polling the port. */
+    port_request_update(port, MSG_PKTLOOP_STOP_PORT);
+
+    rte_eth_dev_stop(port);
+}
+
 /*****************************************************************************
  * port_set_hw_conn_options_internal()
  ****************************************************************************/
@@ -191,6 +293,9 @@ static void port_store_conn_options_internal(uint32_t port,
 {
     /* Store the port configuration in our own structures. */
     port_dev_info[port].pi_mtu = options->po_mtu;
+
+    /* Tell the packet cores to update their local copy. */
+    port_request_update(port, MSG_PKTLOOP_UPDATE_PORT_DEV_INFO);
 }
 
 /*****************************************************************************
@@ -207,28 +312,28 @@ static int port_set_conn_options_internal(uint32_t port,
      * ugly differentiation based on driver name..
      */
     driver_name = port_dev_info[port].pi_dev_info.driver_name;
-    if (strncmp(driver_name, "rte_i40e_pmd",
-                strlen("rte_i40e_pmd") + 1) == 0) {
+    if (strncmp(driver_name, "net_i40e",
+                strlen("net_i40e") + 1) == 0) {
 
         /* First stop port. Restart port after configuration is done. */
-        rte_eth_dev_stop(port);
+        port_dev_stop(port);
 
         rc = port_set_hw_conn_options_internal(port, options);
         if (rc != 0)
             return rc;
 
-        rc = rte_eth_dev_start(port);
+        rc = port_dev_start(port);
         if (rc < 0) {
             RTE_LOG(ERR, USER1,
-                    "ERROR: Failed rte_eth_dev_start(%u), returned %s(%d)!\n",
+                    "ERROR: Failed port_dev_start(%u), returned %s(%d)!\n",
                     port, rte_strerror(-rc), -rc);
             return rc;
         }
 
-    } else if (strncmp(driver_name, "rte_ixgbe_pmd",
-                       strlen("rte_ixgbe_pmd") + 1) == 0 ||
-               strncmp(driver_name, "rte_igb_pmd",
-                       strlen("rte_ixgbe_pmd") + 1) == 0) {
+    } else if (strncmp(driver_name, "net_ixgbe",
+                       strlen("net_ixgbe") + 1) == 0 ||
+               strncmp(driver_name, "net_e1000_igb",
+                       strlen("net_e1000_igb") + 1) == 0) {
 
         /* For igb and ixgbe we can reconfigure MTU on the fly. */
         rc = port_set_hw_conn_options_internal(port, options);
@@ -285,9 +390,9 @@ static bool port_adjust_info(uint32_t port)
      * assume the interface resides on socket-id 0.
      */
     if (port_dev_info[port].pi_dev_info.pci_dev &&
-            port_dev_info[port].pi_dev_info.pci_dev->numa_node != -1)
+            port_dev_info[port].pi_dev_info.pci_dev->device.numa_node != -1)
         port_dev_info[port].pi_numa_node =
-            port_dev_info[port].pi_dev_info.pci_dev->numa_node;
+            port_dev_info[port].pi_dev_info.pci_dev->device.numa_node;
 
     return true;
 }
@@ -297,11 +402,12 @@ static bool port_adjust_info(uint32_t port)
  ****************************************************************************/
 static bool port_setup_port(uint8_t port)
 {
-    int                rc;
-    int                queue;
-    uint16_t           number_of_rings;
-    struct ether_addr  mac_addr;
-    tpg_port_options_t default_port_options;
+    int                 rc;
+    int                 queue;
+    uint16_t            number_of_rings;
+    global_config_t    *cfg;
+    struct ether_addr   mac_addr;
+    tpg_port_options_t  default_port_options;
 
     struct rte_eth_conf default_port_config = {
         .rxmode = {
@@ -352,6 +458,10 @@ static bool port_setup_port(uint8_t port)
     RTE_LOG(INFO, USER1, "[%s()] Initializing Ethernet port %u.\n", __func__,
             port);
 
+    cfg = cfg_get_config();
+    if (cfg == NULL)
+        return false;
+
     number_of_rings = port_port_cfg[port].ppc_q_cnt;
 
     default_port_config.rx_adv_conf.rss_conf.rss_key_len = port_dev_info[port].pi_dev_info.hash_key_size;
@@ -370,6 +480,14 @@ static bool port_setup_port(uint8_t port)
                 port_dev_info[port].pi_dev_info.max_tx_queues);
         return false;
     }
+
+    /*
+     * On KNI ports the maximum supported packet length is that of
+     * the mbuf size.
+     */
+    if (port_is_kni_port(port))
+        default_port_config.rxmode.max_rx_pkt_len = cfg->gcfg_mbuf_size -
+            RTE_PKTMBUF_HEADROOM;
 
     rc = rte_eth_dev_configure(port, number_of_rings, number_of_rings,
                                &default_port_config);
@@ -444,8 +562,14 @@ static bool port_setup_port(uint8_t port)
      * Some NIC PMDs cannot enable scatter mode on the fly so we
      * force them to enable it from the beginning. The default MTU
      * will be set below.
+     *
+     * On KNI based ports we should start with the max supported MTU
+     * (which is the mbuf size) or else the port initialization will fail.
      */
-    rte_eth_dev_set_mtu(port, PORT_MAX_MTU);
+    rte_eth_dev_set_mtu(port,
+                        port_is_kni_port(port) ?
+                        cfg->gcfg_mbuf_size - RTE_PKTMBUF_HEADROOM :
+                        PORT_MAX_MTU);
 
     rc = rte_eth_dev_start(port);
     if (rc < 0) {
@@ -471,7 +595,7 @@ static bool port_setup_port(uint8_t port)
  ****************************************************************************/
 static bool port_parse_mappings(char *pcore_mask, uint32_t pcore_mask_len)
 {
-    int       port_count    = rte_eth_dev_count() + ring_if_get_count();
+    int       port_count    = port_get_pre_init_port_count();
     char     *core_mask     = pcore_mask;
     uint32_t  core_mask_len = pcore_mask_len;
     uint64_t  intmask;
@@ -586,13 +710,21 @@ static void port_handle_cmdline_opt_qmap_maxq(uint64_t *pcore_mask)
     uint32_t port;
     uint32_t core;
 
-    /* We still don't have any ring interfaces created so keep those in mind
-     * when assigning cores to port masks.
+    /* We still don't have any virtual interfaces created so keep those in
+     * mind when assigning cores to port masks.
      */
-    for (port = 0; port < rte_eth_dev_count() + ring_if_get_count(); port++) {
+    for (port = 0; port < port_get_pre_init_port_count(); port++) {
         RTE_LCORE_FOREACH_SLAVE(core) {
-            if (cfg_is_pkt_core(core))
+            if (cfg_is_pkt_core(core)) {
                 PORT_ADD_CORE_TO_MASK(pcore_mask[port], core);
+                if (port_pre_init_is_kni_port(port)) {
+                    /*
+                     * KNI ports only support a single core, so for maxq
+                     * this will always be the first core only.
+                     */
+                    break;
+                }
+            }
         }
     }
 }
@@ -603,13 +735,15 @@ static void port_handle_cmdline_opt_qmap_maxq(uint64_t *pcore_mask)
 static void port_handle_cmdline_opt_qmap_maxc(uint64_t *pcore_mask)
 {
 
-    /* We still don't have any ring interfaces created so keep those in mind
-     * when assigning cores to port masks.
+    /* We still don't have any virtual interfaces created so keep those in
+     * mind when assigning cores to port masks.
      */
-    uint32_t port_count     = rte_eth_dev_count() + ring_if_get_count();
+    bool     all_kni_port   = port_pre_init_all_kni_ports();
+    uint32_t port_count     = port_get_pre_init_port_count();
     uint32_t pkt_core_count = cfg_pkt_core_count();
     uint32_t max            = ((port_count >= pkt_core_count) ?
                                port_count : pkt_core_count);
+    uint32_t cores_per_port[port_count];
     uint32_t port;
     uint32_t core;
     uint32_t i;
@@ -619,6 +753,7 @@ static void port_handle_cmdline_opt_qmap_maxc(uint64_t *pcore_mask)
 
     port = 0;
     core = 0;
+    bzero(&cores_per_port[0], port_count * sizeof(cores_per_port[0]));
 
     /* Start with the first packet core. */
     while (!cfg_is_pkt_core(core))
@@ -626,12 +761,63 @@ static void port_handle_cmdline_opt_qmap_maxc(uint64_t *pcore_mask)
 
     for (i = 0; i < max; i++) {
         PORT_ADD_CORE_TO_MASK(pcore_mask[port], core);
+        cores_per_port[port]++;
 
-        /* Advance port and core ("modulo" port count and pkt core count) */
-        port++; port %= port_count;
+        /*
+         * Advance port and core ("modulo" port count and pkt core count)
+         * For kni ports only one core can be assigned, so skip additional adds
+         */
+        do {
+            port++;
+            port %= port_count;
+
+            /*
+             * If all ports are KNI we can not distribute all cores, so once
+             * all ports have one core we are done!
+             */
+            if (all_kni_port && port == 0)
+                return;
+
+        } while (port_pre_init_is_kni_port(port) && pcore_mask[port] != 0);
+
         do {
             core = rte_get_next_lcore(core, true, true);
         } while (!cfg_is_pkt_core(core));
+    }
+
+    /* WARNING: HACK! Check if both members of the RING interfaces pairs get
+     * assigned the same number of cores. If not then adjust the masks.
+     * In the future this should be properly taken care of by having an
+     * abstraction layer to provide all the capabilities of physical AND
+     * virtual interfaces. Also, we could start with the current
+     * rte_eth_dev_count() as we know RING interfaces are added starting with
+     * that value but we try not to make it even hackier..
+     */
+    for (port = 0;
+         port < port_count && !port_pre_init_is_ring_port(port);
+         port++)
+        ;
+
+    if (port == port_count)
+        return;
+
+    for (; port < port_count && port_pre_init_is_ring_port(port); port += 2) {
+        if (cores_per_port[port] != cores_per_port[port + 1]) {
+            if (cores_per_port[port] != (cores_per_port[port + 1] + 1))
+                TPG_ERROR_ABORT("ERROR: BUG in assiging default max-c qmap!");
+
+            RTE_LOG(WARNING, USER1,
+                    "WARNING: RING interfaces %u and %u would be assigned different number of cores. Leaving one core unused! Please consider adjusting total number of cores!\n",
+                    port, port + 1);
+
+            /* Remove one core from the first pcore_mask. */
+            RTE_LCORE_FOREACH_SLAVE(core) {
+                if (PORT_COREID_IN_MASK(pcore_mask[port], core)) {
+                    PORT_DEL_CORE_FROM_MASK(pcore_mask[port], core);
+                    break;
+                }
+            }
+        }
     }
 }
 
@@ -657,8 +843,8 @@ static bool port_start_ports(void)
     for (port = 0; port < rte_eth_dev_count(); port++) {
         rte_eth_link_get(port, &link);
         if (!link.link_status) {
-            RTE_LOG(ERR, USER1,
-                    "ERROR: Ethernet port %"PRIu32" is DOWN at init!\n",
+            RTE_LOG(WARNING, USER1,
+                    "WARNING: Ethernet port %"PRIu32" is DOWN at init!\n",
                     port);
         }
     }
@@ -848,7 +1034,7 @@ bool port_handle_cmdline_opt(const char *opt_name, char *opt_arg)
  ****************************************************************************/
 bool port_handle_cmdline(void)
 {
-    uint32_t total_if_count = rte_eth_dev_count() + ring_if_get_count();
+    uint32_t total_if_count = port_get_pre_init_port_count();
     uint64_t pcore_mask[total_if_count];
     uint32_t port;
 
@@ -1243,7 +1429,7 @@ static void cmd_show_port_info_parsed(void *parsed_result __rte_unused,
                        port_dev_info[port].pi_mtu,
                        (pci ? pci->domain : 0), (pci ? pci->bus : 0),
                        (pci ? pci->devid : 0), (pci ? pci->function : 0),
-                       (pci_dev->numa_node == -1 ? -1 : port_dev_info[port].pi_numa_node),
+                       (pci_dev == NULL || pci_dev->device.numa_node == -1 ? -1 : port_dev_info[port].pi_numa_node),
                        dev_info.max_rx_queues, dev_info.max_tx_queues,
 
                        (dev_info.rx_offload_capa & DEV_RX_OFFLOAD_VLAN_STRIP) ? 'v' : '-',
@@ -1348,7 +1534,7 @@ static cmdline_parse_ctx_t cli_ctx[] = {
  ****************************************************************************/
 static bool port_interfaces_init(void)
 {
-    uint32_t  total_if_count = rte_eth_dev_count() + ring_if_get_count();
+    uint32_t  total_if_count = port_get_pre_init_port_count();
     uint32_t  port;
     uint32_t  core;
     uint32_t  i;
@@ -1412,7 +1598,7 @@ static bool port_interfaces_init(void)
         return false;
     }
 
-    /* Parse qmappings for all ethernet ports AND ring interfaces. */
+    /* Parse qmappings for all ethernet ports AND virtual interfaces. */
     for (i = 0; i < qmap_args_cnt; i++) {
         qmap = qmap_args[i];
         if (!port_parse_mappings(qmap, strlen(qmap)))
@@ -1430,11 +1616,24 @@ static bool port_interfaces_init(void)
             return false;
     }
 
-    /* Now initialize the ring interfaces. */
+    /*
+     * !!!!! READ THIS IF YOU ADD ANOTHER VIRTUAL INTERFACE !!!!
+     *
+     *   The init functions below should be called in this order,
+     *   reason being that once the init function returns it's
+     *   interface are now included in the rte_eth_dev_count()!!
+     */
     if (!ring_if_init()) {
         RTE_LOG(ERR, USER1, "ERROR: Failed initializing ring interfaces!\n");
         return false;
     }
+    if (!kni_if_init()) {
+        RTE_LOG(ERR, USER1, "ERROR: Failed initializing Kernel Networking Interfaces!\n");
+        return false;
+    }
+    /*
+     * !!!!! READ THE ABOVE IF YOU ADD ANOTHER VIRTUAL INTERFACE !!!!
+     */
 
     return true;
 }

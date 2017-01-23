@@ -402,6 +402,9 @@ int msg_send_remote(msg_t *msg, uint32_t snd_flags)
     if (unlikely(core_idx == -1))
         return -EINVAL;
 
+    if (unlikely(msg_queues[core_idx] == NULL))
+        return -EADDRNOTAVAIL;
+
     return msg_do_send(msg, msg_queues[core_idx], snd_flags);
 }
 

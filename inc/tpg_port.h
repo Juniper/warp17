@@ -91,6 +91,9 @@ typedef struct port_port_cfg_s {
 #define PORT_ADD_CORE_TO_MASK(mask, core) \
     ((mask) |= ((uint64_t) 1 << (core)))
 
+#define PORT_DEL_CORE_FROM_MASK(mask, core) \
+    ((mask) &= (~((uint64_t) 1 << (core))))
+
 #define PORT_QCNT(port) \
     (port_port_cfg[port].ppc_q_cnt)
 
@@ -138,6 +141,7 @@ typedef struct port_info_s {
 
     /* True if the port is a ring interface. */
     uint16_t                pi_ring_if : 1;
+    uint16_t                pi_kni_if  : 1;
 
 } port_info_t;
 

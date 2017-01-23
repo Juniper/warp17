@@ -136,12 +136,14 @@ bool cfg_handle_command_line(int argc, char **argv)
         PKTLOOP_CMDLINE_OPTIONS(),
         CLI_CMDLINE_OPTIONS(),
         RING_IF_CMDLINE_OPTIONS(),
+        KNI_IF_CMDLINE_OPTIONS(),
         {.name = NULL},
     };
 
     static cfg_cmdline_arg_parser_t cmdline_parsers[] = {
         PORT_CMDLINE_PARSER(),
         RING_IF_CMDLINE_PARSER(),
+        KNI_IF_CMDLINE_PARSER(),
         MEM_CMDLINE_PARSER(),
         PKTLOOP_CMDLINE_PARSER(),
         CLI_CMDLINE_PARSER(),

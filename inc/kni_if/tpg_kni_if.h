@@ -39,16 +39,17 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  * File name:
- *     tpg_tcp_data.h
+ *     tpg_kni_if.h
  *
  * Description:
- *     TCP data processing
+ *     Kernel Networking Interface interface support for running WARP17 with a
+ *     interface into the underlying linux kernel.
  *
  * Author:
  *     Dumitru Ceara, Eelco Chaudron
  *
  * Initial Created:
- *     10/05/2015
+ *     10/12/2016
  *
  * Notes:
  *
@@ -57,56 +58,36 @@
 /*****************************************************************************
  * Multiple include protection
  ****************************************************************************/
-#ifndef _H_TPG_TCP_DATA_
-#define _H_TPG_TCP_DATA_
+#ifndef _H_TPG_KNI_IF_
+#define _H_TPG_KNI_IF_
 
 /*****************************************************************************
- * TCP MTU related macros
+ * Definitions
  ****************************************************************************/
-/* TODO: doesn't include any potential options (IP+TCP). */
-#define TCB_MIN_HDRS_SZ                                   \
-    (sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr) + \
-     sizeof(struct tcp_hdr) + ETHER_CRC_LEN)
+#define KNI_IF_CMDLINE_OPTIONS() \
+    CMDLINE_OPT_ARG("kni-ifs", true)
 
-/*
- * Quite an ugly hack to test that we have room to store the
- * receive buffer header in the received mbufs. We make the assumption
- * that the L2-L4 headers will always be part of the first mbuf.
- */
-static_assert(sizeof(tcb_buf_hdr_t) <= TCB_MIN_HDRS_SZ,
-              "Not enough headroom in the mbuf!");
-
-#define TCB_MTU(tcb) \
-    (RTE_PER_LCORE(local_port_dev_info)[(tcb)->tcb_l4.l4cb_interface].pi_mtu - TCB_MIN_HDRS_SZ)
+#define KNI_IF_CMDLINE_PARSER() \
+    CMDLINE_ARG_PARSER(kni_if_handle_cmdline_opt, NULL)
 
 /*****************************************************************************
- * TCP Send related macros
+ * Externals for tpg_kni_if.c
  ****************************************************************************/
-/* In theory we could store more than the window size but that would
- * just waste memory. Keep it like this for now.
- */
-#define TCB_MAX_TX_BUF_SZ(tcb) \
-    (tcp_get_sockopt(&(tcb)->tcb_l4.l4cb_sockopt)->tcpo_win_size)
+extern uint32_t kni_if_get_count(void);
+extern void     kni_handle_kernel_status_requests(void);
+extern bool     kni_if_handle_cmdline_opt(const char *opt_name,
+                                          char *opt_arg);
+extern bool     kni_if_init(void);
+extern uint32_t kni_get_first_kni_interface(void);
 
-#define TCB_AVAIL_SEND(tcb) \
-    (TCB_MAX_TX_BUF_SZ(tcb) - (tcb)->tcb_retrans.tr_total_size)
 
-#define TCB_SEGS_PER_SEND GCFG_TCP_SEGS_PER_SEND
+/*****************************************************************************
+ * Externals for tpg_kni_pdm.c
+ ****************************************************************************/
+extern bool kni_eth_from_kni(const char *kni_name, struct rte_kni *kni,
+                             const unsigned int numa_node);
 
-/* TODO: we only support PUSH SEND for now but when we support more this should
- * be rethought.
- */
-#define TCB_PSH_THRESH(tcb) TCB_MTU(tcb)
-
-extern int      tcp_data_send(tcp_control_block_t *tcb, tsm_data_arg_t *data);
-
-extern uint32_t tcp_data_handle(tcp_control_block_t *tcb,
-                                packet_control_block_t *pcb,
-                                uint32_t seg_seq,
-                                uint32_t seg_len,
-                                bool urgent);
-
-extern uint32_t tcp_data_retrans(tcp_control_block_t *tcb);
-
-#endif /* _H_TPG_TCP_DATA_ */
-
+/*****************************************************************************
+ * End of include file
+ ****************************************************************************/
+#endif /* _H_TPG_KNI_IF_ */

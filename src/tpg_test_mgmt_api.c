@@ -173,6 +173,30 @@ static void test_init_client_sockopt_defaults(sockopt_t *sockopt,
 static void test_init_sockopt_defaults(sockopt_t *sockopt,
                                        const tpg_test_case_t *te)
 {
+    /*
+     * Setup L1 socket options, we currently only need to setup the
+     * checksum offload flags. Now we copy them from the HW capabilities,
+     * however later we can override them for example if we want to
+     * force SW checksumming to introduce faults.
+     */
+    if ((port_dev_info[te->tc_eth_port].pi_dev_info.tx_offload_capa & DEV_TX_OFFLOAD_IPV4_CKSUM) != 0)
+        sockopt->so_eth.ethso_tx_offload_ipv4_cksum = true;
+    else
+        sockopt->so_eth.ethso_tx_offload_ipv4_cksum = false;
+
+    if ((port_dev_info[te->tc_eth_port].pi_dev_info.tx_offload_capa & DEV_TX_OFFLOAD_TCP_CKSUM) != 0)
+        sockopt->so_eth.ethso_tx_offload_tcp_cksum = true;
+    else
+        sockopt->so_eth.ethso_tx_offload_tcp_cksum = false;
+
+    if ((port_dev_info[te->tc_eth_port].pi_dev_info.tx_offload_capa & DEV_TX_OFFLOAD_UDP_CKSUM) != 0)
+        sockopt->so_eth.ethso_tx_offload_udp_cksum = true;
+    else
+        sockopt->so_eth.ethso_tx_offload_udp_cksum = false;
+
+    /*
+     * Setup L4 socket options
+     */
     switch (te->tc_type) {
     case TEST_CASE_TYPE__SERVER:
         test_init_server_sockopt_defaults(sockopt, &te->tc_server);

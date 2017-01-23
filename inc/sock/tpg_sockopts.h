@@ -72,13 +72,13 @@ typedef struct tcp_sockopt_s {
     uint8_t  tcpo_data_retry_cnt;
     uint8_t  tcpo_retry_cnt;
 
-    /* Timeouts in us. */
+    /* Timeouts in us */
     uint32_t tcpo_rto;
     uint32_t tcpo_fin_to;
     uint32_t tcpo_twait_to;
     uint32_t tcpo_orphan_to;
 
-    /* Flags. */
+    /* Flags */
     uint32_t tcpo_skip_timewait : 1;
 
 } tcp_sockopt_t;
@@ -95,7 +95,21 @@ typedef struct ipv6_sockopt_s {
 
 } ipv6_sockopt_t;
 
+typedef struct eth_sockopt_s {
+
+    /* Flags */
+    uint8_t ethso_tx_offload_ipv4_cksum : 1;
+    uint8_t ethso_tx_offload_tcp_cksum  : 1;
+    uint8_t ethso_tx_offload_udp_cksum  : 1;
+
+} eth_sockopt_t;
+
 typedef struct sockopt_s {
+
+    /* L1 options. */
+    union {
+        eth_sockopt_t so_eth;
+    };
 
     /* L3 options. */
     union {

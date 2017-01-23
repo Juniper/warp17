@@ -74,20 +74,23 @@
         void (*opt_cb)(__typeof__(type) *dest, void *value); \
     } OPT_FILL_TYPE_NAME(comp)
 
-#define OPT_FILL_CB_NAME(comp, field) comp ## _fill_ ## field
+#define OPT_FILL_CB(comp, field) comp ## _fill_ ## field
 #define OPT_FILL_PARAM_NAME(comp, field) comp ## _fill_ ## field ## _param
 
-#define OPT_FILL_DEFINE(comp, type, field, field_type)                       \
-    static void OPT_FILL_CB_NAME(comp, field)(__typeof__(type) *dest,        \
-                                              void *value)                   \
-    {                                                                        \
-        bzero(dest, sizeof(*dest));                                          \
-        dest->field = *(__typeof__(field_type) *)value;                      \
-        dest->has_ ## field = true;                                          \
-    }                                                                        \
-                                                                             \
-    static OPT_FILL_TYPE_NAME(comp) OPT_FILL_PARAM_NAME(comp, field) = {     \
-        OPT_FILL_CB_NAME(comp, field)                                        \
+#define OPT_FILL_CB_DEFINE(comp, type, field, field_type)        \
+    static void OPT_FILL_CB(comp, field)(__typeof__(type) *dest, \
+                                         void *value)            \
+    {                                                            \
+        bzero(dest, sizeof(*dest));                              \
+        dest->field = *(__typeof__(field_type) *)value;          \
+        dest->has_ ## field = true;                              \
+    }
+
+#define OPT_FILL_DEFINE(comp, type, field, field_type)                   \
+    OPT_FILL_CB_DEFINE(comp, type, field, field_type)                    \
+                                                                         \
+    static OPT_FILL_TYPE_NAME(comp) OPT_FILL_PARAM_NAME(comp, field) = { \
+        OPT_FILL_CB(comp, field)                                         \
     }
 
 /****************************************************************************
@@ -265,7 +268,7 @@ static void cmd_show_tests_config_parsed(void *parsed_result, struct cmdline *cl
         if (test_mgmt_get_test_case_cfg(pr->port, tcid, &entry, NULL) != 0)
             continue;
 
-        cmdline_printf(cl, "Test Case Id: %"PRIu32"\n", tcid);
+        cmdline_printf(cl, "%-16s : %"PRIu32"\n", "Test Case Id", tcid);
         test_config_show_tc(&entry, &parg);
         cmdline_printf(cl, "\n\n");
     }
@@ -668,7 +671,7 @@ cmdline_parse_inst_t cmd_tests_add_tcp_udp_server = {
     .f = cmd_tests_add_tcp_udp_server_parsed,
     .data = NULL,
     .help_str = "add tests server tcp|udp port <eth_port> "
-                "src <ip_range> sport <port_range>",
+                "test-case-id <tcid> src <ip_range> sport <port_range>",
     .tokens = {
         (void *)&cmd_tests_add_server_T_add,
         (void *)&cmd_tests_add_server_T_tests,
@@ -1291,6 +1294,10 @@ static cmdline_parse_token_string_t cmd_tests_set_async_T_tcid_kw =
 static cmdline_parse_token_num_t cmd_tests_set_async_T_tcid =
     TOKEN_NUM_INITIALIZER(struct cmd_tests_set_async_result, tcid, UINT32);
 
+OPT_FILL_TYPEDEF(test_case, tpg_update_arg_t);
+
+OPT_FILL_CB_DEFINE(test_case, tpg_update_arg_t, ua_async, bool);
+
 static void cmd_tests_set_async_parsed(void *parsed_result,
                                        struct cmdline *cl,
                                        void *data)
@@ -1298,11 +1305,12 @@ static void cmd_tests_set_async_parsed(void *parsed_result,
     printer_arg_t                      parg;
     struct cmd_tests_set_async_result *pr;
     tpg_update_arg_t                   update_arg;
+    bool                               async = ((intptr_t)data);
 
     tpg_xlate_default_UpdateArg(&update_arg);
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
-    update_arg.ua_async = ((intptr_t) data);
+    OPT_FILL_CB(test_case, ua_async)(&update_arg, &async);
 
     if (test_mgmt_update_test_case(pr->port, pr->tcid, &update_arg, &parg) == 0)
         cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
@@ -1380,7 +1388,7 @@ OPT_FILL_TYPEDEF(port, tpg_port_options_t);
 OPT_FILL_DEFINE(port, tpg_port_options_t, po_mtu, uint16_t);
 
 static void cmd_tests_set_mtu_parsed(void *parsed_result, struct cmdline *cl,
-                                     void *data __rte_unused)
+                                     void *data)
 {
     printer_arg_t                    parg;
     struct cmd_tests_set_mtu_result *pr;
@@ -1785,6 +1793,33 @@ cmdline_parse_inst_t cmd_tests_show_tcp_opts = {
     },
 };
 
+/****************************************************************************
+ * - "exit"
+ ****************************************************************************/
+struct cmd_exit_result {
+    cmdline_fixed_string_t exit;
+};
+
+static cmdline_parse_token_string_t cmd_exit_T_exit =
+    TOKEN_STRING_INITIALIZER(struct cmd_exit_result, exit, "exit");
+
+static void cmd_exit_parsed(void *parsed_result __rte_unused,
+                            struct cmdline *cl,
+                            void *data __rte_unused)
+{
+    cmdline_quit(cl);
+}
+
+cmdline_parse_inst_t cmd_exit = {
+    .f = cmd_exit_parsed,
+    .data = NULL,
+    .help_str = "exit",
+    .tokens = {
+        (void *)&cmd_exit_T_exit,
+        NULL,
+    },
+};
+
 /*****************************************************************************
  * Main menu context
  ****************************************************************************/
@@ -1819,6 +1854,7 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_set_tcp_opts_orphan_to,
     &cmd_tests_set_tcp_opts_twait_skip,
     &cmd_tests_show_tcp_opts,
+    &cmd_exit,
     NULL,
 };
 

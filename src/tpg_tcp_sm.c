@@ -1375,9 +1375,9 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
 
     switch (event) {
     case TE_ENTER_STATE:
-        /* Send the FIN. */
+        /* Send the FIN with the current sequence number. */
         tcp_send_ctrl_pkt(tcb, TCP_FIN_FLAG | TCP_ACK_FLAG);
-        /* Increment snd.nxt to take into account the FIN. */
+        /* Increment snd.nxt to take into account the FIN we just sent. */
         tcb->tcb_snd.nxt++;
         /* We might need to retransmit the packets from previous states
          * but also the FIN we just sent.
@@ -1600,13 +1600,13 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
             return tsm_enter_state(tcb, TS_CLOSED, NULL);
         }
 
-        /* If we arrived in this state from SYN-RCVD we should check to
-         * see if we need to retransmit the SYN-ACK.
-         */
         /* TODO: actually resend data here. */
 
-        /* Resend the FIN. */
-        tcp_send_ctrl_pkt(tcb, TCP_FIN_FLAG | TCP_ACK_FLAG);
+        /* Resend the FIN. Make sure we decrement the NXT seq number in the
+         * packet. We know for sure we didn't send any data after FIN!
+         */
+        tcp_send_ctrl_pkt_with_sseq(tcb, tcb->tcb_snd.nxt - 1,
+                                    TCP_FIN_FLAG | TCP_ACK_FLAG);
         tsm_schedule_retransmission(tcb);
         break;
     case TE_ORPHAN_TIMEOUT:
@@ -1921,9 +1921,13 @@ static int tsm_SF_last_ack(tcp_control_block_t *tcb, tcpEvent_t event,
             return tsm_enter_state(tcb, TS_CLOSED, NULL);
         }
 
-        /* Resend the packet that got us here.. */
-        /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=FIN,ACK> */
-        tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG | TCP_FIN_FLAG);
+        /* Resend the packet that got us here..
+         * Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=FIN,ACK>
+         * Make sure we decrement the NXT seq number in the packet.
+         * We know for sure we didn't send any data after FIN!
+         */
+        tcp_send_ctrl_pkt_with_sseq(tcb, tcb->tcb_snd.nxt - 1,
+                                    TCP_ACK_FLAG | TCP_FIN_FLAG);
         /* TODO: anything else to resend here?. */
         tsm_schedule_retransmission(tcb);
         break;
@@ -2083,8 +2087,13 @@ static int tsm_SF_closing(tcp_control_block_t *tcb, tcpEvent_t event,
             return tsm_enter_state(tcb, TS_CLOSED, NULL);
         }
 
-        /* TODO: actually resend data here (resend FIN|ACK??). */
-        tcp_send_ctrl_pkt(tcb, TCP_FIN_FLAG | TCP_ACK_FLAG);
+        /* TODO: actually resend data here. */
+
+        /* Resend the FIN. Make sure we decrement the NXT seq number in the
+         * packet. We know for sure we didn't send any data after FIN!
+         */
+        tcp_send_ctrl_pkt_with_sseq(tcb, tcb->tcb_snd.nxt - 1,
+                                    TCP_FIN_FLAG | TCP_ACK_FLAG);
         tsm_schedule_retransmission(tcb);
         break;
     case TE_ORPHAN_TIMEOUT:
@@ -2218,8 +2227,11 @@ static int tsm_SF_close_wait(tcp_control_block_t *tcb, tcpEvent_t event,
     switch (event) {
     case TE_ENTER_STATE:
         if (tcb->tcb_consume_all_data) {
-            /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=FIN,ACK> */
             /* TODO: we should wait for all our sent data to be acked at least.. */
+
+            /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=FIN,ACK>
+             * Send the FIN with the current sequence number.
+             */
             tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG | TCP_FIN_FLAG);
             /* Increment snd.nxt to take into account the FIN. */
             tcb->tcb_snd.nxt++;
@@ -2351,8 +2363,12 @@ static int tsm_SF_close_wait(tcp_control_block_t *tcb, tcpEvent_t event,
         /* Resend data here if we need to. */
         tsm_retrans_data(tcb);
 
-        /* Resend <SEQ=SND.NXT><ACK=RCV.NXT><CTL=FIN,ACK> */
-        tcp_send_ctrl_pkt(tcb, TCP_FIN_FLAG | TCP_ACK_FLAG);
+        /* Resend <SEQ=SND.NXT><ACK=RCV.NXT><CTL=FIN,ACK>
+         * Make sure we decrement the NXT seq number in the packet.
+         * We know for sure we didn't send any data after FIN!
+         */
+        tcp_send_ctrl_pkt_with_sseq(tcb, tcb->tcb_snd.nxt - 1,
+                                    TCP_FIN_FLAG | TCP_ACK_FLAG);
         break;
     case TE_ORPHAN_TIMEOUT:
     case TE_FIN_TIMEOUT:

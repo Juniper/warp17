@@ -76,11 +76,41 @@ enum pktloop_msg_types {
 
     MSG_TYPE_DEF_START_MARKER(PKTLOOP),
     MSG_PKTLOOP_INIT_WAIT,
+    MSG_PKTLOOP_UPDATE_PORT_DEV_INFO,
+    MSG_PKTLOOP_START_PORT,
+    MSG_PKTLOOP_STOP_PORT,
     MSG_TYPE_DEF_END_MARKER(PKTLOOP),
 
 };
 
 MSG_TYPE_MAX_CHECK(PKTLOOP);
+
+/*****************************************************************************
+ * Information about a port + queue that would be polled by the local core.
+ ****************************************************************************/
+typedef struct local_port_info_s {
+
+    uint32_t     lpi_port_id;
+    uint32_t     lpi_queue_id;
+    port_info_t *lpi_port_info;
+
+} local_port_info_t;
+
+/*****************************************************************************
+ * Message payload for MSG_PKTLOOP_START_PORT and MSG_PKTLOOP_STOP_PORT.
+ ****************************************************************************/
+typedef struct port_req_msg_s {
+
+    uint32_t prm_port_id;
+
+} __tpg_msg port_req_msg_t;
+
+/*****************************************************************************
+ * Global variables
+ ****************************************************************************/
+RTE_DECLARE_PER_LCORE(local_port_info_t *, pktloop_port_info);
+RTE_DECLARE_PER_LCORE(uint32_t, pktloop_port_count);
+RTE_DECLARE_PER_LCORE(port_info_t *, local_port_dev_info);
 
 /*****************************************************************************
  * External's for tpg_pktloop.c

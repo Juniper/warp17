@@ -150,13 +150,13 @@ available, details can be found in the respective [documentation](ovf/README.md)
 sudo apt-get install build-essential python ncurses-dev
 ```
 
-### Install DPDK 16.07
+### Install DPDK 16.11
 
-* Download [DPDK 16.07](http://dpdk.org/browse/dpdk/refs/)
+* Download [DPDK 16.11](http://dpdk.org/browse/dpdk/refs/)
 
 	```
-	tar xf dpdk-16.07.tar.xz
-	cd dpdk-16.07
+	tar xf dpdk-16.11.tar.xz
+	cd dpdk-16.11
 
 	```
 
@@ -167,8 +167,8 @@ sudo apt-get install build-essential python ncurses-dev
 	```
 
 * Load the `igb_uio` DPDK module, either as shown below or by running the
-  `$RTE_SDK/tools/setup.sh` script and selecting option
-  `[18] Insert IGB UIO module`:
+  `$RTE_SDK/tools/dpdk-setup.sh` script and selecting option
+  `[16] Insert IGB UIO module`:
 
 	```
 	sudo modprobe uio
@@ -213,7 +213,7 @@ the [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/sys_reqs.html)):
 RTE_SDK. For example:
 
 	```
-	export RTE_SDK=/home/<user>/src/dpdk-16.07
+	export RTE_SDK=/home/<user>/src/dpdk-16.11
 	```
 
 * Export the target of the DPDK SDK into the variable RTE_TARGET. For example:
@@ -300,8 +300,8 @@ deactivate
 
 Use the `$RTE_SDK/tools/dpdk-setup.sh` script (as described in the
 [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/quick_start.html)). Select
-which ports to be controlled by the IGB UIO module: option `[24] Bind Ethernet
-device to IGB UIO module`.
+which ports to be controlled by the IGB UIO module: option `[22] Bind
+Ethernet/Crypto device to IGB UIO module`.
 
 # How to run
 
@@ -368,6 +368,10 @@ __NOTE: For now WARP17 supports at most 64 cores.__
   __NOTE: please check section
   [Using In-Memory-Ring-Based Interfaces](#using-in-memory-ring-based-interfaces)
   for more information.__
+* `--kni-ifs`: configure the number of _kni_ interfaces.
+  __NOTE: please check section
+  [Using Kernel Network Interface (KNI) Interfaces](#using-kernel-network-interface-kni-interfaces) for more information.__
+
 * `--cmd-file=<file>`: CLI command file to be executed when the application
   starts
 
@@ -493,6 +497,96 @@ __NOTE: There's a restriction in place when using ring interfaces: the user
 must make sure that the same number of TX/RX queues is created through qmaps
 for both ring interfaces in a pair. Otherwise the command line will be
 rejected.__
+
+### Using Kernel Network Interface (KNI) Interfaces
+
+WARP17 can also be run with a virtual interface into the Linux kernel. This
+is especially useful when developing a new protocol and you want to test it
+agains a known working server or client. See the HTTP example below.
+
+By default the support for KNI interfaces is disabled. However the user can
+easily enable it by compiling WARP17 with the following command:
+
+```
+make all-kni-if
+```
+
+Using the `--kni-ifs <number>` command line argument the user can specify
+the number of KNI interfaces that WARP17 will create. Updating
+the previous command line example we end up with:
+
+```
+./build/warp17 -c FC3 -n 4  -m 32768 -- --qmap-default max-q --tcb-pool-sz 32768 --kni-ifs 2 --cmd-file cfg.txt
+```
+
+The user can also use custom queue mappings for KNI interfaces, however they
+can only be assigned to a single core. The KNI interfaces are always created
+after the physical and ring interfaces. This means that
+their IDs will be allocated in order after physical IDs. For example:
+
+```
+./build/warp17 -c FC3 -n 4  -m 32768 -w 0000:82:00.0 -- --ring-if-pairs 1 --kni-ifs 2
+```
+
+This will start WARP17 with five interfaces (one physical, two ring
+interfaces and two KNI interfaces). The physical interface (`0000:82:00.0`)
+will have ID 0, the two ring interfaces will have IDs 1 and 2, and the two
+KNI interfaces will have IDs 3 and 4.
+
+For the example above the two Kernel interfaces will be named `warp3` and `warp4`,
+so the naming convention is `warp<eth_port>`
+
+The following example will show how to use the KNI interface to get some HTTP
+data from the built in HTTP server trough Linux. We assume no physical ports
+are configured, if you have them make sure you increase all the referenced
+ports:
+
+* Load the `rte_kni` DPDK module, either as shown below or by running the
+  `$RTE_SDK/tools/dpdk-setup.sh` script and selecting option
+  `[18] Insert KNI module`:
+
+```
+sudo insmod $RTE_SDK/x86_64-native-linuxapp-gcc/kmod/rte_kni.ko
+```
+
+* Start WARP17:
+
+```
+./build/warp17 -c FC3 -n 4  -m 32768 -- --kni-ifs 1
+```
+
+* Configure the Linux kernel interface:
+
+```
+sudo ip link set warp0 up
+sudo ip addr add 172.16.1.1/24 dev warp0
+```
+
+* Configure WARP17 as follows:
+
+```
+add tests l3_intf port 0 ip 172.16.1.2 mask 255.255.255.0
+add tests l3_gw port 0 gw 172.16.1.1
+add tests server tcp port 0 test-case-id 0 src 172.16.1.2 172.16.1.2 sport 80 80
+set tests server http port 0 test-case-id 0 200-OK resp-size 2000
+start tests port 0
+```
+
+* Now do a HTTP request using wget:
+
+```
+[WARP17:~]$ wget 172.16.1.2
+--2016-10-25 11:40:43--  http://172.16.1.2/
+Connecting to 172.16.1.2:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 2000 (2.0K)
+Saving to: ‘index.html’
+
+index.html                         100%[================================================================>]   1.95K  --.-KB/s   in 0s
+
+2016-10-25 11:40:43 (478 MB/s) - ‘index.html’ saved [2000/2000]
+```
+
 
 # CLI
 

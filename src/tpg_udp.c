@@ -217,9 +217,12 @@ struct rte_mbuf *udp_receive_pkt(packet_control_block_t *pcb,
     /*
      * Handle checksum...
      */
-    if (true) { /* TODO: For now assume we have hardware support, we might need
-                 *       to determine this at startup to support all kind of HW.
-                 */
+#if !defined(TPG_SW_CHECKSUMMING)
+    if (true) {
+#else
+    if ((RTE_PER_LCORE(local_port_dev_info)[pcb->pcb_port].pi_dev_info.rx_offload_capa &
+         DEV_RX_OFFLOAD_UDP_CKSUM) != 0) {
+#endif
 
         if (unlikely((mbuf->ol_flags & PKT_RX_L4_CKSUM_BAD) != 0)) {
             RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Invalid UDP checksum!\n",
@@ -232,18 +235,23 @@ struct rte_mbuf *udp_receive_pkt(packet_control_block_t *pcb,
         /*
          * No HW checksum support do it manually...
          */
+        if (unlikely(udp_hdr->dgram_cksum != 0) &&
+            ipv4_general_l4_cksum(mbuf, pcb->pcb_ipv4, 0,
+                                  rte_be_to_cpu_16(udp_hdr->dgram_len)) != 0xffff) {
 
-        /* TODO: Add manual UDP checksum support, make sure we handle mbuf scattering,
-         *       we only assume individual ip and udp headers (including options) to be
-         *       in contiguous memory so the pointers in the pcb can be used.
-         */
+            RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Invalid UDP checksum!\n",
+                    pcb->pcb_core_index, __func__);
+
+            INC_STATS(stats, us_invalid_checksum);
+            return mbuf;
+        }
     }
 
     /*
      * Calculate hash...
      *
      */
-    if ((mbuf->ol_flags & PKT_RX_RSS_HASH) != 0) {
+    if (likely((mbuf->ol_flags & PKT_RX_RSS_HASH) != 0)) {
         pcb->pcb_hash = mbuf->hash.rss;
         pcb->pcb_hash_valid = true;
     } else {
@@ -349,28 +357,29 @@ struct rte_mbuf *udp_receive_pkt(packet_control_block_t *pcb,
 /*****************************************************************************
  * udp_build_udp_hdr()
  ****************************************************************************/
-static int udp_build_udp_hdr(struct rte_mbuf *mbuf, udp_control_block_t *ucb,
-                             struct ipv4_hdr *ipv4_hdr,
-                             uint16_t dgram_len)
+static struct udp_hdr *udp_build_udp_hdr(struct rte_mbuf *mbuf, udp_control_block_t *ucb,
+                                         struct ipv4_hdr *ipv4_hdr,
+                                         uint16_t dgram_len)
 {
     uint16_t        udp_hdr_len = sizeof(struct udp_hdr);
+    uint16_t        udp_hdr_offset = rte_pktmbuf_data_len(mbuf);
     struct udp_hdr *udp_hdr;
 
     udp_hdr = (struct udp_hdr *) rte_pktmbuf_append(mbuf, udp_hdr_len);
 
     if (udp_hdr == NULL)
-        return -ENOMEM;
+        return NULL;
 
     udp_hdr->src_port = rte_cpu_to_be_16(ucb->ucb_l4.l4cb_src_port);
     udp_hdr->dst_port = rte_cpu_to_be_16(ucb->ucb_l4.l4cb_dst_port);
 
-    udp_hdr->dgram_len = rte_cpu_to_be_16(dgram_len);
+    udp_hdr->dgram_len = rte_cpu_to_be_16(dgram_len + udp_hdr_len);
 
-
-    if (true) { /* TODO: For now assume we have hardware support, we might need
-                *        to determine this at startup to support all kind of HW.
-                */
-
+#if !defined(TPG_SW_CHECKSUMMING)
+    if (true) {
+#else
+    if (ucb->ucb_l4.l4cb_sockopt.so_eth.ethso_tx_offload_udp_cksum) {
+#endif
         mbuf->ol_flags |= PKT_TX_UDP_CKSUM | PKT_TX_IPV4;
         mbuf->l4_len = udp_hdr_len;
 
@@ -380,15 +389,18 @@ static int udp_build_udp_hdr(struct rte_mbuf *mbuf, udp_control_block_t *ucb,
         /*
          * No HW checksum support do it manually...
          */
-
-        /* TODO: Add manual UDP checksum support, make sure we handle mbuf scattering,
-         *       we only assume individual ip and udp headers (including options) to be
-         *       in contiguous memory so the pointers in the pcb can be used.
+        /*
+         * No HW checksum support do it manually, however up to here we can only
+         * calculate the header checksum, so we do...
          */
-        udp_hdr->dgram_cksum = rte_cpu_to_be_16(0);
+        udp_hdr->dgram_cksum = 0;
+        udp_hdr->dgram_cksum = ipv4_general_l4_cksum(mbuf,
+                                                     ipv4_hdr,
+                                                     udp_hdr_offset,
+                                                     udp_hdr_len);
     }
 
-    return sizeof(struct udp_hdr);
+    return udp_hdr;
 }
 
 
@@ -396,7 +408,8 @@ static int udp_build_udp_hdr(struct rte_mbuf *mbuf, udp_control_block_t *ucb,
  * udp_build_udp_hdr_mbuf()
  ****************************************************************************/
 static struct rte_mbuf *udp_build_udp_hdr_mbuf(udp_control_block_t *ucb,
-                                               uint32_t l4_len)
+                                               uint32_t l4_len,
+                                               struct udp_hdr **udp_hdr)
 {
     int              next_header_offset;
     struct rte_mbuf *hdr;
@@ -433,7 +446,7 @@ static struct rte_mbuf *udp_build_udp_hdr_mbuf(udp_control_block_t *ucb,
         return NULL;
     }
 
-        /*
+    /*
      * Build ethernet header
      */
     next_header_offset = eth_build_eth_hdr(hdr, nh_mac, TPG_USE_PORT_MAC,
@@ -455,7 +468,8 @@ static struct rte_mbuf *udp_build_udp_hdr_mbuf(udp_control_block_t *ucb,
 
         ipv4 = (struct ipv4_hdr *) (rte_pktmbuf_mtod(hdr, uint8_t *) + next_header_offset);
 
-        if (ipv4_build_ipv4_hdr(hdr, ucb->ucb_l4.l4cb_src_addr.ip_v4,
+        if (ipv4_build_ipv4_hdr(&ucb->ucb_l4.l4cb_sockopt,
+                                hdr, ucb->ucb_l4.l4cb_src_addr.ip_v4,
                                 ucb->ucb_l4.l4cb_dst_addr.ip_v4,
                                 IPPROTO_UDP,
                                 sizeof(struct udp_hdr) + l4_len,
@@ -468,7 +482,9 @@ static struct rte_mbuf *udp_build_udp_hdr_mbuf(udp_control_block_t *ucb,
     /*
      * Build UDP header
      */
-    if (udp_build_udp_hdr(hdr, ucb, ipv4, l4_len) <= 0) {
+    *udp_hdr = udp_build_udp_hdr(hdr, ucb, ipv4, l4_len);
+
+    if (udp_hdr == NULL) {
         rte_pktmbuf_free(hdr);
         return NULL;
     }
@@ -631,11 +647,12 @@ int udp_send_v4(udp_control_block_t *ucb, struct rte_mbuf *data_mbuf,
                 uint32_t *data_sent)
 {
     struct rte_mbuf  *hdr;
+    struct udp_hdr   *udp_hdr;
     udp_statistics_t *stats;
 
     stats = STATS_LOCAL(udp_statistics_t, ucb->ucb_l4.l4cb_interface);
 
-    hdr = udp_build_udp_hdr_mbuf(ucb, data_mbuf->pkt_len);
+    hdr = udp_build_udp_hdr_mbuf(ucb, data_mbuf->pkt_len, &udp_hdr);
     if (unlikely(hdr == NULL)) {
         INC_STATS(stats, us_failed_pkts);
         rte_pktmbuf_free(data_mbuf);
@@ -648,6 +665,13 @@ int udp_send_v4(udp_control_block_t *ucb, struct rte_mbuf *data_mbuf,
     hdr->nb_segs += data_mbuf->nb_segs;
 
     *data_sent = data_mbuf->pkt_len;
+
+    /* We need to update the checksum in the UDP part now the data has been added */
+#if defined(TPG_SW_CHECKSUMMING)
+    if (!ucb->ucb_l4.l4cb_sockopt.so_eth.ethso_tx_offload_udp_cksum)
+        udp_hdr->dgram_cksum = ipv4_update_general_l4_cksum(udp_hdr->dgram_cksum,
+                                                            data_mbuf);
+#endif
 
     /*
      * Send the packet!!

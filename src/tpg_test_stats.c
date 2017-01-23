@@ -278,9 +278,9 @@ static void test_config_rate_show(const tpg_rate_t *val,
                                   printer_arg_t *printer_arg)
 {
     if (TPG_RATE_IS_INF(val))
-        tpg_printf(printer_arg, "Rate %-12s : INFINITE\n", name);
+        tpg_printf(printer_arg, "Rate %-11s : INFINITE\n", name);
     else
-        tpg_printf(printer_arg, "Rate %-12s : %"PRIu32"%s\n", name,
+        tpg_printf(printer_arg, "Rate %-11s : %"PRIu32"%s\n", name,
                    TPG_RATE_VAL(val),
                    suffix);
 }
@@ -294,9 +294,9 @@ static void test_config_duration_show(const tpg_delay_t *val,
                                       printer_arg_t *printer_arg)
 {
     if (TPG_DELAY_IS_INF(val))
-        tpg_printf(printer_arg, "Delay %-11s : INFINITE\n", name);
+        tpg_printf(printer_arg, "Delay %-10s : INFINITE\n", name);
     else
-        tpg_printf(printer_arg, "Delay %-11s : %"PRIu32"%s\n", name,
+        tpg_printf(printer_arg, "Delay %-10s : %"PRIu32"%s\n", name,
                    TPG_DELAY_VAL(val),
                    suffix);
 }
@@ -350,30 +350,32 @@ static void test_config_show_tc_app(const tpg_test_case_t *te,
  ****************************************************************************/
 void test_config_show_tc(const tpg_test_case_t *te, printer_arg_t *printer_arg)
 {
-    tpg_printf(printer_arg, "Test type: %s\n", test_entry_type(te));
+    tpg_printf(printer_arg, "%-16s : %s\n", "Test type", test_entry_type(te));
+    tpg_printf(printer_arg, "%-16s : %s\n", "Async",
+               (te->tc_async ? "true" : "false"));
     tpg_printf(printer_arg, "\n");
 
     if (te->tc_type == TEST_CASE_TYPE__SERVER) {
         tpg_printf(printer_arg,
-                   "%-12s : [" TPG_IPV4_PRINT_FMT " -> "
+                   "%-16s : [" TPG_IPV4_PRINT_FMT " -> "
                                TPG_IPV4_PRINT_FMT "]\n",
                    "Local IPs",
                    TPG_IPV4_PRINT_ARGS(te->tc_server.srv_ips.ipr_start.ip_v4),
                    TPG_IPV4_PRINT_ARGS(te->tc_server.srv_ips.ipr_end.ip_v4));
         tpg_printf(printer_arg,
-                   "%-12s : [%"PRIu16" -> %"PRIu16"]\n",
+                   "%-16s : [%"PRIu16" -> %"PRIu16"]\n",
                    "Local Ports",
                    te->tc_server.srv_l4.l4s_tcp_udp.tus_ports.l4pr_start,
                    te->tc_server.srv_l4.l4s_tcp_udp.tus_ports.l4pr_end);
     } else if (te->tc_type == TEST_CASE_TYPE__CLIENT) {
         tpg_printf(printer_arg,
-                   "%-12s : [" TPG_IPV4_PRINT_FMT " -> "
+                   "%-16s : [" TPG_IPV4_PRINT_FMT " -> "
                                TPG_IPV4_PRINT_FMT "]\n",
                    "Local IPs",
                    TPG_IPV4_PRINT_ARGS(te->tc_client.cl_src_ips.ipr_start.ip_v4),
                    TPG_IPV4_PRINT_ARGS(te->tc_client.cl_src_ips.ipr_end.ip_v4));
         tpg_printf(printer_arg,
-                   "%-12s : [%"PRIu16" -> %"PRIu16"]\n",
+                   "%-16s : [%"PRIu16" -> %"PRIu16"]\n",
                    "Local Ports",
                    te->tc_client.cl_l4.l4c_tcp_udp.tuc_sports.l4pr_start,
                    te->tc_client.cl_l4.l4c_tcp_udp.tuc_sports.l4pr_end);
@@ -381,13 +383,13 @@ void test_config_show_tc(const tpg_test_case_t *te, printer_arg_t *printer_arg)
         tpg_printf(printer_arg, "\n");
 
         tpg_printf(printer_arg,
-                   "%-12s : [" TPG_IPV4_PRINT_FMT " -> "
+                   "%-16s : [" TPG_IPV4_PRINT_FMT " -> "
                                TPG_IPV4_PRINT_FMT "]\n",
                    "Remote IPs",
                    TPG_IPV4_PRINT_ARGS(te->tc_client.cl_dst_ips.ipr_start.ip_v4),
                    TPG_IPV4_PRINT_ARGS(te->tc_client.cl_dst_ips.ipr_end.ip_v4));
         tpg_printf(printer_arg,
-                   "%-12s : [%"PRIu16" -> %"PRIu16"]\n",
+                   "%-16s : [%"PRIu16" -> %"PRIu16"]\n",
                    "Remote Ports",
                    te->tc_client.cl_l4.l4c_tcp_udp.tuc_dports.l4pr_start,
                    te->tc_client.cl_l4.l4c_tcp_udp.tuc_dports.l4pr_end);
@@ -571,7 +573,7 @@ test_display_stats_hdr(ui_win_t *ui_win, int line, uint32_t port,
     double    usage_rx;
     uint64_t  link_speed_bytes;
 
-    link_speed_bytes = (uint64_t)link_info->link_speed * 1024 * 1024 / 8;
+    link_speed_bytes = (uint64_t)link_info->link_speed * 1000 * 1000 / 8;
 
     if (link_info->link_status) {
         usage_tx = (double)link_rate_stats->obytes * 100 / link_speed_bytes;
