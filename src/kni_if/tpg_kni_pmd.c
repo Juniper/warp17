@@ -722,7 +722,7 @@ bool kni_eth_from_kni(const char *kni_name, struct rte_kni *kni,
     /*
      * Allocate ethernet device
      */
-    eth_dev = rte_eth_dev_allocate(kni_name, RTE_ETH_DEV_VIRTUAL);
+    eth_dev = rte_eth_dev_allocate(kni_name);
     if (eth_dev == NULL) {
         rte_errno = ENOSPC;
         goto error;

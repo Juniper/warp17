@@ -92,7 +92,7 @@ uint32_t kni_get_first_kni_interface(void)
 /*****************************************************************************
  * kni_handle_kernel_status_requests()
  ****************************************************************************/
-void  kni_handle_kernel_status_requests(void)
+void kni_handle_kernel_status_requests(void)
 {
     uint32_t kni_port;
 
@@ -218,7 +218,7 @@ bool kni_if_init(void)
 
         snprintf(conf.name, RTE_KNI_NAMESIZE,
                  "warp%u", port);
-        conf.group_id = (uint16_t) kni_port;
+        conf.group_id = (uint16_t) port;
 
         /*
          * We subtract the RTE_PKTMBUF_HEADROOM from the size here,
@@ -230,7 +230,7 @@ bool kni_if_init(void)
 
         memset(&dev_info, 0, sizeof(dev_info));
         memset(&ops, 0, sizeof(ops));
-        ops.port_id = kni_port;
+        ops.port_id = port;
         ops.change_mtu = kni_change_mtu;
         ops.config_network_if = kni_config_network_if;
 

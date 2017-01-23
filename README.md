@@ -150,13 +150,13 @@ available, details can be found in the respective [documentation](ovf/README.md)
 sudo apt-get install build-essential python ncurses-dev
 ```
 
-### Install DPDK 16.07
+### Install DPDK 16.11
 
-* Download [DPDK 16.07](http://dpdk.org/browse/dpdk/refs/)
+* Download [DPDK 16.11](http://dpdk.org/browse/dpdk/refs/)
 
 	```
-	tar xf dpdk-16.07.tar.xz
-	cd dpdk-16.07
+	tar xf dpdk-16.11.tar.xz
+	cd dpdk-16.11
 
 	```
 
@@ -168,7 +168,7 @@ sudo apt-get install build-essential python ncurses-dev
 
 * Load the `igb_uio` DPDK module, either as shown below or by running the
   `$RTE_SDK/tools/dpdk-setup.sh` script and selecting option
-  `[18] Insert IGB UIO module`:
+  `[16] Insert IGB UIO module`:
 
 	```
 	sudo modprobe uio
@@ -213,7 +213,7 @@ the [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/sys_reqs.html)):
 RTE_SDK. For example:
 
 	```
-	export RTE_SDK=/home/<user>/src/dpdk-16.07
+	export RTE_SDK=/home/<user>/src/dpdk-16.11
 	```
 
 * Export the target of the DPDK SDK into the variable RTE_TARGET. For example:
@@ -300,8 +300,8 @@ deactivate
 
 Use the `$RTE_SDK/tools/dpdk-setup.sh` script (as described in the
 [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/quick_start.html)). Select
-which ports to be controlled by the IGB UIO module: option `[24] Bind Ethernet
-device to IGB UIO module`.
+which ports to be controlled by the IGB UIO module: option `[22] Bind
+Ethernet/Crypto device to IGB UIO module`.
 
 # How to run
 
@@ -525,7 +525,7 @@ after the physical and ring interfaces. This means that
 their IDs will be allocated in order after physical IDs. For example:
 
 ```
-./build/warp17 -c FC3 -n 4  -m 32768 -w 0000:82:00.0 -- --ring-if-pairs 1 kni-ifs 2
+./build/warp17 -c FC3 -n 4  -m 32768 -w 0000:82:00.0 -- --ring-if-pairs 1 --kni-ifs 2
 ```
 
 This will start WARP17 with five interfaces (one physical, two ring
@@ -543,7 +543,7 @@ ports:
 
 * Load the `rte_kni` DPDK module, either as shown below or by running the
   `$RTE_SDK/tools/dpdk-setup.sh` script and selecting option
-  `[20] Insert KNI module`:
+  `[18] Insert KNI module`:
 
 ```
 sudo insmod $RTE_SDK/x86_64-native-linuxapp-gcc/kmod/rte_kni.ko

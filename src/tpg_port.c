@@ -221,19 +221,46 @@ static bool port_pre_init_is_ring_port(uint32_t port)
 }
 
 /*****************************************************************************
- * port_request_update_local_port_dev_info()
+ * port_request_update()
  ****************************************************************************/
-static void port_request_update_local_port_dev_info(uint32_t port)
+static void port_request_update(uint32_t port, enum pktloop_msg_types req_type)
 {
-    uint32_t core;
+    uint32_t  core;
+    msg_t    *msgp;
+    MSG_LOCAL_DEFINE(port_req_msg_t, port_msg);
+
+    msgp = MSG_LOCAL(port_msg);
+    MSG_INNER(port_req_msg_t, msgp)->prm_port_id = port;
 
     FOREACH_CORE_IN_PORT_START(core, port) {
-        msg_t msg;
 
-        msg_init(&msg, MSG_PKTLOOP_UPDATE_PORT_DEV_INFO, core, 0);
-        msg_send(&msg, 0);
+        msg_init(msgp, req_type, core, 0);
+        msg_send(msgp, 0);
 
     } FOREACH_CORE_IN_PORT_END()
+}
+
+/*****************************************************************************
+ * port_dev_start()
+ ****************************************************************************/
+static int port_dev_start(uint32_t port)
+{
+    int rc = rte_eth_dev_start(port);
+
+    /* Tell the packet cores to start polling the port. */
+    port_request_update(port, MSG_PKTLOOP_START_PORT);
+    return rc;
+}
+
+/*****************************************************************************
+ * port_dev_stop()
+ ****************************************************************************/
+static void port_dev_stop(uint32_t port)
+{
+    /* Tell the packet cores to stop polling the port. */
+    port_request_update(port, MSG_PKTLOOP_STOP_PORT);
+
+    rte_eth_dev_stop(port);
 }
 
 /*****************************************************************************
@@ -267,8 +294,8 @@ static void port_store_conn_options_internal(uint32_t port,
     /* Store the port configuration in our own structures. */
     port_dev_info[port].pi_mtu = options->po_mtu;
 
-    /* Tell the packet cores to update their local copy */
-    port_request_update_local_port_dev_info(port);
+    /* Tell the packet cores to update their local copy. */
+    port_request_update(port, MSG_PKTLOOP_UPDATE_PORT_DEV_INFO);
 }
 
 /*****************************************************************************
@@ -285,28 +312,28 @@ static int port_set_conn_options_internal(uint32_t port,
      * ugly differentiation based on driver name..
      */
     driver_name = port_dev_info[port].pi_dev_info.driver_name;
-    if (strncmp(driver_name, "rte_i40e_pmd",
-                strlen("rte_i40e_pmd") + 1) == 0) {
+    if (strncmp(driver_name, "net_i40e",
+                strlen("net_i40e") + 1) == 0) {
 
         /* First stop port. Restart port after configuration is done. */
-        rte_eth_dev_stop(port);
+        port_dev_stop(port);
 
         rc = port_set_hw_conn_options_internal(port, options);
         if (rc != 0)
             return rc;
 
-        rc = rte_eth_dev_start(port);
+        rc = port_dev_start(port);
         if (rc < 0) {
             RTE_LOG(ERR, USER1,
-                    "ERROR: Failed rte_eth_dev_start(%u), returned %s(%d)!\n",
+                    "ERROR: Failed port_dev_start(%u), returned %s(%d)!\n",
                     port, rte_strerror(-rc), -rc);
             return rc;
         }
 
-    } else if (strncmp(driver_name, "rte_ixgbe_pmd",
-                       strlen("rte_ixgbe_pmd") + 1) == 0 ||
-               strncmp(driver_name, "rte_igb_pmd",
-                       strlen("rte_igb_pmd") + 1) == 0) {
+    } else if (strncmp(driver_name, "net_ixgbe",
+                       strlen("net_ixgbe") + 1) == 0 ||
+               strncmp(driver_name, "net_e1000_igb",
+                       strlen("net_e1000_igb") + 1) == 0) {
 
         /* For igb and ixgbe we can reconfigure MTU on the fly. */
         rc = port_set_hw_conn_options_internal(port, options);
@@ -363,9 +390,9 @@ static bool port_adjust_info(uint32_t port)
      * assume the interface resides on socket-id 0.
      */
     if (port_dev_info[port].pi_dev_info.pci_dev &&
-            port_dev_info[port].pi_dev_info.pci_dev->numa_node != -1)
+            port_dev_info[port].pi_dev_info.pci_dev->device.numa_node != -1)
         port_dev_info[port].pi_numa_node =
-            port_dev_info[port].pi_dev_info.pci_dev->numa_node;
+            port_dev_info[port].pi_dev_info.pci_dev->device.numa_node;
 
     return true;
 }
@@ -1402,7 +1429,7 @@ static void cmd_show_port_info_parsed(void *parsed_result __rte_unused,
                        port_dev_info[port].pi_mtu,
                        (pci ? pci->domain : 0), (pci ? pci->bus : 0),
                        (pci ? pci->devid : 0), (pci ? pci->function : 0),
-                       (pci_dev == NULL || pci_dev->numa_node == -1 ? -1 : port_dev_info[port].pi_numa_node),
+                       (pci_dev == NULL || pci_dev->device.numa_node == -1 ? -1 : port_dev_info[port].pi_numa_node),
                        dev_info.max_rx_queues, dev_info.max_tx_queues,
 
                        (dev_info.rx_offload_capa & DEV_RX_OFFLOAD_VLAN_STRIP) ? 'v' : '-',
