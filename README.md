@@ -152,18 +152,19 @@ sudo apt-get install build-essential python ncurses-dev
 
 ### Install DPDK 16.11
 
-* Download [DPDK 16.11](http://dpdk.org/browse/dpdk/refs/)
+* Download [DPDK 16.11](http://dpdk.org/rel/)
 
 	```
 	tar xf dpdk-16.11.tar.xz
 	cd dpdk-16.11
-
 	```
 
 * Install DPDK:
 
 	```
-	make install T=x86_64-native-linuxapp-gcc
+	make config T=x86_64-native-linuxapp-gcc
+	make
+	sudo make install
 	```
 
 * Load the `igb_uio` DPDK module, either as shown below or by running the
@@ -213,7 +214,7 @@ the [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/sys_reqs.html)):
 RTE_SDK. For example:
 
 	```
-	export RTE_SDK=/home/<user>/src/dpdk-16.11
+	export RTE_SDK=/usr/local/share/dpdk
 	```
 
 * Export the target of the DPDK SDK into the variable RTE_TARGET. For example:
