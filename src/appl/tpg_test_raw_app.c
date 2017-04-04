@@ -336,13 +336,21 @@ void raw_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
         INC_STATS(raw_stats, rsts_req_cnt);
 
         if (app_data->ad_raw.ra_resp_size != 0) {
-            TEST_NOTIF(TEST_NOTIF_APP_CLIENT_SEND_STOP, l4, l4->l4cb_test_case_id,
+            TEST_NOTIF(TEST_NOTIF_APP_CLIENT_SEND_STOP, l4,
+                       l4->l4cb_test_case_id,
                        l4->l4cb_interface);
             raw_goto_state(&app_data->ad_raw, RAWS_RECEIVING,
                            app_data->ad_raw.ra_resp_size);
-        } else
+        } else {
+            TEST_NOTIF(TEST_NOTIF_APP_CLIENT_SEND_STOP, l4,
+                       l4->l4cb_test_case_id,
+                       l4->l4cb_interface);
+            TEST_NOTIF(TEST_NOTIF_APP_CLIENT_SEND_START, l4,
+                       l4->l4cb_test_case_id,
+                       l4->l4cb_interface);
             raw_goto_state(&app_data->ad_raw, RAWS_SENDING,
                            app_data->ad_raw.ra_req_size);
+        }
     }
 }
 
