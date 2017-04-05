@@ -333,6 +333,7 @@ bool route_init(void)
     }
 
     default_gw_per_port = rte_zmalloc("default_gw_per_port",
+                                      rte_eth_dev_count() *
                                       sizeof(*default_gw_per_port),
                                       0);
     if (default_gw_per_port == NULL) {
