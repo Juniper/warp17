@@ -105,19 +105,19 @@ struct cmd_tests_start_stop_result {
 };
 
 static cmdline_parse_token_string_t cmd_tests_start_T_start =
-    TOKEN_STRING_INITIALIZER(struct cmd_tests_start_stop_result, start, "start");
+TOKEN_STRING_INITIALIZER(struct cmd_tests_start_stop_result, start, "start");
 static cmdline_parse_token_string_t cmd_tests_start_T_stop =
-    TOKEN_STRING_INITIALIZER(struct cmd_tests_start_stop_result, stop, "stop");
+TOKEN_STRING_INITIALIZER(struct cmd_tests_start_stop_result, stop, "stop");
 static cmdline_parse_token_string_t cmd_tests_start_T_tests =
-    TOKEN_STRING_INITIALIZER(struct cmd_tests_start_stop_result, tests, "tests");
+TOKEN_STRING_INITIALIZER(struct cmd_tests_start_stop_result, tests, "tests");
 static cmdline_parse_token_string_t cmd_tests_start_T_port_kw =
-    TOKEN_STRING_INITIALIZER(struct cmd_tests_start_stop_result, port_kw, "port");
+TOKEN_STRING_INITIALIZER(struct cmd_tests_start_stop_result, port_kw, "port");
 static cmdline_parse_token_num_t cmd_tests_start_T_port =
-    TOKEN_NUM_INITIALIZER(struct cmd_tests_start_stop_result, port, UINT32);
+TOKEN_NUM_INITIALIZER(struct cmd_tests_start_stop_result, port, UINT32);
 
 static void cmd_tests_start_parsed(void *parsed_result,
-                                   struct cmdline *cl,
-                                   void *data __rte_unused)
+        struct cmdline *cl,
+        void *data __rte_unused)
 {
     printer_arg_t                       parg;
     struct cmd_tests_start_stop_result *pr;
@@ -141,12 +141,12 @@ static void cmd_tests_start_parsed(void *parsed_result,
         cmdline_printf(cl, "Tests started on port %"PRIu32"\n", pr->port);
     else
         cmdline_printf(cl, "ERROR: Failed to start tests on port %"PRIu32"!\n",
-                       pr->port);
+                pr->port);
 }
 
 static void cmd_tests_stop_parsed(void *parsed_result __rte_unused,
-                                  struct cmdline *cl __rte_unused,
-                                  void *data __rte_unused)
+        struct cmdline *cl __rte_unused,
+        void *data __rte_unused)
 {
     printer_arg_t                       parg;
     struct cmd_tests_start_stop_result *pr;
@@ -158,7 +158,7 @@ static void cmd_tests_stop_parsed(void *parsed_result __rte_unused,
         cmdline_printf(cl, "Tests stopped on port %"PRIu32"\n", pr->port);
     else
         cmdline_printf(cl, "ERROR: Failed to stop tests on port %"PRIu32"!\n",
-                       pr->port);
+                pr->port);
 }
 
 cmdline_parse_inst_t cmd_tests_start = {
@@ -186,6 +186,78 @@ cmdline_parse_inst_t cmd_tests_stop = {
         NULL,
     },
 };
+/****************************************************************************
+ * - "show link rate"
+ ****************************************************************************/
+struct cmd_show_link_rate_result {
+    cmdline_fixed_string_t show;
+    cmdline_fixed_string_t link;
+    cmdline_fixed_string_t rate;
+};
+
+static cmdline_parse_token_string_t cmd_show_link_rate_T_show =
+TOKEN_STRING_INITIALIZER(struct cmd_show_link_rate_result, show, "show");
+static cmdline_parse_token_string_t cmd_show_link_rate_T_link =
+TOKEN_STRING_INITIALIZER(struct cmd_show_link_rate_result, link, "link");
+static cmdline_parse_token_string_t cmd_show_link_rate_T_rate =
+TOKEN_STRING_INITIALIZER(struct cmd_show_link_rate_result, rate, "rate");
+
+static void tpg_print_line_rate(void)
+{
+    int i = 0;
+    int port = 0;
+    struct rte_eth_link link_info;
+    struct rte_eth_stats link_rate_stats;
+    double    usage_tx;
+    double    usage_rx;
+    uint64_t  link_speed_bytes;
+
+    port = rte_eth_dev_count() + ring_if_get_count();
+
+    for(i=0;i<port;i++){
+        port_link_info_get(i, &link_info);
+        port_link_rate_stats_get(i, &link_rate_stats);
+        link_speed_bytes = (uint64_t)link_info.link_speed * 1000 * 1000 / 8;
+
+        if (link_info.link_status) {
+            usage_tx = (double)link_rate_stats.obytes * 100 / link_speed_bytes;
+            usage_rx = (double)link_rate_stats.ibytes * 100 / link_speed_bytes;
+        } else {
+            usage_tx = 0;
+            usage_rx = 0;
+        }
+        printf( "Port %"PRIu32": link %s, speed %d%s, "
+                "duplex %s%s, TX: %.2lf%% RX: %.2lf%%\n",
+                i,
+                LINK_STATE(&link_info),
+                LINK_SPEED(&link_info),
+                LINK_SPEED_SZ(&link_info),
+                LINK_DUPLEX(&link_info),
+                usage_tx,
+                usage_rx);
+    }
+}
+
+static void cmd_show_link_rate_parsed(void *parsed_result __rte_unused,
+        struct cmdline *cl __rte_unused,
+        void *data __rte_unused)
+{
+    tpg_print_line_rate();
+}
+
+cmdline_parse_inst_t cmd_show_link_rate = {
+    .f = cmd_show_link_rate_parsed,
+    .data = NULL,
+    .help_str = "show link rate",
+    .tokens = {
+        (void *)&cmd_show_link_rate_T_show,
+        (void *)&cmd_show_link_rate_T_link,
+        (void *)&cmd_show_link_rate_T_rate,
+        NULL,
+    },
+};
+
+
 
 /****************************************************************************
  * - "show tests ui"
@@ -1827,6 +1899,7 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_start,
     &cmd_tests_stop,
     &cmd_show_tests_ui,
+    &cmd_show_link_rate,
     &cmd_show_tests_config,
     &cmd_show_tests_state,
     &cmd_show_tests_stats,
