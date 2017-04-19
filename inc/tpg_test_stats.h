@@ -123,6 +123,9 @@ extern void        test_state_show_tcs(uint32_t eth_port,
 extern void        test_state_show_stats(const tpg_test_case_t *te,
                                          printer_arg_t *printer_arg);
 
+extern void        test_show_link_rate(uint32_t eth_port,
+                                       printer_arg_t *printer_arg);
+
 extern void        test_init_stats_screen(void);
 
 #endif /* _H_TPG_TEST_STATS_ */
