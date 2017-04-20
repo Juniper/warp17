@@ -202,38 +202,6 @@ static cmdline_parse_token_string_t cmd_show_link_rate_T_link =
 static cmdline_parse_token_string_t cmd_show_link_rate_T_rate =
     TOKEN_STRING_INITIALIZER(struct cmd_show_link_rate_result, rate, "rate");
 
-void test_show_link_rate(uint32_t eth_port, printer_arg_t *printer_arg)
-{
-    uint64_t             link_speed_bytes;
-    double               usage_tx;
-    double               usage_rx;
-    struct rte_eth_link  link_info;
-    struct rte_eth_stats link_rate_stats;
-
-    port_link_info_get(eth_port, &link_info);
-    port_link_rate_stats_get(eth_port, &link_rate_stats);
-
-    link_speed_bytes = (uint64_t)link_info.link_speed * 1000 * 1000 / 8;
-
-    if (link_info.link_status) {
-        usage_tx = (double)link_rate_stats.obytes * 100 / link_speed_bytes;
-        usage_rx = (double)link_rate_stats.ibytes * 100 / link_speed_bytes;
-    } else {
-        usage_tx = 0;
-        usage_rx = 0;
-    }
-
-    tpg_printf(printer_arg, "Port %"PRIu32": link %s, speed %d%s, "
-               "duplex %s%s, TX: %.2lf%% RX: %.2lf%%\n",
-               eth_port,
-               LINK_STATE(&link_info),
-               LINK_SPEED(&link_info),
-               LINK_SPEED_SZ(&link_info),
-               LINK_DUPLEX(&link_info),
-               usage_tx,
-               usage_rx);
-}
-
 static void cmd_show_link_rate_parsed(void *parsed_result __rte_unused,
                                        struct cmdline *cl __rte_unused,
                                        void *data __rte_unused)
@@ -243,11 +211,8 @@ static void cmd_show_link_rate_parsed(void *parsed_result __rte_unused,
 
     parg = TPG_PRINTER_ARG(cli_printer, cl);
 
-    for (eth_port = 0; eth_port < rte_eth_dev_count(); eth_port++) {
-
+    for (eth_port = 0; eth_port < rte_eth_dev_count(); eth_port++)
         test_show_link_rate(eth_port, &parg);
-
-    }
 }
 
 cmdline_parse_inst_t cmd_show_link_rate = {
