@@ -203,8 +203,8 @@ static cmdline_parse_token_string_t cmd_show_link_rate_T_rate =
     TOKEN_STRING_INITIALIZER(struct cmd_show_link_rate_result, rate, "rate");
 
 static void cmd_show_link_rate_parsed(void *parsed_result __rte_unused,
-                                       struct cmdline *cl __rte_unused,
-                                       void *data __rte_unused)
+                                      struct cmdline *cl __rte_unused,
+                                      void *data __rte_unused)
 {
     printer_arg_t parg;
     uint32_t      eth_port = 0;
