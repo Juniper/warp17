@@ -79,6 +79,7 @@
     CMDLINE_OPT_ARG("tcb-pool-sz", true),     \
     CMDLINE_OPT_ARG("ucb-pool-sz", true),     \
     CMDLINE_OPT_ARG("mbuf-pool-sz", true),    \
+    CMDLINE_OPT_ARG("mbuf-sz", true),         \
     CMDLINE_OPT_ARG("mbuf-hdr-pool-sz", true)
 
 #define MEM_CMDLINE_PARSER() \

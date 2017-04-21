@@ -481,6 +481,16 @@ static bool port_setup_port(uint8_t port)
         return false;
     }
 
+    if ((cfg->gcfg_mbuf_size - RTE_PKTMBUF_HEADROOM) <=
+            port_dev_info[port].pi_dev_info.min_rx_bufsize) {
+        TPG_ERROR_EXIT(EXIT_FAILURE,
+                       "ERROR: invalid mbuf-sz value %d!\n"
+                       "The value must be greater or equal to %d\n",
+                       cfg->gcfg_mbuf_size,
+                       port_dev_info[port].pi_dev_info.min_rx_bufsize +
+                           RTE_PKTMBUF_HEADROOM);
+    }
+
     /*
      * On KNI ports the maximum supported packet length is that of
      * the mbuf size.

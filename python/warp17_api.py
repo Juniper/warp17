@@ -76,23 +76,28 @@ from rpc_impl import warp17_method_call
 
 from warp17_service_pb2 import *
 
+EXIT_FAILURE = 1
+
 class Warp17Env():
 
-    INI_FILE_ENV = 'WARP17_INI_FILE'
-    UNIQ_STAMP   = 'WARP17_UNIQ_STAMP'
-    BIN          = 'WARP17_BIN'
-    HOST         = 'WARP17_HOST'
-    RPC_PORT     = 'WARP17_PORT'
-    INIT_RETRY   = 'WARP17_INIT_RETRY'
+    INI_FILE_ENV     = 'WARP17_INI_FILE'
+    UNIQ_STAMP       = 'WARP17_UNIQ_STAMP'
+    BIN              = 'WARP17_BIN'
+    HOST             = 'WARP17_HOST'
+    RPC_PORT         = 'WARP17_PORT'
+    INIT_RETRY       = 'WARP17_INIT_RETRY'
 
-    COREMASK     = 'coremask'
-    NCHAN        = 'nchan'
-    MEMORY       = 'memory'
-    PORTS        = 'ports'
-    QMAP_DEFAULT = 'qmap-default'
-    QMAP         = 'qmap'
-    TCB_POOL_SZ  = 'tcb-pool-sz'
-    UCB_POOL_SZ  = 'ucb-pool-sz'
+    COREMASK         = 'coremask'
+    NCHAN            = 'nchan'
+    MEMORY           = 'memory'
+    PORTS            = 'ports'
+    QMAP_DEFAULT     = 'qmap-default'
+    QMAP             = 'qmap'
+    MBUF_SZ          = 'mbuf-sz'
+    MBUF_POOL_SZ     = 'mbuf-pool-sz'
+    MBUF_HDR_POOL_SZ = 'mbuf-hdr-pool-sz'
+    TCB_POOL_SZ      = 'tcb-pool-sz'
+    UCB_POOL_SZ      = 'ucb-pool-sz'
 
     def __init__(self, path=None):
         if path is None:
@@ -123,6 +128,10 @@ class Warp17Env():
             return cast(val)
         return val
 
+    def set_value(self, key, value, section=DEFAULTSECT):
+        """Exports into the enviroment che KEY with a certain value"""
+        self._config.set(section, key, str(value))
+
     def get_coremask(self):
         return self.get_value(Warp17Env.COREMASK, mandatory=True)
 
@@ -145,6 +154,15 @@ class Warp17Env():
         return '--qmap '.join([str(idx) + '.' + \
                                self.get_value(Warp17Env.QMAP, section=port) for
                                idx, port in enumerate(ports)])
+
+    def get_mbuf_sz(self):
+        return self.get_value(Warp17Env.MBUF_SZ)
+
+    def get_mbuf_pool_sz(self):
+        return self.get_value(Warp17Env.MBUF_POOL_SZ)
+
+    def get_mbuf_hdr_pool_sz(self):
+        return self.get_value(Warp17Env.MBUF_HDR_POOL_SZ)
 
     def get_tcb_pool_sz(self):
         return self.get_value(Warp17Env.TCB_POOL_SZ)
@@ -174,12 +192,21 @@ class Warp17Env():
                ' '.join(['-w ' + port for port in self.get_ports()]) + ' ' + \
                '--'                                                  + ' ' + \
                self.get_qmap()
+        mbuf_sz = self.get_mbuf_sz()
+        if not mbuf_sz is None:
+            args += ' --mbuf-sz ' + str(mbuf_sz)
         tcb_pool_sz = self.get_tcb_pool_sz()
         if not tcb_pool_sz is None:
             args += ' --tcb-pool-sz ' + str(tcb_pool_sz)
         ucb_pool_sz = self.get_ucb_pool_sz()
         if not ucb_pool_sz is None:
             args += ' --ucb-pool-sz ' + str(ucb_pool_sz)
+        mbuf_pool_sz = self.get_mbuf_pool_sz()
+        if not mbuf_pool_sz is None:
+            args += ' --mbuf-pool-sz ' + str(mbuf_pool_sz)
+        mbuf_hdr_pool_sz = self.get_mbuf_hdr_pool_sz()
+        if not mbuf_hdr_pool_sz is None:
+            args += ' --mbuf-hdr-pool-sz ' + str(mbuf_hdr_pool_sz)
         return args
 
 class Warp17OutputArgs():
@@ -237,9 +264,12 @@ def warp17_wait(env, logger = None):
 def warp17_stop(env, proc, force=False):
     # Should we handle exceptions or let the unittest module do it for us?
     proc.stdin.close()
-    if proc.poll() is None:
+    ret = proc.poll()
+    if ret is None:
         if force:
             proc.kill()
+            return EXIT_FAILURE
         else:
-            proc.wait()
-
+            return proc.wait()
+    else:
+        return ret

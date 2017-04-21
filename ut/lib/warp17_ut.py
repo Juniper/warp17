@@ -77,7 +77,7 @@ from warp17_client_pb2    import *
 from warp17_test_case_pb2 import *
 from warp17_service_pb2   import *
 
-class Warp17UnitTestCase(unittest.TestCase):
+class Warp17BaseUnitTestCase(unittest.TestCase):
     """WARP17 Unit Test base class. Sets up the common variables."""
 
     @classmethod
@@ -94,21 +94,37 @@ class Warp17UnitTestCase(unittest.TestCase):
         out_file = dirpath + '/' + cls.__name__ + '.out'
         log_file = dirpath + '/' + cls.__name__ + '.log'
 
-        oargs = Warp17OutputArgs(out_file)
-        Warp17UnitTestCase.lh = LogHelper(name=cls.__name__, filename=log_file)
+        Warp17BaseUnitTestCase.oargs = Warp17OutputArgs(out_file)
 
-        Warp17UnitTestCase.env = env
+        Warp17BaseUnitTestCase.lh = LogHelper(name=cls.__name__,
+                                              filename=log_file)
 
-        Warp17UnitTestCase.warp17_call = partial(warp17_method_call,
-                                                 env.get_host_name(),
-                                                 env.get_rpc_port(),
-                                                 Warp17_Stub)
+        Warp17BaseUnitTestCase.env = env
 
-        Warp17UnitTestCase.warp17_proc = warp17_start(env=env, output_args=oargs)
-        # Wait until WARP17 actually starts.
-        warp17_wait(env=env, logger=Warp17UnitTestCase.lh)
-        # Detailed error messages
+        Warp17BaseUnitTestCase.warp17_call = partial(warp17_method_call,
+                                                     env.get_host_name(),
+                                                     env.get_rpc_port(),
+                                                     Warp17_Stub)
         Warp17UnitTestCase.longMessage = True
+
+
+    @classmethod
+    def cleanEnv(self):
+        """cleans the Warp17BaseUnitTestCase enviroment"""
+        Warp17BaseUnitTestCase.env = Warp17Env()
+
+class Warp17UnitTestCase(Warp17BaseUnitTestCase):
+    """WARP17 Unit Test base class. Sets up the common variables."""
+
+    @classmethod
+    def setUpClass(cls):
+        super(Warp17UnitTestCase, cls).setUpClass()
+        Warp17UnitTestCase.warp17_proc = warp17_start(env=Warp17BaseUnitTestCase.env,
+                                                      output_args=Warp17BaseUnitTestCase.oargs)
+        # Wait until WARP17 actually starts.
+        warp17_wait(env=Warp17BaseUnitTestCase.env,
+                    logger=Warp17BaseUnitTestCase.lh)
+        # Detailed error messages
 
     @classmethod
     def tearDownClass(cls):

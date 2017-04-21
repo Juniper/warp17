@@ -205,6 +205,8 @@ static struct rte_mempool *mem_create_local_pool(const char *name, uint32_t core
  *      default: GCFG_UCB_POOL_SIZE
  * --mbuf-pool-sz configuration - size in K (*1024) of the mbuf mempool
  *      default: GCFG_MBUF_POOL_SIZE
+ * --mbuf-sz configuration - size in bytes of the mbuf
+ *      default: GCFG_MBUF_SIZE
  * --mbuf-hdr-pool-sz configuration - size in K (*1024) of the mbuf hdr mempool
  *      default: GCFG_MBUF_HDR_POOL_SIZE
  ****************************************************************************/
@@ -216,22 +218,69 @@ bool mem_handle_cmdline_opt(const char *opt_name, char *opt_arg)
         TPG_ERROR_ABORT("ERROR: Unable to get config!\n");
 
     if (strcmp(opt_name, "tcb-pool-sz") == 0) {
-        cfg->gcfg_tcb_pool_size = atoi(opt_arg) * 1024ULL;
+        unsigned long var = strtoul(opt_arg, NULL, 10) * 1024ULL;
+
+        if (var <= UINT32_MAX)
+            cfg->gcfg_tcb_pool_size = var;
+        else
+            TPG_ERROR_EXIT(EXIT_FAILURE,
+                           "ERROR: Invalid tcb-pool-sz value %s!\n"
+                           "The value must be lower than %d\n",
+                           opt_arg, UINT32_MAX);
         return true;
     }
 
     if (strcmp(opt_name, "ucb-pool-sz") == 0) {
-        cfg->gcfg_ucb_pool_size = atoi(opt_arg) * 1024ULL;
+        unsigned long var = strtoul(opt_arg, NULL, 10) * 1024ULL;
+
+        if (var <= UINT32_MAX)
+            cfg->gcfg_ucb_pool_size = var;
+        else
+            TPG_ERROR_EXIT(EXIT_FAILURE,
+                           "ERROR: Invalid ucb-pool-sz value %s!\n"
+                           "The value must be lower than %d\n",
+                           opt_arg, UINT32_MAX);
         return true;
     }
 
     if (strcmp(opt_name, "mbuf-pool-sz") == 0) {
-        cfg->gcfg_mbuf_poolsize = atoi(opt_arg) * 1024UL;
+        unsigned long var = strtoul(opt_arg, NULL, 10) * 1024UL;
+
+        if (var <= UINT32_MAX)
+            cfg->gcfg_mbuf_poolsize = var;
+        else
+            TPG_ERROR_EXIT(EXIT_FAILURE,
+                           "ERROR: Invalid mbuf-pool-sz value %s!\n"
+                           "The value must be lower than %d\n",
+                           opt_arg, UINT32_MAX);
+        return true;
+    }
+
+    if (strcmp(opt_name, "mbuf-sz") == 0) {
+        unsigned long mbuf_size = strtoul(opt_arg, NULL, 10);
+
+        if (mbuf_size >= GCFG_MBUF_SIZE && mbuf_size <= PORT_MAX_MTU) {
+            cfg->gcfg_mbuf_size = mbuf_size;
+        } else {
+            TPG_ERROR_EXIT(EXIT_FAILURE,
+                           "ERROR: Invalid mbuf-sz value %s!\n"
+                           "The value must be greater %d and lower than %d\n",
+                           opt_arg, PORT_MAX_MTU,
+                           GCFG_MBUF_SIZE);
+        }
         return true;
     }
 
     if (strcmp(opt_name, "mbuf-hdr-pool-sz") == 0) {
-        cfg->gcfg_mbuf_hdr_poolsize = atoi(opt_arg) * 1024UL;
+        unsigned long var = strtoul(opt_arg, NULL, 10) * 1024UL;
+
+        if (var <= UINT32_MAX)
+            cfg->gcfg_mbuf_hdr_poolsize = var;
+        else
+            TPG_ERROR_EXIT(EXIT_FAILURE,
+                           "ERROR: Invalid mbuf-hdr-pool-sz value %s!\n"
+                           "The value must be lower than %d\n",
+                           opt_arg, UINT32_MAX);
         return true;
     }
 

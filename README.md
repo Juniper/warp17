@@ -362,6 +362,8 @@ __NOTE: For now WARP17 supports at most 64 cores.__
 * `--mbuf-pool-sz`: configure the size of the packet pool. The size of the
   pool will be given by the argument of this option multiplied by 1024. By
   default 768K packets are allocated.
+* `--mbuf-sz`: configure the size of a packet fragment (mbuf) in bytes. By
+  default fragments are 2048 bytes.
 * `--mbuf-hdr-pool-sz`: configure the size of the packet headers pool. The
   size of the pool will be given by the argument of this option multiplied by
   1024. By default 512K packet headers are allocated.
