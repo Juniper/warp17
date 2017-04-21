@@ -486,6 +486,41 @@ void test_state_show_stats(const tpg_test_case_t *te,
 }
 
 /*****************************************************************************
+ * test_show_link_rate()
+ ****************************************************************************/
+void test_show_link_rate(uint32_t eth_port, printer_arg_t *printer_arg)
+{
+    uint64_t             link_speed_bytes;
+    double               usage_tx;
+    double               usage_rx;
+    struct rte_eth_link  link_info;
+    struct rte_eth_stats link_rate_stats;
+
+    port_link_info_get(eth_port, &link_info);
+    port_link_rate_stats_get(eth_port, &link_rate_stats);
+
+    link_speed_bytes = (uint64_t)link_info.link_speed * 1000 * 1000 / 8;
+
+    if (link_info.link_status) {
+        usage_tx = (double)link_rate_stats.obytes * 100 / link_speed_bytes;
+        usage_rx = (double)link_rate_stats.ibytes * 100 / link_speed_bytes;
+    } else {
+        usage_tx = 0;
+        usage_rx = 0;
+    }
+
+    tpg_printf(printer_arg,
+               "Port %"PRIu32": link %s, speed %d%s, duplex %s%s, TX: %.2lf%% RX: %.2lf%%\n",
+               eth_port,
+               LINK_STATE(&link_info),
+               LINK_SPEED(&link_info),
+               LINK_SPEED_SZ(&link_info),
+               LINK_DUPLEX(&link_info),
+               usage_tx,
+               usage_rx);
+}
+
+/*****************************************************************************
  * test_sig_winch()
  ****************************************************************************/
 static void test_sig_winch(int signo, siginfo_t *siginfo __rte_unused,
@@ -564,35 +599,15 @@ static void test_display_stats_test_detail(ui_win_t *ui_win,
  * test_display_stats_hdr()
  ****************************************************************************/
 static int __tpg_display_func
-test_display_stats_hdr(ui_win_t *ui_win, int line, uint32_t port,
-                       struct rte_eth_link *link_info,
-                       struct rte_eth_stats *link_rate_stats)
+test_display_stats_hdr(ui_win_t *ui_win, int line, uint32_t port)
 {
-    WINDOW   *win = ui_win->uw_win;
-    double    usage_tx;
-    double    usage_rx;
-    uint64_t  link_speed_bytes;
+    WINDOW        *win = ui_win->uw_win;
+    printer_arg_t  parg = TPG_PRINTER_ARG(ui_printer, win);
 
-    link_speed_bytes = (uint64_t)link_info->link_speed * 1000 * 1000 / 8;
+    test_show_link_rate(port, &parg);
 
-    if (link_info->link_status) {
-        usage_tx = (double)link_rate_stats->obytes * 100 / link_speed_bytes;
-        usage_rx = (double)link_rate_stats->ibytes * 100 / link_speed_bytes;
-    } else {
-        usage_tx = 0;
-        usage_rx = 0;
-    }
-
-    UI_PRINTLN_WIN(win, line, 0,
-                   "Port %"PRIu32": link %s, speed %d%s, "
-                   "duplex %s%s, TX: %.2lf%% RX: %.2lf%%",
-                   port,
-                   LINK_STATE(link_info),
-                   LINK_SPEED(link_info),
-                   LINK_SPEED_SZ(link_info),
-                   LINK_DUPLEX(link_info),
-                   usage_tx,
-                   usage_rx);
+    /* Take into account the link rate display (one line). */
+    line++;
     UI_HLINE_WIN(win, line, 0, '=', ui_win->uw_cols - 2);
 
     return line;
@@ -766,7 +781,6 @@ static void test_display_stats(ui_win_t *ui_win, void *arg)
     WINDOW                     *win = ui_win->uw_win;
     int                         line = 0;
 
-    struct rte_eth_link         link_info;
     struct rte_eth_stats        link_stats;
     struct rte_eth_stats        link_rate_stats;
 
@@ -775,7 +789,6 @@ static void test_display_stats(ui_win_t *ui_win, void *arg)
     tsm_statistics_t            tsm_stats;
 
     test_aggregate_rate_stats(port, &rate_stats);
-    port_link_info_get(port, &link_info);
     port_link_stats_get(port, &link_stats);
     port_link_rate_stats_get(port, &link_rate_stats);
     port_total_stats_get(port, &ptotal_stats);
@@ -783,8 +796,7 @@ static void test_display_stats(ui_win_t *ui_win, void *arg)
     tsm_total_stats_get(port, &tsm_stats);
 
     /* Print the header. */
-    line = test_display_stats_hdr(ui_win, line, port, &link_info,
-                                  &link_rate_stats);
+    line = test_display_stats_hdr(ui_win, line, port);
 
     UI_PRINTLN_WIN(win, line, 0, "%8s %12s %12s %12s", "CL s/s",
                    "Established", "Closed", "Data");

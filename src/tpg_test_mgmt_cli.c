@@ -186,6 +186,48 @@ cmdline_parse_inst_t cmd_tests_stop = {
         NULL,
     },
 };
+/****************************************************************************
+ * - "show link rate"
+ ****************************************************************************/
+struct cmd_show_link_rate_result {
+    cmdline_fixed_string_t show;
+    cmdline_fixed_string_t link;
+    cmdline_fixed_string_t rate;
+};
+
+static cmdline_parse_token_string_t cmd_show_link_rate_T_show =
+    TOKEN_STRING_INITIALIZER(struct cmd_show_link_rate_result, show, "show");
+static cmdline_parse_token_string_t cmd_show_link_rate_T_link =
+    TOKEN_STRING_INITIALIZER(struct cmd_show_link_rate_result, link, "link");
+static cmdline_parse_token_string_t cmd_show_link_rate_T_rate =
+    TOKEN_STRING_INITIALIZER(struct cmd_show_link_rate_result, rate, "rate");
+
+static void cmd_show_link_rate_parsed(void *parsed_result __rte_unused,
+                                      struct cmdline *cl __rte_unused,
+                                      void *data __rte_unused)
+{
+    printer_arg_t parg;
+    uint32_t      eth_port = 0;
+
+    parg = TPG_PRINTER_ARG(cli_printer, cl);
+
+    for (eth_port = 0; eth_port < rte_eth_dev_count(); eth_port++)
+        test_show_link_rate(eth_port, &parg);
+}
+
+cmdline_parse_inst_t cmd_show_link_rate = {
+    .f = cmd_show_link_rate_parsed,
+    .data = NULL,
+    .help_str = "show link rate",
+    .tokens = {
+        (void *)&cmd_show_link_rate_T_show,
+        (void *)&cmd_show_link_rate_T_link,
+        (void *)&cmd_show_link_rate_T_rate,
+        NULL,
+    },
+};
+
+
 
 /****************************************************************************
  * - "show tests ui"
@@ -1827,6 +1869,7 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_start,
     &cmd_tests_stop,
     &cmd_show_tests_ui,
+    &cmd_show_link_rate,
     &cmd_show_tests_config,
     &cmd_show_tests_state,
     &cmd_show_tests_stats,
