@@ -195,6 +195,7 @@ extern int  tsm_dispatch_event(tcp_control_block_t *tcb, tcpEvent_t event,
                                void *tsm_arg);
 extern int  tsm_str_to_state(const char *state_str);
 extern void tsm_total_stats_get(uint32_t port, tsm_statistics_t *total_stats);
+extern void tsm_total_stats_clear(uint32_t port);
 
 typedef int (*tsm_function)(tcp_control_block_t *tcb, tcpEvent_t event,
                             void *tsm_arg);

@@ -160,6 +160,7 @@ extern int  tcp_timer_slow_cancel(l4_control_block_t *l4_cb);
 
 extern int  l4cb_timer_test_set(l4_control_block_t *l4_cb, uint32_t timeout_us);
 extern int  l4cb_timer_test_cancel(l4_control_block_t *l4_cb);
+extern void timer_total_stats_clear(uint32_t port);
 
 #endif /* _H_TPG_TIMER_ */
 

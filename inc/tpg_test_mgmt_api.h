@@ -276,6 +276,18 @@ test_mgmt_get_tcp_sockopt(uint32_t eth_port, uint32_t test_case_id,
 extern __tpg_api_func int
 test_mgmt_start_port(uint32_t eth_port, printer_arg_t *printer_arg);
 
+
+/*
+ * Returns:
+ *  -EALREADY: tests already started on port.
+ *  -EINVAL: when arguments are wrong.
+ *  -E*: when internal errors occur
+ *  0 on success.
+ */
+extern __tpg_api_func int
+test_mgmt_clear_stats(uint32_t eth_port, printer_arg_t *printer_arg);
+
+
 /*
  * Returns:
  *  -ENOENT: no tests running on port.

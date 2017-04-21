@@ -162,6 +162,7 @@ extern int            route_v4_gw_add(uint32_t port, tpg_ip_t gw);
 extern int            route_v4_gw_del(uint32_t port, tpg_ip_t gw);
 extern uint64_t       route_v4_nh_lookup(uint32_t port, uint32_t dest);
 extern route_entry_t *route_v4_find_local(uint32_t port, uint32_t dest);
+extern void           route_total_stats_clear(uint32_t port);
 
 #endif /* _H_TPG_ROUTE_ */
 

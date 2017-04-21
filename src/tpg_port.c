@@ -969,6 +969,19 @@ void port_total_stats_get(uint32_t port, port_statistics_t *total_port_stats)
 }
 
 /*****************************************************************************
+ * port_total_stats_clear()
+ *****************************************************************************/
+void port_total_stats_clear(uint32_t port)
+{
+    port_statistics_t *port_stats;
+    uint32_t           core;
+
+    STATS_FOREACH_CORE(port_statistics_t, port, core, port_stats) {
+        bzero(port_stats, sizeof(*port_stats));
+    }
+}
+
+/*****************************************************************************
  * port_set_conn_options()
  ****************************************************************************/
 int port_set_conn_options(uint32_t port, tpg_port_options_t *options)

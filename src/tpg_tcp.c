@@ -111,6 +111,19 @@ void tcp_lcore_init(uint32_t lcore_id)
 }
 
 /*****************************************************************************
+ * tcp_total_stats_clear()
+ *****************************************************************************/
+void tcp_total_stats_clear(uint32_t port)
+{
+    tcp_statistics_t *tcp_stats;
+    uint32_t          core;
+
+    STATS_FOREACH_CORE(tcp_statistics_t, port, core, tcp_stats) {
+        bzero(tcp_stats, sizeof(*tcp_stats));
+    }
+}
+
+/*****************************************************************************
  * tcp_open_v4_connection()
  *
  * NOTE:

@@ -211,6 +211,20 @@ bool eth_init(void)
 }
 
 /*****************************************************************************
+ * eth_total_stats_clear()
+ ****************************************************************************/
+void eth_total_stats_clear(uint32_t port)
+{
+    ethernet_statistics_t *eth_stats;
+    uint32_t               core;
+
+    STATS_FOREACH_CORE(ethernet_statistics_t, port, core, eth_stats) {
+        bzero(eth_stats, sizeof(*eth_stats));
+    }
+}
+
+
+/*****************************************************************************
  * eth_lcore_init()
  ****************************************************************************/
 void eth_lcore_init(uint32_t lcore_id)

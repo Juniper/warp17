@@ -94,6 +94,56 @@
     }
 
 /****************************************************************************
+ * - "clear stats port  "
+ ****************************************************************************/
+struct cmd_clear_stats_result {
+    cmdline_fixed_string_t  clear;
+    cmdline_fixed_string_t  stats;
+    cmdline_fixed_string_t  port_kw;
+    uint32_t                port;
+};
+
+static cmdline_parse_token_string_t cmd_clear_stats_T_clear =
+    TOKEN_STRING_INITIALIZER(struct cmd_clear_stats_result, clear, "clear");
+static cmdline_parse_token_string_t cmd_clear_stats_T_stats =
+    TOKEN_STRING_INITIALIZER(struct cmd_clear_stats_result, stats, "stats");
+static cmdline_parse_token_string_t cmd_clear_stats_T_port_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_clear_stats_result, port_kw, "port");
+static cmdline_parse_token_num_t cmd_clear_stats_T_port =
+    TOKEN_NUM_INITIALIZER(struct cmd_clear_stats_result, port, UINT32);
+
+static void cmd_clear_stats_parsed(void *parsed_result,
+                                   struct cmdline *cl,
+                                   void *data __rte_unused)
+{
+    printer_arg_t                 parg;
+    struct cmd_clear_stats_result *pr;
+
+    parg = TPG_PRINTER_ARG(cli_printer, cl);
+    pr = parsed_result;
+
+    if (test_mgmt_clear_stats(pr->port, &parg) == 0)
+        cmdline_printf(cl, "Stats cleared on port %"PRIu32"\n", pr->port);
+    else
+        cmdline_printf(cl, "ERROR: Failed to clear stats on port %"PRIu32"!\n",
+                       pr->port);
+
+}
+
+cmdline_parse_inst_t cmd_clear_stats = {
+    .f = cmd_clear_stats_parsed,
+    .data = NULL,
+    .help_str = "clear stats port <eth_port>",
+    .tokens = {
+        (void *)&cmd_clear_stats_T_clear,
+        (void *)&cmd_clear_stats_T_stats,
+        (void *)&cmd_clear_stats_T_port_kw,
+        (void *)&cmd_clear_stats_T_port,
+        NULL,
+    },
+};
+
+/****************************************************************************
  * - "start/stop tests "
  ****************************************************************************/
 struct cmd_tests_start_stop_result {
@@ -1868,6 +1918,7 @@ cmdline_parse_inst_t cmd_exit = {
 static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_start,
     &cmd_tests_stop,
+    &cmd_clear_stats,
     &cmd_show_tests_ui,
     &cmd_show_link_rate,
     &cmd_show_tests_config,

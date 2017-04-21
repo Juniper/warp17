@@ -87,6 +87,7 @@ extern int              eth_build_eth_hdr(struct rte_mbuf *mbuf,
                                           uint16_t ether_type);
 extern struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
                                         struct rte_mbuf *mbuf);
+extern void             eth_total_stats_clear(uint32_t port);
 
 #endif /* _H_TPG_ETHERNET_ */
 

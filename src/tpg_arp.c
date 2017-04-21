@@ -433,6 +433,19 @@ void arp_lcore_init(uint32_t lcore_id)
                         __func__);
     }
 }
+/*****************************************************************************
+ * arp_total_stats_clear()
+ ****************************************************************************/
+void arp_total_stats_clear(uint32_t port)
+{
+    arp_statistics_t *arp_stats;
+    uint32_t          core;
+
+    STATS_FOREACH_CORE(arp_statistics_t, port, core, arp_stats) {
+        bzero(arp_stats, sizeof(*arp_stats));
+    }
+}
+
 
 /*****************************************************************************
  * arp_update_entry()

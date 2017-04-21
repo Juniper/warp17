@@ -330,7 +330,10 @@ extern void             tcp_connection_cleanup(tcp_control_block_t *tcb);
 extern int              tcp_close_connection(tcp_control_block_t *tcb,
                                              uint32_t flags);
 
+extern void             tcp_total_stats_clear(uint32_t port);
+
 extern tcp_control_block_t *tcb_clone(tcp_control_block_t *tcb);
+
 
 /*****************************************************************************
  * Flags for tcp_build_tcp_hdr() and tsm_send_tcp_packet()

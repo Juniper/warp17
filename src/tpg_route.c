@@ -391,6 +391,20 @@ void route_lcore_init(uint32_t lcore_id)
 }
 
 /*****************************************************************************
+ * route_total_stats_clear()
+ ****************************************************************************/
+void route_total_stats_clear(uint32_t port)
+{
+    route_statistics_t *route_stats;
+    uint32_t            core;
+
+    STATS_FOREACH_CORE(route_statistics_t, port, core, route_stats) {
+        bzero(route_stats, sizeof(*route_stats));
+    }
+}
+
+
+/*****************************************************************************
  * route_v4_intf_add()
  ****************************************************************************/
 int route_v4_intf_add(uint32_t port, tpg_ip_t ip, tpg_ip_t mask)
