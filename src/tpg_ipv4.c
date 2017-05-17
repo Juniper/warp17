@@ -97,19 +97,6 @@ void ipv4_total_stats_get(uint32_t port, ipv4_statistics_t *total_stats)
     }
 
 }
-/*****************************************************************************
- * ipv4_total_stats_clear()
- *****************************************************************************/
-void ipv4_total_stats_clear(uint32_t port)
-{
-    ipv4_statistics_t *ipv4_stats;
-    uint32_t           core;
-
-    STATS_FOREACH_CORE(ipv4_statistics_t, port, core, ipv4_stats) {
-        bzero(ipv4_stats, sizeof(*ipv4_stats));
-    }
-}
-
 
 /*****************************************************************************
  * CLI commands

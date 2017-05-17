@@ -86,6 +86,8 @@ typedef struct arp_statistics_s {
 
 } arp_statistics_t;
 
+STATS_GLOBAL_DECLARE(arp_statistics_t);
+
 /*****************************************************************************
  * ARP table handling definitions
  ****************************************************************************/

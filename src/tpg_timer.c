@@ -137,20 +137,6 @@ bool timer_init(void)
 }
 
 /*****************************************************************************
- * timer_total_stats_clear()
- ****************************************************************************/
-void timer_total_stats_clear(uint32_t port)
-{
-    timer_statistics_t *timer_stats;
-    uint32_t            core;
-
-    STATS_FOREACH_CORE(timer_statistics_t, port, core, timer_stats) {
-        bzero(timer_stats, sizeof(*timer_stats));
-    }
-}
-
-
-/*****************************************************************************
  * timer_lcore_init()
  ****************************************************************************/
 void timer_lcore_init(uint32_t lcore_id)

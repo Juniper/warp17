@@ -80,6 +80,8 @@ typedef struct route_statistics_s {
 
 } route_statistics_t;
 
+STATS_GLOBAL_DECLARE(route_statistics_t);
+
 /*****************************************************************************
  * Route module message types.
  ****************************************************************************/

@@ -100,21 +100,6 @@ bool udp_init(void)
     return true;
 }
 
-
-/*****************************************************************************
- * udp_total_stats_clear()
- ****************************************************************************/
-void udp_total_stats_clear(uint32_t port)
-{
-    udp_statistics_t *udp_stats;
-    int               core;
-
-    STATS_FOREACH_CORE(udp_statistics_t, port, core, udp_stats) {
-        bzero(udp_stats, sizeof(*udp_stats));
-    }
-}
-
-
 /*****************************************************************************
  * udp_lcore_init()
  ****************************************************************************/

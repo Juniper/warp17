@@ -424,6 +424,14 @@ class TestApi(Warp17UnitTestCase):
                          -errno.ENOENT,
                          'PortStop')
 
+    def test_clear_statistics_negative(self):
+        """Try to clear a non-existent port statistic"""
+        self.assertEqual(self.warp17_call('ClearStatistics',
+                                          PortArg(pa_eth_port=self.PORT_CNT + 1)
+                                          ).e_code,
+                         -errno.EINVAL,
+                         'ClearStatistics')
+
     def test_single_session(self):
         """Setup a single UDP/TCP session and check that the test passed"""
         """Port 0 is the client, Port 1 is the server"""
@@ -564,6 +572,16 @@ class TestApi(Warp17UnitTestCase):
                                                           tca_test_case_id=0)).e_code,
                              0,
                              'DelTestCase')
+
+            self.assertEqual(self.warp17_call('ClearStatistics',
+                                              PortArg(pa_eth_port=0)).e_code,
+                             0,
+                             'ClearStatistics')
+
+            self.assertEqual(self.warp17_call('ClearStatistics',
+                                              PortArg(pa_eth_port=1)).e_code,
+                             0,
+                             'ClearStatistics')
 
 
 ##############################################################################

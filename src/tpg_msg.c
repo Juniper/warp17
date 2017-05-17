@@ -283,20 +283,6 @@ bool msg_sys_lcore_init(uint32_t lcore_id)
 }
 
 /*****************************************************************************
- * msg_total_stats_clear()
- *****************************************************************************/
-void msg_total_stats_clear(uint32_t port)
-{
-    msg_statistics_t *msg_stats;
-    uint32_t          core;
-
-    STATS_FOREACH_CORE(msg_statistics_t, port, core, msg_stats) {
-        bzero(msg_stats, sizeof(*msg_stats));
-    }
-
-}
-
-/*****************************************************************************
  * msg_register_handler()
  ****************************************************************************/
 int msg_register_handler(uint16_t msgid,

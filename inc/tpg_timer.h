@@ -88,6 +88,8 @@ typedef struct timer_statistics_s {
 
 } __rte_cache_aligned timer_statistics_t;
 
+STATS_GLOBAL_DECLARE(timer_statistics_t);
+
 /*****************************************************************************
  * Timer definitions
  ****************************************************************************/

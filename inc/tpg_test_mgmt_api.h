@@ -285,7 +285,7 @@ test_mgmt_start_port(uint32_t eth_port, printer_arg_t *printer_arg);
  *  0 on success.
  */
 extern __tpg_api_func int
-test_mgmt_clear_stats(uint32_t eth_port, printer_arg_t *printer_arg);
+test_mgmt_clear_statistics(uint32_t eth_port, printer_arg_t *printer_arg);
 
 
 /*

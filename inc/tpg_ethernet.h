@@ -77,6 +77,8 @@ typedef struct ethernet_statistics_s {
 
 } ethernet_statistics_t;
 
+STATS_GLOBAL_DECLARE(ethernet_statistics_t);
+
 /*****************************************************************************
  * External's for tpg_ethernet.c
  ****************************************************************************/

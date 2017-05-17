@@ -122,7 +122,7 @@ static void cmd_clear_stats_parsed(void *parsed_result,
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
 
-    if (test_mgmt_clear_stats(pr->port, &parg) == 0)
+    if (test_mgmt_clear_statistics(pr->port, &parg) == 0)
         cmdline_printf(cl, "Stats cleared on port %"PRIu32"\n", pr->port);
     else
         cmdline_printf(cl, "ERROR: Failed to clear stats on port %"PRIu32"!\n",

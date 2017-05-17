@@ -1280,47 +1280,40 @@ int test_mgmt_get_tcp_sockopt(uint32_t eth_port, uint32_t test_case_id,
 /*****************************************************************************
  * test_mgmt_clear_stats()
  ****************************************************************************/
-int test_mgmt_clear_stats(uint32_t eth_port, printer_arg_t *printer_arg)
+int test_mgmt_clear_statistics(uint32_t eth_port, printer_arg_t *printer_arg)
 {
-    if (!test_mgmt_validate_port_id(eth_port, printer_arg)){
-        tpg_printf(printer_arg,
-                   "ERROR: Invalid port %"PRIu32"!\n",
-                   eth_port);
+    if (!test_mgmt_validate_port_id(eth_port, printer_arg))
         return -EINVAL;
-    }
-
-    if (test_mgmt_get_port_env(eth_port)->te_test_running){
-        tpg_printf(printer_arg,
-                   "ERROR: Test already running on port %"PRIu32"!\n",
-                   eth_port);
-        return -EALREADY;
-    }
 
     /* Clearing MSG stats */
-    msg_total_stats_clear(eth_port);
+    STATS_CLEAR(msg_statistics_t, eth_port);
 
     /* Clearing ARP stats */
-    arp_total_stats_clear(eth_port);
+    STATS_CLEAR(arp_statistics_t, eth_port);
+
     /* Clearing ROUTE stats */
-    route_total_stats_clear(eth_port);
+    STATS_CLEAR(route_statistics_t, eth_port);
+
     /* Clearing TIMER stats */
-    timer_total_stats_clear(eth_port);
+    STATS_CLEAR(timer_statistics_t, eth_port);
 
     /* Clearing TCP stats */
-    tcp_total_stats_clear(eth_port);
+    STATS_CLEAR(tcp_statistics_t, eth_port);
+
     /* Clearing TSM stats */
-    tsm_total_stats_clear(eth_port);
+    STATS_CLEAR(tsm_statistics_t, eth_port);
 
     /* Clearing UDP stats */
-    udp_total_stats_clear(eth_port);
+    STATS_CLEAR(udp_statistics_t, eth_port);
 
     /* Clearing IPv4 stats */
-    ipv4_total_stats_clear(eth_port);
+    STATS_CLEAR(ipv4_statistics_t, eth_port);
 
     /* Clearing PORT stats */
-    port_total_stats_clear(eth_port);
+    STATS_CLEAR(port_statistics_t, eth_port);
+
     /* Clearing ETHERNET stats */
-    eth_total_stats_clear(eth_port);
+    STATS_CLEAR(ethernet_statistics_t, eth_port);
 
     return 0;
 }

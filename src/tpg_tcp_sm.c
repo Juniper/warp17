@@ -2518,20 +2518,6 @@ void tsm_total_stats_get(uint32_t port, tsm_statistics_t *total_stats)
 }
 
 /*****************************************************************************
- * tsm_total_stats_clear()
- ****************************************************************************/
-void tsm_total_stats_clear(uint32_t port)
-{
-    tsm_statistics_t *tsm_stats;
-    uint32_t          core;
-
-    STATS_FOREACH_CORE(tsm_statistics_t, port, core, tsm_stats) {
-        bzero(tsm_stats, sizeof(*tsm_stats));
-    }
-}
-
-
-/*****************************************************************************
  * CLI commands
  *****************************************************************************
  * - "show tsm statistics {details}"
