@@ -221,5 +221,4 @@ extern struct rte_mbuf *ipv4_receive_pkt(packet_control_block_t *pcb,
 extern void             ipv4_total_stats_get(uint32_t port,
                                              ipv4_statistics_t *total_ipv4_stats);
 
-extern void             ipv4_total_stats_clear(uint32_t port);
 #endif /* _H_TPG_IPV4_ */

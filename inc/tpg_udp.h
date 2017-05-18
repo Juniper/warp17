@@ -178,7 +178,6 @@ extern int              udp_close_v4(udp_control_block_t *ucb);
 extern int              udp_send_v4(udp_control_block_t *ucb,
                                     struct rte_mbuf *data_mbuf,
                                     uint32_t *data_sent);
-extern void             udp_total_stats_clear(uint32_t port);
 
 #endif /* _H_TPG_UDP_ */
 

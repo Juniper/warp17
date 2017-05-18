@@ -208,7 +208,6 @@ extern bool             arp_send_arp_request(uint32_t port, uint32_t local_ip,
                                              uint32_t remote_ip);
 extern bool             arp_send_grat_arp_request(uint32_t port, uint32_t ip);
 extern bool             arp_send_grat_arp_reply(uint32_t port, uint32_t ip);
-extern void             arp_total_stats_clear(uint32_t port);
 
 #endif /* _H_TPG_ARP_ */
 

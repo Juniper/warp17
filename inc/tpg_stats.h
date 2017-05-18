@@ -140,14 +140,15 @@
 #define STATS_LOCAL_DECLARE(type) \
     extern STATS_LOCAL_DEFINE(type)
 
-#define STATS_CLEAR(type, eth_port)               \
-do {                                              \
-    __typeof__(type) *var;                        \
-    uint32_t core;                                \
-    STATS_FOREACH_CORE(type, eth_port, core, var) \
-    {                                             \
-        bzero(var, sizeof(*var));                 \
-    }                                             \
+#define STATS_CLEAR(type, eth_port)                 \
+do {                                                \
+    __typeof__(type) *var;                          \
+    uint32_t          core;                         \
+                                                    \
+    STATS_FOREACH_CORE(type, eth_port, core, var) { \
+                                                    \
+        bzero(var, sizeof(*var));                   \
+    }                                               \
 } while (0)
 
 #define STATS_LOCAL(type, eth_port) \

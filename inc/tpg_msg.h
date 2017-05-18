@@ -232,7 +232,6 @@ extern int    msg_send_local(msg_t *msg, uint32_t snd_flags);
 
 extern void   msg_free(msg_t *msg);
 extern int    msg_poll(void);
-extern void   msg_total_stats_clear(uint32_t lcore_id);
 
 #endif /* _H_TPG_MSG_ */
 
