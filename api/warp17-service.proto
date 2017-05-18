@@ -208,6 +208,7 @@ service Warp17 {
     rpc PortStart(PortArg)                    returns (Error);
     rpc PortStop(PortArg)                     returns (Error);
     rpc GetTestStatus(TestCaseArg)            returns (TestStatusResult);
+    rpc ClearStatistics(PortArg)              returns (Error);
 
     /* Partial port configs: : FOR WARP17 INTERNAL USE ONLY! */
     rpc ConfigureL3Intf(L3IntfArg)            returns (Error);

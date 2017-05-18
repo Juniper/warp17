@@ -87,6 +87,8 @@ typedef struct ipv4_statistics_s {
 
 } ipv4_statistics_t;
 
+STATS_GLOBAL_DECLARE(ipv4_statistics_t);
+
 /*****************************************************************************
  * General IPv4 L4 checksum functions for scattered mbufs.
  *

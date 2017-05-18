@@ -135,6 +135,8 @@ typedef struct tsm_statistics_s {
 
 } tsm_statistics_t;
 
+STATS_GLOBAL_DECLARE(tsm_statistics_t);
+
 /*****************************************************************************
  * TCP stack notifications
  ****************************************************************************/

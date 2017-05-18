@@ -85,6 +85,8 @@ typedef struct udp_statistics_s {
 
 } __rte_cache_aligned udp_statistics_t;
 
+STATS_GLOBAL_DECLARE(udp_statistics_t);
+
 typedef enum udpState {
 
     US_INIT,

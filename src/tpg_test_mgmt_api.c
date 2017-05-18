@@ -1277,6 +1277,46 @@ int test_mgmt_get_tcp_sockopt(uint32_t eth_port, uint32_t test_case_id,
     tcp_load_sockopt(out, &sockopt->so_tcp);
     return 0;
 }
+/*****************************************************************************
+ * test_mgmt_clear_stats()
+ ****************************************************************************/
+int test_mgmt_clear_statistics(uint32_t eth_port, printer_arg_t *printer_arg)
+{
+    if (!test_mgmt_validate_port_id(eth_port, printer_arg))
+        return -EINVAL;
+
+    /* Clearing MSG stats */
+    STATS_CLEAR(msg_statistics_t, eth_port);
+
+    /* Clearing ARP stats */
+    STATS_CLEAR(arp_statistics_t, eth_port);
+
+    /* Clearing ROUTE stats */
+    STATS_CLEAR(route_statistics_t, eth_port);
+
+    /* Clearing TIMER stats */
+    STATS_CLEAR(timer_statistics_t, eth_port);
+
+    /* Clearing TCP stats */
+    STATS_CLEAR(tcp_statistics_t, eth_port);
+
+    /* Clearing TSM stats */
+    STATS_CLEAR(tsm_statistics_t, eth_port);
+
+    /* Clearing UDP stats */
+    STATS_CLEAR(udp_statistics_t, eth_port);
+
+    /* Clearing IPv4 stats */
+    STATS_CLEAR(ipv4_statistics_t, eth_port);
+
+    /* Clearing PORT stats */
+    STATS_CLEAR(port_statistics_t, eth_port);
+
+    /* Clearing ETHERNET stats */
+    STATS_CLEAR(ethernet_statistics_t, eth_port);
+
+    return 0;
+}
 
 /*****************************************************************************
  * test_mgmt_start_port()

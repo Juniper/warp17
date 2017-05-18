@@ -194,6 +194,8 @@ typedef struct msg_statistics_s {
 
 } __rte_cache_aligned msg_statistics_t;
 
+STATS_GLOBAL_DECLARE(msg_statistics_t);
+
 /*****************************************************************************
  * Externals for messaging module
  ****************************************************************************/

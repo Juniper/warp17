@@ -201,6 +201,11 @@ static void tpg_rpc__get_test_status(Warp17_Service *service,
                                      TestStatusResult_Closure closure,
                                      void *closure_data);
 
+static void tpg_rpc__clear_statistics(Warp17_Service *service,
+                                const PortArg *input,
+                                Error_Closure closure,
+                                void *closure_data);
+
 /*****************************************************************************
  * Globals
  ****************************************************************************/
@@ -1143,3 +1148,22 @@ done:
     RPC_CLEANUP(TestCaseArg, test_case_arg, TestStatusResult, protoc_result);
 }
 
+
+static void tpg_rpc__clear_statistics(Warp17_Service *service __rte_unused,
+                                      const PortArg *input,
+                                      Error_Closure closure,
+                                      void *closure_data)
+{
+    tpg_port_arg_t port_arg;
+    tpg_error_t    tpg_result;
+    Error          protoc_result;
+
+    if (RPC_REQUEST_INIT(PortArg, input, &port_arg))
+        return;
+
+    RPC_STORE_RETCODE(tpg_result,
+                      test_mgmt_clear_statistics(port_arg.pa_eth_port,
+                                                 NULL));
+    RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
+    RPC_CLEANUP(PortArg, port_arg, Error, protoc_result);
+}
