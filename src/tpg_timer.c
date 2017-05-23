@@ -71,7 +71,7 @@ static RTE_DEFINE_PER_LCORE(tmr_wheel_t, l4cb_test_timer_wheel);
 /* Define TIMER global statistics. Each thread has its own set of locally
  * allocated stats which are accessible through STATS_GLOBAL(type, core, port).
  */
-STATS_DEFINE(timer_statistics_t);
+STATS_DEFINE(tpg_timer_statistics_t);
 
 /*****************************************************************************
  * Callbacks for processing the wheels in almost a generic way.
@@ -127,7 +127,7 @@ bool timer_init(void)
     /*
      * Allocate memory for TIMER statistics, and clear all of them
      */
-    if (STATS_GLOBAL_INIT(timer_statistics_t, "timer_stats") == NULL) {
+    if (STATS_GLOBAL_INIT(tpg_timer_statistics_t, "timer_stats") == NULL) {
         RTE_LOG(ERR, USER1,
                 "ERROR: Failed allocating TIMER statistics memory!\n");
         return false;
@@ -173,7 +173,8 @@ void timer_lcore_init(uint32_t lcore_id)
     }
 
     /* Init the local stats. */
-    if (STATS_LOCAL_INIT(timer_statistics_t, "timer_stats", lcore_id) == NULL) {
+    if (STATS_LOCAL_INIT(tpg_timer_statistics_t, "timer_stats",
+                         lcore_id) == NULL) {
         TPG_ERROR_ABORT("[%d:%s() Failed to allocate per lcore timer_stats!\n",
                         rte_lcore_index(lcore_id),
                         __func__);
@@ -279,7 +280,7 @@ static void tcp_handle_slow_to(void *entry)
      * (in case the event handler re-adds it). It's fine to call cancel here
      * because we know the timer just fired.
      */
-    INC_STATS(STATS_LOCAL(timer_statistics_t, tcb->tcb_l4.l4cb_interface),
+    INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, tcb->tcb_l4.l4cb_interface),
               tts_slow_fired);
     TCP_TIMER_CANCEL(tcb, tcb_slow_tmr_entry);
     tcb->tcb_on_slow_list = false;
@@ -329,7 +330,7 @@ static void tcp_handle_retrans_to(void *entry)
      * (in case the event handler readds it). It's fine to call cancel here
      * because we know the timer just fired.
      */
-    INC_STATS(STATS_LOCAL(timer_statistics_t, tcb->tcb_l4.l4cb_interface),
+    INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, tcb->tcb_l4.l4cb_interface),
               tts_rto_fired);
     TCP_TIMER_CANCEL(tcb, tcb_retrans_tmr_entry);
     tcb->tcb_on_rto_list = false;
@@ -351,7 +352,7 @@ static void l4cb_handle_test_to(void *entry)
      * (in case the event handler readds it). It's fine to call cancel here
      * because we know the timer just fired.
      */
-    INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+    INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, l4_cb->l4cb_interface),
               tts_test_fired);
     L4CB_TIMER_CANCEL(l4_cb, l4cb_test_tmr_entry);
     l4_cb->l4cb_on_test_tmr_list = false;
@@ -379,7 +380,7 @@ static int tcp_timer_get_wheel_bucket(tmr_wheel_t *wheel, uint32_t timeout_us)
      * First validate that timeout isn't too late.
      */
     if (unlikely(timeout_us > max_timeout_us)) {
-        INC_STATS(STATS_LOCAL(timer_statistics_t, 0), tts_timeout_overflow);
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, 0), tts_timeout_overflow);
         TRACE_FMT(TMR, ERROR, "[%s] Timeout exceeds limit %u > %"PRIu64,
                   __func__,
                   timeout_us,
@@ -507,7 +508,7 @@ int tcp_timer_rto_set(l4_control_block_t *l4_cb, uint32_t timeout_us)
     int                  status = 0;
 
     if (unlikely(l4_cb == NULL)) {
-        INC_STATS(STATS_LOCAL(timer_statistics_t, 0), tts_l4cb_null);
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, 0), tts_l4cb_null);
         TRACE_FMT(TMR, ERROR, "[%s] tcb NULL", __func__);
         return -EINVAL;
     }
@@ -517,7 +518,7 @@ int tcp_timer_rto_set(l4_control_block_t *l4_cb, uint32_t timeout_us)
     tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
 
     if (unlikely(TCB_RTO_TMR_IS_SET(tcb))) {
-        INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, l4_cb->l4cb_interface),
                   tts_l4cb_invalid_flags);
         TRACE_FMT(TMR, ERROR, "[%s] tcb already on rto list.", __func__);
         return -EINVAL;
@@ -531,10 +532,10 @@ int tcp_timer_rto_set(l4_control_block_t *l4_cb, uint32_t timeout_us)
 
     if (likely(status == 0)) {
         tcb->tcb_on_rto_list = true;
-        INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, l4_cb->l4cb_interface),
                   tts_rto_set);
     } else {
-        INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, l4_cb->l4cb_interface),
                   tts_rto_failed);
     }
 
@@ -549,7 +550,7 @@ int tcp_timer_rto_cancel(l4_control_block_t *l4_cb)
     tcp_control_block_t *tcb;
 
     if (unlikely(l4_cb == NULL)) {
-        INC_STATS(STATS_LOCAL(timer_statistics_t, 0), tts_l4cb_null);
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, 0), tts_l4cb_null);
         TRACE_FMT(TMR, ERROR, "[%s] tcb NULL", __func__);
         return -EINVAL;
     }
@@ -558,7 +559,7 @@ int tcp_timer_rto_cancel(l4_control_block_t *l4_cb)
     tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
 
     if (unlikely(!TCB_RTO_TMR_IS_SET(tcb))) {
-        INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, l4_cb->l4cb_interface),
                   tts_l4cb_invalid_flags);
         TRACE_FMT(TMR, ERROR, "[%s] tcb not on rto list.", __func__);
         return -EINVAL;
@@ -567,7 +568,7 @@ int tcp_timer_rto_cancel(l4_control_block_t *l4_cb)
     TCP_TIMER_CANCEL(tcb, tcb_retrans_tmr_entry);
     tcb->tcb_on_rto_list = false;
 
-    INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+    INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, l4_cb->l4cb_interface),
               tts_rto_cancelled);
 
     return 0;
@@ -582,7 +583,7 @@ int tcp_timer_slow_set(l4_control_block_t *l4_cb, uint32_t timeout_us)
     int                  status = 0;
 
     if (unlikely(l4_cb == NULL)) {
-        INC_STATS(STATS_LOCAL(timer_statistics_t, 0), tts_l4cb_null);
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, 0), tts_l4cb_null);
         TRACE_FMT(TMR, ERROR, "[%s] tcb NULL", __func__);
         return -EINVAL;
     }
@@ -592,7 +593,7 @@ int tcp_timer_slow_set(l4_control_block_t *l4_cb, uint32_t timeout_us)
     tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
 
     if (unlikely(TCB_SLOW_TMR_IS_SET(tcb))) {
-        INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, l4_cb->l4cb_interface),
                   tts_l4cb_invalid_flags);
         TRACE_FMT(TMR, ERROR, "[%s] tcb already on slow list.",
                   __func__);
@@ -607,10 +608,10 @@ int tcp_timer_slow_set(l4_control_block_t *l4_cb, uint32_t timeout_us)
 
     if (likely(status == 0)) {
         tcb->tcb_on_slow_list = true;
-        INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, l4_cb->l4cb_interface),
                   tts_slow_set);
     } else {
-        INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, l4_cb->l4cb_interface),
                   tts_slow_failed);
     }
 
@@ -625,7 +626,7 @@ int tcp_timer_slow_cancel(l4_control_block_t *l4_cb)
     tcp_control_block_t *tcb;
 
     if (unlikely(l4_cb == NULL)) {
-        INC_STATS(STATS_LOCAL(timer_statistics_t, 0), tts_l4cb_null);
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, 0), tts_l4cb_null);
         TRACE_FMT(TMR, ERROR, "[%s] tcb NULL", __func__);
         return -EINVAL;
     }
@@ -635,7 +636,7 @@ int tcp_timer_slow_cancel(l4_control_block_t *l4_cb)
     tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
 
     if (unlikely(!TCB_SLOW_TMR_IS_SET(tcb))) {
-        INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, l4_cb->l4cb_interface),
                   tts_l4cb_invalid_flags);
         TRACE_FMT(TMR, ERROR, "[%s] tcb not on slow list.", __func__);
         return -EINVAL;
@@ -645,7 +646,7 @@ int tcp_timer_slow_cancel(l4_control_block_t *l4_cb)
     TCP_TIMER_CANCEL(tcb, tcb_slow_tmr_entry);
     tcb->tcb_on_slow_list = false;
 
-    INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+    INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, l4_cb->l4cb_interface),
               tts_slow_cancelled);
 
     return 0;
@@ -661,13 +662,13 @@ int l4cb_timer_test_set(l4_control_block_t *l4_cb, uint32_t timeout_us)
     L4_CB_CHECK(l4_cb);
 
     if (unlikely(l4_cb == NULL)) {
-        INC_STATS(STATS_LOCAL(timer_statistics_t, 0), tts_l4cb_null);
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, 0), tts_l4cb_null);
         TRACE_FMT(TMR, ERROR, "[%s] tcb NULL", __func__);
         return -EINVAL;
     }
 
     if (unlikely(L4CB_TEST_TMR_IS_SET(l4_cb))) {
-        INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, l4_cb->l4cb_interface),
                   tts_l4cb_invalid_flags);
         TRACE_FMT(TMR, ERROR, "[%s] l4cb already on rto list.", __func__);
         return -EINVAL;
@@ -681,10 +682,10 @@ int l4cb_timer_test_set(l4_control_block_t *l4_cb, uint32_t timeout_us)
 
     if (likely(status == 0)) {
         l4_cb->l4cb_on_test_tmr_list = true;
-        INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, l4_cb->l4cb_interface),
                   tts_test_set);
     } else {
-        INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, l4_cb->l4cb_interface),
                   tts_test_failed);
     }
 
@@ -699,13 +700,13 @@ int l4cb_timer_test_cancel(l4_control_block_t *l4_cb)
     L4_CB_CHECK(l4_cb);
 
     if (unlikely(l4_cb == NULL)) {
-        INC_STATS(STATS_LOCAL(timer_statistics_t, 0), tts_l4cb_null);
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, 0), tts_l4cb_null);
         TRACE_FMT(TMR, ERROR, "[%s] l4_cb NULL", __func__);
         return -EINVAL;
     }
 
     if (unlikely(!L4CB_TEST_TMR_IS_SET(l4_cb))) {
-        INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, l4_cb->l4cb_interface),
                   tts_l4cb_invalid_flags);
         TRACE_FMT(TMR, ERROR, "[%s] l4_cb not on test list.", __func__);
         return -EINVAL;
@@ -714,7 +715,7 @@ int l4cb_timer_test_cancel(l4_control_block_t *l4_cb)
     L4CB_TIMER_CANCEL(l4_cb, l4cb_test_tmr_entry);
     l4_cb->l4cb_on_test_tmr_list = false;
 
-    INC_STATS(STATS_LOCAL(timer_statistics_t, l4_cb->l4cb_interface),
+    INC_STATS(STATS_LOCAL(tpg_timer_statistics_t, l4_cb->l4cb_interface),
               tts_test_cancelled);
 
     return 0;
@@ -744,115 +745,98 @@ static cmdline_parse_token_string_t cmd_show_timer_statistics_t_details =
 static void cmd_show_timer_statistics_parsed(void *parsed_result __rte_unused,
                                              struct cmdline *cl, void *data)
 {
-    int port;
-    int core;
-    int option = (intptr_t) data;
+    int           port;
+    int           option = (intptr_t) data;
+    printer_arg_t parg = TPG_PRINTER_ARG(cli_printer, cl);
 
     for (port = 0; port < rte_eth_dev_count(); port++) {
 
         /*
          * Calculate totals first
          */
-        timer_statistics_t  total_stats;
-        timer_statistics_t *timer_stats;
+        tpg_timer_statistics_t total_stats;
 
-        bzero(&total_stats, sizeof(total_stats));
-        STATS_FOREACH_CORE(timer_statistics_t, port, core, timer_stats) {
-            total_stats.tts_rto_set += timer_stats->tts_rto_set;
-            total_stats.tts_rto_cancelled += timer_stats->tts_rto_cancelled;
-            total_stats.tts_rto_fired += timer_stats->tts_rto_fired;
-
-            total_stats.tts_slow_set += timer_stats->tts_slow_set;
-            total_stats.tts_slow_cancelled += timer_stats->tts_slow_cancelled;
-            total_stats.tts_slow_fired += timer_stats->tts_slow_fired;
-
-            total_stats.tts_test_set += timer_stats->tts_test_set;
-            total_stats.tts_test_cancelled += timer_stats->tts_test_cancelled;
-            total_stats.tts_test_fired += timer_stats->tts_test_fired;
-
-            total_stats.tts_rto_failed += timer_stats->tts_rto_failed;
-            total_stats.tts_slow_failed += timer_stats->tts_slow_failed;
-            total_stats.tts_l4cb_null += timer_stats->tts_l4cb_null;
-            total_stats.tts_l4cb_invalid_flags +=
-                timer_stats->tts_l4cb_invalid_flags;
-            total_stats.tts_timeout_overflow +=
-                timer_stats->tts_timeout_overflow;
-        }
+        if (test_mgmt_get_timer_stats(port, &total_stats, &parg) != 0)
+            continue;
 
         /*
          * Display individual counters
          */
         cmdline_printf(cl, "Port %d TCP Timer statistics:\n", port);
 
-        SHOW_64BIT_STATS("RTO Timer Set", timer_statistics_t, tts_rto_set,
+        SHOW_64BIT_STATS("RTO Timer Set", tpg_timer_statistics_t, tts_rto_set,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("RTO Timer Cancelled", timer_statistics_t,
+        SHOW_64BIT_STATS("RTO Timer Cancelled", tpg_timer_statistics_t,
                          tts_rto_cancelled,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("RTO Timer Fired", timer_statistics_t, tts_rto_fired,
+        SHOW_64BIT_STATS("RTO Timer Fired", tpg_timer_statistics_t,
+                         tts_rto_fired,
                          port,
                          option);
 
         cmdline_printf(cl, "\n");
 
-        SHOW_64BIT_STATS("Slow Timer Set", timer_statistics_t, tts_slow_set,
+        SHOW_64BIT_STATS("Slow Timer Set", tpg_timer_statistics_t, tts_slow_set,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Slow Timer Cancelled", timer_statistics_t,
+        SHOW_64BIT_STATS("Slow Timer Cancelled", tpg_timer_statistics_t,
                          tts_slow_cancelled,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Slow Timer Fired", timer_statistics_t, tts_slow_fired,
+        SHOW_64BIT_STATS("Slow Timer Fired", tpg_timer_statistics_t,
+                         tts_slow_fired,
                          port,
                          option);
 
         cmdline_printf(cl, "\n");
 
-        SHOW_64BIT_STATS("Test Timer Set", timer_statistics_t, tts_test_set,
+        SHOW_64BIT_STATS("Test Timer Set", tpg_timer_statistics_t, tts_test_set,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Test Timer Cancelled", timer_statistics_t,
+        SHOW_64BIT_STATS("Test Timer Cancelled", tpg_timer_statistics_t,
                          tts_test_cancelled,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Test Timer Fired", timer_statistics_t, tts_test_fired,
+        SHOW_64BIT_STATS("Test Timer Fired", tpg_timer_statistics_t,
+                         tts_test_fired,
                          port,
                          option);
 
         cmdline_printf(cl, "\n");
 
-        SHOW_16BIT_STATS("RTO Timer Failed", timer_statistics_t, tts_rto_failed,
+        SHOW_32BIT_STATS("RTO Timer Failed", tpg_timer_statistics_t,
+                         tts_rto_failed,
                          port,
                          option);
 
-        SHOW_16BIT_STATS("Slow Timer Failed", timer_statistics_t,
+        SHOW_32BIT_STATS("Slow Timer Failed", tpg_timer_statistics_t,
                          tts_slow_failed,
                          port,
                          option);
 
-        SHOW_16BIT_STATS("Test Timer Failed", timer_statistics_t,
+        SHOW_32BIT_STATS("Test Timer Failed", tpg_timer_statistics_t,
                          tts_test_failed,
                          port,
                          option);
 
-        SHOW_16BIT_STATS("TCB NULL", timer_statistics_t, tts_l4cb_null,
+        SHOW_32BIT_STATS("TCB NULL", tpg_timer_statistics_t, tts_l4cb_null,
                          port,
                          option);
 
-        SHOW_16BIT_STATS("TCB Invalid Flags", timer_statistics_t,
+        SHOW_32BIT_STATS("TCB Invalid Flags", tpg_timer_statistics_t,
                          tts_l4cb_invalid_flags,
                          port,
                          option);
 
-        SHOW_16BIT_STATS("Timeout Overflow", timer_statistics_t,
+        SHOW_32BIT_STATS("Timeout Overflow", tpg_timer_statistics_t,
                          tts_timeout_overflow,
                          port,
                          option);

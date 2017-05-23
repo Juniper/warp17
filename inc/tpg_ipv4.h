@@ -60,34 +60,7 @@
 #ifndef _H_TPG_IPV4_
 #define _H_TPG_IPV4_
 
-/*****************************************************************************
- * IPv4 statistics
- ****************************************************************************/
-typedef struct ipv4_statistics_s {
-
-    uint64_t ips_received_pkts;
-    uint64_t ips_received_bytes;
-    uint64_t ips_protocol_icmp;
-    uint64_t ips_protocol_tcp;
-    uint64_t ips_protocol_udp;
-    uint64_t ips_protocol_other;
-
-    /* Unlikely uint16_t error counters */
-
-    uint16_t ips_to_small_fragment;
-    uint16_t ips_hdr_to_small;
-    uint16_t ips_invalid_checksum;
-    uint16_t ips_total_length_invalid;
-    uint16_t ips_received_frags;
-
-#ifndef _SPEEDY_PKT_PARSE_
-    uint16_t ips_not_v4;
-    uint16_t ips_reserved_bit_set;
-#endif
-
-} ipv4_statistics_t;
-
-STATS_GLOBAL_DECLARE(ipv4_statistics_t);
+STATS_GLOBAL_DECLARE(tpg_ipv4_statistics_t);
 
 /*****************************************************************************
  * General IPv4 L4 checksum functions for scattered mbufs.
@@ -218,7 +191,5 @@ extern int              ipv4_build_ipv4_hdr(sockopt_t *sockopt,
                                             struct ipv4_hdr *hdr);
 extern struct rte_mbuf *ipv4_receive_pkt(packet_control_block_t *pcb,
                                          struct rte_mbuf *mbuf);
-extern void             ipv4_total_stats_get(uint32_t port,
-                                             ipv4_statistics_t *total_ipv4_stats);
 
 #endif /* _H_TPG_IPV4_ */

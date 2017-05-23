@@ -135,7 +135,6 @@ extern uint64_t cycles_per_us;
  * Container for all WARP17 includes.
  ****************************************************************************/
 #include "warp17-common.proto.xlate.h"
-#include "warp17-link.proto.xlate.h"
 #include "warp17-l3.proto.xlate.h"
 #include "warp17-app-raw.proto.xlate.h"
 #include "warp17-app-http.proto.xlate.h"
@@ -143,6 +142,7 @@ extern uint64_t cycles_per_us;
 #include "warp17-server.proto.xlate.h"
 #include "warp17-test-case.proto.xlate.h"
 #include "warp17-sockopt.proto.xlate.h"
+#include "warp17-stats.proto.xlate.h"
 #include "warp17-service.proto.xlate.h"
 
 /* Forward declarations to avoid include complaints. Maybe we should move them

@@ -444,7 +444,7 @@ class TestApi(Warp17UnitTestCase):
         b2b_port_add_intfs(pcfg, [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(0, 0)),
                            Ip(ip_version=IPV4, ip_v4=b2b_mask(0, 0)),
                            b2b_count(0, 0))])
-        self.assertEqual(self.warp17_call('ConfigurePort',pcfg).e_code, 0,
+        self.assertEqual(self.warp17_call('ConfigurePort', pcfg).e_code, 0,
                          'ConfigurePort')
 
         # Setup interfaces on port 1
@@ -547,6 +547,96 @@ class TestApi(Warp17UnitTestCase):
                              1,
                              'PortStatus ESTAB')
 
+            for i in range(0, self.PORT_CNT):
+
+                server_result = self.warp17_call('GetStatistics', PortArg(pa_eth_port=i))
+
+                self.assertGreater(server_result.sr_phy.pys_rx_pkts, 0,
+                                   'Phy pys_rx_pkts has to be greater than 0')
+                self.assertGreater(server_result.sr_phy.pys_rx_bytes, 0,
+                                   'Phy pys_rx_bytes has to be greater than 0')
+                self.assertGreater(server_result.sr_phy.pys_tx_pkts, 0,
+                                   'Phy pys_tx_pkts has to be greater than 0')
+                self.assertGreater(server_result.sr_phy.pys_tx_bytes, 0,
+                                   'Phy pys_tx_bytes has to be greater than 0')
+                self.assertEqual(server_result.sr_phy.pys_rx_errors, 0,
+                                 'Phy pys_rx_errors has to be 0')
+                self.assertEqual(server_result.sr_phy.pys_tx_errors, 0,
+                                 'Phy pys_tx_errors has to be 0')
+                self.assertGreater(server_result.sr_phy.pys_link_speed, 0,
+                                   'Phy pys_link_speed has to be greater than 0')
+
+                self.assertGreater(server_result.sr_port.ps_received_pkts, 0,
+                                   'Port ps_received_pkts has to be greater than 0')
+                self.assertGreater(server_result.sr_port.ps_received_bytes, 0,
+                                   'Port ps_received_bytes has to be greater than 0')
+                self.assertGreater(server_result.sr_port.ps_sent_pkts, 0,
+                                   'Port ps_sent_pkts has to be greater than 0')
+                self.assertGreater(server_result.sr_port.ps_sent_bytes, 0,
+                                   'Port ps_sent_bytes has to be greater than 0')
+                self.assertEqual(server_result.sr_port.ps_sent_failure, 0,
+                                 'Port ps_sent_failure has to be 0')
+                self.assertEqual(server_result.sr_port.ps_received_ring_if_failed, 0,
+                                 'Port ps_received_ring_if_failed has to be 0')
+                self.assertEqual(server_result.sr_port.ps_sent_sim_failure, 0,
+                                 'Port ps_sent_sim_failure has to be 0')
+
+                if l4_proto == TCP:
+                    self.assertGreater(server_result.sr_tcp.ts_received_pkts, 0,
+                                       'TCP ts_received_pkts has to be greater than 0')
+                    self.assertGreater(server_result.sr_tcp.ts_received_bytes, 0,
+                                       'TCP ts_received_bytes has to be greater than 0')
+                    self.assertGreater(server_result.sr_tcp.ts_sent_ctrl_pkts, 0,
+                                       'TCP ts_sent_ctrl_pkts has to be greater than 0')
+                    self.assertGreater(server_result.sr_tcp.ts_sent_ctrl_bytes, 0,
+                                       'TCP ts_sent_ctrl_bytes has to be greater than 0')
+                    self.assertGreater(server_result.sr_tcp.ts_sent_data_pkts, 0,
+                                       'TCP ts_sent_data_pkts has to be greater than 0')
+                    self.assertGreater(server_result.sr_tcp.ts_sent_data_bytes, 0,
+                                       'TCP ts_sent_data_bytes has to be greater than 0')
+                    # TODO: Investigate why this test fails
+                    # self.assertEqual(server_result.sr_tcp.ts_tcb_not_found, 0, 'TCP ts_tcb_not_found has to be 0')
+                    self.assertEqual(server_result.sr_tcp.ts_tcb_alloc_err, 0,
+                                     'TCP ts_tcb_alloc_err has to be 0')
+                    self.assertEqual(server_result.sr_tcp.ts_to_small_fragment, 0,
+                                     'TCP ts_to_small_fragment has to be 0')
+                    self.assertEqual(server_result.sr_tcp.ts_hdr_to_small, 0,
+                                     'TCP ts_hdr_to_small has to be 0')
+                    self.assertEqual(server_result.sr_tcp.ts_invalid_checksum, 0,
+                                     'TCP ts_invalid_checksum has to be 0')
+                    self.assertEqual(server_result.sr_tcp.ts_failed_ctrl_pkts, 0,
+                                     'TCP ts_failed_ctrl_pkts has to be 0')
+                    self.assertEqual(server_result.sr_tcp.ts_failed_data_pkts, 0,
+                                     'TCP ts_failed_data_pkts has to be 0')
+                    self.assertEqual(server_result.sr_tcp.ts_failed_data_clone, 0,
+                                     'TCP ts_failed_data_clone has to be 0')
+                    self.assertEqual(server_result.sr_tcp.ts_reserved_bit_set, 0 ,
+                                     'TCP ts_reserved_bit_set has to be 0')
+
+                if l4_proto == UDP:
+                    self.assertGreater(server_result.sr_udp.us_received_pkts, 0,
+                                       'UDP us_received_pkts has to be greater than 0')
+                    self.assertGreater(server_result.sr_udp.us_received_bytes, 0,
+                                       'UDP us_received_bytes has to be greater than 0')
+                    self.assertGreater(server_result.sr_udp.us_sent_pkts, 0,
+                                       'UDP us_sent_pkts has to be greater than 0')
+                    self.assertGreater(server_result.sr_udp.us_sent_bytes, 0,
+                                       'UDP us_sent_bytes has to be greater than 0')
+                    # TODO: Investigate why this test fails
+                    # self.assertEqual(server_result.sr_udp.us_ucb_not_found, 0, 'UDP us_ucb_not_found has to be 0')
+                    self.assertEqual(server_result.sr_udp.us_ucb_alloc_err, 0,
+                                     'UDP us_ucb_alloc_err has to be 0')
+                    self.assertEqual(server_result.sr_udp.us_to_small_fragment, 0,
+                                     'UDP us_to_small_fragment has to be 0')
+                    self.assertEqual(server_result.sr_udp.us_invalid_checksum, 0,
+                                     'UDP us_invalid_checksum has to be 0')
+                    self.assertEqual(server_result.sr_udp.us_failed_pkts, 0,
+                                     'UDP us_failed_pkts has to be 0')
+
+            self.assertEqual(server_result.sr_error.e_code,
+                             0,
+                             'GetPortCfg')
+
             # Stop server test
             self.assertEqual(self.warp17_call('PortStop',
                                               PortArg(pa_eth_port=1)).e_code,
@@ -582,6 +672,19 @@ class TestApi(Warp17UnitTestCase):
                                               PortArg(pa_eth_port=1)).e_code,
                              0,
                              'ClearStatistics')
+
+    def test_get_statistics(self):
+        for eth_port in range(0, self.PORT_CNT):
+            res = self.warp17_call('GetStatistics',
+                                   PortArg(pa_eth_port=eth_port))
+            error = res.sr_error
+            self.assertEqual(error.e_code, 0, 'GetPortCfg')
+
+    def test_get_statistics_invalid_port(self):
+        self.assertEqual(self.warp17_call('GetStatistics',
+                                          PortArg(pa_eth_port=self.PORT_CNT + 1)).sr_error.e_code,
+                         -errno.EINVAL,
+                         'GetPortCfg')
 
 
 ##############################################################################

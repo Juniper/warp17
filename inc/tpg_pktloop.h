@@ -116,7 +116,7 @@ RTE_DECLARE_PER_LCORE(port_info_t *, local_port_dev_info);
  * External's for tpg_pktloop.c
  ****************************************************************************/
 extern int  pkt_send(uint32_t port, struct rte_mbuf *mbuf, bool trace);
-extern void pkt_flush_tx_q(uint32_t port, port_statistics_t *stats);
+extern void pkt_flush_tx_q(uint32_t port, tpg_port_statistics_t *stats);
 extern int  pkt_receive_loop(void *arg __rte_unused);
 
 extern bool pkt_handle_cmdline_opt(const char *opt_name, char *opt_arg);

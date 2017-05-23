@@ -146,7 +146,7 @@ static bool tcp_data_send_segment(tcp_control_block_t *tcb,
 
     clone = data_clone_seg(seg_data, seg_data_len, data_offset);
     if (unlikely(!clone)) {
-        INC_STATS(STATS_LOCAL(tcp_statistics_t, tcb->tcb_l4.l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_tcp_statistics_t, tcb->tcb_l4.l4cb_interface),
                   ts_failed_data_clone);
         return false;
     }

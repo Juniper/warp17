@@ -60,24 +60,7 @@
 #ifndef _H_TPG_ETHERNET_
 #define _H_TPG_ETHERNET_
 
-/*****************************************************************************
- * Ethernet statistics
- ****************************************************************************/
-typedef struct ethernet_statistics_s {
-
-    uint64_t es_etype_arp;
-    uint64_t es_etype_ipv4;
-    uint64_t es_etype_ipv6;
-    uint64_t es_etype_other;
-    uint64_t es_etype_vlan;
-
-    /* Unlikly uint16_t error counters */
-
-    uint16_t es_to_small_fragment;
-
-} ethernet_statistics_t;
-
-STATS_GLOBAL_DECLARE(ethernet_statistics_t);
+STATS_GLOBAL_DECLARE(tpg_eth_statistics_t);
 
 /*****************************************************************************
  * External's for tpg_ethernet.c

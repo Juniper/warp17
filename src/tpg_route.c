@@ -65,7 +65,7 @@
 /* Define ROUTE global statistics. Each thread has its own set of locally
  * allocated stats which are accessible through STATS_GLOBAL(type, core, port).
  */
-STATS_DEFINE(route_statistics_t);
+STATS_DEFINE(tpg_route_statistics_t);
 
 static route_entry_t *route_per_port_table; /* local_intf[port][entries] */
 static route_entry_t *default_gw_per_port;  /* default_gw[port] */
@@ -104,7 +104,7 @@ static bool route_update_entry(uint32_t port, tpg_ip_t *net, tpg_ip_t *mask,
     }
 
     if (i >= TPG_ROUTE_PORT_TABLE_SIZE && free_entry == NULL) {
-        INC_STATS(STATS_LOCAL(route_statistics_t, port), rs_tbl_full);
+        INC_STATS(STATS_LOCAL(tpg_route_statistics_t, port), rs_tbl_full);
         return false;
     }
 
@@ -162,7 +162,7 @@ static int route_intf_add_cb(uint16_t msgid, uint16_t lcore, void *msg)
      * ARP table..
      */
     if (!arp_add_local(add_msg->rim_eth_port, add_msg->rim_ip.ip_v4)) {
-        INC_STATS(STATS_LOCAL(route_statistics_t, add_msg->rim_eth_port),
+        INC_STATS(STATS_LOCAL(tpg_route_statistics_t, add_msg->rim_eth_port),
                   rs_intf_nomem);
         return -ENOMEM;
     }
@@ -172,13 +172,13 @@ static int route_intf_add_cb(uint16_t msgid, uint16_t lcore, void *msg)
                             &add_msg->rim_mask,
                             &nh_zero,
                             ROUTE_FLAG_LOCAL)) {
-        INC_STATS(STATS_LOCAL(route_statistics_t, add_msg->rim_eth_port),
+        INC_STATS(STATS_LOCAL(tpg_route_statistics_t, add_msg->rim_eth_port),
                   rs_intf_nomem);
         return -ENOMEM;
     }
 
 
-    INC_STATS(STATS_LOCAL(route_statistics_t, add_msg->rim_eth_port),
+    INC_STATS(STATS_LOCAL(tpg_route_statistics_t, add_msg->rim_eth_port),
               rs_intf_add);
 
     arp_send_grat_arp_request(add_msg->rim_eth_port, add_msg->rim_ip.ip_v4);
@@ -193,7 +193,7 @@ static int route_intf_add_cb(uint16_t msgid, uint16_t lcore, void *msg)
      * Flush the bulk tx queue to make sure the ARPs are sent.
      */
     pkt_flush_tx_q(add_msg->rim_eth_port,
-                   STATS_LOCAL(port_statistics_t, add_msg->rim_eth_port));
+                   STATS_LOCAL(tpg_port_statistics_t, add_msg->rim_eth_port));
     return 0;
 }
 
@@ -216,19 +216,19 @@ static int route_intf_del_cb(uint16_t msgid, uint16_t lcore __rte_unused,
      * Just abuse the ARP table..
      */
     if (!arp_delete_local(del_msg->rim_eth_port, del_msg->rim_ip.ip_v4)) {
-        INC_STATS(STATS_LOCAL(route_statistics_t, del_msg->rim_eth_port),
+        INC_STATS(STATS_LOCAL(tpg_route_statistics_t, del_msg->rim_eth_port),
                   rs_intf_notfound);
         return -ENOENT;
     }
 
     if (!route_rem_entry(del_msg->rim_eth_port, &del_msg->rim_ip,
                          &del_msg->rim_mask)) {
-        INC_STATS(STATS_LOCAL(route_statistics_t, del_msg->rim_eth_port),
+        INC_STATS(STATS_LOCAL(tpg_route_statistics_t, del_msg->rim_eth_port),
                   rs_intf_notfound);
         return -ENOENT;
     }
 
-    INC_STATS(STATS_LOCAL(route_statistics_t, del_msg->rim_eth_port),
+    INC_STATS(STATS_LOCAL(tpg_route_statistics_t, del_msg->rim_eth_port),
               rs_intf_del);
 
     return 0;
@@ -255,13 +255,13 @@ static int route_gw_add_cb(uint16_t msgid, uint16_t lcore, void *msg)
                                          add_msg->rgm_gw.ip_v4,
                                          ROUTE_FLAG_IN_USE);
 
-    INC_STATS(STATS_LOCAL(route_statistics_t, port), rs_gw_add);
+    INC_STATS(STATS_LOCAL(tpg_route_statistics_t, port), rs_gw_add);
 
     /* Find local network matching default gw. */
     local_intf = route_v4_find_local(port,
                                      default_gw_per_port[port].re_nh.ip_v4);
     if (!local_intf) {
-        INC_STATS(STATS_LOCAL(route_statistics_t, port), rs_gw_nointf);
+        INC_STATS(STATS_LOCAL(tpg_route_statistics_t, port), rs_gw_nointf);
         return -EINVAL;
     }
 
@@ -276,7 +276,7 @@ static int route_gw_add_cb(uint16_t msgid, uint16_t lcore, void *msg)
     /*
      * Flush the bulk tx queue to make sure the ARPs are sent.
      */
-    pkt_flush_tx_q(port, STATS_LOCAL(port_statistics_t, port));
+    pkt_flush_tx_q(port, STATS_LOCAL(tpg_port_statistics_t, port));
     return 0;
 }
 
@@ -297,7 +297,7 @@ static int route_gw_del_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 
     assert(PORT_CORE_DEFAULT(port) == lcore);
 
-    INC_STATS(STATS_LOCAL(route_statistics_t, port), rs_gw_del);
+    INC_STATS(STATS_LOCAL(tpg_route_statistics_t, port), rs_gw_del);
 
     default_gw_per_port[port].re_flags &= ~ROUTE_FLAG_IN_USE;
 
@@ -344,7 +344,7 @@ bool route_init(void)
     /*
      * Allocate memory for ROUTE statistics, and clear all of them
      */
-    if (STATS_GLOBAL_INIT(route_statistics_t, "route_stats") == NULL) {
+    if (STATS_GLOBAL_INIT(tpg_route_statistics_t, "route_stats") == NULL) {
         RTE_LOG(ERR, USER1,
                 "ERROR: Failed allocating ROUTE statistics memory!\n");
         return false;
@@ -383,7 +383,8 @@ bool route_init(void)
 void route_lcore_init(uint32_t lcore_id)
 {
     /* Init the local stats. */
-    if (STATS_LOCAL_INIT(route_statistics_t, "route_stats", lcore_id) == NULL) {
+    if (STATS_LOCAL_INIT(tpg_route_statistics_t, "route_stats",
+                         lcore_id) == NULL) {
         TPG_ERROR_ABORT("[%d:%s() Failed to allocate per lcore route_stats!\n",
                         rte_lcore_index(lcore_id),
                         __func__);
@@ -518,7 +519,7 @@ uint64_t route_v4_nh_lookup(uint32_t port, uint32_t dest)
 
     nh_mac = arp_lookup_mac(port, default_gw_per_port[port].re_nh.ip_v4);
     if (nh_mac == TPG_ARP_MAC_NOT_FOUND) {
-        INC_STATS(STATS_LOCAL(route_statistics_t, port), rs_nh_not_found);
+        INC_STATS(STATS_LOCAL(tpg_route_statistics_t, port), rs_nh_not_found);
     }
 
     return nh_mac;
@@ -543,7 +544,7 @@ route_entry_t *route_v4_find_local(uint32_t port, uint32_t dest)
         }
     }
 
-    INC_STATS(STATS_LOCAL(route_statistics_t, port), rs_route_not_found);
+    INC_STATS(STATS_LOCAL(tpg_route_statistics_t, port), rs_route_not_found);
 
     return NULL;
 }
@@ -571,78 +572,67 @@ static void cmd_show_route_statistics_parsed(void *parsed_result __rte_unused,
                                              struct cmdline *cl,
                                              void *data)
 {
-    int port;
-    int core;
-    int option = (intptr_t) data;
+    int           port;
+    int           option = (intptr_t) data;
+    printer_arg_t parg = TPG_PRINTER_ARG(cli_printer, cl);
 
     for (port = 0; port < rte_eth_dev_count(); port++) {
 
         /*
          * Calculate totals first
          */
-        route_statistics_t  total_stats;
-        route_statistics_t *route_stats;
+        tpg_route_statistics_t total_stats;
 
-        bzero(&total_stats, sizeof(total_stats));
-
-        STATS_FOREACH_CORE(route_statistics_t, port, core, route_stats) {
-            total_stats.rs_intf_add += route_stats->rs_intf_add;
-            total_stats.rs_intf_del += route_stats->rs_intf_del;
-            total_stats.rs_gw_add += route_stats->rs_gw_add;
-            total_stats.rs_gw_del += route_stats->rs_gw_del;
-
-            total_stats.rs_tbl_full += route_stats->rs_tbl_full;
-            total_stats.rs_intf_nomem += route_stats->rs_intf_nomem;
-            total_stats.rs_intf_notfound += route_stats->rs_intf_notfound;
-            total_stats.rs_gw_nointf += route_stats->rs_gw_nointf;
-            total_stats.rs_nh_not_found += route_stats->rs_nh_not_found;
-            total_stats.rs_route_not_found += route_stats->rs_route_not_found;
-        }
+        if (test_mgmt_get_route_stats(port, &total_stats, &parg) != 0)
+            continue;
 
         /*
          * Display individual counters
          */
         cmdline_printf(cl, "Port %d Route statistics:\n", port);
 
-        SHOW_32BIT_STATS("Intf Add", route_statistics_t, rs_intf_add,
+        SHOW_32BIT_STATS("Intf Add", tpg_route_statistics_t, rs_intf_add,
                          port,
                          option);
 
-        SHOW_32BIT_STATS("Intf Del", route_statistics_t, rs_intf_del,
+        SHOW_32BIT_STATS("Intf Del", tpg_route_statistics_t, rs_intf_del,
                          port,
                          option);
 
-        SHOW_32BIT_STATS("Gw Add", route_statistics_t, rs_gw_add,
+        SHOW_32BIT_STATS("Gw Add", tpg_route_statistics_t, rs_gw_add,
                          port,
                          option);
 
-        SHOW_32BIT_STATS("Gw Del", route_statistics_t, rs_gw_del,
+        SHOW_32BIT_STATS("Gw Del", tpg_route_statistics_t, rs_gw_del,
                          port,
                          option);
 
         cmdline_printf(cl, "\n");
 
-        SHOW_32BIT_STATS("Route Tbl Full", route_statistics_t, rs_tbl_full,
+        SHOW_32BIT_STATS("Route Tbl Full", tpg_route_statistics_t, rs_tbl_full,
                          port,
                          option);
 
-        SHOW_32BIT_STATS("Intf No Mem", route_statistics_t, rs_intf_nomem,
+        SHOW_32BIT_STATS("Intf No Mem", tpg_route_statistics_t, rs_intf_nomem,
                          port,
                          option);
 
-        SHOW_32BIT_STATS("Intf Not Found", route_statistics_t, rs_intf_notfound,
+        SHOW_32BIT_STATS("Intf Not Found", tpg_route_statistics_t,
+                         rs_intf_notfound,
                          port,
                          option);
 
-        SHOW_32BIT_STATS("Gw Intf Not Found", route_statistics_t, rs_gw_nointf,
+        SHOW_32BIT_STATS("Gw Intf Not Found", tpg_route_statistics_t,
+                         rs_gw_nointf,
                          port,
                          option);
 
-        SHOW_32BIT_STATS("NH not found", route_statistics_t, rs_nh_not_found,
+        SHOW_32BIT_STATS("NH not found", tpg_route_statistics_t,
+                         rs_nh_not_found,
                          port,
                          option);
 
-        SHOW_32BIT_STATS("Route not found", route_statistics_t,
+        SHOW_32BIT_STATS("Route not found", tpg_route_statistics_t,
                          rs_route_not_found,
                          port,
                          option);

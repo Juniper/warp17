@@ -56,6 +56,8 @@
 
 #include "tcp_generator.h"
 
+STATS_DEFINE(tpg_phy_statistics_t);
+
 /*****************************************************************************
  * Globals
  ****************************************************************************/
@@ -700,6 +702,24 @@ static int test_mgmt_get_sockopt(uint32_t eth_port, uint32_t test_case_id,
 }
 
 /*****************************************************************************
+ * test_mgmt_clear_tsm_statistics()
+ ****************************************************************************/
+static void test_mgmt_clear_tsm_statistics(uint32_t eth_port)
+{
+    uint32_t              core;
+    tpg_tsm_statistics_t *stats;
+
+    STATS_FOREACH_CORE(tpg_tsm_statistics_t, eth_port, core, stats) {
+        stats->tsms_syn_to = 0;
+        stats->tsms_synack_to = 0;
+        stats->tsms_retry_to = 0;
+        stats->tsms_retrans_bytes = 0;
+        stats->tsms_missing_seq = 0;
+        stats->tsms_snd_win_full = 0;
+    }
+}
+
+/*****************************************************************************
  * API Implementation
  ****************************************************************************/
 /*****************************************************************************
@@ -1277,46 +1297,6 @@ int test_mgmt_get_tcp_sockopt(uint32_t eth_port, uint32_t test_case_id,
     tcp_load_sockopt(out, &sockopt->so_tcp);
     return 0;
 }
-/*****************************************************************************
- * test_mgmt_clear_stats()
- ****************************************************************************/
-int test_mgmt_clear_statistics(uint32_t eth_port, printer_arg_t *printer_arg)
-{
-    if (!test_mgmt_validate_port_id(eth_port, printer_arg))
-        return -EINVAL;
-
-    /* Clearing MSG stats */
-    STATS_CLEAR(msg_statistics_t, eth_port);
-
-    /* Clearing ARP stats */
-    STATS_CLEAR(arp_statistics_t, eth_port);
-
-    /* Clearing ROUTE stats */
-    STATS_CLEAR(route_statistics_t, eth_port);
-
-    /* Clearing TIMER stats */
-    STATS_CLEAR(timer_statistics_t, eth_port);
-
-    /* Clearing TCP stats */
-    STATS_CLEAR(tcp_statistics_t, eth_port);
-
-    /* Clearing TSM stats */
-    STATS_CLEAR(tsm_statistics_t, eth_port);
-
-    /* Clearing UDP stats */
-    STATS_CLEAR(udp_statistics_t, eth_port);
-
-    /* Clearing IPv4 stats */
-    STATS_CLEAR(ipv4_statistics_t, eth_port);
-
-    /* Clearing PORT stats */
-    STATS_CLEAR(port_statistics_t, eth_port);
-
-    /* Clearing ETHERNET stats */
-    STATS_CLEAR(ethernet_statistics_t, eth_port);
-
-    return 0;
-}
 
 /*****************************************************************************
  * test_mgmt_start_port()
@@ -1446,3 +1426,415 @@ test_mgmt_get_test_case_app_stats(uint32_t eth_port, uint32_t test_case_id,
     return 0;
 }
 
+
+/*****************************************************************************
+ * test_mgmt_get_port_stats()
+ *****************************************************************************/
+int test_mgmt_get_port_stats(uint32_t eth_port,
+                             tpg_port_statistics_t *total_stats,
+                             printer_arg_t *printer_arg)
+{
+    tpg_port_statistics_t *port_stats;
+    uint32_t               core;
+
+    if (!test_mgmt_validate_port_id(eth_port, printer_arg))
+        return -EINVAL;
+
+    bzero(total_stats, sizeof(*total_stats));
+
+    STATS_FOREACH_CORE(tpg_port_statistics_t, eth_port, core, port_stats) {
+        total_stats->ps_received_pkts += port_stats->ps_received_pkts;
+        total_stats->ps_received_bytes += port_stats->ps_received_bytes;
+        total_stats->ps_sent_pkts += port_stats->ps_sent_pkts;
+        total_stats->ps_sent_bytes += port_stats->ps_sent_bytes;
+        total_stats->ps_sent_failure += port_stats->ps_sent_failure;
+        total_stats->ps_received_ring_if_failed +=
+            port_stats->ps_received_ring_if_failed;
+        total_stats->ps_sent_sim_failure += port_stats->ps_sent_sim_failure;
+
+    }
+
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_get_phy_stats()
+ *****************************************************************************/
+int test_mgmt_get_phy_stats(uint32_t eth_port,
+                            tpg_phy_statistics_t *total_stats,
+                            printer_arg_t *printer_arg)
+{
+    struct rte_eth_link  link_info;
+    struct rte_eth_stats phy_stats;
+
+    if (!test_mgmt_validate_port_id(eth_port, printer_arg))
+        return -EINVAL;
+
+    port_link_stats_get(eth_port, &phy_stats);
+    port_link_info_get(eth_port, &link_info);
+
+    bzero(total_stats, sizeof(*total_stats));
+
+    total_stats->pys_rx_pkts = phy_stats.ipackets;
+    total_stats->pys_rx_bytes = phy_stats.ibytes;
+    total_stats->pys_tx_pkts = phy_stats.opackets;
+    total_stats->pys_tx_bytes = phy_stats.obytes;
+    total_stats->pys_rx_errors = phy_stats.ierrors;
+    total_stats->pys_tx_errors = phy_stats.oerrors;
+    total_stats->pys_link_speed = link_info.link_speed;
+
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_get_eth_stats()
+ *****************************************************************************/
+int test_mgmt_get_eth_stats(uint32_t eth_port,
+                            tpg_eth_statistics_t *total_stats,
+                            printer_arg_t *printer_arg)
+{
+    tpg_eth_statistics_t *eth_stats;
+    uint32_t              core;
+
+    if (!test_mgmt_validate_port_id(eth_port, printer_arg))
+        return -EINVAL;
+
+    bzero(total_stats, sizeof(*total_stats));
+
+    STATS_FOREACH_CORE(tpg_eth_statistics_t, eth_port, core, eth_stats) {
+        total_stats->es_etype_arp += eth_stats->es_etype_arp;
+        total_stats->es_etype_ipv4 += eth_stats->es_etype_ipv4;
+        total_stats->es_etype_ipv6 += eth_stats->es_etype_ipv6;
+        total_stats->es_etype_vlan += eth_stats->es_etype_vlan;
+        total_stats->es_etype_other += eth_stats->es_etype_other;
+        total_stats->es_to_small_fragment += eth_stats->es_to_small_fragment;
+    }
+
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_get_arp_stats()
+ *****************************************************************************/
+int test_mgmt_get_arp_stats(uint32_t eth_port,
+                            tpg_arp_statistics_t *total_stats,
+                            printer_arg_t *printer_arg)
+{
+    tpg_arp_statistics_t *arp_stats;
+    uint32_t              core;
+
+    if (!test_mgmt_validate_port_id(eth_port, printer_arg))
+        return -EINVAL;
+
+    bzero(total_stats, sizeof(*total_stats));
+
+    STATS_FOREACH_CORE(tpg_arp_statistics_t, eth_port, core, arp_stats) {
+        total_stats->as_received_req += arp_stats->as_received_req;
+        total_stats->as_received_rep += arp_stats->as_received_rep;
+        total_stats->as_received_other += arp_stats->as_received_other;
+        total_stats->as_sent_req += arp_stats->as_sent_req;
+        total_stats->as_sent_req_failed += arp_stats->as_sent_req_failed;
+        total_stats->as_sent_rep += arp_stats->as_sent_rep;
+        total_stats->as_sent_rep_failed += arp_stats->as_sent_rep_failed;
+        total_stats->as_to_small_fragment += arp_stats->as_to_small_fragment;
+        total_stats->as_invalid_hw_space += arp_stats->as_invalid_hw_space;
+        total_stats->as_invalid_hw_len += arp_stats->as_invalid_hw_len;
+        total_stats->as_invalid_proto_space +=
+            arp_stats->as_invalid_proto_space;
+        total_stats->as_invalid_proto_len += arp_stats->as_invalid_proto_len;
+        total_stats->as_req_not_mine += arp_stats->as_req_not_mine;
+    }
+
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_get_route_stats()
+ *****************************************************************************/
+int test_mgmt_get_route_stats(uint32_t eth_port,
+                              tpg_route_statistics_t *total_stats,
+                              printer_arg_t *printer_arg)
+{
+    tpg_route_statistics_t *route_stats;
+    uint32_t                core;
+
+    if (!test_mgmt_validate_port_id(eth_port, printer_arg))
+        return -EINVAL;
+
+    bzero(total_stats, sizeof(*total_stats));
+
+    STATS_FOREACH_CORE(tpg_route_statistics_t, eth_port, core, route_stats) {
+        total_stats->rs_intf_add += route_stats->rs_intf_add;
+        total_stats->rs_intf_del += route_stats->rs_intf_del;
+        total_stats->rs_gw_add += route_stats->rs_gw_add;
+        total_stats->rs_gw_del += route_stats->rs_gw_del;
+
+        total_stats->rs_tbl_full += route_stats->rs_tbl_full;
+        total_stats->rs_intf_nomem += route_stats->rs_intf_nomem;
+        total_stats->rs_intf_notfound += route_stats->rs_intf_notfound;
+        total_stats->rs_gw_nointf += route_stats->rs_gw_nointf;
+        total_stats->rs_nh_not_found += route_stats->rs_nh_not_found;
+        total_stats->rs_route_not_found += route_stats->rs_route_not_found;
+    }
+
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_get_ipv4_stats()
+ *****************************************************************************/
+int test_mgmt_get_ipv4_stats(uint32_t eth_port,
+                             tpg_ipv4_statistics_t *total_stats,
+                             printer_arg_t *printer_arg)
+{
+    tpg_ipv4_statistics_t *ipv4_stats;
+    uint32_t               core;
+
+    if (!test_mgmt_validate_port_id(eth_port, printer_arg))
+        return -EINVAL;
+
+    bzero(total_stats, sizeof(*total_stats));
+
+    STATS_FOREACH_CORE(tpg_ipv4_statistics_t, eth_port, core, ipv4_stats) {
+        total_stats->ips_received_pkts += ipv4_stats->ips_received_pkts;
+        total_stats->ips_received_bytes += ipv4_stats->ips_received_bytes;
+        total_stats->ips_protocol_icmp += ipv4_stats->ips_protocol_icmp;
+        total_stats->ips_protocol_tcp += ipv4_stats->ips_protocol_tcp;
+        total_stats->ips_protocol_udp += ipv4_stats->ips_protocol_udp;
+        total_stats->ips_protocol_other += ipv4_stats->ips_protocol_other;
+        total_stats->ips_to_small_fragment += ipv4_stats->ips_to_small_fragment;
+        total_stats->ips_hdr_to_small += ipv4_stats->ips_hdr_to_small;
+        total_stats->ips_invalid_checksum += ipv4_stats->ips_invalid_checksum;
+        total_stats->ips_total_length_invalid +=
+            ipv4_stats->ips_total_length_invalid;
+        total_stats->ips_received_frags += ipv4_stats->ips_received_frags;
+
+#ifndef _SPEEDY_PKT_PARSE_
+        total_stats->ips_not_v4 += ipv4_stats->ips_not_v4;
+        total_stats->ips_reserved_bit_set += ipv4_stats->ips_reserved_bit_set;
+#endif
+    }
+
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_get_udp_stats()
+ *****************************************************************************/
+int test_mgmt_get_udp_stats(uint32_t eth_port,
+                            tpg_udp_statistics_t *total_stats,
+                            printer_arg_t *printer_arg)
+{
+    tpg_udp_statistics_t *udp_stats;
+    uint32_t              core;
+
+    if (!test_mgmt_validate_port_id(eth_port, printer_arg))
+        return -EINVAL;
+
+    bzero(total_stats, sizeof(*total_stats));
+
+    STATS_FOREACH_CORE(tpg_udp_statistics_t, eth_port, core, udp_stats) {
+        total_stats->us_received_pkts += udp_stats->us_received_pkts;
+        total_stats->us_received_bytes += udp_stats->us_received_bytes;
+        total_stats->us_sent_pkts += udp_stats->us_sent_pkts;
+        total_stats->us_sent_bytes += udp_stats->us_sent_bytes;
+        total_stats->us_ucb_malloced += udp_stats->us_ucb_malloced;
+        total_stats->us_ucb_freed += udp_stats->us_ucb_freed;
+        total_stats->us_ucb_not_found += udp_stats->us_ucb_not_found;
+        total_stats->us_ucb_alloc_err += udp_stats->us_ucb_alloc_err;
+        total_stats->us_to_small_fragment += udp_stats->us_to_small_fragment;
+        total_stats->us_invalid_checksum += udp_stats->us_invalid_checksum;
+        total_stats->us_failed_pkts += udp_stats->us_failed_pkts;
+    }
+
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_get_tcp_stats()
+ *****************************************************************************/
+int test_mgmt_get_tcp_stats(uint32_t eth_port,
+                            tpg_tcp_statistics_t *total_stats,
+                            printer_arg_t *printer_arg)
+{
+    tpg_tcp_statistics_t *tcp_stats;
+    uint32_t              core;
+
+    if (!test_mgmt_validate_port_id(eth_port, printer_arg))
+        return -EINVAL;
+
+    bzero(total_stats, sizeof(*total_stats));
+
+    STATS_FOREACH_CORE(tpg_tcp_statistics_t, eth_port, core, tcp_stats) {
+        total_stats->ts_received_pkts += tcp_stats->ts_received_pkts;
+        total_stats->ts_received_bytes += tcp_stats->ts_received_bytes;
+        total_stats->ts_sent_ctrl_pkts += tcp_stats->ts_sent_ctrl_pkts;
+        total_stats->ts_sent_ctrl_bytes += tcp_stats->ts_sent_ctrl_bytes;
+        total_stats->ts_sent_data_pkts += tcp_stats->ts_sent_data_pkts;
+        total_stats->ts_sent_data_bytes += tcp_stats->ts_sent_data_bytes;
+        total_stats->ts_tcb_malloced += tcp_stats->ts_tcb_malloced;
+        total_stats->ts_tcb_freed += tcp_stats->ts_tcb_freed;
+        total_stats->ts_tcb_not_found += tcp_stats->ts_tcb_not_found;
+        total_stats->ts_tcb_alloc_err += tcp_stats->ts_tcb_alloc_err;
+        total_stats->ts_to_small_fragment += tcp_stats->ts_to_small_fragment;
+        total_stats->ts_hdr_to_small += tcp_stats->ts_hdr_to_small;
+        total_stats->ts_invalid_checksum += tcp_stats->ts_invalid_checksum;
+        total_stats->ts_failed_ctrl_pkts += tcp_stats->ts_failed_ctrl_pkts;
+        total_stats->ts_failed_data_pkts += tcp_stats->ts_failed_data_pkts;
+        total_stats->ts_failed_data_clone += tcp_stats->ts_failed_data_clone;
+
+#ifndef _SPEEDY_PKT_PARSE_
+        total_stats->ts_reserved_bit_set += tcp_stats->ts_reserved_bit_set;
+#endif
+    }
+
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_get_tsm_stats()
+ *****************************************************************************/
+int test_mgmt_get_tsm_stats(uint32_t eth_port,
+                            tpg_tsm_statistics_t *total_stats,
+                            printer_arg_t *printer_arg)
+{
+    tpg_tsm_statistics_t *tsm_stats;
+    uint32_t              core;
+
+    if (!test_mgmt_validate_port_id(eth_port, printer_arg))
+        return -EINVAL;
+
+    bzero(total_stats, sizeof(*total_stats));
+    total_stats->tsms_tcb_states_count = TS_MAX_STATE;
+
+    STATS_FOREACH_CORE(tpg_tsm_statistics_t, eth_port, core, tsm_stats) {
+        int i;
+
+        for (i = 0; i < TS_MAX_STATE; i++)
+            total_stats->tsms_tcb_states[i] += tsm_stats->tsms_tcb_states[i];
+
+        total_stats->tsms_syn_to += tsm_stats->tsms_syn_to;
+        total_stats->tsms_synack_to += tsm_stats->tsms_synack_to;
+        total_stats->tsms_retry_to += tsm_stats->tsms_retry_to;
+        total_stats->tsms_retrans_bytes += tsm_stats->tsms_retrans_bytes;
+        total_stats->tsms_missing_seq += tsm_stats->tsms_missing_seq;
+        total_stats->tsms_snd_win_full += tsm_stats->tsms_snd_win_full;
+
+    }
+
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_get_msg_stats()
+ *****************************************************************************/
+int test_mgmt_get_msg_stats(tpg_msg_statistics_t *total_stats,
+                            printer_arg_t *printer_arg __rte_unused)
+{
+    tpg_msg_statistics_t *msg_stats;
+    uint32_t              core;
+
+    bzero(total_stats, sizeof(*total_stats));
+
+    STATS_FOREACH_CORE(tpg_msg_statistics_t, 0, core, msg_stats) {
+        total_stats->ms_rcvd += msg_stats->ms_rcvd;
+        total_stats->ms_snd += msg_stats->ms_snd;
+        total_stats->ms_poll += msg_stats->ms_poll;
+
+        total_stats->ms_err += msg_stats->ms_err;
+        total_stats->ms_proc_err += msg_stats->ms_proc_err;
+
+        total_stats->ms_alloc += msg_stats->ms_alloc;
+        total_stats->ms_alloc_err += msg_stats->ms_alloc_err;
+        total_stats->ms_free += msg_stats->ms_free;
+    }
+
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_get_timer_stats()
+ *****************************************************************************/
+int test_mgmt_get_timer_stats(uint32_t eth_port,
+                              tpg_timer_statistics_t *total_stats,
+                              printer_arg_t *printer_arg)
+{
+    tpg_timer_statistics_t *timer_stats;
+    uint32_t                core;
+
+    if (!test_mgmt_validate_port_id(eth_port, printer_arg))
+        return -EINVAL;
+
+    bzero(total_stats, sizeof(*total_stats));
+    STATS_FOREACH_CORE(tpg_timer_statistics_t, eth_port, core, timer_stats) {
+        total_stats->tts_rto_set += timer_stats->tts_rto_set;
+        total_stats->tts_rto_cancelled += timer_stats->tts_rto_cancelled;
+        total_stats->tts_rto_fired += timer_stats->tts_rto_fired;
+
+        total_stats->tts_slow_set += timer_stats->tts_slow_set;
+        total_stats->tts_slow_cancelled += timer_stats->tts_slow_cancelled;
+        total_stats->tts_slow_fired += timer_stats->tts_slow_fired;
+
+        total_stats->tts_test_set += timer_stats->tts_test_set;
+        total_stats->tts_test_cancelled += timer_stats->tts_test_cancelled;
+        total_stats->tts_test_fired += timer_stats->tts_test_fired;
+
+        total_stats->tts_rto_failed += timer_stats->tts_rto_failed;
+        total_stats->tts_slow_failed += timer_stats->tts_slow_failed;
+        total_stats->tts_l4cb_null += timer_stats->tts_l4cb_null;
+        total_stats->tts_l4cb_invalid_flags +=
+            timer_stats->tts_l4cb_invalid_flags;
+        total_stats->tts_timeout_overflow +=
+            timer_stats->tts_timeout_overflow;
+    }
+
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_clear_stats()
+ ****************************************************************************/
+int test_mgmt_clear_statistics(uint32_t eth_port, printer_arg_t *printer_arg)
+{
+    if (!test_mgmt_validate_port_id(eth_port, printer_arg))
+        return -EINVAL;
+
+    /* Clear PORT stats. */
+    STATS_CLEAR(tpg_port_statistics_t, eth_port);
+
+    /* Clear PHY stats. */
+    rte_eth_stats_reset(eth_port);
+    rte_eth_xstats_reset(eth_port);
+
+    /* Clear ETHERNET stats. */
+    STATS_CLEAR(tpg_eth_statistics_t, eth_port);
+
+    /* Clear ARP stats. */
+    STATS_CLEAR(tpg_arp_statistics_t, eth_port);
+
+    /* Clear ROUTE stats. */
+    STATS_CLEAR(tpg_route_statistics_t, eth_port);
+
+    /* Clear IPv4 stats. */
+    STATS_CLEAR(tpg_ipv4_statistics_t, eth_port);
+
+    /* Clear UDP stats. */
+    STATS_CLEAR(tpg_udp_statistics_t, eth_port);
+
+    /* Clear TCP stats. */
+    STATS_CLEAR(tpg_tcp_statistics_t, eth_port);
+
+    /* Clear TSM stats.
+     * However, we should only clean stats and not the number of TCBs in
+     * each state. Therefore we can't use STATS_CLEAR.
+     */
+    test_mgmt_clear_tsm_statistics(eth_port);
+
+    /* Clear MSG stats. */
+    STATS_CLEAR(tpg_msg_statistics_t, eth_port);
+
+    /* Clear TIMER stats. */
+    STATS_CLEAR(tpg_timer_statistics_t, eth_port);
+
+    return 0;
+}

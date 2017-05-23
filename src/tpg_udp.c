@@ -65,7 +65,7 @@
 /* Define UDP global statistics. Each thread has its own set of locally
  * allocated stats which are accessible through STATS_GLOBAL(type, core, port).
  */
-STATS_DEFINE(udp_statistics_t);
+STATS_DEFINE(tpg_udp_statistics_t);
 
 /* Callback to be executed whenever an interesting event happens. */
 notif_cb_t udp_notif_cb;
@@ -91,7 +91,7 @@ bool udp_init(void)
     /*
      * Allocate memory for UDP statistics, and clear all of them
      */
-    if (STATS_GLOBAL_INIT(udp_statistics_t, "udp_stats") == NULL) {
+    if (STATS_GLOBAL_INIT(tpg_udp_statistics_t, "udp_stats") == NULL) {
         RTE_LOG(ERR, USER1,
                 "ERROR: Failed allocating UDP statistics memory!\n");
         return false;
@@ -106,7 +106,7 @@ bool udp_init(void)
 void udp_lcore_init(uint32_t lcore_id)
 {
     /* Init the local stats. */
-    if (STATS_LOCAL_INIT(udp_statistics_t, "udp_stats", lcore_id) == NULL) {
+    if (STATS_LOCAL_INIT(tpg_udp_statistics_t, "udp_stats", lcore_id) == NULL) {
         TPG_ERROR_ABORT("[%d:%s() Failed to allocate per lcore udp_stats!\n",
                         rte_lcore_index(lcore_id),
                         __func__);
@@ -149,13 +149,13 @@ static int udp_process_incoming(udp_control_block_t *ucb,
  ****************************************************************************/
 static udp_control_block_t *ucb_clone(udp_control_block_t *ucb)
 {
-    udp_control_block_t *new_ucb;
-    uint32_t             new_ucb_id;
-    udp_statistics_t    *stats;
+    udp_control_block_t  *new_ucb;
+    uint32_t              new_ucb_id;
+    tpg_udp_statistics_t *stats;
 
     UCB_CHECK(ucb);
 
-    stats = STATS_LOCAL(udp_statistics_t, ucb->ucb_l4.l4cb_interface);
+    stats = STATS_LOCAL(tpg_udp_statistics_t, ucb->ucb_l4.l4cb_interface);
     new_ucb = tlkp_alloc_ucb();
     if (unlikely(new_ucb == NULL)) {
         INC_STATS(stats, us_ucb_alloc_err);
@@ -185,12 +185,12 @@ static udp_control_block_t *ucb_clone(udp_control_block_t *ucb)
 struct rte_mbuf *udp_receive_pkt(packet_control_block_t *pcb,
                                  struct rte_mbuf *mbuf)
 {
-    udp_statistics_t    *stats;
-    struct udp_hdr      *udp_hdr;
-    udp_control_block_t *ucb;
-    int                  error;
+    tpg_udp_statistics_t *stats;
+    struct udp_hdr       *udp_hdr;
+    udp_control_block_t  *ucb;
+    int                   error;
 
-    stats = STATS_LOCAL(udp_statistics_t, pcb->pcb_port);
+    stats = STATS_LOCAL(tpg_udp_statistics_t, pcb->pcb_port);
 
     if (unlikely(rte_pktmbuf_data_len(mbuf) < sizeof(struct udp_hdr))) {
         RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: mbuf fragment to small for udp_hdr!\n",
@@ -529,12 +529,12 @@ int udp_open_v4_connection(udp_control_block_t **ucb, uint32_t eth_port,
     if (*ucb == NULL) {
         *ucb = tlkp_alloc_ucb();
         if (*ucb == NULL) {
-            INC_STATS(STATS_LOCAL(udp_statistics_t, eth_port),
+            INC_STATS(STATS_LOCAL(tpg_udp_statistics_t, eth_port),
                       us_ucb_alloc_err);
             return -ENOMEM;
         }
         malloc_flag = TCG_CB_MALLOCED;
-        INC_STATS(STATS_LOCAL(udp_statistics_t, eth_port), us_ucb_malloced);
+        INC_STATS(STATS_LOCAL(tpg_udp_statistics_t, eth_port), us_ucb_malloced);
     } else {
         UCB_CHECK(*ucb);
         malloc_flag = 0;
@@ -632,7 +632,7 @@ int udp_close_v4(udp_control_block_t *ucb)
     tlkp_delete_ucb(ucb);
 
     if (ucb->ucb_malloced) {
-        INC_STATS(STATS_LOCAL(udp_statistics_t, ucb->ucb_l4.l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_udp_statistics_t, ucb->ucb_l4.l4cb_interface),
                   us_ucb_freed);
         udp_connection_cleanup(ucb);
     }
@@ -646,11 +646,11 @@ int udp_close_v4(udp_control_block_t *ucb)
 int udp_send_v4(udp_control_block_t *ucb, struct rte_mbuf *data_mbuf,
                 uint32_t *data_sent)
 {
-    struct rte_mbuf  *hdr;
-    struct udp_hdr   *udp_hdr;
-    udp_statistics_t *stats;
+    struct rte_mbuf      *hdr;
+    struct udp_hdr       *udp_hdr;
+    tpg_udp_statistics_t *stats;
 
-    stats = STATS_LOCAL(udp_statistics_t, ucb->ucb_l4.l4cb_interface);
+    stats = STATS_LOCAL(tpg_udp_statistics_t, ucb->ucb_l4.l4cb_interface);
 
     hdr = udp_build_udp_hdr_mbuf(ucb, data_mbuf->pkt_len, &udp_hdr);
     if (unlikely(hdr == NULL)) {
@@ -720,85 +720,81 @@ static void cmd_show_udp_statistics_parsed(void *parsed_result __rte_unused,
                                            struct cmdline *cl,
                                            void *data)
 {
-    int port;
-    int core;
-    int option = (intptr_t) data;
+    int           port;
+    int           option = (intptr_t) data;
+    printer_arg_t parg = TPG_PRINTER_ARG(cli_printer, cl);
 
     for (port = 0; port < rte_eth_dev_count(); port++) {
 
         /*
          * Calculate totals first
          */
-        udp_statistics_t  total_stats;
-        udp_statistics_t *udp_stats;
+        tpg_udp_statistics_t total_stats;
 
-        bzero(&total_stats, sizeof(total_stats));
-        STATS_FOREACH_CORE(udp_statistics_t, port, core, udp_stats) {
-            total_stats.us_received_pkts += udp_stats->us_received_pkts;
-            total_stats.us_received_bytes += udp_stats->us_received_bytes;
-            total_stats.us_sent_pkts += udp_stats->us_sent_pkts;
-            total_stats.us_sent_bytes += udp_stats->us_sent_bytes;
-            total_stats.us_ucb_malloced += udp_stats->us_ucb_malloced;
-            total_stats.us_ucb_freed += udp_stats->us_ucb_freed;
-            total_stats.us_ucb_not_found += udp_stats->us_ucb_not_found;
-            total_stats.us_ucb_alloc_err += udp_stats->us_ucb_alloc_err;
-            total_stats.us_to_small_fragment += udp_stats->us_to_small_fragment;
-            total_stats.us_invalid_checksum += udp_stats->us_invalid_checksum;
-            total_stats.us_failed_pkts += udp_stats->us_failed_pkts;
-        }
+        if (test_mgmt_get_udp_stats(port, &total_stats, &parg) != 0)
+            continue;
 
         /*
          * Display individual counters
          */
         cmdline_printf(cl, "Port %d UDP statistics:\n", port);
 
-        SHOW_64BIT_STATS("Received Packets", udp_statistics_t, us_received_pkts,
+        SHOW_64BIT_STATS("Received Packets", tpg_udp_statistics_t,
+                         us_received_pkts,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Received Bytes", udp_statistics_t, us_received_bytes,
+        SHOW_64BIT_STATS("Received Bytes", tpg_udp_statistics_t,
+                         us_received_bytes,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Sent Packets", udp_statistics_t, us_sent_pkts,
+        SHOW_64BIT_STATS("Sent Packets", tpg_udp_statistics_t,
+                         us_sent_pkts,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Sent Bytes", udp_statistics_t, us_sent_bytes,
+        SHOW_64BIT_STATS("Sent Bytes", tpg_udp_statistics_t,
+                         us_sent_bytes,
                          port,
                          option);
 
 
         cmdline_printf(cl, "\n");
 
-        SHOW_64BIT_STATS("Malloced UCBs", udp_statistics_t, us_ucb_malloced,
+        SHOW_64BIT_STATS("Malloced UCBs", tpg_udp_statistics_t,
+                         us_ucb_malloced,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Freed UCBs", udp_statistics_t, us_ucb_freed,
+        SHOW_64BIT_STATS("Freed UCBs", tpg_udp_statistics_t,
+                         us_ucb_freed,
                          port,
                          option);
-        SHOW_64BIT_STATS("Not found UCBs", udp_statistics_t, us_ucb_not_found,
+        SHOW_64BIT_STATS("Not found UCBs", tpg_udp_statistics_t,
+                         us_ucb_not_found,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("UCB alloc errors", udp_statistics_t, us_ucb_alloc_err,
+        SHOW_64BIT_STATS("UCB alloc errors", tpg_udp_statistics_t,
+                         us_ucb_alloc_err,
                          port,
                          option);
 
         cmdline_printf(cl, "\n");
 
-        SHOW_16BIT_STATS("Invalid checksum", udp_statistics_t,
+        SHOW_32BIT_STATS("Invalid checksum", tpg_udp_statistics_t,
                          us_invalid_checksum,
                          port,
                          option);
 
-        SHOW_16BIT_STATS("Small mbuf fragment", udp_statistics_t,
+        SHOW_32BIT_STATS("Small mbuf fragment", tpg_udp_statistics_t,
                          us_to_small_fragment,
                          port,
                          option);
 
-        SHOW_16BIT_STATS("Failed Packets", udp_statistics_t, us_failed_pkts,
+        SHOW_32BIT_STATS("Failed Packets", tpg_udp_statistics_t,
+                         us_failed_pkts,
                          port,
                          option);
 
@@ -840,4 +836,3 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_show_udp_statistics_details,
     NULL,
 };
-

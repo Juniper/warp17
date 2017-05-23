@@ -65,38 +65,7 @@
 /* Define IPv4 global statistics. Each thread has its own set of locally
  * allocated stats which are accessible through STATS_GLOBAL(type, core, port).
  */
-STATS_DEFINE(ipv4_statistics_t);
-
-/*****************************************************************************
- * ipv4_get_stat_pointer()
- *****************************************************************************/
-void ipv4_total_stats_get(uint32_t port, ipv4_statistics_t *total_stats)
-{
-    ipv4_statistics_t *ipv4_stats;
-    uint32_t           core;
-
-    bzero(total_stats, sizeof(*total_stats));
-
-    STATS_FOREACH_CORE(ipv4_statistics_t, port, core, ipv4_stats) {
-        total_stats->ips_received_pkts += ipv4_stats->ips_received_pkts;
-        total_stats->ips_received_bytes += ipv4_stats->ips_received_bytes;
-        total_stats->ips_protocol_icmp += ipv4_stats->ips_protocol_icmp;
-        total_stats->ips_protocol_tcp += ipv4_stats->ips_protocol_tcp;
-        total_stats->ips_protocol_udp += ipv4_stats->ips_protocol_udp;
-        total_stats->ips_protocol_other += ipv4_stats->ips_protocol_other;
-        total_stats->ips_to_small_fragment += ipv4_stats->ips_to_small_fragment;
-        total_stats->ips_hdr_to_small += ipv4_stats->ips_hdr_to_small;
-        total_stats->ips_invalid_checksum += ipv4_stats->ips_invalid_checksum;
-        total_stats->ips_total_length_invalid += ipv4_stats->ips_total_length_invalid;
-        total_stats->ips_received_frags += ipv4_stats->ips_received_frags;
-
-#ifndef _SPEEDY_PKT_PARSE_
-        total_stats->ips_not_v4 += ipv4_stats->ips_not_v4;
-        total_stats->ips_reserved_bit_set += ipv4_stats->ips_reserved_bit_set;
-#endif
-    }
-
-}
+STATS_DEFINE(tpg_ipv4_statistics_t);
 
 /*****************************************************************************
  * CLI commands
@@ -131,43 +100,43 @@ static void cmd_show_ipv4_statistics_parsed(void *parsed_result __rte_unused,
         /*
          * Calculate totals first
          */
-        ipv4_statistics_t  total_stats;
+        tpg_ipv4_statistics_t total_stats;
 
-        ipv4_total_stats_get(port, &total_stats);
+        test_mgmt_get_ipv4_stats(port, &total_stats, NULL);
 
         /*
          * Display individual counters
          */
         cmdline_printf(cl, "Port %d IPv4 statistics:\n", port);
 
-        SHOW_64BIT_STATS("Received Packets", ipv4_statistics_t,
+        SHOW_64BIT_STATS("Received Packets", tpg_ipv4_statistics_t,
                          ips_received_pkts,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Received Bytes", ipv4_statistics_t,
+        SHOW_64BIT_STATS("Received Bytes", tpg_ipv4_statistics_t,
                          ips_received_bytes,
                          port,
                          option);
 
         cmdline_printf(cl, "\n");
 
-        SHOW_64BIT_STATS("Received ICMP", ipv4_statistics_t,
+        SHOW_64BIT_STATS("Received ICMP", tpg_ipv4_statistics_t,
                          ips_protocol_icmp,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Received TCP ", ipv4_statistics_t,
+        SHOW_64BIT_STATS("Received TCP ", tpg_ipv4_statistics_t,
                          ips_protocol_tcp,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Received UDP ", ipv4_statistics_t,
+        SHOW_64BIT_STATS("Received UDP ", tpg_ipv4_statistics_t,
                          ips_protocol_udp,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Received other ", ipv4_statistics_t,
+        SHOW_64BIT_STATS("Received other ", tpg_ipv4_statistics_t,
                          ips_protocol_other,
                          port,
                          option);
@@ -175,38 +144,38 @@ static void cmd_show_ipv4_statistics_parsed(void *parsed_result __rte_unused,
         cmdline_printf(cl, "\n");
 
 
-        SHOW_16BIT_STATS("Invalid checksum", ipv4_statistics_t,
+        SHOW_32BIT_STATS("Invalid checksum", tpg_ipv4_statistics_t,
                          ips_invalid_checksum,
                          port,
                          option);
 
-        SHOW_16BIT_STATS("Small mbuf fragment", ipv4_statistics_t,
+        SHOW_32BIT_STATS("Small mbuf fragment", tpg_ipv4_statistics_t,
                          ips_to_small_fragment,
                          port,
                          option);
 
-        SHOW_16BIT_STATS("IP hdr to small", ipv4_statistics_t,
+        SHOW_32BIT_STATS("IP hdr to small", tpg_ipv4_statistics_t,
                          ips_hdr_to_small,
                          port,
                          option);
 
-        SHOW_16BIT_STATS("Total length invalid", ipv4_statistics_t,
+        SHOW_32BIT_STATS("Total length invalid", tpg_ipv4_statistics_t,
                          ips_total_length_invalid,
                          port,
                          option);
 
-        SHOW_16BIT_STATS("Received Fragments", ipv4_statistics_t,
+        SHOW_32BIT_STATS("Received Fragments", tpg_ipv4_statistics_t,
                          ips_received_frags,
                          port,
                          option);
 
 #ifndef _SPEEDY_PKT_PARSE_
-        SHOW_16BIT_STATS("Invalid version:", ipv4_statistics_t,
+        SHOW_32BIT_STATS("Invalid version:", tpg_ipv4_statistics_t,
                          ips_not_v4,
                          port,
                          option);
 
-        SHOW_16BIT_STATS("Reserved bit set:", ipv4_statistics_t,
+        SHOW_32BIT_STATS("Reserved bit set:", tpg_ipv4_statistics_t,
                          ips_reserved_bit_set,
                          port,
                          option);
@@ -267,7 +236,7 @@ bool ipv4_init(void)
     /*
      * Allocate memory for IPv4 statistics, and clear all of them
      */
-    if (STATS_GLOBAL_INIT(ipv4_statistics_t, "ipv4_stats") == NULL) {
+    if (STATS_GLOBAL_INIT(tpg_ipv4_statistics_t, "ipv4_stats") == NULL) {
         RTE_LOG(ERR, USER1,
                 "ERROR: Failed allocating IPv4 statistics memory!\n");
         return false;
@@ -282,7 +251,8 @@ bool ipv4_init(void)
 void ipv4_lcore_init(uint32_t lcore_id)
 {
     /* Init the local stats. */
-    if (STATS_LOCAL_INIT(ipv4_statistics_t, "ipv4_stats", lcore_id) == NULL) {
+    if (STATS_LOCAL_INIT(tpg_ipv4_statistics_t,
+                         "ipv4_stats", lcore_id) == NULL) {
         TPG_ERROR_ABORT("[%d:%s() Failed to allocate per lcore ipv4_stats!\n",
                         rte_lcore_index(lcore_id),
                         __func__);
@@ -353,11 +323,11 @@ int ipv4_build_ipv4_hdr(sockopt_t *sockopt __rte_unused,
 struct rte_mbuf *ipv4_receive_pkt(packet_control_block_t *pcb,
                                   struct rte_mbuf *mbuf)
 {
-    unsigned int       ip_hdr_len;
-    ipv4_statistics_t *stats;
-    struct ipv4_hdr   *ip_hdr;
+    unsigned int           ip_hdr_len;
+    tpg_ipv4_statistics_t *stats;
+    struct ipv4_hdr       *ip_hdr;
 
-    stats = STATS_LOCAL(ipv4_statistics_t, pcb->pcb_port);
+    stats = STATS_LOCAL(tpg_ipv4_statistics_t, pcb->pcb_port);
 
     if (unlikely(rte_pktmbuf_data_len(mbuf) < sizeof(struct ipv4_hdr))) {
         RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: mbuf fragment to small for ipv4_hdr!\n",

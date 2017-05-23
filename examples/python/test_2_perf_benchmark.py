@@ -207,6 +207,9 @@ def run_test(protocol, app, req_size, resp_size):
 
     result = warp17_call('GetTestStatus', TestCaseArg(tca_eth_port=0,
                                                       tca_test_case_id=0))
+
+    stats_result = warp17_call('GetStatistics', PortArg(pa_eth_port=0))
+
     if result.tsr_state != PASSED:
         die('Test case didn\'t pass: ' + str(result))
 
@@ -216,11 +219,11 @@ def run_test(protocol, app, req_size, resp_size):
     # start and stop ts are in usecs
     duration = (end_time - start_time) / float(1000000)
     rate = sess_cnt / duration
-    txr = result.tsr_link_stats.ls_tx_pkts / duration
-    rxr = result.tsr_link_stats.ls_rx_pkts / duration
-    link_speed_bytes = float(result.tsr_link_stats.ls_link_speed) * 1024 * 1024 / 8
-    tx_usage = min(float(result.tsr_link_stats.ls_tx_bytes) * 100 / duration / link_speed_bytes, 100.0)
-    rx_usage = min(float(result.tsr_link_stats.ls_rx_bytes) * 100 / duration / link_speed_bytes, 100.0)
+    txr = stats_result.sr_phy.ls_tx_pkts / duration
+    rxr = stats_result.sr_phy.ls_rx_pkts / duration
+    link_speed_bytes = float(stats_result.sr_phy.ls_link_speed) * 1024 * 1024 / 8
+    tx_usage = min(float(stats_result.sr_phy.ls_tx_bytes) * 100 / duration / link_speed_bytes, 100.0)
+    rx_usage = min(float(stats_result.sr_phy.ls_rx_bytes) * 100 / duration / link_speed_bytes, 100.0)
 
     warp17_stop(env, warp17_pid, force=True)
     return (rate, txr, rxr, tx_usage, rx_usage)

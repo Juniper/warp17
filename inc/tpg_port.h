@@ -179,23 +179,6 @@ typedef struct port_info_s {
         "(manual)")
 
 /*****************************************************************************
- * Port statistics
- ****************************************************************************/
-typedef struct port_statistics_s {
-
-    uint64_t ps_received_pkts;
-    uint64_t ps_received_bytes;
-
-    uint64_t ps_send_pkts;
-    uint64_t ps_send_bytes;
-    uint64_t ps_send_failure;
-    uint64_t ps_rx_ring_if_failed;
-
-    uint64_t ps_send_sim_failure;
-
-} port_statistics_t;
-
-/*****************************************************************************
  * Link rate statistics
  ****************************************************************************/
 typedef struct link_rate_statistics_s {
@@ -213,8 +196,8 @@ extern port_core_cfg_t *port_core_cfg;
 extern port_info_t     *port_dev_info;
 
 /* Port stats are actually updated in tpg_pktloop.c */
-STATS_GLOBAL_DECLARE(port_statistics_t);
-STATS_LOCAL_DECLARE(port_statistics_t);
+STATS_GLOBAL_DECLARE(tpg_port_statistics_t);
+STATS_LOCAL_DECLARE(tpg_port_statistics_t);
 
 /*****************************************************************************
  * External's for tpg_port.c
@@ -228,8 +211,6 @@ extern void     port_link_stats_get(uint32_t port,
                                     struct rte_eth_stats *total_link_stats);
 extern void     port_link_rate_stats_get(uint32_t port,
                                          struct rte_eth_stats *total_rate_stats);
-extern void     port_total_stats_get(uint32_t port,
-                                     port_statistics_t *total_port_stats);
 extern int      port_get_global_rss_key(uint8_t ** const rss_key);
 extern int      port_set_conn_options(uint32_t port,
                                       tpg_port_options_t *options);

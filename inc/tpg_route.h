@@ -60,27 +60,7 @@
 #ifndef _H_TPG_ROUTE_
 #define _H_TPG_ROUTE_
 
-/*****************************************************************************
- * ROUTE statistics
- ****************************************************************************/
-typedef struct route_statistics_s {
-
-    uint32_t rs_intf_add;
-    uint32_t rs_intf_del;
-    uint32_t rs_gw_add;
-    uint32_t rs_gw_del;
-
-    /* Error counters */
-    uint32_t rs_tbl_full;
-    uint32_t rs_intf_nomem;
-    uint32_t rs_intf_notfound;
-    uint32_t rs_gw_nointf;
-    uint32_t rs_nh_not_found;
-    uint32_t rs_route_not_found;
-
-} route_statistics_t;
-
-STATS_GLOBAL_DECLARE(route_statistics_t);
+STATS_GLOBAL_DECLARE(tpg_route_statistics_t);
 
 /*****************************************************************************
  * Route module message types.

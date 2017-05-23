@@ -654,7 +654,7 @@ def xlate_tpg_m_gen_optional(item, field, field_name, union_name, union_anon):
                                           'in->has_' + field_name)])
 
 def xlate_tpg_m_gen_msg_repeated(item, field, field_name, array_size):
-    return gen_for('i', '0', 'in->' + field_name + '_count',
+    return gen_for('i', '0', 'out->n_' + field.name,
                    body_inst = \
                        [gen_alloc('out->' + field.name + '[i]',
                                   gen_sizeof('*out->' + field.name + '[i]'))] + \
@@ -664,7 +664,7 @@ def xlate_tpg_m_gen_msg_repeated(item, field, field_name, array_size):
                                                '&in->' + field_name + '[i]')])
 
 def xlate_tpg_m_gen_scalar_repeated(item, field, field_name, array_size):
-    return gen_for('i', '0', 'in->' + field_name + '_count',
+    return gen_for('i', '0', 'out->n_' + field.name,
                    body_inst = [gen_assign('out->' + field.name + '[i]',
                                            'in->' + field_name + '[i]')])
 

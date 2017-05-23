@@ -61,41 +61,6 @@
 #define _H_TPG_TCP_
 
 /*****************************************************************************
- * TCP statistics
- ****************************************************************************/
-typedef struct tcp_statistics_s {
-
-    uint64_t ts_received_pkts;
-    uint64_t ts_received_bytes;
-
-    uint64_t ts_sent_ctrl_pkts;
-    uint64_t ts_sent_ctrl_bytes;
-
-    uint64_t ts_sent_data_pkts;
-    uint64_t ts_sent_data_bytes;
-
-    uint64_t ts_tcb_malloced;
-    uint64_t ts_tcb_freed;
-    uint64_t ts_tcb_not_found;
-    uint64_t ts_tcb_alloc_err;
-
-
-    /* Unlikely uint16_t error counters */
-
-    uint16_t ts_to_small_fragment;
-    uint16_t ts_hdr_to_small;
-    uint16_t ts_invalid_checksum;
-    uint16_t ts_failed_ctrl_pkts;
-    uint16_t ts_failed_data_pkts;
-    uint16_t ts_failed_data_clone;
-
-#ifndef _SPEEDY_PKT_PARSE_
-    uint16_t ts_reserved_bit_set;
-#endif
-
-} __rte_cache_aligned tcp_statistics_t;
-
-/*****************************************************************************
  * TCP Retransmission definition
  ****************************************************************************/
 typedef struct tcb_retrans_s {
@@ -274,8 +239,8 @@ static inline bool tcp_snd_win_full(tcp_control_block_t *tcb)
  * Globals for tpg_tcp.c
  ****************************************************************************/
 /* TCP stats are also updated in tpg_tcp_data.c */
-STATS_GLOBAL_DECLARE(tcp_statistics_t);
-STATS_LOCAL_DECLARE(tcp_statistics_t);
+STATS_GLOBAL_DECLARE(tpg_tcp_statistics_t);
+STATS_LOCAL_DECLARE(tpg_tcp_statistics_t);
 
 /*****************************************************************************
  * Externals for tpg_tcp.c

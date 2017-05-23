@@ -229,7 +229,7 @@ def warp17_start(env, exec_file = None, output_args = None):
     # Should we handle exceptions or let the callers do it for us?
     ofile = open(output_args.out_file, 'w')
 
-    return Popen(args, bufsize=-1, stdout=ofile, stdin=PIPE)
+    return Popen(args, bufsize=-1, stdout=ofile, stderr=ofile, stdin=PIPE)
 
 def warp17_wait(env, logger = None):
 

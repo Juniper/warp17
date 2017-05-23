@@ -80,7 +80,7 @@
 /* Define ARP global statistics. Each thread has its own set of locally
  * allocated stats which are accessible through STATS_GLOBAL(type, core, port).
  */
-STATS_DEFINE(arp_statistics_t);
+STATS_DEFINE(tpg_arp_statistics_t);
 
 /* ARP tables should be stored per port in memory allocated from the same socket
  * as the port. For global access we use an array of arrays indexed by port
@@ -211,98 +211,88 @@ static void cmd_show_arp_statistics_parsed(void *parsed_result __rte_unused,
                                            struct cmdline *cl,
                                            void *data)
 {
-    int port;
-    int core;
-    int option = (intptr_t) data;
+    int           port;
+    int           option = (intptr_t) data;
+    printer_arg_t parg = TPG_PRINTER_ARG(cli_printer, cl);
 
     for (port = 0; port < rte_eth_dev_count(); port++) {
 
         /*
          * Calculate totals first
          */
-        arp_statistics_t  total_stats;
-        arp_statistics_t *arp_stats;
+        tpg_arp_statistics_t total_stats;
 
-        bzero(&total_stats, sizeof(total_stats));
-        STATS_FOREACH_CORE(arp_statistics_t, port, core, arp_stats) {
-            total_stats.as_received_req += arp_stats->as_received_req;
-            total_stats.as_received_rep += arp_stats->as_received_rep;
-            total_stats.as_received_other += arp_stats->as_received_other;
-            total_stats.as_sent_req += arp_stats->as_sent_req;
-            total_stats.as_sent_req_failed += arp_stats->as_sent_req_failed;
-            total_stats.as_sent_rep += arp_stats->as_sent_rep;
-            total_stats.as_sent_rep_failed += arp_stats->as_sent_rep_failed;
-            total_stats.as_to_small_fragment += arp_stats->as_to_small_fragment;
-            total_stats.as_invalid_hw_space += arp_stats->as_invalid_hw_space;
-            total_stats.as_invalid_hw_len += arp_stats->as_invalid_hw_len;
-            total_stats.as_invalid_proto_space += arp_stats->as_invalid_proto_space;
-            total_stats.as_invalid_proto_len += arp_stats->as_invalid_proto_len;
-            total_stats.as_req_not_mine += arp_stats->as_req_not_mine;
-        }
+        if (test_mgmt_get_arp_stats(port, &total_stats, &parg) != 0)
+            continue;
 
         /*
          * Display individual counters
          */
         cmdline_printf(cl, "Port %d ARP statistics:\n", port);
 
-        SHOW_64BIT_STATS("Received Requests", arp_statistics_t, as_received_req,
+        SHOW_64BIT_STATS("Received Requests", tpg_arp_statistics_t,
+                         as_received_req,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Received Replies", arp_statistics_t, as_received_rep,
+        SHOW_64BIT_STATS("Received Replies", tpg_arp_statistics_t,
+                         as_received_rep,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Received \"other\"", arp_statistics_t,
+        SHOW_64BIT_STATS("Received \"other\"", tpg_arp_statistics_t,
                          as_received_other,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Sent Requests", arp_statistics_t, as_sent_req, port,
+        SHOW_64BIT_STATS("Sent Requests", tpg_arp_statistics_t,
+                         as_sent_req, port,
                          option);
 
-        SHOW_64BIT_STATS("Sent Requests Failed", arp_statistics_t,
+        SHOW_64BIT_STATS("Sent Requests Failed", tpg_arp_statistics_t,
                          as_sent_req_failed,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Sent Replies", arp_statistics_t, as_sent_req, port,
+        SHOW_64BIT_STATS("Sent Replies", tpg_arp_statistics_t,
+                         as_sent_req, port,
                          option);
 
-        SHOW_64BIT_STATS("Sent Replies Failed", arp_statistics_t,
+        SHOW_64BIT_STATS("Sent Replies Failed", tpg_arp_statistics_t,
                          as_sent_req_failed,
                          port,
                          option);
 
         cmdline_printf(cl, "\n");
 
-        SHOW_64BIT_STATS("Request not mine", arp_statistics_t, as_req_not_mine,
+        SHOW_64BIT_STATS("Request not mine", tpg_arp_statistics_t,
+                         as_req_not_mine,
                          port,
                          option);
 
         cmdline_printf(cl, "\n");
 
-        SHOW_16BIT_STATS("Small mbuf fragment", arp_statistics_t,
+        SHOW_32BIT_STATS("Small mbuf fragment", tpg_arp_statistics_t,
                          as_to_small_fragment,
                          port,
                          option);
 
-        SHOW_16BIT_STATS("Invalid hw space", arp_statistics_t,
+        SHOW_32BIT_STATS("Invalid hw space", tpg_arp_statistics_t,
                          as_invalid_hw_space,
                          port,
                          option);
 
-        SHOW_16BIT_STATS("Invalid hw length", arp_statistics_t,
+        SHOW_32BIT_STATS("Invalid hw length", tpg_arp_statistics_t,
                          as_invalid_hw_len,
                          port,
                          option);
 
-        SHOW_16BIT_STATS("Invalid proto space", arp_statistics_t,
+        SHOW_32BIT_STATS("Invalid proto space", tpg_arp_statistics_t,
                          as_invalid_proto_space,
                          port,
                          option);
 
-        SHOW_16BIT_STATS("Invalid proto length", arp_statistics_t,
+        SHOW_32BIT_STATS("Invalid proto length", tpg_arp_statistics_t,
                          as_invalid_proto_len,
                          port,
                          option);
@@ -365,7 +355,7 @@ bool arp_init(void)
     /*
      * Allocate memory for ARP statistics, and clear all of them
      */
-    if (STATS_GLOBAL_INIT(arp_statistics_t, "arp_stats") == NULL) {
+    if (STATS_GLOBAL_INIT(tpg_arp_statistics_t, "arp_stats") == NULL) {
         RTE_LOG(ERR, USER1,
                 "ERROR: Failed allocating ARP statistics memory!\n");
         return false;
@@ -427,7 +417,7 @@ void arp_lcore_init(uint32_t lcore_id)
     }
 
     /* Init the local stats. */
-    if (STATS_LOCAL_INIT(arp_statistics_t, "arp_stats", lcore_id) == NULL) {
+    if (STATS_LOCAL_INIT(tpg_arp_statistics_t, "arp_stats", lcore_id) == NULL) {
         TPG_ERROR_ABORT("[%d:%s() Failed to allocate per lcore arp_stats!\n",
                         rte_lcore_index(lcore_id),
                         __func__);
@@ -593,11 +583,11 @@ static bool arp_send_arp_reply(uint32_t port, uint32_t sip, uint32_t dip,
                 (sip >>  8) & 0xff, (sip >>  0) & 0xff,
                 port);
 
-        INC_STATS(STATS_LOCAL(arp_statistics_t, port), as_sent_rep_failed);
+        INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, port), as_sent_rep_failed);
         return false;
     }
 
-    INC_STATS(STATS_LOCAL(arp_statistics_t, port), as_sent_rep);
+    INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, port), as_sent_rep);
     return true;
 }
 
@@ -659,11 +649,11 @@ bool arp_send_arp_request(uint32_t port, uint32_t local_ip, uint32_t remote_ip)
                 (remote_ip >>  8) & 0xff, (remote_ip >>  0) & 0xff,
                 port);
 
-        INC_STATS(STATS_LOCAL(arp_statistics_t, port), as_sent_req_failed);
+        INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, port), as_sent_req_failed);
         return false;
     }
 
-    INC_STATS(STATS_LOCAL(arp_statistics_t, port), as_sent_req);
+    INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, port), as_sent_req);
     return true;
 }
 
@@ -768,7 +758,7 @@ static void arp_process_request(packet_control_block_t *pcb)
      */
     local_arp = arp_lookup(pcb->pcb_port, arp_req_ip);
     if (local_arp == NULL || !ARP_IS_FLAG_SET(local_arp, TPG_ARP_FLAG_LOCAL)) {
-        INC_STATS(STATS_LOCAL(arp_statistics_t, pcb->pcb_port),
+        INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, pcb->pcb_port),
                   as_req_not_mine);
         return;
     }
@@ -835,7 +825,7 @@ struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
         RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: mbuf fragment to small for arp_hdr!\n",
                 pcb->pcb_core_index, __func__);
 
-        INC_STATS(STATS_LOCAL(arp_statistics_t, pcb->pcb_port),
+        INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, pcb->pcb_port),
                   as_to_small_fragment);
         return mbuf;
     }
@@ -879,11 +869,11 @@ struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
 
         switch (op) {
         case ARP_OP_REQUEST:
-            INC_STATS(STATS_LOCAL(arp_statistics_t, pcb->pcb_port),
+            INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, pcb->pcb_port),
                       as_received_req);
             break;
         case ARP_OP_REPLY:
-            INC_STATS(STATS_LOCAL(arp_statistics_t, pcb->pcb_port),
+            INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, pcb->pcb_port),
                       as_received_rep);
             break;
 
@@ -891,7 +881,7 @@ struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
             /*
              * All other type we do not handle, so return
              */
-            INC_STATS(STATS_LOCAL(arp_statistics_t, pcb->pcb_port),
+            INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, pcb->pcb_port),
                       as_received_other);
             return mbuf;
         }
@@ -903,7 +893,7 @@ struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
             RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: ARP hardware protocol is not ethernet!\n",
                     pcb->pcb_core_index, __func__);
 
-            INC_STATS(STATS_LOCAL(arp_statistics_t, pcb->pcb_port),
+            INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, pcb->pcb_port),
                       as_invalid_hw_space);
             return mbuf;
         }
@@ -912,7 +902,7 @@ struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
             RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Protocol is not IPv4!\n",
                     pcb->pcb_core_index, __func__);
 
-            INC_STATS(STATS_LOCAL(arp_statistics_t, pcb->pcb_port),
+            INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, pcb->pcb_port),
                       as_invalid_proto_space);
             return mbuf;
         }
@@ -921,7 +911,7 @@ struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
             RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Hardware length is not 6!\n",
                     pcb->pcb_core_index, __func__);
 
-            INC_STATS(STATS_LOCAL(arp_statistics_t, pcb->pcb_port),
+            INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, pcb->pcb_port),
                       as_invalid_hw_len);
             return mbuf;
         }
@@ -930,7 +920,7 @@ struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
             RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Protocol length is not 4!\n",
                     pcb->pcb_core_index, __func__);
 
-            INC_STATS(STATS_LOCAL(arp_statistics_t, pcb->pcb_port),
+            INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, pcb->pcb_port),
                       as_invalid_proto_len);
             return mbuf;
         }

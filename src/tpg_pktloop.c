@@ -225,7 +225,7 @@ static void pkt_trace_tx(packet_control_block_t *pcb, int32_t tx_queue_id,
 /*****************************************************************************
  * pkt_flush_tx_q()
  ****************************************************************************/
-void pkt_flush_tx_q(uint32_t port, port_statistics_t *stats)
+void pkt_flush_tx_q(uint32_t port, tpg_port_statistics_t *stats)
 {
     int32_t                tx_queue_id;
     int                    lcore_id = rte_lcore_id();
@@ -255,8 +255,8 @@ void pkt_flush_tx_q(uint32_t port, port_statistics_t *stats)
         pcb.pcb_trace = RTE_PER_LCORE(pkt_tx_q_trace)[port][i];
         pkt_trace_tx(&pcb, tx_queue_id, RTE_PER_LCORE(pkt_tx_q)[port][i], false);
 
-        INC_STATS(stats, ps_send_pkts);
-        INC_STATS_VAL(stats, ps_send_bytes,
+        INC_STATS(stats, ps_sent_pkts);
+        INC_STATS_VAL(stats, ps_sent_bytes,
                       rte_pktmbuf_pkt_len(RTE_PER_LCORE(pkt_tx_q)[port][i]));
     }
 
@@ -268,9 +268,9 @@ void pkt_flush_tx_q(uint32_t port, port_statistics_t *stats)
      * Free the ones we couldn't send but first log them.
      */
     for (i = pkt_sent_cnt; i < RTE_PER_LCORE(pkt_tx_q_len)[port]; i++) {
-        INC_STATS(stats, ps_send_failure);
-        DEC_STATS(stats, ps_send_pkts);
-        DEC_STATS_VAL(stats, ps_send_bytes,
+        INC_STATS(stats, ps_sent_failure);
+        DEC_STATS(stats, ps_sent_pkts);
+        DEC_STATS_VAL(stats, ps_sent_bytes,
                       rte_pktmbuf_pkt_len(RTE_PER_LCORE(pkt_tx_q)[port][i]));
 
         pcb.pcb_trace = RTE_PER_LCORE(pkt_tx_q_trace)[port][i];
@@ -291,15 +291,15 @@ void pkt_flush_tx_q(uint32_t port, port_statistics_t *stats)
  ****************************************************************************/
 int pkt_send(uint32_t port, struct rte_mbuf *mbuf, bool trace)
 {
-    port_statistics_t *stats;
+    tpg_port_statistics_t *stats;
 
-    stats = STATS_LOCAL(port_statistics_t, port);
+    stats = STATS_LOCAL(tpg_port_statistics_t, port);
 
     /* If we should simulate a packet drop, do it here! */
     if (unlikely(RTE_PER_LCORE(pkt_send_simulate_drop_rate) != 0)) {
         if (unlikely(rte_rand() %
                 RTE_PER_LCORE(pkt_send_simulate_drop_rate) == 0)) {
-            INC_STATS(stats, ps_send_sim_failure);
+            INC_STATS(stats, ps_sent_sim_failure);
             rte_pktmbuf_free(mbuf);
             return false;
         }
@@ -322,7 +322,7 @@ static uint16_t pkt_rx_burst(uint8_t port_id, uint16_t queue_id,
                              struct rte_mbuf **rx_pkts,
                              const uint16_t nb_pkts,
                              port_info_t *port_info,
-                             port_statistics_t *stats)
+                             tpg_port_statistics_t *stats)
 {
     uint16_t no_rx_buffers;
 
@@ -339,7 +339,7 @@ static uint16_t pkt_rx_burst(uint8_t port_id, uint16_t queue_id,
 
             rx_pkts[i] = data_copy_chain(orig_mbuf, mem_get_mbuf_local_pool());
             if (unlikely(rx_pkts[i] == NULL)) {
-                INC_STATS(stats, ps_rx_ring_if_failed);
+                INC_STATS(stats, ps_received_ring_if_failed);
 
                 rx_pkts[i] = rx_pkts[no_rx_buffers - 1];
                 no_rx_buffers--;
@@ -417,7 +417,7 @@ int pkt_receive_loop(void *arg __rte_unused)
     int                     lcore_index = rte_lcore_index(lcore_id);
     int32_t                 queue_id;
     global_config_t        *cfg;
-    port_statistics_t      *port_stats;
+    tpg_port_statistics_t  *port_stats;
     packet_control_block_t *pcb;
     uint32_t                port;
 
@@ -461,7 +461,7 @@ int pkt_receive_loop(void *arg __rte_unused)
     /*
      * Get per core port stats pointer.
      */
-    port_stats = STATS_LOCAL_NAME(port_statistics_t);
+    port_stats = STATS_LOCAL_NAME(tpg_port_statistics_t);
     if (port_stats == NULL) {
         TPG_ERROR_ABORT("Can't get port stats pointer on lcore %d, lindex %d\n",
                         lcore_id,

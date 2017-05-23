@@ -77,7 +77,6 @@ WARP17-XLATE-C = $(GEN-DIR-XLATE)/warp17.xlate.c
 
 # Warning! The order of proto files is important for .xlate.h translation!
 PROTO-SRCS  = warp17-common.proto
-PROTO-SRCS += warp17-link.proto
 PROTO-SRCS += warp17-l3.proto
 PROTO-SRCS += warp17-app-raw.proto
 PROTO-SRCS += warp17-app-http.proto
@@ -85,6 +84,7 @@ PROTO-SRCS += warp17-client.proto
 PROTO-SRCS += warp17-server.proto
 PROTO-SRCS += warp17-test-case.proto
 PROTO-SRCS += warp17-sockopt.proto
+PROTO-SRCS += warp17-stats.proto
 PROTO-SRCS += warp17-service.proto
 
 PROTO-OBJS-H        = $(addprefix $(GEN-DIR-C)/, $(PROTO-SRCS:.proto=.pb-c.h))

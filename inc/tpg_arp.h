@@ -60,33 +60,7 @@
 #ifndef _H_TPG_ARP_
 #define _H_TPG_ARP_
 
-/*****************************************************************************
- * ARP statistics
- ****************************************************************************/
-typedef struct arp_statistics_s {
-
-    uint64_t as_received_req;
-    uint64_t as_received_rep;
-    uint64_t as_received_other;
-
-    uint64_t as_req_not_mine;
-
-    uint64_t as_sent_req;
-    uint64_t as_sent_req_failed;
-    uint64_t as_sent_rep;
-    uint64_t as_sent_rep_failed;
-
-    /* Unlikly uint16_t error counters */
-
-    uint16_t as_to_small_fragment;
-    uint16_t as_invalid_hw_space;
-    uint16_t as_invalid_proto_space;
-    uint16_t as_invalid_hw_len;
-    uint16_t as_invalid_proto_len;
-
-} arp_statistics_t;
-
-STATS_GLOBAL_DECLARE(arp_statistics_t);
+STATS_GLOBAL_DECLARE(tpg_arp_statistics_t);
 
 /*****************************************************************************
  * ARP table handling definitions

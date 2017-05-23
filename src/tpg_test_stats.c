@@ -620,7 +620,7 @@ static int __tpg_display_func
 test_display_stats_link(ui_win_t *ui_win, int line,
                         struct rte_eth_stats *link_stats,
                         struct rte_eth_stats *link_rate_stats,
-                        port_statistics_t *ptotal_stats)
+                        tpg_port_statistics_t *ptotal_stats)
 {
     WINDOW *win = ui_win->uw_win;
 
@@ -638,16 +638,16 @@ test_display_stats_link(ui_win_t *ui_win, int line,
                    ptotal_stats->ps_received_bytes);
     UI_PRINTLN_WIN(win, line, 0, "%10s %15"PRIu64" %10"PRIu64" %15"PRIu64,
                    "Tx Pkts", link_stats->opackets, link_rate_stats->opackets,
-                   ptotal_stats->ps_send_pkts);
+                   ptotal_stats->ps_sent_pkts);
     UI_PRINTLN_WIN(win, line, 0, "%10s %15"PRIu64" %10"PRIu64" %15"PRIu64,
                    "Tx Bytes", link_stats->obytes, link_rate_stats->obytes,
-                   ptotal_stats->ps_send_bytes);
+                   ptotal_stats->ps_sent_bytes);
     UI_PRINTLN_WIN(win, line, 0, "%10s %15"PRIu64" %10"PRIu64" %15s",
                    "Rx Err", link_stats->ierrors, link_rate_stats->ierrors,
                    "N/A");
     UI_PRINTLN_WIN(win, line, 0, "%10s %15"PRIu64" %10"PRIu64" %15"PRIu32,
                    "Tx Err", link_stats->oerrors, link_rate_stats->oerrors,
-                   ptotal_stats->ps_send_failure);
+                   ptotal_stats->ps_sent_failure);
     UI_PRINTLN_WIN(win, line, 0, "%10s %15"PRIu64" %10"PRIu64" %15s",
                    "Rx No Mbuf", link_stats->rx_nombuf,
                    link_rate_stats->rx_nombuf,
@@ -663,7 +663,7 @@ test_display_stats_link(ui_win_t *ui_win, int line,
  ****************************************************************************/
 static int __tpg_display_func
 test_display_stats_ip(ui_win_t *ui_win, int line,
-                      ipv4_statistics_t *ipv4_stats)
+                      tpg_ipv4_statistics_t *ipv4_stats)
 {
     WINDOW *win = ui_win->uw_win;
 
@@ -715,7 +715,8 @@ test_display_stats_ip(ui_win_t *ui_win, int line,
  * test_display_stats_tsm()
  ****************************************************************************/
 static int __tpg_display_func
-test_display_stats_tsm(ui_win_t *ui_win, int line, tsm_statistics_t *tsm_stats)
+test_display_stats_tsm(ui_win_t *ui_win, int line,
+                       tpg_tsm_statistics_t *tsm_stats)
 {
     tcpState_t  tcp_state;
     int         tcp_col = 0;
@@ -780,20 +781,24 @@ static void test_display_stats(ui_win_t *ui_win, void *arg)
     tpg_test_case_rate_stats_t  rate_stats;
     WINDOW                     *win = ui_win->uw_win;
     int                         line = 0;
+    printer_arg_t               parg = TPG_PRINTER_ARG(ui_printer, win);
 
     struct rte_eth_stats        link_stats;
     struct rte_eth_stats        link_rate_stats;
 
-    port_statistics_t           ptotal_stats;
-    ipv4_statistics_t           ipv4_stats;
-    tsm_statistics_t            tsm_stats;
+    tpg_port_statistics_t       ptotal_stats;
+    tpg_ipv4_statistics_t       ipv4_stats;
+    tpg_tsm_statistics_t        tsm_stats;
 
     test_aggregate_rate_stats(port, &rate_stats);
     port_link_stats_get(port, &link_stats);
     port_link_rate_stats_get(port, &link_rate_stats);
-    port_total_stats_get(port, &ptotal_stats);
-    ipv4_total_stats_get(port, &ipv4_stats);
-    tsm_total_stats_get(port, &tsm_stats);
+    if (test_mgmt_get_port_stats(port, &ptotal_stats, &parg) != 0)
+        return;
+    if (test_mgmt_get_ipv4_stats(port, &ipv4_stats, &parg) != 0)
+        return;
+    if (test_mgmt_get_tsm_stats(port, &tsm_stats, &parg) != 0)
+        return;
 
     /* Print the header. */
     line = test_display_stats_hdr(ui_win, line, port);

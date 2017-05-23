@@ -176,25 +176,7 @@ typedef int (*msg_handler_t)(uint16_t msgid, uint16_t lcore, void *msg);
 #define MSG_INVALID(msgid, inner_msg, expected_type) \
     (unlikely((msgid) != (expected_type) || (inner_msg) == NULL))
 
-/*****************************************************************************
- * MSG statistics
- ****************************************************************************/
-typedef struct msg_statistics_s {
-
-    uint64_t ms_rcvd;
-    uint64_t ms_snd;
-    uint64_t ms_poll;
-
-    uint64_t ms_err;
-    uint64_t ms_proc_err;
-
-    uint64_t ms_alloc;
-    uint64_t ms_alloc_err;
-    uint64_t ms_free;
-
-} __rte_cache_aligned msg_statistics_t;
-
-STATS_GLOBAL_DECLARE(msg_statistics_t);
+STATS_GLOBAL_DECLARE(tpg_msg_statistics_t);
 
 /*****************************************************************************
  * Externals for messaging module

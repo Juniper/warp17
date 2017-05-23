@@ -81,6 +81,11 @@ typedef enum {
 
 } tcpState_t;
 
+static_assert(TS_MAX_STATE == TPG_TS_MAX_STATE,
+              "ERROR: TPG_TS_MAX_STATE should match with TS_MAX_STATE");
+
+STATS_GLOBAL_DECLARE(tpg_tsm_statistics_t);
+
 typedef enum {
 
     TE_ENTER_STATE,
@@ -116,26 +121,6 @@ typedef struct tsm_data_arg_s {
     uint32_t         tda_urg  :1;
 
 } tsm_data_arg_t;
-
-/*****************************************************************************
- * Port statistics
- ****************************************************************************/
-typedef struct tsm_statistics_s {
-
-    uint32_t tsms_tcb_states[TS_MAX_STATE];
-
-    uint32_t tsms_syn_to;
-    uint32_t tsms_synack_to;
-    uint32_t tsms_retry_to;
-
-    uint64_t tsms_retrans_bytes;
-
-    uint32_t tsms_missing_seq;
-    uint32_t tsms_snd_win_full;
-
-} tsm_statistics_t;
-
-STATS_GLOBAL_DECLARE(tsm_statistics_t);
 
 /*****************************************************************************
  * TCP stack notifications
@@ -196,7 +181,6 @@ extern int  tsm_dispatch_net_event(tcp_control_block_t *tcb, tcpEvent_t event,
 extern int  tsm_dispatch_event(tcp_control_block_t *tcb, tcpEvent_t event,
                                void *tsm_arg);
 extern int  tsm_str_to_state(const char *state_str);
-extern void tsm_total_stats_get(uint32_t port, tsm_statistics_t *total_stats);
 
 typedef int (*tsm_function)(tcp_control_block_t *tcb, tcpEvent_t event,
                             void *tsm_arg);

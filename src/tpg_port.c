@@ -81,7 +81,7 @@ static const char *qmap_default;
 /* Define PORT global statistics. Each thread has its own set of locally
  * allocated stats which are accessible through STATS_GLOBAL(type, core, port).
  */
-STATS_DEFINE(port_statistics_t);
+STATS_DEFINE(tpg_port_statistics_t);
 
 port_port_cfg_t          *port_port_cfg; /* Array of [port] holding the ports core config */
 port_core_cfg_t          *port_core_cfg; /* Array of [core] holding the q mappings. */
@@ -947,28 +947,6 @@ void port_link_rate_stats_get(uint32_t port, struct rte_eth_stats *total_rstats)
 }
 
 /*****************************************************************************
- * port_total_stats_get()
- *****************************************************************************/
-void port_total_stats_get(uint32_t port, port_statistics_t *total_port_stats)
-{
-    const port_statistics_t *port_stats;
-    uint32_t                 core;
-
-    bzero(total_port_stats, sizeof(*total_port_stats));
-    STATS_FOREACH_CORE(port_statistics_t, port, core, port_stats) {
-        total_port_stats->ps_received_pkts += port_stats->ps_received_pkts;
-        total_port_stats->ps_received_bytes += port_stats->ps_received_bytes;
-
-        total_port_stats->ps_send_pkts += port_stats->ps_send_pkts;
-        total_port_stats->ps_send_bytes += port_stats->ps_send_bytes;
-        total_port_stats->ps_send_failure += port_stats->ps_send_failure;
-        total_port_stats->ps_send_sim_failure += port_stats->ps_send_sim_failure;
-
-        total_port_stats->ps_rx_ring_if_failed += port_stats->ps_rx_ring_if_failed;
-    }
-}
-
-/*****************************************************************************
  * port_set_conn_options()
  ****************************************************************************/
 int port_set_conn_options(uint32_t port, tpg_port_options_t *options)
@@ -1128,59 +1106,61 @@ static void cmd_show_port_statistics_parsed(void *parsed_result __rte_unused,
                                             struct cmdline *cl,
                                             void *data)
 {
-    int port;
-    int option = (intptr_t) data;
+    int           port;
+    int           option = (intptr_t) data;
+    printer_arg_t parg = TPG_PRINTER_ARG(cli_printer, cl);
 
     for (port = 0; port < rte_eth_dev_count(); port++) {
 
         /*
          * Calculate totals first
          */
-        port_statistics_t        total_stats;
+        tpg_port_statistics_t total_stats;
 
-        port_total_stats_get(port, &total_stats);
+        if (test_mgmt_get_port_stats(port, &total_stats, &parg) != 0)
+            continue;
 
         /*
          * Display individual counters
          */
         cmdline_printf(cl, "Port %d software statistics:\n", port);
 
-        SHOW_64BIT_STATS("Received packets", port_statistics_t,
+        SHOW_64BIT_STATS("Received packets", tpg_port_statistics_t,
                          ps_received_pkts,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Received bytes", port_statistics_t,
+        SHOW_64BIT_STATS("Received bytes", tpg_port_statistics_t,
                          ps_received_bytes,
                          port,
                          option);
 
         cmdline_printf(cl, "\n");
 
-        SHOW_64BIT_STATS("Sent packets", port_statistics_t,
-                         ps_send_pkts,
+        SHOW_64BIT_STATS("Sent packets", tpg_port_statistics_t,
+                         ps_sent_pkts,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Sent bytes", port_statistics_t,
-                         ps_send_bytes,
+        SHOW_64BIT_STATS("Sent bytes", tpg_port_statistics_t,
+                         ps_sent_bytes,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Sent failures", port_statistics_t,
-                         ps_send_failure,
+        SHOW_64BIT_STATS("Sent failures", tpg_port_statistics_t,
+                         ps_sent_failure,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("RX Ring If failures", port_statistics_t,
-                         ps_rx_ring_if_failed,
+        SHOW_64BIT_STATS("RX Ring If failures", tpg_port_statistics_t,
+                         ps_received_ring_if_failed,
                          port,
                          option);
 
         cmdline_printf(cl, "\n");
 
-        SHOW_64BIT_STATS("Simulated failures", port_statistics_t,
-                         ps_send_sim_failure,
+        SHOW_64BIT_STATS("Simulated failures", tpg_port_statistics_t,
+                         ps_sent_sim_failure,
                          port,
                          option);
 
@@ -1683,7 +1663,7 @@ bool port_init(void)
     /*
      * Allocate memory for port statistics, and clear all of them
      */
-    if (STATS_GLOBAL_INIT(port_statistics_t, "port_stats") == NULL) {
+    if (STATS_GLOBAL_INIT(tpg_port_statistics_t, "port_stats") == NULL) {
         RTE_LOG(ERR, USER1,
                 "ERROR: Failed allocating PORT statistics memory!\n");
         return false;
@@ -1729,7 +1709,8 @@ bool port_init(void)
 void port_lcore_init(uint32_t lcore_id)
 {
     /* Init the local stats. */
-    if (STATS_LOCAL_INIT(port_statistics_t, "port_stats", lcore_id) == NULL) {
+    if (STATS_LOCAL_INIT(tpg_port_statistics_t,
+                         "port_stats", lcore_id) == NULL) {
         TPG_ERROR_ABORT("[%d:%s() Failed to allocate per lcore port_stats!\n",
                         rte_lcore_index(lcore_id),
                         __func__);
