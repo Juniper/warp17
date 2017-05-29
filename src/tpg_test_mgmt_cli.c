@@ -1912,6 +1912,69 @@ cmdline_parse_inst_t cmd_exit = {
     },
 };
 
+/****************************************************************************
+ * - "syslog"
+ ****************************************************************************/
+struct cmd_syslog {
+    cmdline_fixed_string_t set;
+    cmdline_fixed_string_t syslog;
+    cmdline_fixed_string_t level;
+
+};
+
+static cmdline_parse_token_string_t cmd_syslog_T_set =
+    TOKEN_STRING_INITIALIZER(struct cmd_syslog, set, "set");
+static cmdline_parse_token_string_t cmd_syslog_T_lognum =
+    TOKEN_STRING_INITIALIZER(struct cmd_syslog, syslog, "syslog");
+static cmdline_parse_token_string_t cmd_syslog_T_level =
+    TOKEN_STRING_INITIALIZER(struct cmd_syslog, level,
+        "EMERG#ALERT#CRIT#ERR#WARNING#NOTICE#INFO#DEBUG");
+
+static void cmd_syslog_parsed(void *parsed_result __rte_unused,
+                              struct cmdline *cl,
+                              void *data __rte_unused)
+{
+    static const char *const levels[]  = {
+        [RTE_LOG_EMERG]   = "EMERG",
+        [RTE_LOG_ALERT]   = "ALERT",
+        [RTE_LOG_CRIT]    = "CRIT",
+        [RTE_LOG_ERR]     = "ERR",
+        [RTE_LOG_WARNING] = "WARNING",
+        [RTE_LOG_NOTICE]  = "NOTICE",
+        [RTE_LOG_INFO]    = "INFO",
+        [RTE_LOG_DEBUG]   = "DEBUG"
+    };
+
+    struct cmd_syslog *pr = parsed_result;
+
+    int32_t log_level = 0;
+    int     level_count = sizeof(levels) / sizeof(*levels);
+    int     pos;
+
+    for (pos = 0; pos < level_count; pos++)
+        if (levels[pos] != NULL && strcmp(levels[pos], pr->level) == 0)
+            break;
+
+    if (pos == level_count)
+        return;
+
+    rte_set_log_level(pos);
+    log_level = rte_get_log_level();
+    cmdline_printf(cl, "Syslog set to %s\n", levels[log_level]);
+}
+
+cmdline_parse_inst_t cmd_syslog = {
+    .f = cmd_syslog_parsed,
+    .data = NULL,
+    .help_str = "syslog",
+    .tokens = {
+        (void *)&cmd_syslog_T_set,
+        (void *)&cmd_syslog_T_lognum,
+        (void *)&cmd_syslog_T_level,
+        NULL,
+    },
+};
+
 /*****************************************************************************
  * Main menu context
  ****************************************************************************/
@@ -1949,6 +2012,7 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_set_tcp_opts_twait_skip,
     &cmd_tests_show_tcp_opts,
     &cmd_exit,
+    &cmd_syslog,
     NULL,
 };
 

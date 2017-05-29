@@ -1059,6 +1059,22 @@ ethernet port.
 	show memory statistics [details]
 	```
 
+* __Modifying Log Levels__: allow the user to change the syslog verbosity.
+
+    ```
+    set syslog <level>
+    ```
+
+    Available log levels (corresponding to DPDK log levels):
+    - `EMERG`: System is unusable.
+    - `ALERT`: Action must be taken immediately.
+    - `CRIT`: Critical conditions.
+    - `ERR`: Error conditions.
+    - `WARNING`: Warning conditions.
+    - `NOTICE`: Normal but significant condition.
+    - `INFO`: Informational.
+    - `DEBUG`: Debug-level messages.
+
 # UI
 
 `show tests ui` displays an UI which allows monitoring the test execution.
