@@ -69,7 +69,13 @@
     CMDLINE_OPT_ARG("qmap-default", true)
 
 #define PORT_CMDLINE_PARSER() \
-    CMDLINE_ARG_PARSER(port_handle_cmdline_opt, port_handle_cmdline)
+    CMDLINE_ARG_PARSER(port_handle_cmdline_opt, port_handle_cmdline,                \
+"  --qmap <port>.<hex_mask>:   Bitmask specifying which physical cores will\n"      \
+"                              control the physical port <eth_port>.\n"             \
+"  --qmap-default max-c:       Maximize the number of independent cores handling\n" \
+"                              each physical port.\n"                               \
+"  --qmap-default max-q:       Maximize the number of transmit queues per\n"        \
+"                              physical port.\n")
 
 /*****************************************************************************
  * Port core mask - for each core in a mask we allocate an RX HW queue and a
@@ -202,22 +208,25 @@ STATS_LOCAL_DECLARE(tpg_port_statistics_t);
 /*****************************************************************************
  * External's for tpg_port.c
  ****************************************************************************/
-extern bool     port_init(void);
-extern void     port_lcore_init(uint32_t lcore_id);
-extern uint32_t port_get_socket(int port, int queue);
-extern void     port_link_info_get(uint32_t port,
-                                   struct rte_eth_link *link_info);
-extern void     port_link_stats_get(uint32_t port,
-                                    struct rte_eth_stats *total_link_stats);
-extern void     port_link_rate_stats_get(uint32_t port,
-                                         struct rte_eth_stats *total_rate_stats);
-extern int      port_get_global_rss_key(uint8_t ** const rss_key);
-extern int      port_set_conn_options(uint32_t port,
-                                      tpg_port_options_t *options);
-extern void     port_get_conn_options(uint32_t port, tpg_port_options_t *out);
-extern bool     port_handle_cmdline_opt(const char *opt_name,
-                                        char *opt_arg);
-extern bool     port_handle_cmdline(void);
+extern bool                     port_init(void);
+extern void                     port_lcore_init(uint32_t lcore_id);
+extern uint32_t                 port_get_socket(int port, int queue);
+extern void                     port_link_info_get(uint32_t port,
+                                                   struct rte_eth_link *link_info);
+extern void                     port_link_stats_get(uint32_t port,
+                                                    struct rte_eth_stats *total_link_stats);
+extern void                     port_link_rate_stats_get(uint32_t port,
+                                                         struct rte_eth_stats *total_rate_stats);
+extern void                     port_total_stats_get(uint32_t port,
+                                                     tpg_port_statistics_t *total_port_stats);
+extern int                      port_get_global_rss_key(uint8_t ** const rss_key);
+extern int                      port_set_conn_options(uint32_t port,
+                                                      tpg_port_options_t *options);
+extern void                     port_get_conn_options(uint32_t port,
+                                                      tpg_port_options_t *out);
+extern cmdline_arg_parser_res_t port_handle_cmdline_opt(const char *opt_name,
+                                                        char *opt_arg);
+extern bool                     port_handle_cmdline(void);
 
 /*****************************************************************************
  * Static inlines.

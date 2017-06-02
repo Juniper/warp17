@@ -67,7 +67,9 @@
     CMDLINE_OPT_ARG("cmd-file", true)
 
 #define CLI_CMDLINE_PARSER() \
-    CMDLINE_ARG_PARSER(cli_handle_cmdline_opt, NULL)
+    CMDLINE_ARG_PARSER(cli_handle_cmdline_opt, NULL,                       \
+"  --cmd-file=<file>:          CLI command file to be executed when the\n" \
+"                              application starts\n")
 
 typedef int (*tpg_cli_override_cb_t)(char *buf, uint32_t size);
 
@@ -76,15 +78,16 @@ typedef int (*tpg_cli_override_cb_t)(char *buf, uint32_t size);
  ****************************************************************************/
 extern void cli_printer(void *printer_arg, const char *fmt, va_list ap);
 
-extern bool cli_init(void);
-extern void cli_exit(void);
-extern bool cli_set_override(tpg_cli_override_cb_t override);
-extern bool cli_unset_override(void);
-extern void cli_redisplay_prompt(void);
-extern bool cli_run_input_file(const char *filename);
-extern void cli_interact(void);
-extern bool cli_handle_cmdline_opt(const char *opt_name, char *opt_arg);
-extern bool cli_add_main_ctx(cmdline_parse_ctx_t *ctx);
+extern bool                     cli_init(void);
+extern void                     cli_exit(void);
+extern bool                     cli_set_override(tpg_cli_override_cb_t override);
+extern bool                     cli_unset_override(void);
+extern void                     cli_redisplay_prompt(void);
+extern bool                     cli_run_input_file(const char *filename);
+extern void                     cli_interact(void);
+extern cmdline_arg_parser_res_t cli_handle_cmdline_opt(const char *opt_name,
+                                                       char *opt_arg);
+extern bool                     cli_add_main_ctx(cmdline_parse_ctx_t *ctx);
 
 #endif /* _H_TPG_CLI_ */
 

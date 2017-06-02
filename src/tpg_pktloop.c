@@ -676,7 +676,8 @@ static int pkt_loop_stop_port_cb(uint16_t msgid, uint16_t lcore, void *msg)
  * --pkt-send-drop-rate - if set then one packet every 'pkt-send-drop-rate' will
  *      be dropped at TX. (per lcore)
  ****************************************************************************/
-bool pkt_handle_cmdline_opt(const char *opt_name, char *opt_arg)
+cmdline_arg_parser_res_t pkt_handle_cmdline_opt(const char *opt_name,
+                                                char *opt_arg)
 {
     global_config_t *cfg = cfg_get_config();
 
@@ -684,11 +685,27 @@ bool pkt_handle_cmdline_opt(const char *opt_name, char *opt_arg)
         TPG_ERROR_ABORT("ERROR: Unable to get config!\n");
 
     if (strcmp(opt_name, "pkt-send-drop-rate") == 0) {
-        cfg->gcfg_pkt_send_drop_rate = atoi(opt_arg);
-        return true;
+        unsigned long  var;
+        char          *endptr;
+
+        errno = 0;
+        var = strtoul(opt_arg, &endptr, 10);
+
+        if ((errno == ERANGE && var == ULONG_MAX) ||
+                (errno != 0 && var == 0) ||
+                *endptr != '\0' ||
+                var > UINT32_MAX) {
+            printf("ERROR: pkt-send-drop-rate %s!\n"
+                   "The value must be lower than %d\n",
+                   opt_arg, UINT32_MAX);
+            return CAPR_ERROR;
+        }
+
+        cfg->gcfg_pkt_send_drop_rate = var;
+        return CAPR_CONSUMED;
     }
 
-    return false;
+    return CAPR_IGNORED;
 }
 
 /*****************************************************************************

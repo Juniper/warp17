@@ -65,25 +65,43 @@
  ****************************************************************************/
 #define CMDLINE_OPT_ARG(knob_name, knob_has_arg) \
     ((struct option) {.name = (knob_name), .has_arg = (knob_has_arg)})
+/*
+ * Return type for cfg_handle_cmdline_arg_cb_t,
+ * helps to figure out what is going wrong
+ */
+typedef enum cmdline_arg_parser_res_s {
+    /*
+     * CAPR_CONSUMED: means that the given option and the value has been parsed
+     *                in a proper way.
+     * CAPR_ERROR: means that the given option wasn't been recognized by the
+     *             current parser
+     * CAPR_IGNORED: means that the given option was recognized but the give
+     *               wasn't fit the option range/accepted values
+     */
+    CAPR_CONSUMED,
+    CAPR_ERROR,
+    CAPR_IGNORED
+} cmdline_arg_parser_res_t;
 
 /* To be called whenever when a command line arg is found. */
-typedef bool (*cfg_handle_cmdline_arg_cb_t)(const char *arg_name,
-                                            char *opt_arg);
+typedef cmdline_arg_parser_res_t (*cfg_handle_cmdline_arg_cb_t)
+                                 (const char *arg_name, char *opt_arg);
 
 /* To be called whenever the parsing of the command line is done. */
 typedef bool (*cfg_handle_cmdline_cb_t)(void);
 
 typedef struct cmdline_arg_parser_s {
 
-    cfg_handle_cmdline_arg_cb_t cap_arg_parser;
-    cfg_handle_cmdline_cb_t     cap_handler;
+    cfg_handle_cmdline_arg_cb_t  cap_arg_parser;
+    cfg_handle_cmdline_cb_t      cap_handler;
+    const char                  *cap_usage;
 
 } cfg_cmdline_arg_parser_t;
 
-#define CMDLINE_ARG_PARSER(arg_parser, handler)                  \
+#define CMDLINE_ARG_PARSER(arg_parser, handler, usage)           \
     ((cfg_cmdline_arg_parser_t) {.cap_arg_parser = (arg_parser), \
-                                 .cap_handler = (handler)})
-
+                                 .cap_handler    = (handler),    \
+                                 .cap_usage      = (usage)})
 /*****************************************************************************
  * Global configuration, and defaults
  ****************************************************************************/
@@ -360,6 +378,7 @@ extern bool             cfg_init(void);
 extern bool             cfg_handle_command_line(int argc, char **argv);
 extern global_config_t *cfg_get_config(void);
 extern const char      *cfg_get_gtrace_name(gtrace_id_t id);
+extern void             cfg_print_usage(const char *prgname);
 
 #endif /* _H_TPG_CONFIG_ */
 

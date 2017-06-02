@@ -83,7 +83,27 @@
     CMDLINE_OPT_ARG("mbuf-hdr-pool-sz", true)
 
 #define MEM_CMDLINE_PARSER() \
-    CMDLINE_ARG_PARSER(mem_handle_cmdline_opt, NULL)
+    CMDLINE_ARG_PARSER(mem_handle_cmdline_opt, NULL,                                 \
+"  --tcb-pool-sz:              Configure the size of the TCP control block pool\n"   \
+"                              (one TCB is used per TCP connection endpoint). The\n" \
+"                              size of the pool will be given by the argument of\n"  \
+"                              this option multiplied by 1024. By default 10M\n"     \
+"                              TCBs are allocated.\n"                                \
+"  --ucb-pool-sz:              Configure the size of the UDP control block pool\n"   \
+"                              (one UCB is used per UDP connection endpoint). The\n" \
+"                              size of the pool will be given by the argument of\n"  \
+"                              this option multiplied by 1024. By default 10M\n"     \
+"                              UCBs are allocated.\n"                                \
+"  --mbuf-pool-sz:             Configure the size of the packet pool. The size of\n" \
+"                              the pool will be given by the argument of this\n"     \
+"                              option multiplied by 1024. By default 768K packets\n" \
+"                              are allocated.\n"                                     \
+"  --mbuf-sz:                  Configure the size of a packet fragment (mbuf) in\n"  \
+"                              bytes. By default fragments are 2048 bytes.\n"        \
+"  --mbuf-hdr-pool-sz:         Configure the size of the packet headers pool. The\n" \
+"                              size of the pool will be given by the argument of\n"  \
+"                              this option multiplied by 1024. By default 512K\n"    \
+"                              packet headers are allocated.\n")
 
 /*****************************************************************************
  * External's for tpg_memory.c
@@ -94,13 +114,14 @@ RTE_DECLARE_PER_LCORE(struct rte_mempool *, mbuf_pool_clone);
 RTE_DECLARE_PER_LCORE(struct rte_mempool *, tcb_pool);
 RTE_DECLARE_PER_LCORE(struct rte_mempool *, ucb_pool);
 
-extern bool                 mem_init(void);
-extern void                 mem_lcore_init(uint32_t lcore_id);
-extern struct rte_mempool  *mem_get_mbuf_pool(uint32_t port, uint32_t queue_id);
-extern struct rte_mempool **mem_get_tcb_pools(void);
-extern struct rte_mempool **mem_get_ucb_pools(void);
-extern bool                 mem_handle_cmdline_opt(const char *opt_name,
-                                                   char *opt_arg);
+extern bool                       mem_init(void);
+extern void                       mem_lcore_init(uint32_t lcore_id);
+extern struct rte_mempool        *mem_get_mbuf_pool(uint32_t port,
+                                                  uint32_t queue_id);
+extern struct rte_mempool       **mem_get_tcb_pools(void);
+extern struct rte_mempool       **mem_get_ucb_pools(void);
+extern cmdline_arg_parser_res_t   mem_handle_cmdline_opt(const char *opt_name,
+                                                         char *opt_arg);
 
 /*****************************************************************************
  * mem_get_mbuf_local_pool()

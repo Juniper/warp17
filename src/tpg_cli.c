@@ -413,7 +413,8 @@ void cli_interact(void)
  * cli_handle_cmdline_opt()
  * --cmd-file - file containing startup commands
  ****************************************************************************/
-bool cli_handle_cmdline_opt(const char *opt_name, char *opt_arg)
+cmdline_arg_parser_res_t cli_handle_cmdline_opt(const char *opt_name,
+                                                char *opt_arg)
 {
     global_config_t *cfg = cfg_get_config();
 
@@ -422,9 +423,9 @@ bool cli_handle_cmdline_opt(const char *opt_name, char *opt_arg)
 
     if (strcmp(opt_name, "cmd-file") == 0) {
         cfg->gcfg_cmd_file = strdup(opt_arg);
-        return true;
+        return CAPR_CONSUMED;
     }
 
-    return false;
+    return CAPR_IGNORED;
 }
 

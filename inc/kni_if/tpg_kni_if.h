@@ -68,17 +68,20 @@
     CMDLINE_OPT_ARG("kni-ifs", true)
 
 #define KNI_IF_CMDLINE_PARSER() \
-    CMDLINE_ARG_PARSER(kni_if_handle_cmdline_opt, NULL)
+    CMDLINE_ARG_PARSER(kni_if_handle_cmdline_opt, NULL,                         \
+"  --kni-ifs:                  Configure the number of kni interfaces. NOTE:\n" \
+"                              please check section Using Kernel Network\n"     \
+"                              Interface (KNI) Interfaces for more information.\n")
 
 /*****************************************************************************
  * Externals for tpg_kni_if.c
  ****************************************************************************/
-extern uint32_t kni_if_get_count(void);
-extern void     kni_handle_kernel_status_requests(void);
-extern bool     kni_if_handle_cmdline_opt(const char *opt_name,
-                                          char *opt_arg);
-extern bool     kni_if_init(void);
-extern uint32_t kni_get_first_kni_interface(void);
+extern uint32_t                 kni_if_get_count(void);
+extern void                     kni_handle_kernel_status_requests(void);
+extern cmdline_arg_parser_res_t kni_if_handle_cmdline_opt(const char *opt_name,
+                                                          char *opt_arg);
+extern bool                     kni_if_init(void);
+extern uint32_t                 kni_get_first_kni_interface(void);
 
 
 /*****************************************************************************

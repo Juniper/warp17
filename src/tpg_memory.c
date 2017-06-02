@@ -210,7 +210,8 @@ static struct rte_mempool *mem_create_local_pool(const char *name, uint32_t core
  * --mbuf-hdr-pool-sz configuration - size in K (*1024) of the mbuf hdr mempool
  *      default: GCFG_MBUF_HDR_POOL_SIZE
  ****************************************************************************/
-bool mem_handle_cmdline_opt(const char *opt_name, char *opt_arg)
+cmdline_arg_parser_res_t mem_handle_cmdline_opt(const char *opt_name,
+                                                char *opt_arg)
 {
     global_config_t *cfg = cfg_get_config();
 
@@ -218,73 +219,112 @@ bool mem_handle_cmdline_opt(const char *opt_name, char *opt_arg)
         TPG_ERROR_ABORT("ERROR: Unable to get config!\n");
 
     if (strcmp(opt_name, "tcb-pool-sz") == 0) {
-        unsigned long var = strtoul(opt_arg, NULL, 10) * 1024ULL;
+        unsigned long  var;
+        char          *endptr;
 
-        if (var <= UINT32_MAX)
-            cfg->gcfg_tcb_pool_size = var;
-        else
-            TPG_ERROR_EXIT(EXIT_FAILURE,
-                           "ERROR: Invalid tcb-pool-sz value %s!\n"
-                           "The value must be lower than %d\n",
-                           opt_arg, UINT32_MAX);
-        return true;
+        errno = 0;
+        var = strtoul(opt_arg, &endptr, 10);
+
+        if ((errno == ERANGE && var == ULONG_MAX) ||
+                (errno != 0 && var == 0) ||
+                *endptr != '\0' ||
+                var > (UINT32_MAX / 1024)) {
+            printf("ERROR: Invalid tcb-pool-sz value %s!\n"
+                   "The value must be lower than %d\n",
+                   opt_arg, (UINT32_MAX / 1024));
+            return CAPR_ERROR;
+        }
+
+        cfg->gcfg_tcb_pool_size = var * 1024;
+        return CAPR_CONSUMED;
     }
 
     if (strcmp(opt_name, "ucb-pool-sz") == 0) {
-        unsigned long var = strtoul(opt_arg, NULL, 10) * 1024ULL;
+        unsigned long  var;
+        char          *endptr;
 
-        if (var <= UINT32_MAX)
-            cfg->gcfg_ucb_pool_size = var;
-        else
-            TPG_ERROR_EXIT(EXIT_FAILURE,
-                           "ERROR: Invalid ucb-pool-sz value %s!\n"
-                           "The value must be lower than %d\n",
-                           opt_arg, UINT32_MAX);
-        return true;
+        errno = 0;
+        var = strtoul(opt_arg, &endptr, 10);
+
+        if ((errno == ERANGE && var == ULONG_MAX) ||
+                (errno != 0 && var == 0) ||
+                *endptr != '\0' ||
+                var > (UINT32_MAX / 1024)) {
+            printf("ERROR: Invalid ucb-pool-sz value %s!\n"
+                   "The value must be lower than %d\n",
+                   opt_arg, (UINT32_MAX / 1024));
+            return CAPR_ERROR;
+        }
+
+        cfg->gcfg_ucb_pool_size = var * 1024;
+        return CAPR_CONSUMED;
     }
 
     if (strcmp(opt_name, "mbuf-pool-sz") == 0) {
-        unsigned long var = strtoul(opt_arg, NULL, 10) * 1024UL;
+        unsigned long  var;
+        char          *endptr;
 
-        if (var <= UINT32_MAX)
-            cfg->gcfg_mbuf_poolsize = var;
-        else
-            TPG_ERROR_EXIT(EXIT_FAILURE,
-                           "ERROR: Invalid mbuf-pool-sz value %s!\n"
-                           "The value must be lower than %d\n",
-                           opt_arg, UINT32_MAX);
-        return true;
+        errno = 0;
+        var = strtoul(opt_arg, &endptr, 10);
+
+        if ((errno == ERANGE && var == ULONG_MAX) ||
+                (errno != 0 && var == 0) ||
+                *endptr != '\0' ||
+                var > (UINT32_MAX / 1024)) {
+            printf("ERROR: Invalid mbuf-pool-sz value %s!\n"
+                   "The value must be lower than %d\n",
+                   opt_arg, (UINT32_MAX / 1024));
+            return CAPR_ERROR;
+        }
+
+        cfg->gcfg_mbuf_poolsize = var * 1024;
+        return CAPR_CONSUMED;
     }
 
     if (strcmp(opt_name, "mbuf-sz") == 0) {
-        unsigned long mbuf_size = strtoul(opt_arg, NULL, 10);
+        unsigned long  mbuf_size;
+        char          *endptr;
 
-        if (mbuf_size >= GCFG_MBUF_SIZE && mbuf_size <= PORT_MAX_MTU) {
-            cfg->gcfg_mbuf_size = mbuf_size;
-        } else {
-            TPG_ERROR_EXIT(EXIT_FAILURE,
-                           "ERROR: Invalid mbuf-sz value %s!\n"
-                           "The value must be greater %d and lower than %d\n",
-                           opt_arg, PORT_MAX_MTU,
-                           GCFG_MBUF_SIZE);
+        errno = 0;
+        mbuf_size = strtoul(opt_arg, &endptr, 10);
+
+        if ((errno == ERANGE && mbuf_size == ULONG_MAX) ||
+                (errno != 0 && mbuf_size == 0) ||
+                *endptr != '\0' ||
+                mbuf_size < GCFG_MBUF_SIZE ||
+                mbuf_size > PORT_MAX_MTU) {
+            printf("ERROR: Invalid mbuf-sz value %s!\n"
+                   "The value must be greater than %d and lower than %d\n",
+                   opt_arg, GCFG_MBUF_SIZE, PORT_MAX_MTU);
+            return CAPR_ERROR;
         }
-        return true;
+
+        cfg->gcfg_mbuf_size = mbuf_size;
+        return CAPR_CONSUMED;
     }
 
     if (strcmp(opt_name, "mbuf-hdr-pool-sz") == 0) {
-        unsigned long var = strtoul(opt_arg, NULL, 10) * 1024UL;
+        unsigned long  var;
+        char          *endptr;
 
-        if (var <= UINT32_MAX)
-            cfg->gcfg_mbuf_hdr_poolsize = var;
-        else
-            TPG_ERROR_EXIT(EXIT_FAILURE,
-                           "ERROR: Invalid mbuf-hdr-pool-sz value %s!\n"
-                           "The value must be lower than %d\n",
-                           opt_arg, UINT32_MAX);
-        return true;
+        errno = 0;
+        var = strtoul(opt_arg, &endptr, 10);
+
+        if ((errno == ERANGE && var == ULONG_MAX) ||
+                (errno != 0 && var == 0) ||
+                *endptr != '\0' ||
+                var > (UINT32_MAX / 1024)) {
+            printf("ERROR: Invalid mbuf-hdr-pool-sz value %s!\n"
+                   "The value must be lower than %d\n",
+                   opt_arg, (UINT32_MAX / 1024));
+            return CAPR_ERROR;
+        }
+
+        cfg->gcfg_mbuf_hdr_poolsize = var * 1024;
+        return CAPR_CONSUMED;
     }
 
-    return false;
+    return CAPR_IGNORED;
 }
 
 /*****************************************************************************

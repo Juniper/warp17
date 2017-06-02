@@ -123,6 +123,7 @@ int main(int argc, char **argv)
     /*
      * Initialize DPDK infrastructure before we do anything else
      */
+    rte_set_application_usage_hook(cfg_print_usage);
     ret = rte_eal_init(argc, argv);
     if (ret < 0)
         rte_panic("Cannot init EAL\n");
@@ -145,126 +146,153 @@ int main(int argc, char **argv)
     /*
      * General checks
      */
-    if (rte_lcore_count() < 3)
+    if (rte_lcore_count() < 3) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s\n",
                        "WARP17 needs at least three cores!");
+    }
     /* We only support at most 64 cores right now (to make parsing easier). */
-    if (rte_lcore_count() > (sizeof(uint64_t) * 8))
+    if (rte_lcore_count() > (sizeof(uint64_t) * 8)) {
         TPG_ERROR_EXIT(EXIT_FAILURE,
                        "ERROR: WARP17 supports at most %"PRIu32" cores!\n",
                        (uint32_t)sizeof(uint64_t) * 8);
-    if (rte_eth_dev_count() > TPG_ETH_DEV_MAX)
+    }
+    if (rte_eth_dev_count() > TPG_ETH_DEV_MAX) {
         TPG_ERROR_EXIT(EXIT_FAILURE,
                        "ERROR: WARP17 works with at most %u ports!\n",
                        TPG_ETH_DEV_MAX);
+    }
 
     /*
      * Initialize various submodules
      */
 
-    if (!cli_init())
+    if (!cli_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the command line interface");
+    }
 
-    if (!rpc_init())
+    if (!rpc_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the RPC server");
+    }
 
-    if (!cfg_init())
+    if (!cfg_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s\n",
                        "Failed initializing default configuration!\n");
+    }
 
     if (!cfg_handle_command_line(argc, argv))
         exit(EXIT_FAILURE); /* Error reporting is handled by the function itself */
 
-    if (!trace_init())
+    if (!trace_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the tracing module");
+    }
 
-    if (!trace_filter_init())
+    if (!trace_filter_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the trace filter module");
+    }
 
-    if (!mem_init())
+    if (!mem_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed allocating required mbufs");
+    }
 
     /* WARNING: Careful when adding code above this point. Up until ports are
      * initialized DPDK can't know that there might be ring interfaces that
      * still need to be created. Therefore any call to rte_eth_dev_count()
      * doesn't include them.
      */
-    if (!port_init())
+    if (!port_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the Ethernets ports");
+    }
 
-    if (!msg_sys_init())
+    if (!msg_sys_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the message queues");
+    }
 
-    if (!test_mgmt_init())
+    if (!test_mgmt_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing test mgmt");
+    }
 
-    if (!test_init())
+    if (!test_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing tests");
+    }
 
-    if (!eth_init())
+    if (!eth_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the Ethernets pkt handler");
+    }
 
-    if (!arp_init())
+    if (!arp_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the ARP pkt handler");
+    }
 
-    if (!route_init())
+    if (!route_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the ROUTE module");
+    }
 
-    if (!ipv4_init())
+    if (!ipv4_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the IPv4 pkt handler");
+    }
 
-    if (!tcp_init())
+    if (!tcp_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the TCP pkt handler");
+    }
 
-    if (!udp_init())
+    if (!udp_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the UDP pkt handler");
+    }
 
-    if (!tlkp_init())
+    if (!tlkp_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the Session lookup engine");
+    }
 
-    if (!tlkp_tcp_init())
+    if (!tlkp_tcp_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the TCP lookup engine");
+    }
 
-    if (!tlkp_udp_init())
+    if (!tlkp_udp_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the UDP lookup engine");
+    }
 
-    if (!tsm_init())
+    if (!tsm_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the TSM module");
+    }
 
-    if (!timer_init())
+    if (!timer_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the TCP timers module");
+    }
 
-    if (!pkt_loop_init())
+    if (!pkt_loop_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the pkt loop");
+    }
 
-    if (!raw_init())
+    if (!raw_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the RAW Application module");
+    }
 
-    if (!http_init())
+    if (!http_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the RAW Application module");
+    }
 
     start_cores();
 
@@ -273,9 +301,10 @@ int main(int argc, char **argv)
      */
     cfg = cfg_get_config();
     if (cfg != NULL && cfg->gcfg_cmd_file) {
-        if (!cli_run_input_file(cfg->gcfg_cmd_file))
+        if (!cli_run_input_file(cfg->gcfg_cmd_file)) {
             TPG_ERROR_EXIT(EXIT_FAILURE, "Failed to run command file: %s!\n",
                            cfg->gcfg_cmd_file);
+        }
     }
 
     /*

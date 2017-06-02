@@ -118,25 +118,33 @@ static unsigned int kni_cores_in_mask(uint64_t mask)
 /*****************************************************************************
  * kni_if_handle_cmdline_opt()
  ****************************************************************************/
-bool kni_if_handle_cmdline_opt(const char *opt_name, char *opt_arg)
+cmdline_arg_parser_res_t kni_if_handle_cmdline_opt(const char *opt_name,
+                                                   char *opt_arg)
 {
+    unsigned long  val;
+    char          *endptr;
+
     if (strcmp(opt_name, "kni-ifs"))
-        return false;
+        return CAPR_IGNORED;
 
 #if !defined(TPG_KNI_IF)
-    TPG_ERROR_EXIT(EXIT_FAILURE,
-                   "ERROR: Recompile with TPG_KNI_IF set for Kernel Networking Interface support!\n");
-    return false;
+    printf("ERROR: Recompile with TPG_KNI_IF set for Kernel Networking Interface support!\n");
+    return CAPR_ERROR;
 #endif /* !defined(TPG_KNI_IF) */
 
     errno = 0;
-    kni_interfaces = strtol(opt_arg, NULL, 10);
-    if (errno != 0)
-        TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: Invalid Ketnel Networking Interface count!\n");
+    val = strtoul(opt_arg, &endptr, 10);
+    if ((errno == ERANGE && val == ULONG_MAX) ||
+            (errno != 0 && val == 0) ||
+            *endptr != '\0' ||
+            val > UINT32_MAX) {
+        printf("ERROR: Invalid Kernel Networking Interface count %s!\n",
+               opt_arg);
+        return CAPR_ERROR;
+    }
 
-    opt_arg = opt_arg;
-
-    return true;
+    kni_interfaces = val;
+    return CAPR_CONSUMED;
 }
 
 /*****************************************************************************
@@ -165,10 +173,12 @@ bool kni_if_init(void)
      *       has been called at this stage, so they are included in the
      *       rte_eth_dev_count()!
      */
-    if ((rte_eth_dev_count() + kni_if_get_count()) > TPG_ETH_DEV_MAX)
+    if ((rte_eth_dev_count() + kni_if_get_count()) > TPG_ETH_DEV_MAX) {
         TPG_ERROR_EXIT(EXIT_FAILURE,
                        "ERROR: Total number of virtual interfaces and ethernet ports must be less than (or equal to) %u!\n",
                        TPG_ETH_DEV_MAX);
+        return false;
+    }
 
     /*
      * Allocate memory to store kni pointers

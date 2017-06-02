@@ -489,6 +489,7 @@ static bool port_setup_port(uint8_t port)
                        cfg->gcfg_mbuf_size,
                        port_dev_info[port].pi_dev_info.min_rx_bufsize +
                            RTE_PKTMBUF_HEADROOM);
+        return false;
     }
 
     /*
@@ -609,6 +610,7 @@ static bool port_parse_mappings(char *pcore_mask, uint32_t pcore_mask_len)
     char     *core_mask     = pcore_mask;
     uint32_t  core_mask_len = pcore_mask_len;
     uint64_t  intmask;
+    char     *endptr;
     long int  port;
     int       core;
 
@@ -650,8 +652,10 @@ static bool port_parse_mappings(char *pcore_mask, uint32_t pcore_mask_len)
     }
 
     errno = 0;
-    intmask = strtoll(core_mask, NULL, 16);
-    if (errno)
+    intmask = strtoull(core_mask, &endptr, 16);
+    if ((errno == ERANGE && intmask == ULLONG_MAX) ||
+            (errno != 0 && intmask == 0) ||
+            *endptr != '\0')
         return false;
 
     RTE_LCORE_FOREACH_SLAVE(core) {
@@ -683,15 +687,16 @@ static bool port_parse_mappings(char *pcore_mask, uint32_t pcore_mask_len)
 /*****************************************************************************
  * port_handle_cmdline_opt_qmap()
  ****************************************************************************/
-static bool port_handle_cmdline_opt_qmap(char *qmap_str)
+static cmdline_arg_parser_res_t port_handle_cmdline_opt_qmap(char *qmap_str)
 {
     uint32_t    i;
     const char *old;
     const char *new;
 
-    if (qmap_args_cnt == TPG_ETH_DEV_MAX)
-        TPG_ERROR_EXIT(EXIT_FAILURE,
-                       "ERROR: too many qmap arguments supplied!\n");
+    if (qmap_args_cnt == TPG_ETH_DEV_MAX) {
+        printf("ERROR: too many qmap arguments supplied!\n");
+        return CAPR_ERROR;
+    }
 
     /* Make sure we don't already have a qmap argument for the same
      * port.
@@ -703,13 +708,12 @@ static bool port_handle_cmdline_opt_qmap(char *qmap_str)
              old++, new++)
             ;
         if (*old == *new && *old == '.') {
-            TPG_ERROR_EXIT(EXIT_FAILURE,
-                           "ERROR: Qmap supplied multiple times for same port!\n");
-            return false;
+            printf("ERROR: Qmap supplied multiple times for same port!\n");
+            return CAPR_ERROR;
         }
     }
     qmap_args[qmap_args_cnt++] = qmap_str;
-    return true;
+    return CAPR_CONSUMED;
 }
 
 /*****************************************************************************
@@ -997,7 +1001,8 @@ void port_get_conn_options(uint32_t port, tpg_port_options_t *out)
  * "--qmap-default max-c"
  *
  ****************************************************************************/
-bool port_handle_cmdline_opt(const char *opt_name, char *opt_arg)
+cmdline_arg_parser_res_t port_handle_cmdline_opt(const char *opt_name,
+                                                 char *opt_arg)
 {
     if (strcmp(opt_name, "qmap") == 0)
         return port_handle_cmdline_opt_qmap(opt_arg);
@@ -1007,14 +1012,13 @@ bool port_handle_cmdline_opt(const char *opt_name, char *opt_arg)
                 strcmp(optarg, "max-c") == 0) {
             qmap_default = opt_arg;
         } else {
-            TPG_ERROR_EXIT(EXIT_FAILURE,
-                           "ERROR: invalid qmap-default value %s!\n",
-                           opt_arg);
+            printf("ERROR: invalid qmap-default value %s!\n", opt_arg);
+            return CAPR_ERROR;
         }
-        return true;
+        return CAPR_CONSUMED;
     }
 
-    return false;
+    return CAPR_IGNORED;
 }
 
 /*****************************************************************************
@@ -1027,13 +1031,17 @@ bool port_handle_cmdline(void)
     uint32_t port;
 
     if (qmap_args_cnt) {
-        if (qmap_default)
+        if (qmap_default) {
             TPG_ERROR_EXIT(EXIT_FAILURE,
                            "ERROR: Cannot supply both qmap and qmap-default at the same time!\n");
+            return false;
+        }
 
-        if (qmap_args_cnt != total_if_count)
+        if (qmap_args_cnt != total_if_count) {
             TPG_ERROR_EXIT(EXIT_FAILURE,
                            "ERROR: Qmap not specified for all interfaces!\n");
+            return false;
+        }
 
         return true;
     }
@@ -1591,10 +1599,12 @@ static bool port_interfaces_init(void)
     /* Parse qmappings for all ethernet ports AND virtual interfaces. */
     for (i = 0; i < qmap_args_cnt; i++) {
         qmap = qmap_args[i];
-        if (!port_parse_mappings(qmap, strlen(qmap)))
+        if (!port_parse_mappings(qmap, strlen(qmap))) {
             TPG_ERROR_EXIT(EXIT_FAILURE,
                            "ERROR: Failed initializing qmap %s!\n",
                            qmap);
+            return false;
+        }
     }
 
     /* Initialize port_info for all physical ports. Ring-if port_info is

@@ -71,27 +71,27 @@ UINT32MAX = 0xFFFFFFFF
 
 class Warp17InputTestCase(Warp17BaseUnitTestCase):
 
-    def test_tcb_pool_sz(self):
-        """Test 'tcb-pool-sz' input, its maximum value has to be uint32max"""
-        Warp17BaseUnitTestCase.env.set_value('tcb-pool-sz', UINT32MAX + 1)
+    def _test_invalid_input(self, tname, key, value):
+        Warp17BaseUnitTestCase.env.set_value(key, value)
 
         warp17_proc = warp17_start(env=Warp17BaseUnitTestCase.env,
                                    output_args=Warp17BaseUnitTestCase.oargs)
 
         ret = warp17_stop(Warp17BaseUnitTestCase.env, warp17_proc)
         self.assertEqual(ret, warp17_api.EXIT_FAILURE,
-                         'Error in test_tcb_pool_sz:"{}" occurred\n'.format(ret))
+                         'Error in {0}:"{1}" occurred\n'.format(tname, ret))
+
+    def test_tcb_pool_sz(self):
+        """Test 'tcb-pool-sz' input, its maximum value has to be uint32max / 1024"""
+        self._test_invalid_input('test_tcb_pool_sz', 'tcb-pool-sz',
+                                 UINT32MAX / 1024 + 1)
+        self._test_invalid_input('test_tcb_pool_sz-nonum', 'tcb-pool-sz', '1X')
 
     def test_ucb_pool_sz(self):
-        """Test 'ucb-pool-sz' input, its maximum value has to be uint32max"""
-        Warp17BaseUnitTestCase.env.set_value('ucb-pool-sz', UINT32MAX + 1)
-
-        warp17_proc = warp17_start(env=Warp17BaseUnitTestCase.env,
-                                   output_args=Warp17BaseUnitTestCase.oargs)
-
-        ret = warp17_stop(Warp17BaseUnitTestCase.env, warp17_proc)
-        self.assertEqual(ret, warp17_api.EXIT_FAILURE,
-                         'Error in test_ucb_pool_sz:"{}" occurred\n'.format(ret))
+        """Test 'ucb-pool-sz' input, its maximum value has to be uint32max / 1024"""
+        self._test_invalid_input('test_ucb_pool_sz', 'ucb-pool-sz',
+                                 UINT32MAX / 1024 + 1)
+        self._test_invalid_input('test_ucb_pool_sz-nonum', 'ucb-pool-sz', '1X')
 
     def test_mbuf_sz(self):
         """Test 'mbuf-sz' input, its maximum value has to be PORT_MAX_MTU"""
@@ -105,47 +105,26 @@ class Warp17InputTestCase(Warp17BaseUnitTestCase):
         # if (mbuf_size > GCFG_MBUF_SIZE && ) {
 
         # Case one: mbuf_size < PORT_MAX_MTU #
-        Warp17BaseUnitTestCase.env.set_value('mbuf-sz', PORT_MAX_MTU + 1)
-
-        warp17_proc = warp17_start(env=Warp17BaseUnitTestCase.env,
-                                   output_args=Warp17BaseUnitTestCase.oargs)
-
-        ret = warp17_stop(Warp17BaseUnitTestCase.env, warp17_proc)
-        self.assertEqual(ret, warp17_api.EXIT_FAILURE,
-                         'Error in test_mbuf_sz:"{}" occurred\n'.format(ret))
+        self._test_invalid_input('test_mbuf_sz-max', 'mbuf-sz',
+                                 PORT_MAX_MTU + 1)
 
         # Case two: mbuf_size > GCFG_MBUF_SIZE #
-
-        Warp17BaseUnitTestCase.env.set_value('mbuf-sz', GCFG_MBUF_SIZE - 1)
-
-        warp17_proc = warp17_start(env=Warp17BaseUnitTestCase.env,
-                                   output_args=Warp17BaseUnitTestCase.oargs)
-
-        ret = warp17_stop(Warp17BaseUnitTestCase.env, warp17_proc)
-        self.assertEqual(ret, warp17_api.EXIT_FAILURE,
-                         'Error in test_mbuf_sz:"{}" occurred\n'.format(ret))
+        self._test_invalid_input('test_mbuf_sz-min', 'mbuf-sz',
+                                 GCFG_MBUF_SIZE - 1)
 
     def test_mbuf_pool_sz(self):
-        """Test 'ucb-pool-sz' input, its maximum value has to be uint32max"""
-        Warp17BaseUnitTestCase.env.set_value('mbuf-pool-sz', UINT32MAX + 1)
-
-        warp17_proc = warp17_start(env=Warp17BaseUnitTestCase.env,
-                                   output_args=Warp17BaseUnitTestCase.oargs)
-
-        ret = warp17_stop(Warp17BaseUnitTestCase.env, warp17_proc)
-        self.assertEqual(ret, warp17_api.EXIT_FAILURE,
-                         'Error in test_mbuf_pool_sz:"{}" occurred\n'.format(ret))
+        """Test 'mbuf-pool-sz' input, its maximum value has to be uint32max / 1024"""
+        self._test_invalid_input('test_mbuf_pool_sz', 'mbuf-pool-sz',
+                                 UINT32MAX / 1024 + 1)
+        self._test_invalid_input('test_mbuf_pool_sz-nonum', 'mbuf-pool-sz',
+                                 '1X')
 
     def test_mbuf_hdr_pool_sz(self):
-        """Test 'ucb-pool-sz' input, its maximum value has to be uint32max"""
-        Warp17BaseUnitTestCase.env.set_value('mbuf-hdr-pool-sz', UINT32MAX + 1)
-
-        warp17_proc = warp17_start(env=Warp17BaseUnitTestCase.env,
-                                   output_args=Warp17BaseUnitTestCase.oargs)
-
-        ret = warp17_stop(Warp17BaseUnitTestCase.env, warp17_proc)
-        self.assertEqual(ret, warp17_api.EXIT_FAILURE,
-                         'Error in test_mbuf_hdr_pool_sz:"{}" occurred\n'.format(ret))
+        """Test 'mbuf-hdr-pool-sz' input, its maximum value has to be uint32max / 1024"""
+        self._test_invalid_input('test_mbuf_hdr_pool_sz', 'mbuf-hdr-pool-sz',
+                                 UINT32MAX / 1024 + 1)
+        self._test_invalid_input('test_mbuf_hdr_pool_sz-nonum',
+                                 'mbuf-hdr-pool-sz', '1X')
 
     def tearDown(self):
         """For each tests we need to clean the enviroment"""
