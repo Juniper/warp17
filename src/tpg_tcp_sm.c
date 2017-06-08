@@ -292,8 +292,12 @@ static void tsm_cleanup_retrans_queu(tcp_control_block_t *tcb, uint32_t seg_ack)
         rte_pktmbuf_free_seg(mbuf);
     }
 
-    if (retrans->tr_data_mbufs == NULL)
+    if (retrans->tr_data_mbufs == NULL) {
         retrans->tr_last_mbuf = NULL;
+
+        /* Everything was acked so we can cancel the retransmission timer. */
+        tcp_timer_rto_cancel(&tcb->tcb_l4);
+    }
 
     /* Update SND.UNA based on what was acked. */
     tcb->tcb_snd.una = seg_ack;
