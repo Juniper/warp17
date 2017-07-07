@@ -1536,6 +1536,7 @@ struct cmd_tests_set_tcp_opts_result {
     cmdline_fixed_string_t twait_to;
     cmdline_fixed_string_t orphan_to;
     cmdline_fixed_string_t twait_skip;
+    cmdline_fixed_string_t ack_delay;
 
     union {
         uint32_t opt_val_32;
@@ -1581,6 +1582,8 @@ static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_orphan_to =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, orphan_to, "orphan-to");
 static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_twait_skip =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, twait_skip, "twait-skip");
+static cmdline_parse_token_string_t cmd_tests_set_tcp_opts_T_ack_del =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_tcp_opts_result, ack_delay, "ack-delay");
 
 static cmdline_parse_token_num_t cmd_tests_set_tcp_opts_T_opt_val_32 =
     TOKEN_NUM_INITIALIZER(struct cmd_tests_set_tcp_opts_result, opt_u.opt_val_32, UINT32);
@@ -1602,6 +1605,7 @@ OPT_FILL_DEFINE(tcp, tpg_tcp_sockopt_t, to_fin_to, uint32_t);
 OPT_FILL_DEFINE(tcp, tpg_tcp_sockopt_t, to_twait_to, uint32_t);
 OPT_FILL_DEFINE(tcp, tpg_tcp_sockopt_t, to_orphan_to, uint32_t);
 OPT_FILL_DEFINE(tcp, tpg_tcp_sockopt_t, to_skip_timewait, bool);
+OPT_FILL_DEFINE(tcp, tpg_tcp_sockopt_t, to_ack_delay, bool);
 
 static void cmd_tests_set_tcp_opts_parsed(void *parsed_result,
                                           struct cmdline *cl,
@@ -1794,7 +1798,7 @@ cmdline_parse_inst_t cmd_tests_set_tcp_opts_orphan_to = {
 cmdline_parse_inst_t cmd_tests_set_tcp_opts_twait_skip = {
     .f = cmd_tests_set_tcp_opts_parsed,
     .data = (void *) &OPT_FILL_PARAM_NAME(tcp, to_skip_timewait),
-    .help_str = "set tests tcp-options port <eth_port> test-case-id <tcid> twait-skip <true|false>",
+    .help_str = "set tests tcp-options port <eth_port> test-case-id <tcid> twait-skip <1|0>",
     .tokens = {
         (void *)&cmd_tests_set_tcp_opts_T_set,
         (void *)&cmd_tests_set_tcp_opts_T_tests,
@@ -1804,6 +1808,24 @@ cmdline_parse_inst_t cmd_tests_set_tcp_opts_twait_skip = {
         (void *)&cmd_tests_set_tcp_opts_T_tcid_kw,
         (void *)&cmd_tests_set_tcp_opts_T_tcid,
         (void *)&cmd_tests_set_tcp_opts_T_twait_skip,
+        (void *)&cmd_tests_set_tcp_opts_T_opt_val_bool,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_tests_set_tcp_opts_ack_del = {
+    .f = cmd_tests_set_tcp_opts_parsed,
+    .data = (void *) &OPT_FILL_PARAM_NAME(tcp, to_ack_delay),
+    .help_str = "set tests tcp-options port <eth_port> test-case-id <tcid> ack-delay <1|0>",
+    .tokens = {
+        (void *)&cmd_tests_set_tcp_opts_T_set,
+        (void *)&cmd_tests_set_tcp_opts_T_tests,
+        (void *)&cmd_tests_set_tcp_opts_T_tcp_options,
+        (void *)&cmd_tests_set_tcp_opts_T_port_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_port,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid_kw,
+        (void *)&cmd_tests_set_tcp_opts_T_tcid,
+        (void *)&cmd_tests_set_tcp_opts_T_ack_del,
         (void *)&cmd_tests_set_tcp_opts_T_opt_val_bool,
         NULL,
     },
@@ -1853,9 +1875,9 @@ static void cmd_tests_show_tcp_opts_parsed(void *parsed_result,
     if (test_mgmt_get_tcp_sockopt(pr->port, pr->tcid, &tcp_sockopt, &parg) != 0)
         return;
 
-    cmdline_printf(cl, "WIN   SYN SYN/ACK DATA RETRY RTO(ms) FIN(ms) TW(ms)  ORP(ms) TW-SKIP\n");
-    cmdline_printf(cl, "----- --- ------- ---- ----- ------- ------- ------- ------- -------\n");
-    cmdline_printf(cl, "%5u %3u %7u %4u %5u %7u %7u %7u %7u %7u\n",
+    cmdline_printf(cl, "WIN   SYN SYN/ACK DATA RETRY RTO(ms) FIN(ms) TW(ms)  ORP(ms) TW-SKIP ACK-DEL\n");
+    cmdline_printf(cl, "----- --- ------- ---- ----- ------- ------- ------- ------- ------- -------\n");
+    cmdline_printf(cl, "%5u %3u %7u %4u %5u %7u %7u %7u %7u %7u %7u\n",
                    tcp_sockopt.to_win_size,
                    tcp_sockopt.to_syn_retry_cnt,
                    tcp_sockopt.to_syn_ack_retry_cnt,
@@ -1865,7 +1887,8 @@ static void cmd_tests_show_tcp_opts_parsed(void *parsed_result,
                    tcp_sockopt.to_fin_to,
                    tcp_sockopt.to_twait_to,
                    tcp_sockopt.to_orphan_to,
-                   tcp_sockopt.to_skip_timewait);
+                   tcp_sockopt.to_skip_timewait,
+                   tcp_sockopt.to_ack_delay);
     cmdline_printf(cl, "\n\n");
 }
 
@@ -2010,6 +2033,7 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_set_tcp_opts_twait_to,
     &cmd_tests_set_tcp_opts_orphan_to,
     &cmd_tests_set_tcp_opts_twait_skip,
+    &cmd_tests_set_tcp_opts_ack_del,
     &cmd_tests_show_tcp_opts,
     &cmd_exit,
     &cmd_syslog,

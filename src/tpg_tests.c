@@ -1379,8 +1379,10 @@ test_case_execute_udp_send(test_case_info_t *tc_info,
                                                         &ucb->ucb_l4.l4cb_app_data,
                                                         &tc_info->tci_app_stats,
                                                         data_sent);
-        } else if ((is_server && TEST_SRV_STATE(&ucb->ucb_l4) == TST_SRVS_SENDING) ||
-                        (!is_server && TEST_CL_STATE(&ucb->ucb_l4) == TST_CLS_SENDING)) {
+        } else if ((is_server &&
+                        test_server_sm_has_data_pending(&ucb->ucb_l4)) ||
+                        (!is_server &&
+                         test_client_sm_has_data_pending(&ucb->ucb_l4))) {
             /* Move at the end. */
             TEST_CBQ_REM_TO_SEND(ts, &ucb->ucb_l4);
             TEST_CBQ_ADD_TO_SEND(ts, &ucb->ucb_l4);

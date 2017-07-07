@@ -333,6 +333,7 @@ void tcp_store_sockopt(tcp_sockopt_t *dest, const tpg_tcp_sockopt_t *options)
 
     /* Bit flags. */
     dest->tcpo_skip_timewait = (options->to_skip_timewait > 0 ? true : false);
+    dest->tcpo_ack_delay = (options->to_ack_delay > 0 ? true : false);
 }
 
 /*****************************************************************************
@@ -370,6 +371,8 @@ void tcp_load_sockopt(tpg_tcp_sockopt_t *dest, const tcp_sockopt_t *options)
     /* Bit flags. */
     dest->to_skip_timewait = options->tcpo_skip_timewait;
     dest->has_to_skip_timewait = true;
+    dest->to_ack_delay = options->tcpo_ack_delay;
+    dest->has_to_ack_delay = true;
 }
 
 

@@ -80,6 +80,7 @@ typedef struct tcp_sockopt_s {
 
     /* Flags */
     uint32_t tcpo_skip_timewait : 1;
+    uint32_t tcpo_ack_delay : 1;
 
 } tcp_sockopt_t;
 

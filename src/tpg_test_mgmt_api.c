@@ -1255,6 +1255,9 @@ test_mgmt_set_tcp_sockopt(uint32_t eth_port, uint32_t test_case_id,
     if (opts->has_to_skip_timewait)
         old_opts.to_skip_timewait = opts->to_skip_timewait;
 
+    if (opts->has_to_ack_delay)
+        old_opts.to_ack_delay = opts->to_ack_delay;
+
     if (!test_mgmt_validate_tcp_sockopt(&old_opts, printer_arg))
         return -EINVAL;
 

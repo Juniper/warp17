@@ -99,7 +99,6 @@ static int tsm_SF_close_wait(tcp_control_block_t *tcb, tcpEvent_t event,
                              void *tsm_arg);
 static int tsm_SF_closed(tcp_control_block_t *tcb, tcpEvent_t event,
                          void *tsm_arg);
-
 /*****************************************************************************
  * State functions call table
  ****************************************************************************/
@@ -396,6 +395,27 @@ static bool tsm_do_receive_acceptance_test(tcp_control_block_t *tcb,
             rc = true;
     }
     return rc;
+}
+
+/*****************************************************************************
+ * tsm_need_ack()
+ ****************************************************************************/
+static bool tsm_need_ack(tcp_control_block_t *tcb)
+{
+    tcp_sockopt_t *tcp_opts;
+
+    tcp_opts = tcp_get_sockopt(&tcb->tcb_l4.l4cb_sockopt);
+
+    if (!tcp_opts->tcpo_ack_delay)
+        return true;
+
+    if (tcb->tcb_active && test_client_sm_has_data_pending(&tcb->tcb_l4))
+        return false;
+
+    if (!tcb->tcb_active && test_server_sm_has_data_pending(&tcb->tcb_l4))
+        return false;
+
+    return true;
 }
 
 /*****************************************************************************
@@ -1297,8 +1317,12 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
              * seventh, process the segment text,
              */
             if (seg_len && tsm_handle_incoming(tcb, pcb, seg_seq, seg_len)) {
-                /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
+                /* If there both client and server won't send other data
+                 * send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK>
+                 */
+
+                if (tsm_need_ack(tcb))
+                    tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
             }
 
             /*

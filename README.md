@@ -832,7 +832,15 @@ __NOTE: Only IPv4 is supported for now!__
       not.
 
 		```
-		set tests tcp-options port <eth_port> test-case-id <tcid> twait-skip <true|false>
+		set tests tcp-options port <eth_port> test-case-id <tcid> twait-skip <1|0>
+		```
+
+    - `ack-delay`: boolean to decide if `ACK` should be delayed (according to
+       [RFC1122, section 4.2.3.2](https://tools.ietf.org/html/rfc1122#section-4.2.3.2))
+       or not. By default `ACK` delay will be __disabled__.
+
+		```
+		set tests tcp-options port <eth_port> test-case-id <tcid> ack-delay <1|0>
 		```
 
 ## Application configuration and statistics commands
