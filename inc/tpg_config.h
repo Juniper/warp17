@@ -249,6 +249,8 @@ typedef struct global_config_s {
     uint32_t gcfg_ucb_pool_size;
     uint32_t gcfg_ucb_pool_cache_size;
 
+    bool     gcfg_mpool_any_sock;
+
     uint32_t gcfg_msgq_size;
 
     uint32_t gcfg_slow_tmr_max;

@@ -75,12 +75,13 @@
 #define MEM_TCB_POOL_FLAGS  0
 #define MEM_UCB_POOL_FLAGS  0
 
-#define MEM_CMDLINE_OPTIONS()                 \
-    CMDLINE_OPT_ARG("tcb-pool-sz", true),     \
-    CMDLINE_OPT_ARG("ucb-pool-sz", true),     \
-    CMDLINE_OPT_ARG("mbuf-pool-sz", true),    \
-    CMDLINE_OPT_ARG("mbuf-sz", true),         \
-    CMDLINE_OPT_ARG("mbuf-hdr-pool-sz", true)
+#define MEM_CMDLINE_OPTIONS()                  \
+    CMDLINE_OPT_ARG("tcb-pool-sz", true),      \
+    CMDLINE_OPT_ARG("ucb-pool-sz", true),      \
+    CMDLINE_OPT_ARG("mbuf-pool-sz", true),     \
+    CMDLINE_OPT_ARG("mbuf-sz", true),          \
+    CMDLINE_OPT_ARG("mbuf-hdr-pool-sz", true), \
+    CMDLINE_OPT_ARG("mpool-any-sock", false)
 
 #define MEM_CMDLINE_PARSER() \
     CMDLINE_ARG_PARSER(mem_handle_cmdline_opt, NULL,                                 \
@@ -103,7 +104,11 @@
 "  --mbuf-hdr-pool-sz:         Configure the size of the packet headers pool. The\n" \
 "                              size of the pool will be given by the argument of\n"  \
 "                              this option multiplied by 1024. By default 512K\n"    \
-"                              packet headers are allocated.\n")
+"                              packet headers are allocated.\n"                      \
+"  --mpool-any-sock:           Configure if memory pools should be created from\n"   \
+"                              any available memory if the local socket memory is\n" \
+"                              exhausted. By default this feature is disabled as\n"  \
+"                              it might affect performance.\n")
 
 /*****************************************************************************
  * External's for tpg_memory.c

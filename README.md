@@ -367,6 +367,9 @@ __NOTE: For now WARP17 supports at most 64 cores.__
 * `--mbuf-hdr-pool-sz`: configure the size of the packet headers pool. The
   size of the pool will be given by the argument of this option multiplied by
   1024. By default 512K packet headers are allocated.
+* `--mpool-any-sock`: configure if memory pools should be created from
+  any available memory if the local socket memory is exhausted. By default
+  this feature is disabled as it might affect performance.
 * `--ring-if-pairs`: configure the number of _in-memory-ring-based_ interfaces.
   __NOTE: please check section
   [Using In-Memory-Ring-Based Interfaces](#using-in-memory-ring-based-interfaces)
