@@ -70,6 +70,11 @@
  ****************************************************************************/
 #define PORT_PMASK_STR_MAXLEN 512
 
+/* "Sleep" time after port start/stop operations on i40e. See
+ * port_dev_hw_sync.
+ */
+#define PORT_I40E_SYNC_DELAY_S 10
+
 /*****************************************************************************
  * Global variables
  ****************************************************************************/
@@ -241,11 +246,57 @@ static void port_request_update(uint32_t port, enum pktloop_msg_types req_type)
 }
 
 /*****************************************************************************
+ * port_dev_hw_sync()
+ * WARNING: HACK: there is an issue in the i40e DPDK PMD (or FW)
+ * and the Firmware might be in an inconsistent state immediately after
+ * rte_eth_dev_start/rte_eth_dev_stop:
+ * http://dpdk.org/ml/archives/users/2017-July/002200.html
+ *
+ * Try to emulate the same behavior as DPDK's test-pmd and introduce a
+ * sufficient delay.. Retrieving the link state is not always enough.
+ * http://dpdk.org/browse/dpdk/tree/app/test-pmd/testpmd.c?h=v16.11&id=d3bfeaaabfd37ecc7d7d2edf2a3b60cc2d913cc9#n1646
+ *
+ ****************************************************************************/
+static void port_dev_hw_sync(uint32_t port)
+{
+    if (strncmp(port_dev_info[port].pi_dev_info.driver_name,
+                "net_i40e",
+                strlen("net_i40e") + 1) == 0) {
+        RTE_LOG(WARNING, USER1,
+                "WARNING: Sleeping for %u seconds in order to avoid i40e FW sync issues!\n",
+                PORT_I40E_SYNC_DELAY_S);
+        sleep(PORT_I40E_SYNC_DELAY_S);
+    }
+}
+
+/*****************************************************************************
+ * port_dev_hw_start()
+ ****************************************************************************/
+static int port_dev_hw_start(uint32_t port)
+{
+    int rc = rte_eth_dev_start(port);
+
+    if (rc == 0)
+        port_dev_hw_sync(port);
+
+    return rc;
+}
+
+/*****************************************************************************
+ * port_dev_hw_stop()
+ ****************************************************************************/
+static void port_dev_hw_stop(uint32_t port)
+{
+    rte_eth_dev_stop(port);
+    port_dev_hw_sync(port);
+}
+
+/*****************************************************************************
  * port_dev_start()
  ****************************************************************************/
 static int port_dev_start(uint32_t port)
 {
-    int rc = rte_eth_dev_start(port);
+    int rc = port_dev_hw_start(port);
 
     /* Tell the packet cores to start polling the port. */
     port_request_update(port, MSG_PKTLOOP_START_PORT);
@@ -260,7 +311,7 @@ static void port_dev_stop(uint32_t port)
     /* Tell the packet cores to stop polling the port. */
     port_request_update(port, MSG_PKTLOOP_STOP_PORT);
 
-    rte_eth_dev_stop(port);
+    port_dev_hw_stop(port);
 }
 
 /*****************************************************************************
@@ -582,7 +633,7 @@ static bool port_setup_port(uint8_t port)
                         cfg->gcfg_mbuf_size - RTE_PKTMBUF_HEADROOM :
                         PORT_MAX_MTU);
 
-    rc = rte_eth_dev_start(port);
+    rc = port_dev_hw_start(port);
     if (rc < 0) {
         RTE_LOG(ERR, USER1,
                 "ERROR: Failed rte_eth_dev_start(%u), returned %s(%d)!\n",
