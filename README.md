@@ -150,13 +150,13 @@ available, details can be found in the respective [documentation](ovf/README.md)
 sudo apt-get install build-essential python ncurses-dev
 ```
 
-### Install DPDK 16.11
+### Install DPDK 16.11.2
 
-* Download [DPDK 16.11](http://dpdk.org/rel/)
+* Download [DPDK 16.11.2](http://dpdk.org/rel/)
 
 	```
-	tar xf dpdk-16.11.tar.xz
-	cd dpdk-16.11
+	tar xf dpdk-16.11.2.tar.xz
+	cd dpdk-stable-16.11.2
 	```
 
 * Install DPDK:
@@ -169,12 +169,27 @@ sudo apt-get install build-essential python ncurses-dev
 
 * Load the `igb_uio` DPDK module, either as shown below or by running the
   `$RTE_SDK/tools/dpdk-setup.sh` script and selecting option
-  `[16] Insert IGB UIO module`:
+  `[2] Insert IGB UIO module`:
 
-	```
-	sudo modprobe uio
-	sudo insmod x86_64-native-linuxapp-gcc/kmod/igb_uio.ko
-	```
+	- add the following modules to `/etc/modules`:
+
+		```
+		#
+		# DPDK additions
+		#
+		uio
+		igb_uio
+		rte_kni
+		```
+
+	- reload all modules:
+
+		```
+		sudo depmod -a
+		sudo modprobe uio
+		sudo modprobe igb_uio
+		sudo modprobe rte_kni
+		```
 
 * Enable at least 32 1G hugepages and configure them (see section 2.3.2.1 from
 the [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/sys_reqs.html)):
@@ -210,6 +225,12 @@ the [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/sys_reqs.html)):
 		nodev           /mnt/huge_1GB   hugetlbfs pagesize=1GB  0       0
 		```
 
+		- remount:
+
+		```
+		sudo mount /mnt/huge_1GB
+		```
+
 * Export the path to the DPDK SDK (where DPDK was installed) into the variable
 RTE_SDK. For example:
 
@@ -234,7 +255,7 @@ RTE_SDK. For example:
 * If using Ubuntu Server 14.04 LTS then just install:
 
 	```
-	sudo apt-get install libprotobuf-c0 libprotobuf-c0-dev libprotobuf8 libprotoc8 protobuf-c-	compiler
+	sudo apt-get install libprotobuf-c0 libprotobuf-c0-dev libprotobuf8 libprotoc8 protobuf-c-compiler
 	```
 
 * Otherwise (Ubuntu version >= 15.10):
@@ -263,13 +284,14 @@ RTE_SDK. For example:
 		sudo dpkg -i protobuf-c-compiler_0.15-1build1_amd64.deb
 
 ## Get WARP17
-Get the `warp17-<ver>.tgz` archive or clone the desired release.
+Get the `warp17-<ver>.tgz` archive or clone the desired
+[release](https://github.com/Juniper/warp17/releases).
 
 ## Compile WARP17
 
 ```
 tar xfz warp17-<ver>.tgz
-cd warp17
+cd warp17-<ver>
 make
 ```
 
@@ -301,7 +323,7 @@ deactivate
 
 Use the `$RTE_SDK/tools/dpdk-setup.sh` script (as described in the
 [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/quick_start.html)). Select
-which ports to be controlled by the IGB UIO module: option `[22] Bind
+which ports to be controlled by the IGB UIO module: option `[8] Bind
 Ethernet/Crypto device to IGB UIO module`.
 
 # How to run
@@ -547,18 +569,19 @@ data from the built in HTTP server trough Linux. We assume no physical ports
 are configured, if you have them make sure you increase all the referenced
 ports:
 
-* Load the `rte_kni` DPDK module, either as shown below or by running the
-  `$RTE_SDK/tools/dpdk-setup.sh` script and selecting option
-  `[18] Insert KNI module`:
+* Load the `rte_kni` DPDK module (if needed), either as shown below or by
+  running the `$RTE_SDK/tools/dpdk-setup.sh` script and selecting option
+  `[4] Insert KNI module`:
 
 ```
-sudo insmod $RTE_SDK/x86_64-native-linuxapp-gcc/kmod/rte_kni.ko
+sudo modprobe rte_kni
 ```
 
-* Start WARP17:
+* Start WARP17 while blacklisting all physical devices (just for the purpose of
+  this test as otherwise the KNI interface name might differ):
 
 ```
-./build/warp17 -c FC3 -n 4  -m 32768 -- --kni-ifs 1
+./build/warp17 -c FC3 -n 4  -m 32768 -w 0000:00:00.0 -- --kni-ifs 1
 ```
 
 * Configure the Linux kernel interface:
@@ -1176,9 +1199,12 @@ A short example about how to use Perl to script WARP17 can be found in
 `examples/perl/test_1_http_4M.pl`. Requirements for running the Perl scripts:
 
 ```
-sudo apt-get install python2.7-dev
-sudo apt-get install cpanminus
+sudo apt-get install python2.7-dev cpanminus
 sudo cpanm Inline::Python
+```
+
+```
+sudo perl -I ./perl/ examples/perl/test_1_http_4M.pl
 ```
 
 # Contributing a new L7 Application implementation
