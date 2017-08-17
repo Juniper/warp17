@@ -285,6 +285,17 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
     if (SEG_LE(seg_seq + seg_len, tcb->tcb_rcv.nxt))
         return 0;
 
+    /* The first part of the data might be a retransmission so just skip it. */
+    if (unlikely(SEG_LT(seg_seq, tcb->tcb_rcv.nxt) &&
+                    SEG_GT(seg_seq + seg_len, tcb->tcb_rcv.nxt))) {
+        if (unlikely(!data_mbuf_adj(pcb->pcb_mbuf,
+                                    SEG_DIFF(tcb->tcb_rcv.nxt, seg_seq)))) {
+            assert(false);
+        }
+        seg_len -= SEG_DIFF(tcb->tcb_rcv.nxt, seg_seq);
+        seg_seq = tcb->tcb_rcv.nxt;
+    }
+
     new_hdr.tbh_mbuf = pcb->pcb_mbuf;
     new_hdr.tbh_seg_seq = seg_seq;
 
@@ -302,7 +313,9 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
         if (TCB_RCVBUF_CONTAINED(&new_hdr, cur))
             goto deliver_data;
 
-        /* Either we fit before the current buffer or somewhere inside it. */
+        /* Either we fit before the current buffer, immediately after or
+         * somewhere inside it.
+         */
         if (SEG_LT(new_hdr.tbh_seg_seq, cur->tbh_seg_seq)) {
             MBUF_STORE_RCVBUF_HDR(new_hdr.tbh_mbuf, &new_hdr);
             seg = MBUF_TO_RCVBUF_HDR(new_hdr.tbh_mbuf);
@@ -313,8 +326,14 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
                 LIST_INSERT_AFTER(prev, seg, tbh_entry);
 
             break;
+        } else if (SEG_EQ(cur->tbh_seg_seq + cur->tbh_mbuf->pkt_len,
+                          new_hdr.tbh_seg_seq)) {
+            data_mbuf_merge(cur->tbh_mbuf, new_hdr.tbh_mbuf);
+            seg = cur;
+            break;
         } else if (SEG_LE(cur->tbh_seg_seq, new_hdr.tbh_seg_seq) &&
-                    SEG_LT(new_hdr.tbh_seg_seq, cur->tbh_seg_seq + cur->tbh_mbuf->pkt_len)) {
+                        SEG_LT(new_hdr.tbh_seg_seq,
+                               cur->tbh_seg_seq + cur->tbh_mbuf->pkt_len)) {
             if (unlikely(!data_mbuf_adj(new_hdr.tbh_mbuf,
                                         SEG_DIFF(cur->tbh_seg_seq + cur->tbh_mbuf->pkt_len,
                                                  new_hdr.tbh_seg_seq)))) {

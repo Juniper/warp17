@@ -223,17 +223,19 @@ struct rte_mbuf *data_adj_chain(struct rte_mbuf *mbuf, uint32_t len)
 
     while (len >= mbuf->data_len) {
         prev = mbuf;
-        mbuf = mbuf->next;
         len -= mbuf->data_len;
+        mbuf = mbuf->next;
         rte_pktmbuf_free_seg(prev);
     }
 
     if (len != 0) {
-        assert(mbuf != NULL);
+        assert(mbuf != NULL && mbuf->data_len >= len);
         rte_pktmbuf_adj(mbuf, len);
-        mbuf->pkt_len = new_pkt_len;
-        return mbuf;
     }
+
+    if (mbuf)
+        mbuf->pkt_len = new_pkt_len;
+
     return mbuf;
 }
 
