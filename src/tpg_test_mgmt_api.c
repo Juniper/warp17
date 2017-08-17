@@ -1616,6 +1616,8 @@ int test_mgmt_get_ipv4_stats(uint32_t eth_port,
         total_stats->ips_not_v4 += ipv4_stats->ips_not_v4;
         total_stats->ips_reserved_bit_set += ipv4_stats->ips_reserved_bit_set;
 #endif
+
+        total_stats->ips_invalid_pad += ipv4_stats->ips_invalid_pad;
     }
 
     return 0;

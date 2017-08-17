@@ -181,6 +181,11 @@ static void cmd_show_ipv4_statistics_parsed(void *parsed_result __rte_unused,
                          option);
 #endif
 
+        SHOW_32BIT_STATS("Invalid Padding:", tpg_ipv4_statistics_t,
+                         ips_invalid_pad,
+                         port,
+                         option);
+
         cmdline_printf(cl, "\n");
     }
 
@@ -492,6 +497,18 @@ struct rte_mbuf *ipv4_receive_pkt(packet_control_block_t *pcb,
     pcb->pcb_ipv4 = ip_hdr;
     pcb->pcb_l4_len = rte_be_to_cpu_16(ip_hdr->total_length) - ip_hdr_len;
     rte_pktmbuf_adj(mbuf, ip_hdr_len);
+
+    /* "Remove" packet padding (e.g. Ethernet). Applications might store the
+     * mbuf (e.g. TCP) and it would be nice to be able to use pkt_len as the
+     * real data size.
+     */
+    if (unlikely(mbuf->pkt_len > pcb->pcb_l4_len)) {
+        if (unlikely(rte_pktmbuf_trim(mbuf,
+                                      mbuf->pkt_len - pcb->pcb_l4_len) == -1)) {
+            INC_STATS(stats, ips_invalid_pad);
+            return mbuf;
+        }
+    }
 
     if (ip_hdr->next_proto_id == IPPROTO_TCP)
         return tcp_receive_pkt(pcb, mbuf);
