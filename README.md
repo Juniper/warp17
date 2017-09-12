@@ -888,12 +888,30 @@ defined the client or server test cases.
 		set tests client http port <eth_port> test-case-id <tcid> GET|HEAD <host-name> <obj-name> req-size <req-size>
 		```
 
+    - __HTTP 1.1 request fields__: Any user specified fields can be added to the
+      HTTP request. The only constraint is that `Content-Length` cannot be
+      explicitly set by the user. Use a `set` command for each of the HTTP
+      fields that need to be set:
+
+		```
+		set tests client http port <eth_port> test-case-id <tcid> http-field <plain text HTTP field>
+		```
+
     - __HTTP 1.1 server configuration__: _200 OK_/_404 NOT FOUND_ responses are
       supported. A `resp-size` must also be specified (0 is also valid) in order
       to define the size of the body of the HTTP response.
 
 		```
 		set tests server http port <eth_port> test-case-id <tcid> 200-OK|404-NOT-FOUND resp-size <resp-size>
+		```
+
+    - __HTTP 1.1 response fields__: Any user specified fields can be added to
+      the HTTP response. The only constraint is that `Content-Length` cannot be
+      explicitly set by the user. Use a `set` command for each of the HTTP
+      fields that need to be set:
+
+		```
+		set tests server http port <eth_port> test-case-id <tcid> http-field <plain text HTTP field>
 		```
 
     - __HTTP 1.1 global stats__: display (detailed) statistics for the ethernet ports
@@ -1177,6 +1195,9 @@ WARP17 or executed directly in the CLI.
 * __examples/test\_7\_routing\_raw\_8M\_sesssions.cfg__: example config to
   be used when having (multiple) routers in between the client and server
   ports.
+
+* __examples/test\_8\_http\_fields.cfg__: example showing how to configure
+  various HTTP fields in the requests/responses (e.g., `Content-Type`).
 
 # Python scripting API
 WARP17 offers an RPC-based API which allows users to write scripts and automate

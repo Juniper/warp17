@@ -71,6 +71,7 @@ enum Constants {
     TPG_TEST_MAX_ENTRIES = 16;
     TPG_TEST_MAX_L3_INTF = 10;
     TPG_TS_MAX_STATE     = 12;
+    TPG_HTTP_MAX_OPTIONS = 32;
 }
 
 extend google.protobuf.FieldOptions {

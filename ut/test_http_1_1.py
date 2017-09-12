@@ -79,17 +79,21 @@ class TestHttpCfg(Warp17TrafficTestCase, Warp17UnitTestCase):
     # Allow test cases to run for a while so we actually see requests/responses
     RUN_TIME_S = 3
 
-    def _http_client_cfg(self, method=GET, req_size=42):
+    def _http_client_cfg(self, method=GET, req_size=42,
+                         fields='Content-Type: plain/text'):
         return AppClient(ac_app_proto=HTTP,
                          ac_http=HttpClient(hc_req_method=method,
                                             hc_req_object_name='/index.html',
                                             hc_req_host_name='www.foobar.net',
-                                            hc_req_size=req_size))
+                                            hc_req_size=req_size,
+                                            hc_req_fields=fields))
 
-    def _http_server_cfg(self, resp_code=OK_200, resp_size=42):
+    def _http_server_cfg(self, resp_code=OK_200, resp_size=42,
+                         fields='Content-Type: plain/text'):
         return AppServer(as_app_proto=HTTP,
                          as_http=HttpServer(hs_resp_code=resp_code,
-                                            hs_resp_size=resp_size))
+                                            hs_resp_size=resp_size,
+                                            hs_resp_fields=fields))
 
     #####################################################
     # Overrides of Warp17TrafficTestCase specific to HTTP
@@ -130,6 +134,10 @@ class TestHttpCfg(Warp17TrafficTestCase, Warp17UnitTestCase):
                          {'met': str(method), 'resp': str(resp_code)})
             yield (self._http_client_cfg(method),
                    self._http_server_cfg(resp_code))
+        for fields in ['Content-Length: 42']:
+            self.lh.info('FIELDS %(fld)s' % {'fld': fields})
+            yield (self._http_client_cfg(fields=fields),
+                   self._http_server_cfg(fields=fields))
 
     def update_client(self, tc_arg, http_client, expected_err=0):
         err = self.warp17_call('UpdateTestCaseAppClient',

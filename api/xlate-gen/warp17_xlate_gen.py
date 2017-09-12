@@ -486,6 +486,8 @@ def xlate_protoc_m_gen_scalar_optional(item, field, field_name, union_name,
         elif union_name is None:
             assign_default = [gen_assign('out->' + field_name,
                                          field.default_value)]
+    elif is_type_ptr(field.type):
+        assign_default = [gen_assign('out->' + field_name, 'NULL')]
 
     if is_type_ptr(field.type):
         if is_type_str(field.type):

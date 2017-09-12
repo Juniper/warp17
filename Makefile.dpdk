@@ -165,6 +165,9 @@ ifneq ($(WARP17_KNI_IF),)
 CFLAGS += -DTPG_KNI_IF -DTPG_SW_CHECKSUMMING
 endif
 
+# For strcasestr and asprintf
+CFLAGS += -D_GNU_SOURCE
+
 LDFLAGS += -lncurses
 LDFLAGS += -lprotobuf-c
 
