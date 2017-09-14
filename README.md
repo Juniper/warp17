@@ -869,6 +869,23 @@ __NOTE: Only IPv4 is supported for now!__
 		set tests tcp-options port <eth_port> test-case-id <tcid> ack-delay <1|0>
 		```
 
+* __Customize IPv4 stack settings__: customize the behavior of the IPv4 layer
+  running on thest case with ID `tcid` on port `eth_port`. The following
+	settings are customizable:
+
+  	- `tos`: the TOS field of the IPv4 header
+
+		```
+		set tests ipv4-options port <eth_port> test-case-id <tcid> tos <tos-value>
+		```
+
+  	- `dscp` and `ecn`: the DSCP/ECN field of the IPv4 header
+
+		```
+		set tests ipv4-options port <eth_port> test-case-id <tcid> dscp <dscp-name> ecn <ecn-name>
+		```
+
+
 ## Application configuration and statistics commands
 
 Currently only _RAW TCP_ (L5-L7 payload is random) and a sub-set of _HTTP 1.1_
@@ -1198,6 +1215,9 @@ WARP17 or executed directly in the CLI.
 
 * __examples/test\_8\_http\_fields.cfg__: example showing how to configure
   various HTTP fields in the requests/responses (e.g., `Content-Type`).
+
+* __examples/test\_9\_ipv4\_tos.cfg__: example showing how to configure
+  various TOS or DSCP/ECN values as part of the IPv4 options of the test cases.
 
 # Python scripting API
 WARP17 offers an RPC-based API which allows users to write scripts and automate

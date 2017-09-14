@@ -261,9 +261,34 @@ test_mgmt_set_tcp_sockopt(uint32_t eth_port, uint32_t test_case_id,
  *  0 on success
  */
 extern __tpg_api_func int
-test_mgmt_get_tcp_sockopt(uint32_t eth_port, uint32_t test_case_id,
-                          tpg_tcp_sockopt_t *out,
-                          printer_arg_t *printer_arg);
+test_mgmt_get_ipv4_sockopt(uint32_t eth_port, uint32_t test_case_id,
+                           tpg_ipv4_sockopt_t *out,
+                           printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -EALREADY: tests already started on port.
+ *  -ENOENT: no such test case exists.
+ *  -EINVAL: when arguments are wrong.
+ *  -E*: when internal errors occur
+ *  0 on success.
+ */
+ extern __tpg_api_func int
+ test_mgmt_set_ipv4_sockopt(uint32_t eth_port, uint32_t test_case_id,
+                            const tpg_ipv4_sockopt_t *options,
+                            printer_arg_t *printer_arg);
+
+ /*
+  * Returns:
+  *  -ENOENT: test_case_id not found.
+  *  -EINVAL: invalid arguments or wrong test case type.
+  *  0 on success
+  */
+ extern __tpg_api_func int
+ test_mgmt_get_tcp_sockopt(uint32_t eth_port, uint32_t test_case_id,
+                           tpg_tcp_sockopt_t *out,
+                           printer_arg_t *printer_arg);
+
 
 /*
  * Returns:

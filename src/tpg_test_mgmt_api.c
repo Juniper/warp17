@@ -145,7 +145,6 @@ static void test_init_server_sockopt_defaults(sockopt_t *sockopt,
         tcp_store_sockopt(&sockopt->so_tcp, &default_tcp_sockopt);
         break;
     default:
-        bzero(sockopt, sizeof(*sockopt));
         return;
     }
 }
@@ -164,7 +163,6 @@ static void test_init_client_sockopt_defaults(sockopt_t *sockopt,
         tcp_store_sockopt(&sockopt->so_tcp, &default_tcp_sockopt);
         break;
     default:
-        bzero(sockopt, sizeof(*sockopt));
         return;
     }
 }
@@ -175,6 +173,10 @@ static void test_init_client_sockopt_defaults(sockopt_t *sockopt,
 static void test_init_sockopt_defaults(sockopt_t *sockopt,
                                        const tpg_test_case_t *te)
 {
+    tpg_ipv4_sockopt_t default_ipv4_sockopt;
+
+    bzero(sockopt, sizeof(*sockopt));
+
     /*
      * Setup L1 socket options, we currently only need to setup the
      * checksum offload flags. Now we copy them from the HW capabilities,
@@ -195,6 +197,12 @@ static void test_init_sockopt_defaults(sockopt_t *sockopt,
         sockopt->so_eth.ethso_tx_offload_udp_cksum = true;
     else
         sockopt->so_eth.ethso_tx_offload_udp_cksum = false;
+
+    /*
+     * Setup L3 socket options.
+     */
+    tpg_xlate_default_Ipv4Sockopt(&default_ipv4_sockopt);
+    ipv4_store_sockopt(&sockopt->so_ipv4, &default_ipv4_sockopt);
 
     /*
      * Setup L4 socket options
@@ -502,6 +510,26 @@ static bool test_mgmt_validate_tcp_sockopt(const tpg_tcp_sockopt_t *options,
         tpg_printf(printer_arg,
                    "ERROR: Invalid TCP orphan timeout. Max allowed: %ums\n",
                    TCP_MAX_ORPHAN_TO_MS);
+        return false;
+    }
+
+    return true;
+}
+
+/*****************************************************************************
+ * test_mgmt_validate_ipv4_sockopt()
+ ****************************************************************************/
+static bool
+test_mgmt_validate_ipv4_sockopt(const tpg_ipv4_sockopt_t *options,
+                                printer_arg_t *printer_arg)
+{
+    /* The only option we have for now is TOS and we allow any possible 8-bit
+     * value in case the user wants to test with undefined TOS values.
+     */
+    if (options->has_io_tos && options->io_tos > UINT8_MAX) {
+        tpg_printf(printer_arg,
+                   "ERROR: Invalid IPv4 ToS. Max allowed: %u\n",
+                   UINT8_MAX);
         return false;
     }
 
@@ -1298,6 +1326,65 @@ int test_mgmt_get_tcp_sockopt(uint32_t eth_port, uint32_t test_case_id,
     }
 
     tcp_load_sockopt(out, &sockopt->so_tcp);
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_set_ipv4_sockopt()
+ ****************************************************************************/
+int
+test_mgmt_set_ipv4_sockopt(uint32_t eth_port, uint32_t test_case_id,
+                           const tpg_ipv4_sockopt_t *opts,
+                           printer_arg_t *printer_arg)
+{
+    tpg_ipv4_sockopt_t  old_opts;
+    test_env_t         *tenv;
+    int                 err;
+
+    if (!opts)
+        return -EINVAL;
+
+    err = test_mgmt_update_test_case_check(eth_port, test_case_id,
+                                           TEST_CASE_TYPE__MAX,
+                                           &tenv,
+                                           printer_arg);
+    if (err != 0)
+        return err;
+
+    ipv4_load_sockopt(&old_opts,
+                      &tenv->te_test_cases[test_case_id].sockopt.so_ipv4);
+
+    if (opts->has_io_tos)
+        old_opts.io_tos = opts->io_tos;
+
+    if (!test_mgmt_validate_ipv4_sockopt(&old_opts, printer_arg))
+        return -EINVAL;
+
+    ipv4_store_sockopt(&tenv->te_test_cases[test_case_id].sockopt.so_ipv4,
+                       &old_opts);
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_get_ipv4_sockopt()
+ ****************************************************************************/
+int test_mgmt_get_ipv4_sockopt(uint32_t eth_port, uint32_t test_case_id,
+                               tpg_ipv4_sockopt_t *out,
+                               printer_arg_t *printer_arg)
+{
+    test_env_t *tenv;
+    sockopt_t  *sockopt;
+    int         err;
+
+    if (!out)
+        return -EINVAL;
+
+    err = test_mgmt_get_sockopt(eth_port, test_case_id, &sockopt, &tenv,
+                                printer_arg);
+    if (err != 0)
+        return err;
+
+    ipv4_load_sockopt(out, &sockopt->so_ipv4);
     return 0;
 }
 

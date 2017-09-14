@@ -67,6 +67,86 @@
  */
 STATS_DEFINE(tpg_ipv4_statistics_t);
 
+/*
+ * DSCP value to name mapping.
+ */
+static const char *ipv4_dscp_names[IPV4_DSCP_MAX] = {
+    [0x0A] = "af11",
+    [0x0C] = "af12",
+    [0x0E] = "af13",
+    [0x12] = "af21",
+    [0x14] = "af22",
+    [0x16] = "af23",
+    [0x1A] = "af31",
+    [0x1C] = "af32",
+    [0x1E] = "af33",
+    [0x22] = "af41",
+    [0x24] = "af42",
+    [0x26] = "af43",
+    [0x00] = "be",
+    [0x08] = "cs1",
+    [0x10] = "cs2",
+    [0x18] = "cs3",
+    [0x20] = "cs4",
+    [0x28] = "cs5",
+    [0x30] = "cs6",
+    [0x38] = "cs7",
+    [0x2E] = "ef",
+};
+
+/*
+ * DSCP name to value mapping.
+ */
+static struct {
+    const char *dscp_str;
+    uint8_t     dscp_val;
+} ipv4_dscp_values[] = {
+    {.dscp_str = "af11", .dscp_val = 0x0A},
+    {.dscp_str = "af12", .dscp_val = 0x0C},
+    {.dscp_str = "af13", .dscp_val = 0x0E},
+    {.dscp_str = "af21", .dscp_val = 0x12},
+    {.dscp_str = "af22", .dscp_val = 0x14},
+    {.dscp_str = "af23", .dscp_val = 0x16},
+    {.dscp_str = "af31", .dscp_val = 0x1A},
+    {.dscp_str = "af32", .dscp_val = 0x1C},
+    {.dscp_str = "af33", .dscp_val = 0x1E},
+    {.dscp_str = "af41", .dscp_val = 0x22},
+    {.dscp_str = "af42", .dscp_val = 0x24},
+    {.dscp_str = "af43", .dscp_val = 0x26},
+    {.dscp_str = "be",   .dscp_val = 0x00},
+    {.dscp_str = "cs1",  .dscp_val = 0x08},
+    {.dscp_str = "cs2",  .dscp_val = 0x10},
+    {.dscp_str = "cs3",  .dscp_val = 0x18},
+    {.dscp_str = "cs4",  .dscp_val = 0x20},
+    {.dscp_str = "cs5",  .dscp_val = 0x28},
+    {.dscp_str = "cs6",  .dscp_val = 0x30},
+    {.dscp_str = "cs7",  .dscp_val = 0x38},
+    {.dscp_str = "ef",   .dscp_val = 0x2E},
+};
+
+/*
+ * ECN value to name mapping.
+ */
+static const char *ipv4_ecn_names[IPv4_ECN_MAX] = {
+    [0x0] = "Non-ECT",
+    [0x1] = "ECT1",
+    [0x2] = "ECT0",
+    [0x3] = "CE",
+};
+
+/*
+ * ECN name to value mapping.
+ */
+static struct {
+    const char *ecn_str;
+    uint8_t     ecn_val;
+} ipv4_ecn_values[] = {
+    {.ecn_str = "Non-ECT", .ecn_val = 0x0},
+    {.ecn_str = "ECT0",    .ecn_val = 0x2},
+    {.ecn_str = "ECT1",    .ecn_val = 0x1},
+    {.ecn_str = "CE",      .ecn_val = 0x3},
+};
+
 /*****************************************************************************
  * CLI commands
  *****************************************************************************
@@ -265,9 +345,89 @@ void ipv4_lcore_init(uint32_t lcore_id)
 }
 
 /*****************************************************************************
+ * ipv4_store_sockopt()
+ ****************************************************************************/
+void ipv4_store_sockopt(ipv4_sockopt_t *dest, const tpg_ipv4_sockopt_t *options)
+{
+    dest->io_tos = options->io_tos;
+}
+
+/*****************************************************************************
+ * ipv4_load_sockopt()
+ ****************************************************************************/
+void ipv4_load_sockopt(tpg_ipv4_sockopt_t *dest, const ipv4_sockopt_t *options)
+{
+    dest->io_tos = options->io_tos;
+    dest->has_io_tos = true;
+}
+
+/*****************************************************************************
+ * ipv4_tos_to_dscp_name()
+ ****************************************************************************/
+const char *ipv4_tos_to_dscp_name(const tpg_ipv4_sockopt_t *options)
+{
+    const char *dscp_name;
+
+    dscp_name = ipv4_dscp_names[IPV4_TOS_TO_DSCP(options->io_tos)];
+
+    if (!dscp_name)
+        return "UNK";
+
+    return dscp_name;
+}
+
+/*****************************************************************************
+ * ipv4_tos_to_ecn_name()
+ ****************************************************************************/
+const char *ipv4_tos_to_ecn_name(const tpg_ipv4_sockopt_t *options)
+{
+    return ipv4_ecn_names[IPV4_TOS_TO_ECN(options->io_tos)];
+}
+
+/*****************************************************************************
+ * ipv4_dscp_ecn_to_tos()
+ ****************************************************************************/
+uint8_t ipv4_dscp_ecn_to_tos(const char *dscp_str, const char *ecn_str)
+{
+    uint32_t i;
+    uint8_t  dscp = IPV4_TOS_INVALID;
+    uint8_t  ecn = IPV4_TOS_INVALID;
+
+    for (i = 0;
+         i < (sizeof(ipv4_dscp_values) / sizeof(ipv4_dscp_values[0]));
+         i++) {
+
+        if (strncasecmp(dscp_str, ipv4_dscp_values[i].dscp_str,
+                        strlen(ipv4_dscp_values[i].dscp_str) + 1) == 0) {
+            dscp = ipv4_dscp_values[i].dscp_val;
+            break;
+        }
+    }
+
+    if (dscp == IPV4_TOS_INVALID)
+        return IPV4_TOS_INVALID;
+
+    for (i = 0;
+         i < (sizeof(ipv4_ecn_values) / sizeof(ipv4_ecn_values[0]));
+         i++) {
+
+        if (strncasecmp(ecn_str, ipv4_ecn_values[i].ecn_str,
+                        strlen(ipv4_ecn_values[i].ecn_str) + 1) == 0) {
+            ecn = ipv4_ecn_values[i].ecn_val;
+            break;
+        }
+    }
+
+    if (ecn == IPV4_TOS_INVALID)
+        return IPV4_TOS_INVALID;
+
+    return IPV4_TOS(dscp, ecn);
+}
+
+/*****************************************************************************
  * ipv4_build_ipv4_hdr()
  ****************************************************************************/
-int ipv4_build_ipv4_hdr(sockopt_t *sockopt __rte_unused,
+int ipv4_build_ipv4_hdr(sockopt_t *sockopt,
                         struct rte_mbuf *mbuf, uint32_t src_addr,
                         uint32_t dst_addr, uint8_t protocol,
                         uint16_t l4_len,
@@ -289,7 +449,7 @@ int ipv4_build_ipv4_hdr(sockopt_t *sockopt __rte_unused,
         return -ENOMEM;
 
     ip_hdr->version_ihl = (4 << 4) | (ip_hdr_len >> 2);
-    ip_hdr->type_of_service = 0;
+    ip_hdr->type_of_service = sockopt->so_ipv4.io_tos;
     ip_hdr->total_length = rte_cpu_to_be_16(ip_hdr_len + l4_len);
     ip_hdr->packet_id = rte_rand();
     ip_hdr->fragment_offset = rte_cpu_to_be_16(0);

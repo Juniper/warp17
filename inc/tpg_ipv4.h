@@ -178,10 +178,28 @@ static inline uint16_t ipv4_update_general_l4_cksum(uint16_t cksum_in,
 }
 
 /*****************************************************************************
+ * TOS/DSCP/ECN related definitions
+ ****************************************************************************/
+#define IPV4_DSCP_MAX          (0x3F + 1) /* 6 bits */
+#define IPV4_TOS_TO_DSCP(tos)  (((tos) & 0xFF) >> 2)
+#define IPv4_DSCP_TO_TOS(dscp) (((dscp) & 0x3F) << 2)
+
+#define IPv4_ECN_MAX         (0x3 + 1) /* 2 bits */
+#define IPV4_TOS_TO_ECN(tos) ((tos) & 0x3)
+#define IPV4_ECN_TO_TOS(ecn) ((ecn) & 0x3)
+
+#define IPV4_TOS(dscp, ecn) (IPv4_DSCP_TO_TOS(dscp) | IPV4_ECN_TO_TOS(ecn))
+#define IPV4_TOS_INVALID    0xFF
+
+/*****************************************************************************
  * External's for tpg_ipv4.c
  ****************************************************************************/
 extern bool             ipv4_init(void);
 extern void             ipv4_lcore_init(uint32_t lcore_id);
+extern void             ipv4_store_sockopt(ipv4_sockopt_t *dest,
+                                           const tpg_ipv4_sockopt_t *options);
+extern void             ipv4_load_sockopt(tpg_ipv4_sockopt_t *dest,
+                                          const ipv4_sockopt_t *options);
 extern int              ipv4_build_ipv4_hdr(sockopt_t *sockopt,
                                             struct rte_mbuf *mbuf,
                                             uint32_t src_addr,
@@ -191,5 +209,10 @@ extern int              ipv4_build_ipv4_hdr(sockopt_t *sockopt,
                                             struct ipv4_hdr *hdr);
 extern struct rte_mbuf *ipv4_receive_pkt(packet_control_block_t *pcb,
                                          struct rte_mbuf *mbuf);
+
+extern const char *ipv4_tos_to_dscp_name(const tpg_ipv4_sockopt_t *options);
+extern const char *ipv4_tos_to_ecn_name(const tpg_ipv4_sockopt_t *options);
+extern uint8_t     ipv4_dscp_ecn_to_tos(const char *dscp,
+                                        const char *ecn);
 
 #endif /* _H_TPG_IPV4_ */

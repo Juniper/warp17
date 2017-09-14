@@ -165,6 +165,16 @@ message TcpSockoptResult {
     required TcpSockopt tor_opts  = 2;
 }
 
+message Ipv4SockoptArg {
+    required TestCaseArg i4sa_tc_arg = 1;
+    required Ipv4Sockopt i4sa_opts   = 2;
+}
+
+message Ipv4SockoptResult {
+    required Error       i4sr_error = 1;
+    required Ipv4Sockopt i4sr_opts  = 2;
+}
+
 message StatsResult {
     required Error           sr_error = 1;
     required PortStatistics  sr_port  = 2;
@@ -212,6 +222,8 @@ service Warp17 {
     rpc GetPortOptions(PortArg)               returns (PortOptionsResult);
     rpc SetTcpSockopt(TcpSockoptArg)          returns (Error);
     rpc GetTcpSockopt(TestCaseArg)            returns (TcpSockoptResult);
+    rpc SetIpv4Sockopt(Ipv4SockoptArg)        returns (Error);
+    rpc GetIpv4Sockopt(TestCaseArg)           returns (Ipv4SockoptResult);
 
     /* Operational calls. */
     rpc PortStart(PortArg)                    returns (Error);

@@ -409,25 +409,26 @@ class Warp17TrafficTestCase():
         """Tests updates when tests are already running"""
 
         self.lh.info('Running: test_update_test_running')
-        self.assertEqual(self.warp17_call('PortStart', self._tc_arg_client).e_code,
-                         0,
-                         'Port Start Client')
-        self.assertEqual(self.warp17_call('PortStart', self._tc_arg_server).e_code,
-                         0,
-                         'Port Start Server')
 
         for (cl_update, srv_update) in self.get_updates():
+            self.assertEqual(self.warp17_call('PortStart', self._tc_arg_client).e_code,
+                             0,
+                             'Port Start Client')
+            self.assertEqual(self.warp17_call('PortStart', self._tc_arg_server).e_code,
+                             0,
+                             'Port Start Server')
+
             self.update_client(self._tc_arg_client, cl_update,
                                expected_err=-errno.EALREADY)
             self.update_server(self._tc_arg_server, srv_update,
                                expected_err=-errno.EALREADY)
 
-        self.assertEqual(self.warp17_call('PortStop', self._tc_arg_client).e_code,
-                         0,
-                         'Port Stop Client')
-        self.assertEqual(self.warp17_call('PortStop', self._tc_arg_server).e_code,
-                         0,
-                         'Port Stop Server')
+            self.assertEqual(self.warp17_call('PortStop', self._tc_arg_client).e_code,
+                             0,
+                             'Port Stop Client')
+            self.assertEqual(self.warp17_call('PortStop', self._tc_arg_server).e_code,
+                             0,
+                             'Port Stop Server')
 
     def test_update_invalid_config(self):
         """Tests updates with invalid configs"""

@@ -75,3 +75,7 @@ message TcpSockopt {
     optional bool   to_ack_delay         = 11 [default = false];
 }
 
+message Ipv4Sockopt {
+    optional uint32 io_tos = 3 [default = 0];
+}
+

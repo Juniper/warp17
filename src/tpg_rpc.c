@@ -189,6 +189,17 @@ static void tpg_rpc__get_tcp_sockopt(Warp17_Service *service,
                                      TcpSockoptResult_Closure closure,
                                      void *closure_data);
 
+static void tpg_rpc__set_ipv4_sockopt(Warp17_Service *service,
+                                      const Ipv4SockoptArg *input,
+                                      Error_Closure closure,
+                                      void *closure_data);
+
+static void tpg_rpc__get_ipv4_sockopt(Warp17_Service *service,
+                                      const TestCaseArg *input,
+                                      Ipv4SockoptResult_Closure closure,
+                                      void *closure_data);
+
+
 static void tpg_rpc__port_start(Warp17_Service *service,
                                 const PortArg *input,
                                 Error_Closure closure,
@@ -1013,6 +1024,61 @@ static void tpg_rpc__get_tcp_sockopt(Warp17_Service *service __rte_unused,
     RPC_REPLY(TcpSockoptResult, protoc_result, TCP_SOCKOPT_RESULT__INIT,
               tpg_result);
     RPC_CLEANUP(TestCaseArg, tc_arg, TcpSockoptResult, protoc_result);
+}
+
+/*****************************************************************************
+ * tpg_rpc__set_ipv4_sockopt()
+ ****************************************************************************/
+static void tpg_rpc__set_ipv4_sockopt(Warp17_Service *service __rte_unused,
+                                      const Ipv4SockoptArg *input,
+                                      Error_Closure closure,
+                                      void *closure_data)
+{
+    tpg_ipv4_sockopt_arg_t msg;
+    tpg_error_t            tpg_result;
+    Error                  protoc_result;
+    int                    err;
+
+    RPC_INIT_DEFAULT(Error, &tpg_result);
+    if (RPC_REQUEST_INIT(Ipv4SockoptArg, input, &msg))
+        return;
+
+    err = test_mgmt_set_ipv4_sockopt(msg.i4sa_tc_arg.tca_eth_port,
+                                     msg.i4sa_tc_arg.tca_test_case_id,
+                                     &msg.i4sa_opts,
+                                     NULL);
+    RPC_STORE_RETCODE(tpg_result, err);
+
+    RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
+    RPC_CLEANUP(Ipv4SockoptArg, msg, Error, protoc_result);
+}
+
+/*****************************************************************************
+ * tpg_rpc__get_ipv4_sockopt()
+ ****************************************************************************/
+static void tpg_rpc__get_ipv4_sockopt(Warp17_Service *service __rte_unused,
+                                      const TestCaseArg *input,
+                                      Ipv4SockoptResult_Closure closure,
+                                      void *closure_data)
+{
+    tpg_test_case_arg_t       tc_arg;
+    tpg_ipv4_sockopt_result_t tpg_result;
+    Ipv4SockoptResult         protoc_result;
+    int                       err = 0;
+
+    RPC_INIT_DEFAULT(Ipv4SockoptResult, &tpg_result);
+    if (RPC_REQUEST_INIT(TestCaseArg, input, &tc_arg))
+        return;
+
+    err = test_mgmt_get_ipv4_sockopt(tc_arg.tca_eth_port,
+                                     tc_arg.tca_test_case_id,
+                                     &tpg_result.i4sr_opts,
+                                     NULL);
+    RPC_STORE_RETCODE(tpg_result.i4sr_error, err);
+
+    RPC_REPLY(Ipv4SockoptResult, protoc_result, IPV4_SOCKOPT_RESULT__INIT,
+              tpg_result);
+    RPC_CLEANUP(TestCaseArg, tc_arg, Ipv4SockoptResult, protoc_result);
 }
 
 /*****************************************************************************

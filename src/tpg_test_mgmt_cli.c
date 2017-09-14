@@ -1875,7 +1875,7 @@ static void cmd_tests_show_tcp_opts_parsed(void *parsed_result,
     if (test_mgmt_get_tcp_sockopt(pr->port, pr->tcid, &tcp_sockopt, &parg) != 0)
         return;
 
-    cmdline_printf(cl, "WIN   SYN SYN/ACK DATA RETRY RTO(ms) FIN(ms) TW(ms)  ORP(ms) TW-SKIP ACK-DEL\n");
+    cmdline_printf(cl, "  WIN SYN SYN/ACK DATA RETRY RTO(ms) FIN(ms) TW(ms)  ORP(ms) TW-SKIP ACK-DEL\n");
     cmdline_printf(cl, "----- --- ------- ---- ----- ------- ------- ------- ------- ------- -------\n");
     cmdline_printf(cl, "%5u %3u %7u %4u %5u %7u %7u %7u %7u %7u %7u\n",
                    tcp_sockopt.to_win_size,
@@ -1904,6 +1904,278 @@ cmdline_parse_inst_t cmd_tests_show_tcp_opts = {
         (void *)&cmd_tests_show_tcp_opts_T_port,
         (void *)&cmd_tests_show_tcp_opts_T_tcid_kw,
         (void *)&cmd_tests_show_tcp_opts_T_tcid,
+        NULL,
+    },
+};
+
+/****************************************************************************
+ * - "set tests ipv4-options port <eth_port> test-case-id <tcid> option value"
+ ****************************************************************************/
+struct cmd_tests_set_ipv4_opts_result {
+    cmdline_fixed_string_t set;
+    cmdline_fixed_string_t tests;
+    cmdline_fixed_string_t ipv4_options;
+    cmdline_fixed_string_t port_kw;
+    uint32_t               port;
+    cmdline_fixed_string_t tcid_kw;
+    uint32_t               tcid;
+    cmdline_fixed_string_t tos;
+
+    union {
+        uint8_t  opt_val_8;
+    } opt_u;
+};
+
+static cmdline_parse_token_string_t cmd_tests_set_ipv4_opts_T_set =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_ipv4_opts_result, set, "set");
+static cmdline_parse_token_string_t cmd_tests_set_ipv4_opts_T_tests =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_ipv4_opts_result, tests, "tests");
+static cmdline_parse_token_string_t cmd_tests_set_ipv4_opts_T_ipv4_options =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_ipv4_opts_result, ipv4_options, "ipv4-options");
+
+static cmdline_parse_token_string_t cmd_tests_set_ipv4_opts_T_port_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_ipv4_opts_result, port_kw, "port");
+static cmdline_parse_token_num_t cmd_tests_set_ipv4_opts_T_port =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_ipv4_opts_result, port, UINT32);
+
+static cmdline_parse_token_string_t cmd_tests_set_ipv4_opts_T_tcid_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_ipv4_opts_result, tcid_kw, "test-case-id");
+static cmdline_parse_token_num_t cmd_tests_set_ipv4_opts_T_tcid =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_ipv4_opts_result, tcid, UINT32);
+
+static cmdline_parse_token_string_t cmd_tests_set_ipv4_opts_T_tos =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_ipv4_opts_result, tos, "tos");
+
+static cmdline_parse_token_num_t cmd_tests_set_ipv4_opts_T_opt_val_8 =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_ipv4_opts_result, opt_u.opt_val_8, UINT8);
+
+OPT_FILL_TYPEDEF(ipv4, tpg_ipv4_sockopt_t);
+
+OPT_FILL_DEFINE(ipv4, tpg_ipv4_sockopt_t, io_tos, uint8_t);
+
+static void cmd_tests_set_ipv4_opts_parsed(void *parsed_result,
+                                           struct cmdline *cl,
+                                           void *data)
+{
+    printer_arg_t                          parg;
+    struct cmd_tests_set_ipv4_opts_result *pr;
+    OPT_FILL_TYPE_NAME(ipv4)              *fill_param = data;
+    tpg_ipv4_sockopt_t                     ipv4_sockopt;
+
+    parg = TPG_PRINTER_ARG(cli_printer, cl);
+    pr = parsed_result;
+    fill_param->opt_cb(&ipv4_sockopt, &pr->opt_u);
+
+    if (test_mgmt_set_ipv4_sockopt(pr->port, pr->tcid, &ipv4_sockopt,
+                                   &parg) == 0)
+        cmdline_printf(cl,
+                       "Port %"PRIu32", Test Case %"PRIu32
+                       " IPv4 Socket Options updated!\n",
+                       pr->port,
+                       pr->tcid);
+    else
+        cmdline_printf(cl,
+                       "ERROR: Failed updating test case %"PRIu32
+                       " IPv4 Socket Options on port %"PRIu32"\n",
+                       pr->tcid,
+                       pr->port);
+}
+
+cmdline_parse_inst_t cmd_tests_set_ipv4_opts_tos = {
+    .f = cmd_tests_set_ipv4_opts_parsed,
+    .data = (void *) &OPT_FILL_PARAM_NAME(ipv4, io_tos),
+    .help_str = "set tests ipv4-options port <eth_port> test-case-id <tcid> tos <tos-value>",
+    .tokens = {
+        (void *)&cmd_tests_set_ipv4_opts_T_set,
+        (void *)&cmd_tests_set_ipv4_opts_T_tests,
+        (void *)&cmd_tests_set_ipv4_opts_T_ipv4_options,
+        (void *)&cmd_tests_set_ipv4_opts_T_port_kw,
+        (void *)&cmd_tests_set_ipv4_opts_T_port,
+        (void *)&cmd_tests_set_ipv4_opts_T_tcid_kw,
+        (void *)&cmd_tests_set_ipv4_opts_T_tcid,
+        (void *)&cmd_tests_set_ipv4_opts_T_tos,
+        (void *)&cmd_tests_set_ipv4_opts_T_opt_val_8,
+        NULL,
+    },
+};
+
+/****************************************************************************
+ * - "set tests ipv4-options port <eth_port> test-case-id <tcid> dscp ecn"
+ ****************************************************************************/
+struct cmd_tests_set_ipv4_dscp_ecn_result {
+    cmdline_fixed_string_t set;
+    cmdline_fixed_string_t tests;
+    cmdline_fixed_string_t ipv4_options;
+    cmdline_fixed_string_t port_kw;
+    uint32_t               port;
+    cmdline_fixed_string_t tcid_kw;
+    uint32_t               tcid;
+    cmdline_fixed_string_t dscp_kw;
+    cmdline_fixed_string_t dscp;
+    cmdline_fixed_string_t ecn_kw;
+    cmdline_fixed_string_t ecn;
+};
+
+static cmdline_parse_token_string_t cmd_tests_set_ipv4_dscp_ecn_T_set =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_ipv4_dscp_ecn_result, set, "set");
+static cmdline_parse_token_string_t cmd_tests_set_ipv4_dscp_ecn_T_tests =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_ipv4_dscp_ecn_result, tests, "tests");
+static cmdline_parse_token_string_t cmd_tests_set_ipv4_dscp_ecn_T_ipv4_options =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_ipv4_dscp_ecn_result, ipv4_options, "ipv4-options");
+
+static cmdline_parse_token_string_t cmd_tests_set_ipv4_dscp_ecn_T_port_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_ipv4_dscp_ecn_result, port_kw, "port");
+static cmdline_parse_token_num_t cmd_tests_set_ipv4_dscp_ecn_T_port =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_ipv4_dscp_ecn_result, port, UINT32);
+
+static cmdline_parse_token_string_t cmd_tests_set_ipv4_dscp_ecn_T_tcid_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_ipv4_dscp_ecn_result, tcid_kw, "test-case-id");
+static cmdline_parse_token_num_t cmd_tests_set_ipv4_dscp_ecn_T_tcid =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_ipv4_dscp_ecn_result, tcid, UINT32);
+
+/* Used for informing the CLI about valid DSCP names. */
+#define IPV4_DSCP_STRING_INITIALIZER \
+    "af11#af12#af13#af21#af22#af23#af31#af32#af33#af41#af42#af43#be#cs1#cs2#cs3#cs4#cs5#cs6#cs7#ef"
+
+/* Used for informing the CLI about valid ECN names. */
+#define IPV4_ECN_STRING_INITIALIZER \
+    "Non-ECT#ECT0#ECT1#CE"
+
+static cmdline_parse_token_string_t cmd_tests_set_ipv4_dscp_ecn_T_dscp_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_ipv4_dscp_ecn_result, dscp_kw, "dscp");
+static cmdline_parse_token_string_t cmd_tests_set_ipv4_dscp_ecn_T_dscp =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_ipv4_dscp_ecn_result, dscp,
+                             IPV4_DSCP_STRING_INITIALIZER);
+
+static cmdline_parse_token_string_t cmd_tests_set_ipv4_dscp_ecn_T_ecn_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_ipv4_dscp_ecn_result, ecn_kw, "ecn");
+static cmdline_parse_token_string_t cmd_tests_set_ipv4_dscp_ecn_T_ecn =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_ipv4_dscp_ecn_result, ecn,
+                             IPV4_ECN_STRING_INITIALIZER);
+
+static void cmd_tests_set_ipv4_dscp_ecn_parsed(void *parsed_result,
+                                               struct cmdline *cl,
+                                               void *data __rte_unused)
+{
+    printer_arg_t                              parg;
+    struct cmd_tests_set_ipv4_dscp_ecn_result *pr;
+    OPT_FILL_TYPE_NAME(ipv4)                  *fill_param;
+    tpg_ipv4_sockopt_t                         ipv4_sockopt;
+    uint8_t                                    tos;
+
+    fill_param = &OPT_FILL_PARAM_NAME(ipv4, io_tos);
+    parg = TPG_PRINTER_ARG(cli_printer, cl);
+    pr = parsed_result;
+
+    tos = ipv4_dscp_ecn_to_tos(pr->dscp, pr->ecn);
+    if (tos == IPV4_TOS_INVALID) {
+        cmdline_printf(cl, "ERROR: Invalid DSCP and/or ECN names!\n");
+        return;
+    }
+
+    fill_param->opt_cb(&ipv4_sockopt, &tos);
+
+    if (test_mgmt_set_ipv4_sockopt(pr->port, pr->tcid, &ipv4_sockopt,
+                                   &parg) == 0)
+        cmdline_printf(cl,
+                       "Port %"PRIu32", Test Case %"PRIu32
+                       " IPv4 Socket Options updated!\n",
+                       pr->port,
+                       pr->tcid);
+    else
+        cmdline_printf(cl,
+                       "ERROR: Failed updating test case %"PRIu32
+                       " IPv4 Socket Options on port %"PRIu32"\n",
+                       pr->tcid,
+                       pr->port);
+}
+
+cmdline_parse_inst_t cmd_tests_set_ipv4_opts_dscp_ecn = {
+    .f = cmd_tests_set_ipv4_dscp_ecn_parsed,
+    .data = NULL,
+    .help_str = "set tests ipv4-options port <eth_port> test-case-id <tcid> dscp <dscp-name> ecn <ecn-name>",
+    .tokens = {
+        (void *)&cmd_tests_set_ipv4_dscp_ecn_T_set,
+        (void *)&cmd_tests_set_ipv4_dscp_ecn_T_tests,
+        (void *)&cmd_tests_set_ipv4_dscp_ecn_T_ipv4_options,
+        (void *)&cmd_tests_set_ipv4_dscp_ecn_T_port_kw,
+        (void *)&cmd_tests_set_ipv4_dscp_ecn_T_port,
+        (void *)&cmd_tests_set_ipv4_dscp_ecn_T_tcid_kw,
+        (void *)&cmd_tests_set_ipv4_dscp_ecn_T_tcid,
+        (void *)&cmd_tests_set_ipv4_dscp_ecn_T_dscp_kw,
+        (void *)&cmd_tests_set_ipv4_dscp_ecn_T_dscp,
+        (void *)&cmd_tests_set_ipv4_dscp_ecn_T_ecn_kw,
+        (void *)&cmd_tests_set_ipv4_dscp_ecn_T_ecn,
+        NULL,
+    },
+};
+
+
+/****************************************************************************
+ * - "show tests ipv4-options port <eth_port> test-case-id <tcid>"
+ ****************************************************************************/
+ struct cmd_tests_show_ipv4_opts_result {
+    cmdline_fixed_string_t show;
+    cmdline_fixed_string_t tests;
+    cmdline_fixed_string_t ipv4_options;
+    cmdline_fixed_string_t port_kw;
+    uint32_t               port;
+    cmdline_fixed_string_t tcid_kw;
+    uint32_t               tcid;
+};
+
+static cmdline_parse_token_string_t cmd_tests_show_ipv4_opts_T_set =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_show_ipv4_opts_result, show, "show");
+static cmdline_parse_token_string_t cmd_tests_show_ipv4_opts_T_tests =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_show_ipv4_opts_result, tests, "tests");
+static cmdline_parse_token_string_t cmd_tests_show_ipv4_opts_T_ipv4_options =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_show_ipv4_opts_result, ipv4_options, "ipv4-options");
+
+static cmdline_parse_token_string_t cmd_tests_show_ipv4_opts_T_port_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_show_ipv4_opts_result, port_kw, "port");
+static cmdline_parse_token_num_t cmd_tests_show_ipv4_opts_T_port =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_show_ipv4_opts_result, port, UINT32);
+
+static cmdline_parse_token_string_t cmd_tests_show_ipv4_opts_T_tcid_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_show_ipv4_opts_result, tcid_kw, "test-case-id");
+static cmdline_parse_token_num_t cmd_tests_show_ipv4_opts_T_tcid =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_show_ipv4_opts_result, tcid, UINT32);
+
+static void cmd_tests_show_ipv4_opts_parsed(void *parsed_result,
+                                            struct cmdline *cl,
+                                            void *data __rte_unused)
+{
+    printer_arg_t                           parg;
+    struct cmd_tests_show_ipv4_opts_result *pr;
+    tpg_ipv4_sockopt_t                      ipv4_sockopt;
+
+    parg = TPG_PRINTER_ARG(cli_printer, cl);
+    pr = parsed_result;
+
+    if (test_mgmt_get_ipv4_sockopt(pr->port, pr->tcid,
+                                   &ipv4_sockopt, &parg) != 0)
+        return;
+
+    cmdline_printf(cl, "IPv4 TOS DSCP     ECN\n");
+    cmdline_printf(cl, "-------- ---- -------\n");
+    cmdline_printf(cl, "%6s%x %4s %7s\n", "0x", ipv4_sockopt.io_tos,
+                   ipv4_tos_to_dscp_name(&ipv4_sockopt),
+                   ipv4_tos_to_ecn_name(&ipv4_sockopt));
+    cmdline_printf(cl, "\n\n");
+}
+
+cmdline_parse_inst_t cmd_tests_show_ipv4_opts = {
+    .f = cmd_tests_show_ipv4_opts_parsed,
+    .data = NULL,
+    .help_str = "show tests ipv4-options port <eth_port> test-case-id <tcid>",
+    .tokens = {
+        (void *)&cmd_tests_show_ipv4_opts_T_set,
+        (void *)&cmd_tests_show_ipv4_opts_T_tests,
+        (void *)&cmd_tests_show_ipv4_opts_T_ipv4_options,
+        (void *)&cmd_tests_show_ipv4_opts_T_port_kw,
+        (void *)&cmd_tests_show_ipv4_opts_T_port,
+        (void *)&cmd_tests_show_ipv4_opts_T_tcid_kw,
+        (void *)&cmd_tests_show_ipv4_opts_T_tcid,
         NULL,
     },
 };
@@ -2035,6 +2307,9 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_set_tcp_opts_twait_skip,
     &cmd_tests_set_tcp_opts_ack_del,
     &cmd_tests_show_tcp_opts,
+    &cmd_tests_set_ipv4_opts_tos,
+    &cmd_tests_set_ipv4_opts_dscp_ecn,
+    &cmd_tests_show_ipv4_opts,
     &cmd_exit,
     &cmd_syslog,
     NULL,

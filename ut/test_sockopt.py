@@ -202,3 +202,73 @@ class TestTcpSockOpt(Warp17TrafficTestCase, Warp17UnitTestCase):
     def update_server(self, tc_arg, srv_tcp_opts, expected_err=0):
         self.update(tc_arg, srv_tcp_opts, expected_err)
 
+class TestIPv4SockOpt(Warp17TrafficTestCase, Warp17UnitTestCase):
+
+    dscp_values = [
+        ('af11', 0x0A),
+        ('af12', 0x0C),
+        ('af13', 0x0E),
+        ('af21', 0x12),
+        ('af22', 0x14),
+        ('af23', 0x16),
+        ('af31', 0x1A),
+        ('af32', 0x1C),
+        ('af33', 0x1E),
+        ('af41', 0x22),
+        ('af42', 0x24),
+        ('af43', 0x26),
+        ('be',   0x00),
+        ('cs1',  0x08),
+        ('cs2',  0x10),
+        ('cs3',  0x18),
+        ('cs4',  0x20),
+        ('cs5',  0x28),
+        ('cs6',  0x30),
+        ('cs7',  0x38),
+        ('ef',   0x2E)
+    ]
+
+    ecn_values = [
+        ('Non-ECT', 0x0),
+        ('ECT0',    0x2),
+        ('ECT1',    0x1),
+        ('CE',      0x3)
+    ]
+
+    MAX_TOS = 0xFF
+
+    @staticmethod
+    def dscp_ecn_to_tos(dscp_val, ecn_val):
+        return ((dscp_val << 2) | ecn_val)
+
+    ##################################################################
+    # Overrides of Warp17TrafficTestCase specific to IPv4 stack options
+    ##################################################################
+    def get_updates(self):
+        for (dscp_name, dscp) in TestIPv4SockOpt.dscp_values:
+            for (ecn_name, ecn) in TestIPv4SockOpt.ecn_values:
+                self.lh.info('IPv4 DSCP {} ECN {}'.format(dscp_name, ecn_name))
+                tos = self.dscp_ecn_to_tos(dscp, ecn)
+                yield(Ipv4Sockopt(io_tos=tos), Ipv4Sockopt(io_tos=tos))
+
+    def get_invalid_updates(self):
+        yield(Ipv4Sockopt(io_tos=TestIPv4SockOpt.MAX_TOS+1),
+              Ipv4Sockopt(io_tos=TestIPv4SockOpt.MAX_TOS+1))
+
+    def update(self, tc_arg, ipv4_opts, expected_err):
+        err = self.warp17_call('SetIpv4Sockopt',
+                               Ipv4SockoptArg(i4sa_tc_arg=tc_arg,
+                                              i4sa_opts=ipv4_opts))
+        self.assertEqual(err.e_code, expected_err)
+
+        if expected_err == 0:
+            ipv4_opts_res = self.warp17_call('GetIpv4Sockopt', tc_arg)
+            self.assertEqual(ipv4_opts_res.i4sr_error.e_code, 0)
+            self.assertTrue(self.compare_opts(ipv4_opts, ipv4_opts_res.i4sr_opts))
+
+    def update_client(self, tc_arg, cl_ipv4_opts, expected_err=0):
+        self.update(tc_arg, cl_ipv4_opts, expected_err)
+
+    def update_server(self, tc_arg, srv_ipv4_opts, expected_err=0):
+        self.update(tc_arg, srv_ipv4_opts, expected_err)
+
