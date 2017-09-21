@@ -158,19 +158,20 @@ message UdpStatistics {
     required uint64 us_received_bytes    = 2;
 
     required uint64 us_sent_pkts         = 3;
-    required uint64 us_sent_bytes        = 4;
+    required uint64 us_sent_ctrl_bytes   = 4;
+    required uint64 us_sent_data_bytes   = 5;
 
-    required uint64 us_ucb_malloced      = 5;
-    required uint64 us_ucb_freed         = 6;
-    required uint64 us_ucb_not_found     = 7;
-    required uint64 us_ucb_alloc_err     = 8;
+    required uint64 us_ucb_malloced      = 6;
+    required uint64 us_ucb_freed         = 7;
+    required uint64 us_ucb_not_found     = 8;
+    required uint64 us_ucb_alloc_err     = 9;
 
     // TODO: Following stats should be uint16 because they’re not expected
     // to happen too often but no such type exists.
 
-    required uint32 us_to_small_fragment = 9;
-    required uint32 us_invalid_checksum  = 10;
-    required uint32 us_failed_pkts       = 11;
+    required uint32 us_to_small_fragment = 10;
+    required uint32 us_invalid_checksum  = 11;
+    required uint32 us_failed_pkts       = 12;
 }
 
 message TcpStatistics {

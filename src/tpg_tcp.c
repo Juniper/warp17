@@ -769,7 +769,6 @@ bool tcp_send_data_pkt(tcp_control_block_t *tcb, uint32_t sseq, uint32_t flags,
     struct rte_mbuf      *hdr;
     struct tcp_hdr       *tcp_hdr;
     tpg_tcp_statistics_t *stats;
-    uint32_t              pkt_len;
 
     if (unlikely(!data))
         return false;
@@ -791,7 +790,12 @@ bool tcp_send_data_pkt(tcp_control_block_t *tcb, uint32_t sseq, uint32_t flags,
     hdr->pkt_len += data->pkt_len;
     hdr->nb_segs += data->nb_segs;
 
-    pkt_len = hdr->pkt_len;
+    /*
+     * Increment transmit bytes counters. Failed counters are incremented lower
+     * in the stack.
+     */
+    INC_STATS_VAL(stats, ts_sent_ctrl_bytes, hdr->l4_len);
+    INC_STATS_VAL(stats, ts_sent_data_bytes, data->pkt_len);
 
     /* We need to update the checksum in the TCP part now the data has been added */
 #if defined(TPG_SW_CHECKSUMMING)
@@ -817,7 +821,6 @@ bool tcp_send_data_pkt(tcp_control_block_t *tcb, uint32_t sseq, uint32_t flags,
      * the stack.
      */
     INC_STATS(stats, ts_sent_data_pkts);
-    INC_STATS_VAL(stats, ts_sent_data_bytes, pkt_len);
     return true;
 }
 
@@ -830,7 +833,6 @@ inline bool tcp_send_ctrl_pkt_with_sseq(tcp_control_block_t *tcb, uint32_t sseq,
     struct rte_mbuf      *hdr;
     struct tcp_hdr       *tcp_hdr;
     tpg_tcp_statistics_t *stats;
-    uint32_t              pkt_len;
 
     TCB_CHECK(tcb);
 
@@ -842,7 +844,11 @@ inline bool tcp_send_ctrl_pkt_with_sseq(tcp_control_block_t *tcb, uint32_t sseq,
         return false;
     }
 
-    pkt_len = hdr->pkt_len;
+    /*
+     * Increment transmit bytes counters. Failed counters are incremented lower
+     * in the stack.
+     */
+    INC_STATS_VAL(stats, ts_sent_ctrl_bytes, hdr->pkt_len);
 
     /*
      * Send the packet!!
@@ -862,7 +868,6 @@ inline bool tcp_send_ctrl_pkt_with_sseq(tcp_control_block_t *tcb, uint32_t sseq,
      * the stack.
      */
     INC_STATS(stats, ts_sent_ctrl_pkts);
-    INC_STATS_VAL(stats, ts_sent_ctrl_bytes, pkt_len);
     return true;
 }
 

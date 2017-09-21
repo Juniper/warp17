@@ -666,6 +666,13 @@ int udp_send_v4(udp_control_block_t *ucb, struct rte_mbuf *data_mbuf,
 
     *data_sent = data_mbuf->pkt_len;
 
+    /*
+     * Increment transmit bytes counters. Failed counters are incremented lower
+     * in the stack.
+     */
+    INC_STATS_VAL(stats, us_sent_ctrl_bytes, hdr->l4_len);
+    INC_STATS_VAL(stats, us_sent_data_bytes, *data_sent);
+
     /* We need to update the checksum in the UDP part now the data has been added */
 #if defined(TPG_SW_CHECKSUMMING)
     if (!ucb->ucb_l4.l4cb_sockopt.so_eth.ethso_tx_offload_udp_cksum)
@@ -691,7 +698,6 @@ int udp_send_v4(udp_control_block_t *ucb, struct rte_mbuf *data_mbuf,
      * the stack.
      */
     INC_STATS(stats, us_sent_pkts);
-    INC_STATS_VAL(stats, us_sent_bytes, *data_sent);
     return 0;
 }
 
@@ -754,8 +760,13 @@ static void cmd_show_udp_statistics_parsed(void *parsed_result __rte_unused,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Sent Bytes", tpg_udp_statistics_t,
-                         us_sent_bytes,
+        SHOW_64BIT_STATS("Sent Ctrl Bytes", tpg_udp_statistics_t,
+                         us_sent_ctrl_bytes,
+                         port,
+                         option);
+
+        SHOW_64BIT_STATS("Sent Data Bytes", tpg_udp_statistics_t,
+                         us_sent_data_bytes,
                          port,
                          option);
 

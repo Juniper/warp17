@@ -620,8 +620,10 @@ class TestApi(Warp17UnitTestCase):
                                        'UDP us_received_bytes has to be greater than 0')
                     self.assertGreater(server_result.sr_udp.us_sent_pkts, 0,
                                        'UDP us_sent_pkts has to be greater than 0')
-                    self.assertGreater(server_result.sr_udp.us_sent_bytes, 0,
-                                       'UDP us_sent_bytes has to be greater than 0')
+                    self.assertGreater(server_result.sr_udp.us_sent_ctrl_bytes, 0,
+                                       'UDP us_sent_ctrl_bytes has to be greater than 0')
+                    self.assertGreater(server_result.sr_udp.us_sent_data_bytes, 0,
+                                       'UDP us_sent_data_bytes has to be greater than 0')
                     # TODO: Investigate why this test fails
                     # self.assertEqual(server_result.sr_udp.us_ucb_not_found, 0, 'UDP us_ucb_not_found has to be 0')
                     self.assertEqual(server_result.sr_udp.us_ucb_alloc_err, 0,

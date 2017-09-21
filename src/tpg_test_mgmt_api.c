@@ -1729,7 +1729,8 @@ int test_mgmt_get_udp_stats(uint32_t eth_port,
         total_stats->us_received_pkts += udp_stats->us_received_pkts;
         total_stats->us_received_bytes += udp_stats->us_received_bytes;
         total_stats->us_sent_pkts += udp_stats->us_sent_pkts;
-        total_stats->us_sent_bytes += udp_stats->us_sent_bytes;
+        total_stats->us_sent_ctrl_bytes += udp_stats->us_sent_ctrl_bytes;
+        total_stats->us_sent_data_bytes += udp_stats->us_sent_data_bytes;
         total_stats->us_ucb_malloced += udp_stats->us_ucb_malloced;
         total_stats->us_ucb_freed += udp_stats->us_ucb_freed;
         total_stats->us_ucb_not_found += udp_stats->us_ucb_not_found;
