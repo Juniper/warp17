@@ -375,67 +375,6 @@ void tcp_load_sockopt(tpg_tcp_sockopt_t *dest, const tcp_sockopt_t *options)
     dest->has_to_ack_delay = true;
 }
 
-
-/*****************************************************************************
- * tcp_build_tcp_hdr()
- ****************************************************************************/
-struct tcp_hdr *tcp_build_tcp_hdr(struct rte_mbuf *mbuf, tcp_control_block_t *tcb,
-                                  struct ipv4_hdr *ipv4_hdr,
-                                  uint32_t sseq,
-                                  uint32_t flags)
-{
-    uint16_t        tcp_hdr_len = sizeof(struct tcp_hdr);
-    uint16_t        tcp_hdr_offset = rte_pktmbuf_data_len(mbuf);
-    struct tcp_hdr *tcp_hdr;
-
-    /* TODO: Support options, we need more room */
-    tcp_hdr = (struct tcp_hdr *) rte_pktmbuf_append(mbuf, tcp_hdr_len);
-
-    if (tcp_hdr == NULL)
-        return NULL;
-
-    tcp_hdr->src_port = rte_cpu_to_be_16(tcb->tcb_l4.l4cb_src_port);
-    tcp_hdr->dst_port = rte_cpu_to_be_16(tcb->tcb_l4.l4cb_dst_port);
-    if ((flags & TCP_BUILD_FLAG_USE_ISS) != 0)
-        tcp_hdr->sent_seq = rte_cpu_to_be_32(tcb->tcb_snd.iss);
-    else
-        tcp_hdr->sent_seq = rte_cpu_to_be_32(sseq);
-    tcp_hdr->recv_ack = rte_cpu_to_be_32(tcb->tcb_rcv.nxt);
-    tcp_hdr->data_off = tcp_hdr_len >> 2 << 4;
-    tcp_hdr->tcp_flags = flags & TCP_BUILD_FLAG_MASK;
-    tcp_hdr->rx_win = rte_cpu_to_be_16(tcb->tcb_rcv.wnd);
-    tcp_hdr->tcp_urp = rte_cpu_to_be_16(0); /* TODO: set correctly if urgen flag is set */
-
-    /*
-     * TODO: Do we want TCP segmentation offload, if so do it before
-     *       calculating the checksum!
-     */
-
-#if !defined(TPG_SW_CHECKSUMMING)
-    if (true) {
-#else
-    if (tcb->tcb_l4.l4cb_sockopt.so_eth.ethso_tx_offload_tcp_cksum) {
-#endif
-        mbuf->ol_flags |= PKT_TX_TCP_CKSUM | PKT_TX_IPV4;
-        mbuf->l4_len = tcp_hdr_len;
-
-        tcp_hdr->cksum = rte_ipv4_phdr_cksum(ipv4_hdr, mbuf->ol_flags);
-
-    } else {
-        /*
-         * No HW checksum support do it manually, however up to here we can only
-         * calculate the header checksum, so we do...
-         */
-        tcp_hdr->cksum = 0;
-        tcp_hdr->cksum = ipv4_general_l4_cksum(mbuf,
-                                               ipv4_hdr,
-                                               tcp_hdr_offset,
-                                               tcp_hdr_len);
-    }
-
-    return tcp_hdr;
-}
-
 /*****************************************************************************
  * tcp_receive_pkt()
  *
@@ -656,8 +595,10 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
         bzero(&closed_tcb, sizeof(closed_tcb));
 
         closed_tcb.tcb_l4.l4cb_valid = true;
-        closed_tcb.tcb_l4.l4cb_src_addr.ip_v4 = rte_be_to_cpu_32(pcb->pcb_ipv4->dst_addr);
-        closed_tcb.tcb_l4.l4cb_dst_addr.ip_v4 = rte_be_to_cpu_32(pcb->pcb_ipv4->src_addr);
+        closed_tcb.tcb_l4.l4cb_src_addr =
+            TPG_IPV4(rte_be_to_cpu_32(pcb->pcb_ipv4->dst_addr));
+        closed_tcb.tcb_l4.l4cb_dst_addr =
+            TPG_IPV4(rte_be_to_cpu_32(pcb->pcb_ipv4->src_addr));
         closed_tcb.tcb_l4.l4cb_src_port = rte_be_to_cpu_16(tcp_hdr->dst_port);
         closed_tcb.tcb_l4.l4cb_dst_port = rte_be_to_cpu_16(tcp_hdr->src_port);
         closed_tcb.tcb_l4.l4cb_interface = pcb->pcb_port;
@@ -671,136 +612,143 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
 }
 
 /*****************************************************************************
- * tcp_build_tcp_hdr_mbuf()
+ * tcp_build_hdr()
  ****************************************************************************/
-static struct rte_mbuf *tcp_build_tcp_hdr_mbuf(tcp_control_block_t *tcb,
-                                               uint32_t sseq, uint32_t flags,
-                                               uint16_t l4_len,
-                                               struct tcp_hdr **tcp_hdr)
+static struct tcp_hdr *tcp_build_hdr(tcp_control_block_t *tcb,
+                                     struct rte_mbuf *mbuf,
+                                     struct ipv4_hdr *ipv4_hdr,
+                                     uint32_t sseq,
+                                     uint32_t flags)
 {
-    int              next_header_offset;
-    struct rte_mbuf *hdr;
-    struct ipv4_hdr *ipv4;
-    uint64_t         nh_mac;
+    uint16_t        tcp_hdr_len = sizeof(struct tcp_hdr);
+    uint16_t        tcp_hdr_offset = rte_pktmbuf_data_len(mbuf);
+    struct tcp_hdr *tcp_hdr;
 
-    hdr = rte_pktmbuf_alloc(mem_get_mbuf_local_pool_tx_hdr());
-    if (unlikely(!hdr)) {
-        RTE_LOG(ERR, USER2, "[%d:%s()] ERR: Failed mbuf hdr alloc for send on port %d\n",
-                rte_lcore_index(rte_lcore_id()),
-                __func__,
-                tcb->tcb_l4.l4cb_interface);
+    /* TODO: Support options, we need more room */
+    tcp_hdr = (struct tcp_hdr *) rte_pktmbuf_append(mbuf, tcp_hdr_len);
 
+    if (unlikely(!tcp_hdr))
         return NULL;
-    }
 
-    /* Prepend the header & update header fields. */
-    hdr->port = tcb->tcb_l4.l4cb_interface;
+    tcp_hdr->src_port = rte_cpu_to_be_16(tcb->tcb_l4.l4cb_src_port);
+    tcp_hdr->dst_port = rte_cpu_to_be_16(tcb->tcb_l4.l4cb_dst_port);
+    if ((flags & TCP_BUILD_FLAG_USE_ISS) != 0)
+        tcp_hdr->sent_seq = rte_cpu_to_be_32(tcb->tcb_snd.iss);
+    else
+        tcp_hdr->sent_seq = rte_cpu_to_be_32(sseq);
+    tcp_hdr->recv_ack = rte_cpu_to_be_32(tcb->tcb_rcv.nxt);
+    tcp_hdr->data_off = tcp_hdr_len >> 2 << 4;
+    tcp_hdr->tcp_flags = flags & TCP_BUILD_FLAG_MASK;
+    tcp_hdr->rx_win = rte_cpu_to_be_16(tcb->tcb_rcv.wnd);
+    tcp_hdr->tcp_urp = rte_cpu_to_be_16(0); /* TODO: set correctly if urgen flag is set */
 
     /*
-     * Search for next hop mac.
+     * TODO: Do we want TCP segmentation offload, if so do it before
+     *       calculating the checksum!
      */
-    nh_mac = route_v4_nh_lookup(tcb->tcb_l4.l4cb_interface,
-                                tcb->tcb_l4.l4cb_dst_addr.ip_v4);
-    if (nh_mac == TPG_ARP_MAC_NOT_FOUND) {
-        /*
-         * Normally we should queue the packet if the ARP is not there yet
-         * however here we want high volume of traffic, and the ARP should
-         * be there before we start testing.
-         *
-         * Revisit if we want this to be a "REAL" TCP stack ;)
-         */
-        rte_pktmbuf_free(hdr);
-        return NULL;
-    }
 
-    /*
-     * Build ethernet header
-     */
-    next_header_offset = eth_build_eth_hdr(hdr, nh_mac, TPG_USE_PORT_MAC,
-                                           ETHER_TYPE_IPv4);
+#if !defined(TPG_SW_CHECKSUMMING)
+    if (true) {
+#else
+    if (tcb->tcb_l4.l4cb_sockopt.so_eth.ethso_tx_offload_tcp_cksum) {
+#endif
+        mbuf->ol_flags |= PKT_TX_TCP_CKSUM | PKT_TX_IPV4;
+        mbuf->l4_len = tcp_hdr_len;
 
-    if (next_header_offset <= 0) {
-        rte_pktmbuf_free(hdr);
-        return NULL;
-    }
-
-    /*
-     * Build IP header
-     */
-    if (tcb->tcb_l4.l4cb_domain != AF_INET) {
-
-        TPG_ERROR_ABORT("TODO: %s!\n", "TCP = IPv4 only for now!");
+        tcp_hdr->cksum = rte_ipv4_phdr_cksum(ipv4_hdr, mbuf->ol_flags);
 
     } else {
-
-        ipv4 = (struct ipv4_hdr *) (rte_pktmbuf_mtod(hdr, uint8_t *) + next_header_offset);
-
-        if (ipv4_build_ipv4_hdr(&tcb->tcb_l4.l4cb_sockopt,
-                                hdr, tcb->tcb_l4.l4cb_src_addr.ip_v4,
-                                tcb->tcb_l4.l4cb_dst_addr.ip_v4,
-                                IPPROTO_TCP,
-                                sizeof(struct tcp_hdr) + l4_len,
-                                NULL) <= 0) {
-            rte_pktmbuf_free(hdr);
-            return NULL;
-        }
+        /*
+         * No HW checksum support do it manually, however up to here we can only
+         * calculate the header checksum, so we do...
+         */
+        tcp_hdr->cksum = 0;
+        tcp_hdr->cksum = ipv4_general_l4_cksum(mbuf,
+                                               ipv4_hdr,
+                                               tcp_hdr_offset,
+                                               tcp_hdr_len);
     }
+
+    return tcp_hdr;
+}
+
+/*****************************************************************************
+ * tcp_build_hdr_mbuf()
+ ****************************************************************************/
+static struct rte_mbuf *tcp_build_hdr_mbuf(tcp_control_block_t *tcb,
+                                           uint32_t sseq, uint32_t flags,
+                                           uint16_t l4_len,
+                                           struct tcp_hdr **tcp_hdr_p)
+{
+    struct rte_mbuf *mbuf;
+    struct ipv4_hdr *ip_hdr;
+
+    if (tcb->tcb_l4.l4cb_domain != AF_INET) {
+        TPG_ERROR_ABORT("TODO: TCP = IPv4 only for now!\n");
+        return NULL;
+    }
+
+    mbuf = ipv4_build_hdr_mbuf(&tcb->tcb_l4, IPPROTO_TCP,
+                               sizeof(struct tcp_hdr) + l4_len,
+                               &ip_hdr);
+    if (unlikely(!mbuf))
+        return NULL;
 
     /*
      * Build TCP header
      */
 
-    *tcp_hdr = tcp_build_tcp_hdr(hdr, tcb, ipv4, sseq, flags);
-
-    if (*tcp_hdr == NULL) {
-        rte_pktmbuf_free(hdr);
+    *tcp_hdr_p = tcp_build_hdr(tcb, mbuf, ip_hdr, sseq, flags);
+    if (unlikely(!(*tcp_hdr_p))) {
+        rte_pktmbuf_free(mbuf);
         return NULL;
     }
 
-    return hdr;
+    return mbuf;
 }
 
 /*****************************************************************************
- * tcp_send_data_pkt()
+ * tcp_send_pkt()
  ****************************************************************************/
-bool tcp_send_data_pkt(tcp_control_block_t *tcb, uint32_t sseq, uint32_t flags,
-                       struct rte_mbuf *data)
+static bool tcp_send_pkt(tcp_control_block_t *tcb, uint32_t sseq,
+                         uint32_t flags, struct rte_mbuf *data_mbuf,
+                         uint32_t data_pkt_len, uint32_t data_nb_segs)
 {
     struct rte_mbuf      *hdr;
     struct tcp_hdr       *tcp_hdr;
     tpg_tcp_statistics_t *stats;
 
-    if (unlikely(!data))
-        return false;
-
     TCB_CHECK(tcb);
 
     stats = STATS_LOCAL(tpg_tcp_statistics_t, tcb->tcb_l4.l4cb_interface);
 
-    hdr = tcp_build_tcp_hdr_mbuf(tcb, sseq, flags, data->pkt_len, &tcp_hdr);
+    hdr = tcp_build_hdr_mbuf(tcb, sseq, flags, data_pkt_len, &tcp_hdr);
     if (unlikely(!hdr)) {
         INC_STATS(STATS_LOCAL(tpg_tcp_statistics_t, tcb->tcb_l4.l4cb_interface),
                   ts_failed_data_pkts);
-        rte_pktmbuf_free(data);
+        rte_pktmbuf_free(data_mbuf);
         return false;
     }
 
     /* Append the data part too. */
-    hdr->next = data;
-    hdr->pkt_len += data->pkt_len;
-    hdr->nb_segs += data->nb_segs;
+    hdr->next = data_mbuf;
+    hdr->pkt_len += data_pkt_len;
+    hdr->nb_segs += data_nb_segs;
 
     /*
      * Increment transmit bytes counters. Failed counters are incremented lower
      * in the stack.
      */
     INC_STATS_VAL(stats, ts_sent_ctrl_bytes, hdr->l4_len);
-    INC_STATS_VAL(stats, ts_sent_data_bytes, data->pkt_len);
+    INC_STATS_VAL(stats, ts_sent_data_bytes, data_pkt_len);
 
     /* We need to update the checksum in the TCP part now the data has been added */
 #if defined(TPG_SW_CHECKSUMMING)
-    if (!tcb->tcb_l4.l4cb_sockopt.so_eth.ethso_tx_offload_tcp_cksum)
-        tcp_hdr->cksum = ipv4_update_general_l4_cksum(tcp_hdr->cksum, data);
+    if (data_mbuf &&
+            !tcb->tcb_l4.l4cb_sockopt.so_eth.ethso_tx_offload_tcp_cksum) {
+        tcp_hdr->cksum = ipv4_update_general_l4_cksum(tcp_hdr->cksum,
+                                                      data_mbuf);
+    }
 #endif
 
     /*
@@ -816,11 +764,34 @@ bool tcp_send_data_pkt(tcp_control_block_t *tcb, uint32_t sseq, uint32_t flags,
         return false;
     }
 
+    return true;
+}
+
+/*****************************************************************************
+ * tcp_send_data_pkt()
+ ****************************************************************************/
+bool tcp_send_data_pkt(tcp_control_block_t *tcb, uint32_t sseq, uint32_t flags,
+                       struct rte_mbuf *data_mbuf)
+{
+    tpg_tcp_statistics_t *stats;
+
+    TCB_CHECK(tcb);
+
+    if (unlikely(!data_mbuf))
+        return false;
+
+    stats = STATS_LOCAL(tpg_tcp_statistics_t, tcb->tcb_l4.l4cb_interface);
+
+    if (unlikely(!tcp_send_pkt(tcb, sseq, flags, data_mbuf, data_mbuf->pkt_len,
+                               data_mbuf->nb_segs)))
+        return false;
+
     /*
      * Increment transmit counters. Failed counters are incremented lower in
      * the stack.
      */
     INC_STATS(stats, ts_sent_data_pkts);
+
     return true;
 }
 
@@ -830,38 +801,14 @@ bool tcp_send_data_pkt(tcp_control_block_t *tcb, uint32_t sseq, uint32_t flags,
 inline bool tcp_send_ctrl_pkt_with_sseq(tcp_control_block_t *tcb, uint32_t sseq,
                                         uint32_t flags)
 {
-    struct rte_mbuf      *hdr;
-    struct tcp_hdr       *tcp_hdr;
     tpg_tcp_statistics_t *stats;
 
     TCB_CHECK(tcb);
 
     stats = STATS_LOCAL(tpg_tcp_statistics_t, tcb->tcb_l4.l4cb_interface);
 
-    hdr = tcp_build_tcp_hdr_mbuf(tcb, sseq, flags, 0, &tcp_hdr);
-    if (unlikely(!hdr)) {
-        INC_STATS(stats, ts_failed_ctrl_pkts);
+    if (unlikely(!tcp_send_pkt(tcb, sseq, flags, NULL, 0, 0)))
         return false;
-    }
-
-    /*
-     * Increment transmit bytes counters. Failed counters are incremented lower
-     * in the stack.
-     */
-    INC_STATS_VAL(stats, ts_sent_ctrl_bytes, hdr->pkt_len);
-
-    /*
-     * Send the packet!!
-     */
-    if (unlikely(!pkt_send_with_hash(tcb->tcb_l4.l4cb_interface, hdr,
-                                     L4CB_TX_HASH(&tcb->tcb_l4),
-                                     tcb->tcb_trace))) {
-
-        TCB_TRACE(tcb, TSM, DEBUG, "[%s()] ERR: Failed tx on port %d\n",
-                  __func__,
-                  tcb->tcb_l4.l4cb_interface);
-        return false;
-    }
 
     /*
      * Increment transmit counters. Failed counters are incremented lower in

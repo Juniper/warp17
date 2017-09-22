@@ -169,7 +169,6 @@ typedef struct test_case_info_s test_case_info_t;
 #include "tpg_trace_msg.h"
 
 #include "tpg_pcb.h"
-#include "tpg_arp.h"
 #include "tpg_cli.h"
 #include "tpg_timer.h"
 
@@ -186,6 +185,7 @@ typedef struct test_case_info_s test_case_info_t;
 #include "tpg_lookup.h"
 
 #include "tpg_ethernet.h"
+#include "tpg_arp.h"
 #include "tpg_ipv4.h"
 
 #include "tpg_tcp_sm.h"

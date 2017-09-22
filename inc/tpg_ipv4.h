@@ -178,6 +178,20 @@ static inline uint16_t ipv4_update_general_l4_cksum(uint16_t cksum_in,
 }
 
 /*****************************************************************************
+ * IP Multicast related definitions
+ ****************************************************************************/
+#define IPV4_MCAST_ETH_ADDR_PREFIX 0x000001005e000000
+#define IPV4_MCAST_ETH_ADDR_MASK   0x00000000007FFFFF
+
+/*****************************************************************************
+ * ipv4_mcast_addr_to_eth()
+ ****************************************************************************/
+static inline uint64_t ipv4_mcast_addr_to_eth(uint32_t ip_addr)
+{
+    return (IPV4_MCAST_ETH_ADDR_PREFIX | (ip_addr & IPV4_MCAST_ETH_ADDR_MASK));
+}
+
+/*****************************************************************************
  * TOS/DSCP/ECN related definitions
  ****************************************************************************/
 #define IPV4_DSCP_MAX          (0x3F + 1) /* 6 bits */
@@ -200,15 +214,12 @@ extern void             ipv4_store_sockopt(ipv4_sockopt_t *dest,
                                            const tpg_ipv4_sockopt_t *options);
 extern void             ipv4_load_sockopt(tpg_ipv4_sockopt_t *dest,
                                           const ipv4_sockopt_t *options);
-extern int              ipv4_build_ipv4_hdr(sockopt_t *sockopt,
-                                            struct rte_mbuf *mbuf,
-                                            uint32_t src_addr,
-                                            uint32_t dst_addr,
-                                            uint8_t protocol,
-                                            uint16_t l4_len,
-                                            struct ipv4_hdr *hdr);
 extern struct rte_mbuf *ipv4_receive_pkt(packet_control_block_t *pcb,
                                          struct rte_mbuf *mbuf);
+extern struct rte_mbuf *ipv4_build_hdr_mbuf(l4_control_block_t *l4_cb,
+                                            uint8_t protocol,
+                                            uint16_t l4_len,
+                                            struct ipv4_hdr **ip_hdr_p);
 
 extern const char *ipv4_tos_to_dscp_name(const tpg_ipv4_sockopt_t *options);
 extern const char *ipv4_tos_to_ecn_name(const tpg_ipv4_sockopt_t *options);

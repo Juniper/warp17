@@ -722,8 +722,8 @@ static int tsm_SF_listen(tcp_control_block_t *tcb, tcpEvent_t event,
                     /* TODO: how do we handle server allocation errors? */
                     return -ENOMEM;
                 }
-                new_tcb->tcb_l4.l4cb_dst_addr.ip_v4 =
-                    rte_be_to_cpu_32(pcb->pcb_ipv4->src_addr);
+                new_tcb->tcb_l4.l4cb_dst_addr =
+                    TPG_IPV4(rte_be_to_cpu_32(pcb->pcb_ipv4->src_addr));
                 new_tcb->tcb_l4.l4cb_dst_port =
                     rte_be_to_cpu_16(pcb->pcb_tcp->src_port);
 

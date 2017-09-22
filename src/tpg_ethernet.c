@@ -217,27 +217,43 @@ void eth_lcore_init(uint32_t lcore_id)
 }
 
 /*****************************************************************************
- * eth_build_eth_hdr()
+ * eth_build_hdr_mbuf()
  ****************************************************************************/
-int eth_build_eth_hdr(struct rte_mbuf *mbuf, uint64_t dst_mac,
-                      uint64_t src_mac, uint16_t ether_type)
+struct rte_mbuf *eth_build_hdr_mbuf(uint32_t port, uint64_t dst_mac,
+                                    uint64_t src_mac,
+                                    uint16_t ether_type)
 {
     struct ether_hdr *eth;
+    struct rte_mbuf  *mbuf;
 
+    mbuf = rte_pktmbuf_alloc(mem_get_mbuf_local_pool_tx_hdr());
+    if (unlikely(!mbuf)) {
+        RTE_LOG(ERR, USER2,
+                "[%d:%s()] ERR: Failed mbuf hdr alloc for send on port %d\n",
+                rte_lcore_index(rte_lcore_id()),
+                __func__,
+                port);
+
+        return NULL;
+    }
+
+    mbuf->port = port;
+
+    /*
+     * Build ethernet header
+     */
     eth = (struct ether_hdr *) rte_pktmbuf_append(mbuf,
                                                   sizeof(struct ether_hdr));
 
-    if (eth == NULL)
-        return -ENOMEM;
+    if (unlikely(!eth)) {
+        rte_pktmbuf_free(mbuf);
+        return NULL;
+    }
 
-    arp_uint64_to_mac(dst_mac, eth->d_addr.addr_bytes);
+    eth_uint64_to_mac(dst_mac, eth->d_addr.addr_bytes);
+    eth_uint64_to_mac(src_mac, eth->s_addr.addr_bytes);
 
-    if (src_mac == TPG_USE_PORT_MAC)
-        rte_eth_macaddr_get(mbuf->port, &eth->s_addr);
-    else
-        arp_uint64_to_mac(src_mac, eth->s_addr.addr_bytes);
-
-    eth->ether_type =  rte_cpu_to_be_16(ether_type);
+    eth->ether_type = rte_cpu_to_be_16(ether_type);
 
     if (true) {
         /*
@@ -247,7 +263,7 @@ int eth_build_eth_hdr(struct rte_mbuf *mbuf, uint64_t dst_mac,
         mbuf->l2_len = sizeof(struct ether_hdr);
     }
 
-    return sizeof(struct ether_hdr);
+    return mbuf;
 }
 
 /*****************************************************************************

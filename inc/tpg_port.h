@@ -144,6 +144,7 @@ typedef struct port_info_s {
     uint16_t                pi_adjusted_reta_size;
     uint16_t                pi_mtu;
     uint16_t                pi_numa_node;
+    uint64_t                pi_mac_addr;
 
     /* True if the port is a ring interface. */
     uint16_t                pi_ring_if : 1;

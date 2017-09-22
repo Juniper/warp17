@@ -237,8 +237,8 @@ void tlkp_init_cb(l4_control_block_t *l4_cb, uint32_t local_addr,
                   sockopt_t *sockopt,
                   uint32_t flags)
 {
-    l4_cb->l4cb_src_addr.ip_v4 = local_addr;
-    l4_cb->l4cb_dst_addr.ip_v4 = remote_addr;
+    l4_cb->l4cb_src_addr = TPG_IPV4(local_addr);
+    l4_cb->l4cb_dst_addr = TPG_IPV4(remote_addr);
     l4_cb->l4cb_src_port = local_port;
     l4_cb->l4cb_dst_port = remote_port;
 

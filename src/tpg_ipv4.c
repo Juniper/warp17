@@ -425,28 +425,24 @@ uint8_t ipv4_dscp_ecn_to_tos(const char *dscp_str, const char *ecn_str)
 }
 
 /*****************************************************************************
- * ipv4_build_ipv4_hdr()
+ * ipv4_build_hdr()
  ****************************************************************************/
-int ipv4_build_ipv4_hdr(sockopt_t *sockopt,
-                        struct rte_mbuf *mbuf, uint32_t src_addr,
-                        uint32_t dst_addr, uint8_t protocol,
-                        uint16_t l4_len,
-                        struct ipv4_hdr *hdr)
+static struct ipv4_hdr *ipv4_build_hdr(l4_control_block_t *l4_cb,
+                                       struct rte_mbuf *mbuf,
+                                       uint8_t protocol,
+                                       uint16_t l4_len,
+                                       struct ipv4_hdr *ref_ip_hdr)
 {
-    /*
-     * TODO: For now we do not support options.
-     */
-
-    uint16_t         ip_hdr_len = sizeof(struct ipv4_hdr);
     struct ipv4_hdr *ip_hdr;
+    uint16_t         ip_hdr_len = sizeof(struct ipv4_hdr);
+    sockopt_t       *sockopt = &l4_cb->l4cb_sockopt;
 
-    if (hdr != NULL)
-        TPG_ERROR_ABORT("TODO: %s!\n", "No reference header supported");
+    if (unlikely(ref_ip_hdr != NULL))
+        TPG_ERROR_ABORT("TODO: No reference IPv4 header supported!\n");
 
     ip_hdr = (struct ipv4_hdr *) rte_pktmbuf_append(mbuf, ip_hdr_len);
-
-    if (ip_hdr == NULL)
-        return -ENOMEM;
+    if (unlikely(!ip_hdr))
+        return NULL;
 
     ip_hdr->version_ihl = (4 << 4) | (ip_hdr_len >> 2);
     ip_hdr->type_of_service = sockopt->so_ipv4.io_tos;
@@ -455,8 +451,8 @@ int ipv4_build_ipv4_hdr(sockopt_t *sockopt,
     ip_hdr->fragment_offset = rte_cpu_to_be_16(0);
     ip_hdr->time_to_live = 60;
     ip_hdr->next_proto_id = protocol;
-    ip_hdr->src_addr = rte_cpu_to_be_32(src_addr);
-    ip_hdr->dst_addr = rte_cpu_to_be_32(dst_addr);
+    ip_hdr->src_addr = rte_cpu_to_be_32(l4_cb->l4cb_src_addr.ip_v4);
+    ip_hdr->dst_addr = rte_cpu_to_be_32(l4_cb->l4cb_dst_addr.ip_v4);
 
 #if !defined(TPG_SW_CHECKSUMMING)
     if (true) {
@@ -475,9 +471,59 @@ int ipv4_build_ipv4_hdr(sockopt_t *sockopt,
         ip_hdr->hdr_checksum = rte_ipv4_cksum(ip_hdr);
     }
 
-    return sizeof(struct ipv4_hdr);
+    return ip_hdr;
 }
 
+/*****************************************************************************
+ * ipv4_build_hdr_mbuf()
+ ****************************************************************************/
+struct rte_mbuf *ipv4_build_hdr_mbuf(l4_control_block_t *l4_cb,
+                                     uint8_t protocol,
+                                     uint16_t l4_len,
+                                     struct ipv4_hdr **ip_hdr_p)
+{
+    struct rte_mbuf *mbuf;
+    port_info_t     *port_info;
+    uint64_t         dst_mac;
+    uint64_t         src_mac;
+
+    /* TODO: normally we should have L2 information in the control block.
+     * However, for now we only support Ethernet.
+     */
+    port_info = &RTE_PER_LCORE(local_port_dev_info)[l4_cb->l4cb_interface];
+    src_mac = port_info->pi_mac_addr;
+
+    if (!TPG_IP_MCAST(&l4_cb->l4cb_dst_addr)) {
+        dst_mac = route_v4_nh_lookup(l4_cb->l4cb_interface,
+                                     l4_cb->l4cb_dst_addr.ip_v4);
+    } else {
+        dst_mac = ipv4_mcast_addr_to_eth(l4_cb->l4cb_dst_addr.ip_v4);
+    }
+
+    if (unlikely(dst_mac == TPG_ARP_MAC_NOT_FOUND)) {
+        /*
+         * Normally we should queue the packet if the ARP is not there yet
+         * however here we want high volume of traffic, and the ARP should
+         * be there before we start testing.
+         *
+         * Revisit if we want this to be a "REAL" TCP/IP stack ;)
+         */
+        return NULL;
+    }
+
+    mbuf = eth_build_hdr_mbuf(l4_cb->l4cb_interface, dst_mac, src_mac,
+                              ETHER_TYPE_IPv4);
+    if (unlikely(!mbuf))
+        return NULL;
+
+    *ip_hdr_p = ipv4_build_hdr(l4_cb, mbuf, protocol, l4_len, NULL);
+    if (unlikely(!(*ip_hdr_p))) {
+        rte_pktmbuf_free(mbuf);
+        return NULL;
+    }
+
+    return mbuf;
+}
 
 /*****************************************************************************
  * ipv4_receive_pkt()

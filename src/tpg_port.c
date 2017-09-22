@@ -418,6 +418,8 @@ static int port_set_conn_options_internal(uint32_t port,
  ****************************************************************************/
 static bool port_adjust_info(uint32_t port)
 {
+    struct ether_addr mac_addr;
+
     /* Adjust reta_size. RETA size may be 0 in case we're running on a VF.
      * e.g: for Intel 82599 10G.
      */
@@ -444,6 +446,10 @@ static bool port_adjust_info(uint32_t port)
             port_dev_info[port].pi_dev_info.pci_dev->device.numa_node != -1)
         port_dev_info[port].pi_numa_node =
             port_dev_info[port].pi_dev_info.pci_dev->device.numa_node;
+
+    /* Prefetch the port MAC address. */
+    rte_eth_macaddr_get(port, &mac_addr);
+    port_dev_info[port].pi_mac_addr = eth_mac_to_uint64(mac_addr.addr_bytes);
 
     return true;
 }

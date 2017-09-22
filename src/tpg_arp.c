@@ -715,7 +715,7 @@ bool arp_add_local(uint32_t port, uint32_t ip)
 
     rte_eth_macaddr_get(port, &mac);
 
-    return arp_update_entry(port, ip, arp_mac_to_uint64(&mac.addr_bytes[0]),
+    return arp_update_entry(port, ip, eth_mac_to_uint64(&mac.addr_bytes[0]),
                             true);
 }
 
@@ -779,7 +779,7 @@ static void arp_process_request(packet_control_block_t *pcb)
             pcb->pcb_core_index, __func__);
 
     arp_update_entry(pcb->pcb_port, arp_req_sip,
-                     arp_mac_to_uint64(arp_hdr->arp_data.arp_sha.addr_bytes),
+                     eth_mac_to_uint64(arp_hdr->arp_data.arp_sha.addr_bytes),
                      false);
 }
 
@@ -805,7 +805,7 @@ static void arp_process_reply(packet_control_block_t *pcb)
             pcb->pcb_core_index, __func__);
 
     arp_update_entry(pcb->pcb_port,  arp_req_ip,
-                     arp_mac_to_uint64(arp_hdr->arp_data.arp_sha.addr_bytes),
+                     eth_mac_to_uint64(arp_hdr->arp_data.arp_sha.addr_bytes),
                      false);
 }
 

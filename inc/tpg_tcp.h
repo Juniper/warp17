@@ -251,11 +251,6 @@ extern void             tcp_store_sockopt(tcp_sockopt_t *dest,
                                           const tpg_tcp_sockopt_t *options);
 extern void             tcp_load_sockopt(tpg_tcp_sockopt_t *dest,
                                          const tcp_sockopt_t *options);
-extern struct tcp_hdr  *tcp_build_tcp_hdr(struct rte_mbuf *mbuf,
-                                          tcp_control_block_t *tcb,
-                                          struct ipv4_hdr *ipv4hdr,
-                                          uint32_t sseq,
-                                          uint32_t flags);
 extern struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
                                         struct rte_mbuf *mbuf);
 extern bool             tcp_send_data_pkt(tcp_control_block_t *tcb,

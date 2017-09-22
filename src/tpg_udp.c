@@ -308,8 +308,8 @@ struct rte_mbuf *udp_receive_pkt(packet_control_block_t *pcb,
             if (unlikely(new_ucb == NULL))
                 return mbuf;
 
-            new_ucb->ucb_l4.l4cb_dst_addr.ip_v4 =
-                rte_be_to_cpu_32(pcb->pcb_ipv4->src_addr);
+            new_ucb->ucb_l4.l4cb_dst_addr =
+                TPG_IPV4(rte_be_to_cpu_32(pcb->pcb_ipv4->src_addr));
             new_ucb->ucb_l4.l4cb_dst_port =
                 rte_be_to_cpu_16(pcb->pcb_tcp->src_port);
 
@@ -355,11 +355,12 @@ struct rte_mbuf *udp_receive_pkt(packet_control_block_t *pcb,
 }
 
 /*****************************************************************************
- * udp_build_udp_hdr()
+ * udp_build_hdr()
  ****************************************************************************/
-static struct udp_hdr *udp_build_udp_hdr(struct rte_mbuf *mbuf, udp_control_block_t *ucb,
-                                         struct ipv4_hdr *ipv4_hdr,
-                                         uint16_t dgram_len)
+static struct udp_hdr *udp_build_hdr(udp_control_block_t *ucb,
+                                     struct rte_mbuf *mbuf,
+                                     struct ipv4_hdr *ipv4_hdr,
+                                     uint16_t dgram_len)
 {
     uint16_t        udp_hdr_len = sizeof(struct udp_hdr);
     uint16_t        udp_hdr_offset = rte_pktmbuf_data_len(mbuf);
@@ -403,93 +404,93 @@ static struct udp_hdr *udp_build_udp_hdr(struct rte_mbuf *mbuf, udp_control_bloc
     return udp_hdr;
 }
 
-
 /*****************************************************************************
- * udp_build_udp_hdr_mbuf()
+ * udp_build_hdr_mbuf()
  ****************************************************************************/
-static struct rte_mbuf *udp_build_udp_hdr_mbuf(udp_control_block_t *ucb,
-                                               uint32_t l4_len,
-                                               struct udp_hdr **udp_hdr)
+static struct rte_mbuf *udp_build_hdr_mbuf(udp_control_block_t *ucb,
+                                           uint32_t l4_len,
+                                           struct udp_hdr **udp_hdr_p)
 {
-    int              next_header_offset;
-    struct rte_mbuf *hdr;
-    struct ipv4_hdr *ipv4;
-    uint64_t         nh_mac;
+    struct rte_mbuf *mbuf;
+    struct ipv4_hdr *ip_hdr;
 
-    hdr = rte_pktmbuf_alloc(mem_get_mbuf_local_pool_tx_hdr());
-    if (unlikely(!hdr)) {
-        RTE_LOG(ERR, USER2, "[%d:%s()] ERR: Failed mbuf hdr alloc for send on port %d\n",
-                rte_lcore_index(rte_lcore_id()),
-                __func__,
-                ucb->ucb_l4.l4cb_interface);
-
-        return NULL;
-    }
-
-    /* Prepend the header & update header fields. */
-    hdr->port = ucb->ucb_l4.l4cb_interface;
-
-    /*
-     * Search for next hop mac.
-     */
-    nh_mac = route_v4_nh_lookup(ucb->ucb_l4.l4cb_interface,
-                                ucb->ucb_l4.l4cb_dst_addr.ip_v4);
-    if (nh_mac == TPG_ARP_MAC_NOT_FOUND) {
-        /*
-         * Normally we should queue the packet if the ARP is not there yet
-         * however here we want high volume of traffic, and the ARP should
-         * be there before we start testing.
-         *
-         * Revisit if we want this to be a "REAL" TCP/IP stack ;)
-         */
-        rte_pktmbuf_free(hdr);
-        return NULL;
-    }
-
-    /*
-     * Build ethernet header
-     */
-    next_header_offset = eth_build_eth_hdr(hdr, nh_mac, TPG_USE_PORT_MAC,
-                                           ETHER_TYPE_IPv4);
-
-    if (next_header_offset <= 0) {
-        rte_pktmbuf_free(hdr);
-        return NULL;
-    }
-
-    /*
-     * Build IP header
-     */
     if (ucb->ucb_l4.l4cb_domain != AF_INET) {
-
-        TPG_ERROR_ABORT("TODO: %s!\n", "UDP = IPv4 only for now!");
-
-    } else {
-
-        ipv4 = (struct ipv4_hdr *) (rte_pktmbuf_mtod(hdr, uint8_t *) + next_header_offset);
-
-        if (ipv4_build_ipv4_hdr(&ucb->ucb_l4.l4cb_sockopt,
-                                hdr, ucb->ucb_l4.l4cb_src_addr.ip_v4,
-                                ucb->ucb_l4.l4cb_dst_addr.ip_v4,
-                                IPPROTO_UDP,
-                                sizeof(struct udp_hdr) + l4_len,
-                                NULL) <= 0) {
-            rte_pktmbuf_free(hdr);
-            return NULL;
-        }
+        TPG_ERROR_ABORT("TODO: UDP = IPv4 only for now!\n");
+        return NULL;
     }
+
+    mbuf = ipv4_build_hdr_mbuf(&ucb->ucb_l4, IPPROTO_UDP,
+                                sizeof(struct udp_hdr) + l4_len,
+                                &ip_hdr);
+    if (unlikely(!mbuf))
+        return NULL;
 
     /*
      * Build UDP header
      */
-    *udp_hdr = udp_build_udp_hdr(hdr, ucb, ipv4, l4_len);
-
-    if (udp_hdr == NULL) {
-        rte_pktmbuf_free(hdr);
+    *udp_hdr_p = udp_build_hdr(ucb, mbuf, ip_hdr, l4_len);
+    if (unlikely(!(*udp_hdr_p))) {
+        rte_pktmbuf_free(mbuf);
         return NULL;
     }
 
-    return hdr;
+    return mbuf;
+}
+
+
+/*****************************************************************************
+ * udp_send_pkt()
+ ****************************************************************************/
+static int
+udp_send_pkt(udp_control_block_t *ucb, struct rte_mbuf *hdr_mbuf,
+             struct udp_hdr *udp_hdr,
+             struct rte_mbuf *data_mbuf,
+             uint32_t *data_sent)
+{
+    tpg_udp_statistics_t *stats;
+
+    stats = STATS_LOCAL(tpg_udp_statistics_t, ucb->ucb_l4.l4cb_interface);
+
+    /* Append the data part too. */
+    hdr_mbuf->next = data_mbuf;
+    hdr_mbuf->pkt_len += data_mbuf->pkt_len;
+    hdr_mbuf->nb_segs += data_mbuf->nb_segs;
+
+    *data_sent = data_mbuf->pkt_len;
+
+    /*
+     * Increment transmit bytes counters. Failed counters are incremented lower
+     * in the stack.
+     */
+    INC_STATS_VAL(stats, us_sent_ctrl_bytes, hdr_mbuf->l4_len);
+    INC_STATS_VAL(stats, us_sent_data_bytes, *data_sent);
+
+    /* We need to update the checksum in the UDP part now the data has been
+     * added.
+     */
+#if defined(TPG_SW_CHECKSUMMING)
+    if (!ucb->ucb_l4.l4cb_sockopt.so_eth.ethso_tx_offload_udp_cksum) {
+        udp_hdr->dgram_cksum =
+            ipv4_update_general_l4_cksum(udp_hdr->dgram_cksum, data_mbuf);
+    }
+#else
+    RTE_SET_USED(udp_hdr);
+#endif
+
+    /*
+     * Send the packet!!
+     */
+    if (unlikely(!pkt_send_with_hash(ucb->ucb_l4.l4cb_interface, hdr_mbuf,
+                                     L4CB_TX_HASH(&ucb->ucb_l4),
+                                     ucb->ucb_trace))) {
+
+        TRACE_FMT(UDP, DEBUG, "[%s()] ERR: Failed tx on port %d\n",
+                  __func__,
+                  ucb->ucb_l4.l4cb_interface);
+        return -ENOMEM;
+    }
+
+    return 0;
 }
 
 /*****************************************************************************
@@ -649,56 +650,34 @@ int udp_send_v4(udp_control_block_t *ucb, struct rte_mbuf *data_mbuf,
     struct rte_mbuf      *hdr;
     struct udp_hdr       *udp_hdr;
     tpg_udp_statistics_t *stats;
+    int                   err;
+
+    UCB_CHECK(ucb);
+
+    if (ucb->ucb_l4.l4cb_domain != AF_INET) {
+        TPG_ERROR_ABORT("TODO: UDP = IPv4 only for now!\n");
+        return -EINVAL;
+    }
 
     stats = STATS_LOCAL(tpg_udp_statistics_t, ucb->ucb_l4.l4cb_interface);
 
-    hdr = udp_build_udp_hdr_mbuf(ucb, data_mbuf->pkt_len, &udp_hdr);
-    if (unlikely(hdr == NULL)) {
+    hdr = udp_build_hdr_mbuf(ucb, data_mbuf->pkt_len, &udp_hdr);
+    if (unlikely(!hdr)) {
         INC_STATS(stats, us_failed_pkts);
         rte_pktmbuf_free(data_mbuf);
         return -ENOMEM;
     }
 
-    /* Append the data part too. */
-    hdr->next = data_mbuf;
-    hdr->pkt_len += data_mbuf->pkt_len;
-    hdr->nb_segs += data_mbuf->nb_segs;
-
-    *data_sent = data_mbuf->pkt_len;
-
-    /*
-     * Increment transmit bytes counters. Failed counters are incremented lower
-     * in the stack.
-     */
-    INC_STATS_VAL(stats, us_sent_ctrl_bytes, hdr->l4_len);
-    INC_STATS_VAL(stats, us_sent_data_bytes, *data_sent);
-
-    /* We need to update the checksum in the UDP part now the data has been added */
-#if defined(TPG_SW_CHECKSUMMING)
-    if (!ucb->ucb_l4.l4cb_sockopt.so_eth.ethso_tx_offload_udp_cksum)
-        udp_hdr->dgram_cksum = ipv4_update_general_l4_cksum(udp_hdr->dgram_cksum,
-                                                            data_mbuf);
-#endif
-
-    /*
-     * Send the packet!!
-     */
-    if (unlikely(!pkt_send_with_hash(ucb->ucb_l4.l4cb_interface, hdr,
-                                     L4CB_TX_HASH(&ucb->ucb_l4),
-                                     ucb->ucb_trace))) {
-
-        TRACE_FMT(UDP, DEBUG, "[%s()] ERR: Failed tx on port %d\n",
-                  __func__,
-                  ucb->ucb_l4.l4cb_interface);
-        return -ENOMEM;
+    err = udp_send_pkt(ucb, hdr, udp_hdr, data_mbuf, data_sent);
+    if (likely(err == 0)) {
+        /*
+        * Increment transmit counters. Failed counters are incremented lower in
+        * the stack.
+        */
+        INC_STATS(stats, us_sent_pkts);
     }
 
-    /*
-     * Increment transmit counters. Failed counters are incremented lower in
-     * the stack.
-     */
-    INC_STATS(stats, us_sent_pkts);
-    return 0;
+    return err;
 }
 
 /*****************************************************************************
