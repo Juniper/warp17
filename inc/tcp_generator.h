@@ -206,6 +206,7 @@ typedef struct test_case_info_s test_case_info_t;
 
 #include "tpg_test_mgmt.h"
 #include "tpg_test_mgmt_api.h"
+#include "tpg_test_mgmt_cli.h"
 #include "tpg_test_stats.h"
 
 /*****************************************************************************

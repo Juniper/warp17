@@ -79,17 +79,18 @@ from warp17_service_pb2   import *
 
 class TestPerfNames:
     # On some port types we might want to skip sending big data
-    SKIP_BIG_DATA        = 'skip-big-data'
+    SKIP_BIG_DATA = 'skip-big-data'
 
     # WARP17 Rates and Session values
-    SETUP_RLIMIT         = 'setup-rate-limit'
-    SEND_RLIMIT          = 'send-rate-limit'
-    ALLOWED_FAILED       = 'allowed-failed-sessions'
+    SETUP_RLIMIT   = 'setup-rate-limit'
+    SEND_RLIMIT    = 'send-rate-limit'
+    ALLOWED_FAILED = 'allowed-failed-sessions'
 
-    TCP_SETUP_RATE       = 'tcp-setup-rate'
-    TCP_DATA_SETUP_RATE  = 'tcp-data-setup-rate'
+    TCP_SETUP_RATE      = 'tcp-setup-rate'
+    TCP_DATA_SETUP_RATE = 'tcp-data-setup-rate'
 
-    UDP_DATA_SETUP_RATE  = 'udp-data-setup-rate'
+    UDP_DATA_SETUP_RATE       = 'udp-data-setup-rate'
+    UDP_MCAST_DATA_SETUP_RATE = 'udp-mcast-data-setup-rate'
 
     HTTP_DATA_SETUP_RATE = 'http-data-setup-rate'
 
@@ -141,6 +142,10 @@ class TestPerf(Warp17UnitTestCase):
                                                 section=self.CFG_SEC_UNIT_TEST,
                                                 cast=int)
 
+    def _get_expected_udp_mcast_setup(self):
+        return Warp17UnitTestCase.env.get_value(TestPerfNames.UDP_MCAST_DATA_SETUP_RATE,
+                                                section=self.CFG_SEC_UNIT_TEST,
+                                                cast=int)
     def _get_expected_http_setup(self):
         return Warp17UnitTestCase.env.get_value(TestPerfNames.HTTP_DATA_SETUP_RATE,
                                                 section=self.CFG_SEC_UNIT_TEST,
@@ -460,4 +465,16 @@ class TestPerf(Warp17UnitTestCase):
                                        app_ccfg=self._get_http_app_client(GET, 10),
                                        app_scfg=self._get_http_app_server(OK_200, 10),
                                        expected_rate=self._get_expected_http_setup())
+
+    def test_9_4M_udp_mcast_flows_data_10b_setup_rate(self):
+        """Tests setting up 4M UDP mcast sessions + 10 byte packet data."""
+
+        self.lh.info('Test test_8_4M_http_sess_data_10b_setup_rate')
+        self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
+                                       dport_cnt=100,
+                                       l4_proto=UDP,
+                                       rate_ccfg=self._get_rates_client(),
+                                       app_ccfg=self._get_raw_app_client(10),
+                                       app_scfg=self._get_raw_app_server(0),
+                                       expected_rate=self._get_expected_udp_mcast_setup())
 

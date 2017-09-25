@@ -138,25 +138,51 @@ const char *test_entry_state(tpg_test_case_state_t state)
 }
 
 /*****************************************************************************
+ * test_entry_server_type()
+ ****************************************************************************/
+static const char *test_entry_server_type(const tpg_server_t *entry)
+{
+    switch (entry->srv_l4.l4s_proto) {
+    case L4_PROTO__TCP:
+        return "TCP SRV";
+    case L4_PROTO__UDP:
+        return "UDP SRV";
+    default:
+        return "<UNKNOWN>";
+    }
+}
+
+/*****************************************************************************
+ * test_entry_client_type()
+ ****************************************************************************/
+static const char *test_entry_client_type(const tpg_client_t *entry)
+{
+    switch (entry->cl_l4.l4c_proto) {
+    case L4_PROTO__TCP:
+        return "TCP CL";
+    case L4_PROTO__UDP:
+        if (entry->cl_mcast_src)
+            return "UDP MCAST SRC";
+        else
+            return "UDP CL";
+    default:
+        return "<UNKNOWN>";
+    }
+}
+
+/*****************************************************************************
  * test_entry_type()
  ****************************************************************************/
 const char *test_entry_type(const tpg_test_case_t *entry)
 {
-    if (entry->tc_type == TEST_CASE_TYPE__SERVER &&
-            entry->tc_server.srv_l4.l4s_proto == L4_PROTO__TCP) {
-        return "TCP SRV";
-    } else if (entry->tc_type == TEST_CASE_TYPE__SERVER &&
-            entry->tc_server.srv_l4.l4s_proto == L4_PROTO__UDP) {
-        return "UDP SRV";
-    } else  if (entry->tc_type == TEST_CASE_TYPE__CLIENT &&
-            entry->tc_client.cl_l4.l4c_proto == L4_PROTO__TCP) {
-        return "TCP CL";
-    } else if (entry->tc_type == TEST_CASE_TYPE__CLIENT &&
-            entry->tc_client.cl_l4.l4c_proto == L4_PROTO__UDP) {
-        return "UDP CL";
+    switch (entry->tc_type) {
+    case TEST_CASE_TYPE__SERVER:
+        return test_entry_server_type(&entry->tc_server);
+    case TEST_CASE_TYPE__CLIENT:
+        return test_entry_client_type(&entry->tc_client);
+    default:
+        return "<UNKNOWN>";
     }
-
-    return "<UNKNOWN>";
 }
 
 /*****************************************************************************
@@ -409,7 +435,7 @@ void test_state_show_tcs_hdr(uint32_t eth_port, printer_arg_t *printer_arg)
 {
     /* Print the header */
     tpg_printf(printer_arg, "Port %"PRIu32 "\n", eth_port);
-    tpg_printf(printer_arg, "%4s %11s %20s %10s %10s %20s\n",
+    tpg_printf(printer_arg, "%4s %15s %20s %10s %10s %20s\n",
                "TcId", "Type", "Criteria", "State", "Runtime",
                "Quick stats");
 }
@@ -437,7 +463,7 @@ void test_state_show_tcs(uint32_t eth_port, printer_arg_t *printer_arg)
         test_entry_quickstats(&entry, &state, quick_stat_buf,
                               sizeof(quick_stat_buf));
 
-        tpg_printf(printer_arg, "%4"PRIu32" %11s %20s %10s %9.2lfs %20s\n",
+        tpg_printf(printer_arg, "%4"PRIu32" %15s %20s %10s %9.2lfs %20s\n",
                    tcid,
                    test_entry_type(&entry),
                    crit_buf,
@@ -560,6 +586,7 @@ static void test_display_stats_test_state(ui_win_t *ui_win,
         UI_HLINE_PRINT(ui_win->uw_win, "=", ui_win->uw_cols - 2);
 
         test_state_show_tcs(port, &parg);
+        wprintw(ui_win->uw_win, "\n");
     }
 }
 

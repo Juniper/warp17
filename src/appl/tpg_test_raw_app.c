@@ -460,7 +460,8 @@ static cmdline_parse_token_string_t cmd_tests_set_app_raw_client_T_set =
 static cmdline_parse_token_string_t cmd_tests_set_app_raw_client_T_tests =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_client_result, tests, "tests");
 static cmdline_parse_token_string_t cmd_tests_set_app_raw_client_T_client =
-    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_client_result, client, "client");
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_client_result, client,
+                             TEST_CASE_CLIENT_CLI_STR);
 static cmdline_parse_token_string_t cmd_tests_set_app_raw_client_T_raw =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_client_result, raw, "raw");
 
@@ -565,7 +566,8 @@ static cmdline_parse_token_string_t cmd_tests_set_app_raw_server_T_set =
 static cmdline_parse_token_string_t cmd_tests_set_app_raw_server_T_tests =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_server_result, tests, "tests");
 static cmdline_parse_token_string_t cmd_tests_set_app_raw_server_T_server =
-    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_server_result, server, "server");
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_server_result, server,
+                             TEST_CASE_SERVER_CLI_STR);
 static cmdline_parse_token_string_t cmd_tests_set_app_raw_server_T_raw =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_server_result, raw, "raw");
 

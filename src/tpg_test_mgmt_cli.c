@@ -690,7 +690,8 @@ static cmdline_parse_token_string_t cmd_tests_add_server_T_tcp_udp =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_add_server_result, tcp_udp, "tcp#udp");
 
 static cmdline_parse_token_string_t cmd_tests_add_server_T_server =
-    TOKEN_STRING_INITIALIZER(struct cmd_tests_add_server_result, server, "server");
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_add_server_result, server,
+                             TEST_CASE_SERVER_CLI_STR);
 static cmdline_parse_token_string_t cmd_tests_add_server_T_port_kw =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_add_server_result, port_kw, "port");
 static cmdline_parse_token_num_t cmd_tests_add_server_T_port =
@@ -819,7 +820,8 @@ static cmdline_parse_token_string_t cmd_tests_add_client_T_tests =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_add_client_result, tests, "tests");
 
 static cmdline_parse_token_string_t cmd_tests_add_client_T_client =
-    TOKEN_STRING_INITIALIZER(struct cmd_tests_add_client_result, client, "client");
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_add_client_result, client,
+                             TEST_CASE_CLIENT_CLI_STR);
 static cmdline_parse_token_string_t cmd_tests_add_client_T_tcp_udp =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_add_client_result, tcp_udp, "tcp#udp");
 
@@ -898,6 +900,12 @@ static void cmd_tests_add_client_parsed(void *parsed_result, struct cmdline *cl,
     tc.tc_client.cl_l4.l4c_tcp_udp.tuc_dports =
         TPG_PORT_RANGE(pr->dport_low, pr->dport_high);
 
+    if (strncmp(pr->client, TEST_CASE_MCAST_SRC_STR,
+                strlen(TEST_CASE_MCAST_SRC_STR) + 1) == 0) {
+        tc.tc_client.has_cl_mcast_src = true;
+        tc.tc_client.cl_mcast_src = true;
+    }
+
     if (test_mgmt_add_test_case(pr->port, &tc, &parg) == 0)
         cmdline_printf(cl,
                        "Test case %"PRIu32
@@ -913,7 +921,8 @@ static void cmd_tests_add_client_parsed(void *parsed_result, struct cmdline *cl,
 cmdline_parse_inst_t cmd_tests_add_client = {
     .f = cmd_tests_add_client_parsed,
     .data = NULL,
-    .help_str = "add tests client tcp|udp port <eth_port> test-case-id <tcid> "
+    .help_str = "add tests client|multicast-src tcp|udp "
+                "port <eth_port> test-case-id <tcid> "
                 "src <ip-range> sport <l4-ports> "
                 "dest <ip-range> dport <l4-ports>",
     .tokens = {

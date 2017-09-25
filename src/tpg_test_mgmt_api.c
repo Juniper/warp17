@@ -62,8 +62,8 @@ STATS_DEFINE(tpg_phy_statistics_t);
  * Globals
  ****************************************************************************/
 static const char *test_case_type_names[TEST_CASE_TYPE__MAX] = {
-    [TEST_CASE_TYPE__CLIENT] = "client",
-    [TEST_CASE_TYPE__SERVER] = "server",
+    [TEST_CASE_TYPE__CLIENT] = TEST_CASE_CLIENT_STR,
+    [TEST_CASE_TYPE__SERVER] = TEST_CASE_SERVER_STR,
 };
 
 /*****************************************************************************
@@ -129,6 +129,8 @@ static void test_init_client_defaults(tpg_test_case_t *cfg)
     cfg->tc_client.cl_app.ac_app_proto = APP_PROTO__RAW;
 
     APP_CL_CALL(default_cfg, APP_PROTO__RAW)(cfg);
+
+    cfg->tc_client.cl_mcast_src = false;
 }
 
 /*****************************************************************************
@@ -260,6 +262,45 @@ test_mgmt_validate_ip_range(const tpg_ip_range_t *range)
 }
 
 /*****************************************************************************
+ * test_mgmt_validate_ip_unicast_range()
+ ****************************************************************************/
+static bool test_mgmt_validate_ip_unicast_range(const tpg_ip_range_t *range)
+{
+    tpg_ip_t min_mcast_ip = TPG_IP_MCAST_MIN(&range->ipr_start.ip_version);
+    tpg_ip_t max_mcast_ip = TPG_IP_MCAST_MAX(&range->ipr_start.ip_version);
+
+    if (!test_mgmt_validate_ip_range(range))
+        return false;
+
+    if (TPG_IP_GE(&range->ipr_start, &min_mcast_ip) &&
+            TPG_IP_GE(&max_mcast_ip, &range->ipr_end))
+        return false;
+
+    if (TPG_IP_GE(&range->ipr_end, &min_mcast_ip) &&
+            TPG_IP_GE(&max_mcast_ip, &range->ipr_end))
+        return false;
+
+    if (TPG_IP_GE(&range->ipr_end, &max_mcast_ip) &&
+            TPG_IP_GE(&min_mcast_ip, &range->ipr_start))
+        return false;
+
+    if (TPG_IP_BCAST(&range->ipr_end))
+        return false;
+
+    return true;
+}
+
+/*****************************************************************************
+ * test_mgmt_validate_ip_mcast_range()
+ ****************************************************************************/
+static bool test_mgmt_validate_ip_mcast_range(const tpg_ip_range_t *range)
+{
+    return test_mgmt_validate_ip_range(range) &&
+                TPG_IP_MCAST(&range->ipr_start) &&
+                TPG_IP_MCAST(&range->ipr_end);
+}
+
+/*****************************************************************************
  * test_mgmt_validate_l4port_range()
  ****************************************************************************/
 static bool
@@ -333,6 +374,36 @@ test_mgmt_validate_test_case_client(const tpg_test_case_t *cfg,
 
     if (cfg->tc_client.cl_app.ac_app_proto >= APP_PROTO__APP_PROTO_MAX) {
         tpg_printf(printer_arg, "ERROR: Invalid APP protocol type!\n");
+        return false;
+    }
+
+    if (cfg->tc_client.cl_mcast_src) {
+        /* Validate Multicast IP ranges. */
+        if (!test_mgmt_validate_ip_mcast_range(&cfg->tc_client.cl_dst_ips)) {
+            tpg_printf(printer_arg,
+                       "ERROR: Invalid destination IP Multicast range!\n");
+            return false;
+        }
+
+        /* Only allow UDP clients to act as multicast sources. */
+        if (cfg->tc_client.cl_l4.l4c_proto != L4_PROTO__UDP) {
+            tpg_printf(printer_arg,
+                       "ERROR: Only UDP multicast sources allowed!\n");
+            return false;
+        }
+    } else {
+        /* Validate Unicast Dest IP ranges. */
+        if (!test_mgmt_validate_ip_unicast_range(&cfg->tc_client.cl_dst_ips)) {
+            tpg_printf(printer_arg,
+                       "ERROR: Invalid destination IP Unicast range!\n");
+            return false;
+        }
+    }
+
+    /* Validate Unicast SRC IP ranges. */
+    if (!test_mgmt_validate_ip_unicast_range(&cfg->tc_client.cl_src_ips)) {
+        tpg_printf(printer_arg,
+                   "ERROR: Invalid source IP Unicast range!\n");
         return false;
     }
 

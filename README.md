@@ -666,6 +666,19 @@ __NOTE: Only IPv4 is supported for now!__
 	                 dest <ip-range> dport <l4-ports>
 	```
 
+* __Configure multicast source test cases (per port)__: configure a multicast
+  source test case with ID `test-case-id` on `eth_port`. The underlying L4
+  traffic can only be UDP. The source IP/l4-port and destination IP/l4-port
+  ranges define the `<src_ip, src_port:dst_ip, dst_port>` UDP multicast streams
+  that will be generated. By default, the application (L5-L7) traffic will be
+  RAW traffic. Destination IP ranges must be valid IP Multicast ranges.
+
+	```
+	add tests multicast-src udp port <eth_port> test-case-id <tcid>
+	                        src <ip-range> sport <l4-ports>
+	                        dest <ip-mcast-range> dport <l4-ports>
+	```
+
 * __Configure test profile timeouts__: each test has a specific timeout profile
   which is defined by the initial delay after which client connections are
   initiated, how long a connection should live and how long a connection should
@@ -1218,6 +1231,10 @@ WARP17 or executed directly in the CLI.
 
 * __examples/test\_9\_ipv4\_tos.cfg__: example showing how to configure
   various TOS or DSCP/ECN values as part of the IPv4 options of the test cases.
+
+* __examples/test\_10\_ipv4\_mcast.cfg__: example showing how to configure
+  UDP Multicast Source test cases. The example combines UDP Unicast traffic with
+  UDP Multicast traffic.
 
 # Python scripting API
 WARP17 offers an RPC-based API which allows users to write scripts and automate

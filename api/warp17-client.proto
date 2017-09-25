@@ -91,13 +91,15 @@ message AppClient {
 }
 
 message Client {
-    required IpRange     cl_src_ips = 1;
-    required IpRange     cl_dst_ips = 2;
+    required IpRange     cl_src_ips   = 1;
+    required IpRange     cl_dst_ips   = 2;
 
-    required L4Client    cl_l4      = 3;
-    required RateClient  cl_rates   = 4;
-    required DelayClient cl_delays  = 5;
+    required L4Client    cl_l4        = 3;
+    required RateClient  cl_rates     = 4;
+    required DelayClient cl_delays    = 5;
 
-    required AppClient   cl_app     = 6;
+    required AppClient   cl_app       = 6;
+
+    optional bool        cl_mcast_src = 7 [default = false];
 }
 
