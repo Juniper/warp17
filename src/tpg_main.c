@@ -132,6 +132,7 @@ int main(int argc, char **argv)
      * Initialize RTE timer library
      */
     rte_timer_subsystem_init();
+
     /*
      * Precalculate the number of cycles per us so we don't do it everytime.
      */

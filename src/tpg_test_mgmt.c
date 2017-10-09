@@ -767,10 +767,6 @@ static int test_start_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
 
     } TEST_CASE_FOREACH_END()
 
-    /* Clear port stats. */
-    rte_eth_stats_reset(start_msg->tssm_eth_port);
-    rte_eth_xstats_reset(start_msg->tssm_eth_port);
-
     /* Start first test and it's associated timer. In the timer callback we
      * either wait for completion of the test (if async == false) or start
      * the next test too.

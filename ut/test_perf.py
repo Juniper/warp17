@@ -469,7 +469,7 @@ class TestPerf(Warp17UnitTestCase):
     def test_9_4M_udp_mcast_flows_data_10b_setup_rate(self):
         """Tests setting up 4M UDP mcast sessions + 10 byte packet data."""
 
-        self.lh.info('Test test_8_4M_http_sess_data_10b_setup_rate')
+        self.lh.info('Test test_9_4M_udp_mcast_flows_data_10b_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
                                        dport_cnt=100,
                                        l4_proto=UDP,
