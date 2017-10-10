@@ -391,7 +391,7 @@ void raw_stats_print(const tpg_test_case_app_stats_t *stats,
                      printer_arg_t *printer_arg)
 {
     tpg_printf(printer_arg, "%13s %13s\n", "Requests", "Replies");
-    tpg_printf(printer_arg, "%13"PRIu32 " %13"PRIu32 "\n",
+    tpg_printf(printer_arg, "%13"PRIu64 " %13"PRIu64 "\n",
                stats->tcas_raw.rsts_req_cnt,
                stats->tcas_raw.rsts_resp_cnt);
 }

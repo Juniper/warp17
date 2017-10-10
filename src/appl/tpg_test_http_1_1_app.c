@@ -1444,7 +1444,7 @@ void http_stats_print(const tpg_test_case_app_stats_t *stats,
                "No Len",
                "Trans-Enc");
     tpg_printf(printer_arg,
-               "%13"PRIu32" %13"PRIu32" %13"PRIu32" %13"PRIu32" %13"PRIu32"\n",
+               "%13"PRIu64" %13"PRIu64" %13"PRIu32" %13"PRIu32" %13"PRIu32"\n",
                stats->tcas_http.hsts_req_cnt,
                stats->tcas_http.hsts_resp_cnt,
                stats->tcas_http.hsts_invalid_msg_cnt,

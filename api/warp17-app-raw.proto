@@ -65,7 +65,7 @@ message RawServer {
 }
 
 message RawStats {
-    required uint32 rsts_req_cnt  = 1;
-    required uint32 rsts_resp_cnt = 2;
+    required uint64 rsts_req_cnt  = 1;
+    required uint64 rsts_resp_cnt = 2;
 }
 

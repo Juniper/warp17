@@ -89,8 +89,8 @@ message HttpServer {
 }
 
 message HttpStats {
-    required uint32 hsts_req_cnt            = 1;
-    required uint32 hsts_resp_cnt           = 2;
+    required uint64 hsts_req_cnt            = 1;
+    required uint64 hsts_resp_cnt           = 2;
     required uint32 hsts_invalid_msg_cnt    = 3;
     required uint32 hsts_no_content_len_cnt = 4;
     required uint32 hsts_transfer_enc_cnt   = 5;
