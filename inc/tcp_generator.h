@@ -122,8 +122,10 @@
 #define TPG_BUILD_DATE __DATE__
 #define TPG_BUILD_TIME __TIME__
 
-#define TPG_VERSION_PRINTF_STR  "warp17 v%s @%s, %s"
-#define TPG_VERSION_PRINTF_ARGS TPG_VERSION, TPG_BUILD_TIME, TPG_BUILD_DATE
+#define TPG_VERSION_PRINTF_STR  \
+    "warp17 v%s @%s, %s, revision: %s"
+#define TPG_VERSION_PRINTF_ARGS \
+    TPG_VERSION, TPG_BUILD_TIME, TPG_BUILD_DATE, TPG_BUILD_HASH
 
 /*****************************************************************************
  * Global variables

@@ -65,7 +65,8 @@ include $(RTE_SDK)/mk/rte.vars.mk
 
 # binary name
 APP = warp17
-VERSION = \"$(shell cat $(SRCDIR)/VERSION)\"
+VERSION    = \"$(shell cat $(SRCDIR)/VERSION)\"
+BUILD_HASH = \"$(shell git rev-parse HEAD 2> /dev/null || echo "N/A")\"
 
 # Include sec, and 3rd party source directory in build process
 VPATH := $(SRCDIR)/src
@@ -142,6 +143,7 @@ CFLAGS += -DTPG_NO_DEBUG_LOGS
 CFLAGS += -DDBG_TRACE_ALL_RX
 CFLAGS += -DDBG_TRACE_ALL_TX
 CFLAGS += -DTPG_VERSION=$(VERSION)
+CFLAGS += -DTPG_BUILD_HASH=$(BUILD_HASH)
 
 ifeq ($(WARP17_RELEASE),)
 CFLAGS += -g
