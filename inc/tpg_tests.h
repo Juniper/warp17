@@ -73,6 +73,7 @@ enum tests_control_msg_types {
     MSG_TEST_CASE_RUN_SEND,
     MSG_TEST_CASE_STOP,
     MSG_TEST_CASE_STATS_REQ,
+    MSG_TEST_CASE_RATES_REQ,
     MSG_TYPE_DEF_END_MARKER(TESTS),
 
 };
@@ -227,34 +228,17 @@ typedef struct test_case_stats_req_msg_s {
     uint32_t                    tcsrm_eth_port;
     uint32_t                    tcsrm_test_case_id;
     tpg_test_case_stats_t      *tcsrm_test_case_stats;
-    tpg_test_case_rate_stats_t *tcsrm_test_case_rate_stats;
     tpg_test_case_app_stats_t  *tcsrm_test_case_app_stats;
 
 } __tpg_msg test_case_stats_req_msg_t;
 
-/*****************************************************************************
- * Test case operational rate definitions
- ****************************************************************************/
-typedef struct test_rate_info_s {
+typedef struct test_case_rates_req_msg_s {
 
-    struct {
-        uint32_t cnt; /* per sec */
-        uint32_t size;
-        uint32_t max_burst;
-        uint32_t exp_rate;
-        uint32_t exp_rate_last;
-        uint32_t exp_rate_break;
-    } tri_cfg;
+    uint32_t                    tcrrm_eth_port;
+    uint32_t                    tcrrm_test_case_id;
+    tpg_test_case_rate_stats_t *tcrrm_test_case_rate_stats;
 
-    struct {
-        uint32_t exp_rate;
-        uint32_t rate;
-    } tri_op;
-
-} test_rate_info_t;
-
-#define TEST_RATE_ACHIEVED(rinfo) \
-    ((rinfo)->tri_op.rate >= (rinfo)->tri_op.exp_rate)
+} __tpg_msg test_case_rates_req_msg_t;
 
 /*****************************************************************************
  * Test case operational state definitions
@@ -296,23 +280,25 @@ typedef void (*test_case_close_cb_t)(l4_control_block_t *l4_cb);
 typedef struct test_case_info_s {
 
     /* A copy of the message that configured this test. */
-    test_case_init_msg_t       tci_cfg_msg;
+    test_case_init_msg_t tci_cfg_msg;
 
-    /* Operational part */
-    test_rate_info_t           tci_rate_open_info;
-    test_rate_info_t           tci_rate_close_info;
-    test_rate_info_t           tci_rate_send_info;
-    test_oper_state_t          tci_state;
+    /* Rate limiting. */
+    rate_limit_t tci_open_rate;
+    rate_limit_t tci_close_rate;
+    rate_limit_t tci_send_rate;
+
+    /* Operational state */
+    test_oper_state_t tci_state;
 
     /* Callbacks for run_open/run_close/run_send/close */
-    test_case_runner_cb_t      tci_run_open_cb;
-    test_case_runner_cb_t      tci_run_close_cb;
-    test_case_runner_cb_t      tci_run_send_cb;
+    test_case_runner_cb_t tci_run_open_cb;
+    test_case_runner_cb_t tci_run_close_cb;
+    test_case_runner_cb_t tci_run_send_cb;
 
     /* Callback for closing sessions to avoid checking the L4 connection
      * type.
      */
-    test_case_close_cb_t       tci_close_cb;
+    test_case_close_cb_t tci_close_cb;
 
     /* Stats */
     tpg_test_case_stats_t      tci_general_stats;
@@ -322,9 +308,9 @@ typedef struct test_case_info_s {
     /* Timers that will be used for updating the rates of the test and
      * triggering the run.
      */
-    struct rte_timer           tci_open_timer;  /* For TCP only. */
-    struct rte_timer           tci_close_timer; /* For TCP only. */
-    struct rte_timer           tci_send_timer;  /* Both TCP & UDP. */
+    struct rte_timer tci_open_timer;  /* For TCP only. */
+    struct rte_timer tci_close_timer; /* For TCP only. */
+    struct rte_timer tci_send_timer;  /* Both TCP & UDP. */
 
 } test_case_info_t;
 

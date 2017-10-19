@@ -223,13 +223,14 @@ enum {
 #define GCFG_UDP_CLIENT_BURST_MAX      16
 
 #define GCFG_TEST_MGMT_TMR_TO          500000    /* 500ms */
-#define GCFG_TEST_STATS_TMR_TO         1000000   /* 1s */
+#define GCFG_TEST_MGMT_RATES_TMR_TO    1000000   /* 1s */
 #define GCFG_TEST_MAX_TC_RUNTIME       600000000 /* 10min */
 
 /*
  * Test defaults.
  */
-#define GCFG_RATE_MIN_INTERVAL_SIZE    1000      /* 1ms*/
+#define GCFG_RATE_MIN_INTERVAL_SIZE    100      /* 100us */
+#define GCFG_RATE_NO_LIM_INTERVAL_SIZE 10000    /* 10ms  */
 
 typedef struct global_config_s {
 
@@ -268,6 +269,7 @@ typedef struct global_config_s {
     uint32_t gcfg_test_max_tc_runtime;
 
     uint32_t gcfg_rate_min_interval_size;
+    uint32_t gcfg_rate_no_lim_interval_size;
 
     const char *gcfg_cmd_file;
 

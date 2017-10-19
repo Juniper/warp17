@@ -174,6 +174,8 @@ typedef struct test_case_info_s test_case_info_t;
 #include "tpg_cli.h"
 #include "tpg_timer.h"
 
+#include "tpg_rate.h"
+
 #include "tpg_sockopts.h"
 #include "tpg_tests.h"
 #include "tpg_tests_sm.h"

@@ -122,130 +122,6 @@ static uint32_t test_case_execute_udp_send(test_case_info_t *tc_info,
                                            uint32_t to_send_cnt);
 
 /*****************************************************************************
- * Test Rate functions
- ****************************************************************************/
-/*****************************************************************************
- * test_init_rate_info()
- *  NOTES: right now we set the rate a bit higher for the first intervals in the
- *       second and a bit lower for the last part so in total we achieve the
- *       desired rate.
- ****************************************************************************/
-static void test_init_rate_info(test_rate_info_t *rate_info,
-                                tpg_rate_t *desired_rate,
-                                uint32_t max_burst)
-{
-    uint32_t         rate_min_intv_size;
-    global_config_t *gc;
-    uint32_t         desired_rate_s;
-
-    gc = cfg_get_config();
-    if (unlikely(gc == NULL))
-        TPG_ERROR_ABORT("[%d:%s()] NULL Global Config!\n",
-                        rte_lcore_index(rte_lcore_id()),
-                        __func__);
-
-    if (TPG_RATE_IS_INF(desired_rate))
-        desired_rate_s = UINT32_MAX;
-    else
-        desired_rate_s = TPG_RATE_VAL(desired_rate);
-
-    if (desired_rate_s != 0) {
-
-        rate_min_intv_size = gc->gcfg_rate_min_interval_size;
-
-        if (desired_rate_s <= (TPG_SEC_TO_USEC / rate_min_intv_size)) {
-            rate_info->tri_cfg.cnt  = desired_rate_s;
-            rate_info->tri_cfg.size = TPG_SEC_TO_USEC / desired_rate_s;
-        } else {
-            rate_info->tri_cfg.size = rate_min_intv_size;
-            rate_info->tri_cfg.cnt  = TPG_SEC_TO_USEC / rate_min_intv_size;
-        }
-
-        if (desired_rate_s == UINT32_MAX) {
-            rate_info->tri_cfg.exp_rate = UINT32_MAX;
-        } else {
-            rate_info->tri_cfg.exp_rate = (desired_rate_s + rate_info->tri_cfg.cnt - 1) /
-                                           rate_info->tri_cfg.cnt;
-        }
-
-        if (rate_info->tri_cfg.exp_rate == 0) {
-            rate_info->tri_cfg.exp_rate = 0;
-            rate_info->tri_cfg.exp_rate_last = 0;
-            rate_info->tri_cfg.exp_rate_break = rate_info->tri_cfg.cnt;
-        } else {
-            uint32_t mod = desired_rate_s % rate_info->tri_cfg.cnt;
-
-            rate_info->tri_cfg.exp_rate_last = rate_info->tri_cfg.exp_rate - 1;
-            if (mod)
-                rate_info->tri_cfg.exp_rate_break = mod;
-            else
-                rate_info->tri_cfg.exp_rate_break = rate_info->tri_cfg.cnt;
-        }
-
-        if (rate_info->tri_cfg.exp_rate < max_burst)
-            rate_info->tri_cfg.max_burst = 1;
-        else
-            rate_info->tri_cfg.max_burst = max_burst;
-
-        rate_info->tri_op.rate = 0;
-    } else {
-
-        bzero(rate_info, sizeof(*rate_info));
-
-    }
-
-    TRACE_FMT(TST, INFO, "Rate info: "
-                         "desired_rate_s %"PRIu32" "
-                         "max_burst %"PRIu32" "
-                         "int_sz %"PRIu32" int_cnt %"PRIu32" "
-                         "int_exp_rate %"PRIu32" "
-                         "int_exp_rate_last %"PRIu32" "
-                         "int_exp_rate_break %"PRIu32" "
-                         "int_burst %"PRIu32,
-              desired_rate_s,
-              max_burst,
-              rate_info->tri_cfg.size,
-              rate_info->tri_cfg.cnt,
-              rate_info->tri_cfg.exp_rate,
-              rate_info->tri_cfg.exp_rate_last,
-              rate_info->tri_cfg.exp_rate_break,
-              rate_info->tri_cfg.max_burst);
-}
-
-/*****************************************************************************
- * test_rate_advance()
- ****************************************************************************/
-static void test_rate_advance(test_rate_info_t *rinfo, uint64_t now_us)
-{
-    uint32_t intv_now;
-
-    if (rinfo->tri_cfg.cnt == 0)
-        return;
-
-    intv_now = (now_us / rinfo->tri_cfg.size) % rinfo->tri_cfg.cnt;
-    rinfo->tri_op.rate = 0;
-
-    if (unlikely(intv_now == rinfo->tri_cfg.exp_rate_break))
-        rinfo->tri_op.exp_rate = rinfo->tri_cfg.exp_rate_last;
-    else
-        rinfo->tri_op.exp_rate = rinfo->tri_cfg.exp_rate;
-}
-
-/*****************************************************************************
- * test_run_get_avail_rate()
- ****************************************************************************/
-static uint32_t test_run_get_avail_rate(test_rate_info_t *rinfo)
-{
-    uint32_t rate_avail_cnt;
-
-    rate_avail_cnt = rinfo->tri_op.exp_rate - rinfo->tri_op.rate;
-    if (likely(rinfo->tri_cfg.max_burst < rate_avail_cnt))
-        return rinfo->tri_cfg.max_burst;
-
-    return rate_avail_cnt;
-}
-
-/*****************************************************************************
  * TCP/UDP close functions
  ****************************************************************************/
 /*****************************************************************************
@@ -387,12 +263,9 @@ static void test_case_tmr_open_cb(struct rte_timer *tmr __rte_unused, void *arg)
 {
     test_tmr_arg_t   *tmr_arg = arg;
     test_case_info_t *tc_info = tmr_arg->tta_test_case_info;
-    uint64_t          now_us;
-
-    now_us = rte_get_timer_cycles() / cycles_per_us;
 
     /* We step into a new time interval... "Advance" the rates. */
-    test_rate_advance(&tc_info->tci_rate_open_info, now_us);
+    rate_limit_advance_interval(&tc_info->tci_open_rate);
 
     /* Start from scratch.. */
     tc_info->tci_state.tos_open_rate_achieved = false;
@@ -408,12 +281,9 @@ static void test_case_tmr_close_cb(struct rte_timer *tmr __rte_unused, void *arg
 {
     test_tmr_arg_t   *tmr_arg = arg;
     test_case_info_t *tc_info = tmr_arg->tta_test_case_info;
-    uint64_t          now_us;
-
-    now_us = rte_get_timer_cycles() / cycles_per_us;
 
     /* We step into a new time interval... "Advance" the rates. */
-    test_rate_advance(&tc_info->tci_rate_close_info, now_us);
+    rate_limit_advance_interval(&tc_info->tci_close_rate);
 
     /* Start from scratch.. */
     tc_info->tci_state.tos_close_rate_achieved = false;
@@ -429,12 +299,9 @@ static void test_case_tmr_send_cb(struct rte_timer *tmr __rte_unused, void *arg)
 {
     test_tmr_arg_t   *tmr_arg = arg;
     test_case_info_t *tc_info = tmr_arg->tta_test_case_info;
-    uint64_t          now_us;
-
-    now_us = rte_get_timer_cycles() / cycles_per_us;
 
     /* We step into a new time interval... "Advance" the rates. */
-    test_rate_advance(&tc_info->tci_rate_send_info, now_us);
+    rate_limit_advance_interval(&tc_info->tci_send_rate);
 
     /* Start from scratch.. */
     tc_info->tci_state.tos_send_rate_achieved = false;
@@ -772,6 +639,23 @@ static void test_case_init_callbacks(test_case_info_t *tc_info,
 }
 
 /*****************************************************************************
+ * test_case_init_rate()
+ *      NOTES: scales down the rate limit based on the percentage of sessions
+ *      actually running on this core. However, if rate limiting is unlimited
+ *      (UINT32_MAX) there's no need to scale down.
+ ****************************************************************************/
+static void test_case_init_rate(rate_limit_t *rl, uint32_t desired_rate,
+                                uint32_t max_burst,
+                                uint32_t total_sessions,
+                                uint32_t local_sessions)
+{
+    if (desired_rate != UINT32_MAX && total_sessions != 0)
+        desired_rate = (uint64_t)local_sessions * desired_rate / total_sessions;
+
+    rate_limit_init(rl, desired_rate, max_burst);
+}
+
+/*****************************************************************************
  * test_case_init_tcp_srv()
  ****************************************************************************/
 static void test_case_init_tcp_srv(test_case_info_t *tc_info,
@@ -785,16 +669,15 @@ static void test_case_init_tcp_srv(test_case_info_t *tc_info,
     uint16_t             tcp_port;
     uint32_t             server_count = 0;
     int                  error = 0;
-    /* No rate limiting on the server side for now! */
-    tpg_rate_t           send_rate = TPG_RATE_INF();
     tpg_app_proto_t      app_id;
     sockopt_t           *sockopt;
 
     app_id = tc_info->tci_cfg_msg.tcim_server.srv_app.as_app_proto;
     sockopt = &tc_info->tci_cfg_msg.tcim_sockopt;
 
-    test_init_rate_info(&tc_info->tci_rate_send_info, &send_rate,
-                        GCFG_TCP_CLIENT_BURST_MAX);
+    /* No send rate limiting on the server side for now! */
+    test_case_init_rate(&tc_info->tci_send_rate, UINT32_MAX,
+                        GCFG_TCP_CLIENT_BURST_MAX, 0, 0);
 
     /* Initialize the run callbacks. */
     test_case_init_callbacks(tc_info, NULL, NULL, test_case_execute_tcp_send,
@@ -817,7 +700,8 @@ static void test_case_init_tcp_srv(test_case_info_t *tc_info,
                 TEST_NOTIF(TEST_NOTIF_SERVER_FAILED, NULL, test_case_id,
                            eth_port);
             } else {
-                TEST_NOTIF_TCB(TEST_NOTIF_SERVER_UP, server_tcb);
+                TEST_NOTIF(TEST_NOTIF_SERVER_UP, NULL, test_case_id,
+                           eth_port);
                 /* Initialize the server state machine. */
                 test_server_sm_initialize(&server_tcb->tcb_l4, tc_info);
                 server_count++;
@@ -857,16 +741,15 @@ static void test_case_init_udp_srv(test_case_info_t *tc_info,
     uint16_t             udp_port;
     uint32_t             server_count = 0;
     int                  error = 0;
-    /* No rate limiting on the server side for now! */
-    tpg_rate_t           send_rate = TPG_RATE_INF();
     tpg_app_proto_t      app_id;
     sockopt_t           *sockopt;
 
     app_id = tc_info->tci_cfg_msg.tcim_server.srv_app.as_app_proto;
     sockopt = &tc_info->tci_cfg_msg.tcim_sockopt;
 
-    test_init_rate_info(&tc_info->tci_rate_send_info, &send_rate,
-                        GCFG_UDP_CLIENT_BURST_MAX);
+    /* No rate limiting on the server side for now! */
+    test_case_init_rate(&tc_info->tci_send_rate, UINT32_MAX,
+                        GCFG_UDP_CLIENT_BURST_MAX, 0, 0);
 
     /* Initialize the run callbacks. */
     test_case_init_callbacks(tc_info, NULL, NULL, test_case_execute_udp_send,
@@ -928,6 +811,7 @@ static void test_case_init_tcp_clients(test_case_info_t *tc_info,
 {
     tcp_control_block_t *tcb;
     uint32_t             tcb_count = 0;
+    uint32_t             total_sess_count = 0;
     int                  rx_queue_id;
     uint32_t             conn_hash;
     uint32_t             sip, dip;
@@ -937,18 +821,6 @@ static void test_case_init_tcp_clients(test_case_info_t *tc_info,
 
     app_id = tc_info->tci_cfg_msg.tcim_client.cl_app.ac_app_proto;
     sockopt = &tc_info->tci_cfg_msg.tcim_sockopt;
-
-    /* First initialize rates. */
-    test_init_rate_info(&tc_info->tci_rate_open_info,
-                        &cm->cl_rates.rc_open_rate,
-                        GCFG_TCP_CLIENT_BURST_MAX);
-    test_init_rate_info(&tc_info->tci_rate_close_info,
-                        &cm->cl_rates.rc_close_rate,
-                        GCFG_TCP_CLIENT_BURST_MAX);
-
-    test_init_rate_info(&tc_info->tci_rate_send_info,
-                        &cm->cl_rates.rc_send_rate,
-                        GCFG_TCP_CLIENT_BURST_MAX);
 
     /* Initialize the run callbacks. */
     test_case_init_callbacks(tc_info, test_case_execute_tcp_open,
@@ -963,6 +835,7 @@ static void test_case_init_tcp_clients(test_case_info_t *tc_info,
                             &cm->cl_l4.l4c_tcp_udp.tuc_sports,
                             &cm->cl_l4.l4c_tcp_udp.tuc_dports,
                             sip, dip, sport, dport) {
+        total_sess_count++;
         conn_hash = tlkp_calc_connection_hash(dip, sip, dport, sport);
 
         if (tlkp_get_qindex_from_hash(conn_hash, eth_port) !=
@@ -994,6 +867,22 @@ static void test_case_init_tcp_clients(test_case_info_t *tc_info,
         tcb_count++;
     }
 
+    /* Initialize the rates based on the percentage of clients running on this
+     * core.
+     */
+    test_case_init_rate(&tc_info->tci_open_rate,
+                        TPG_RATE_VAL_DEFAULT(&cm->cl_rates.rc_open_rate),
+                        GCFG_TCP_CLIENT_BURST_MAX,
+                        total_sess_count, tcb_count);
+    test_case_init_rate(&tc_info->tci_close_rate,
+                        TPG_RATE_VAL_DEFAULT(&cm->cl_rates.rc_close_rate),
+                        GCFG_TCP_CLIENT_BURST_MAX,
+                        total_sess_count, tcb_count);
+    test_case_init_rate(&tc_info->tci_send_rate,
+                        TPG_RATE_VAL_DEFAULT(&cm->cl_rates.rc_send_rate),
+                        GCFG_TCP_CLIENT_BURST_MAX,
+                        total_sess_count, tcb_count);
+
     TRACE_FMT(TST, INFO, "Start TCP client count %"PRIu32": "
               "eth_port=%"PRIu32" tcid=%"PRIu32,
               tcb_count,
@@ -1012,6 +901,7 @@ static void test_case_init_udp_clients(test_case_info_t *tc_info,
 {
     udp_control_block_t *ucb;
     uint32_t             ucb_count = 0;
+    uint32_t             total_sess_count = 0;
     int                  rx_queue_id;
     uint32_t             conn_hash;
     uint32_t             sip, dip;
@@ -1021,18 +911,6 @@ static void test_case_init_udp_clients(test_case_info_t *tc_info,
 
     app_id = tc_info->tci_cfg_msg.tcim_client.cl_app.ac_app_proto;
     sockopt = &tc_info->tci_cfg_msg.tcim_sockopt;
-
-    /* First initialize rates. */
-    test_init_rate_info(&tc_info->tci_rate_open_info,
-                        &cm->cl_rates.rc_open_rate,
-                        GCFG_UDP_CLIENT_BURST_MAX);
-    test_init_rate_info(&tc_info->tci_rate_close_info,
-                        &cm->cl_rates.rc_close_rate,
-                        GCFG_UDP_CLIENT_BURST_MAX);
-
-    test_init_rate_info(&tc_info->tci_rate_send_info,
-                        &cm->cl_rates.rc_send_rate,
-                        GCFG_UDP_CLIENT_BURST_MAX);
 
     /* Initialize the run callbacks. */
     test_case_init_callbacks(tc_info, test_case_execute_udp_open,
@@ -1047,6 +925,7 @@ static void test_case_init_udp_clients(test_case_info_t *tc_info,
                             &cm->cl_l4.l4c_tcp_udp.tuc_sports,
                             &cm->cl_l4.l4c_tcp_udp.tuc_dports,
                             sip, dip, sport, dport) {
+        total_sess_count++;
         conn_hash = tlkp_calc_connection_hash(dip, sip, dport, sport);
 
         if (tlkp_get_qindex_from_hash(conn_hash, eth_port) !=
@@ -1079,6 +958,22 @@ static void test_case_init_udp_clients(test_case_info_t *tc_info,
         ucb_count++;
     }
 
+    /* Initialize the rates based on the percentage of clients running on this
+     * core.
+     */
+    test_case_init_rate(&tc_info->tci_open_rate,
+                        TPG_RATE_VAL_DEFAULT(&cm->cl_rates.rc_open_rate),
+                        GCFG_UDP_CLIENT_BURST_MAX,
+                        total_sess_count, ucb_count);
+    test_case_init_rate(&tc_info->tci_close_rate,
+                        TPG_RATE_VAL_DEFAULT(&cm->cl_rates.rc_close_rate),
+                        GCFG_UDP_CLIENT_BURST_MAX,
+                        total_sess_count, ucb_count);
+    test_case_init_rate(&tc_info->tci_send_rate,
+                        TPG_RATE_VAL_DEFAULT(&cm->cl_rates.rc_send_rate),
+                        GCFG_UDP_CLIENT_BURST_MAX,
+                        total_sess_count, ucb_count);
+
     TRACE_FMT(TST, INFO, "Start UDP client count %"PRIu32": "
               "eth_port=%"PRIu32" tcid=%"PRIu32,
               ucb_count,
@@ -1095,49 +990,36 @@ static void test_case_init_udp_clients(test_case_info_t *tc_info,
 static void test_case_start_timer(struct rte_timer *tmr,
                                   test_tmr_arg_t *tmr_arg,
                                   test_case_info_t *tc_info,
-                                  test_rate_info_t *rinfo,
+                                  rate_limit_t *rl,
                                   rte_timer_cb_t tmr_cb,
                                   uint32_t lcore_id,
                                   uint32_t eth_port,
                                   uint32_t test_case_id)
 {
+
+    /* No need to start a periodic timer if rate-limiting is set to 0. */
+    if (!rate_limit_interval_us(rl))
+        return;
+
     test_init_run_arg_ptr(tmr_arg, lcore_id, eth_port, test_case_id, tc_info);
-    rte_timer_reset(tmr, rinfo->tri_cfg.size * cycles_per_us, PERIODICAL,
+    rte_timer_reset(tmr, rate_limit_interval_us(rl) * cycles_per_us, PERIODICAL,
                     lcore_id,
                     tmr_cb,
                     tmr_arg);
 }
 
 /*****************************************************************************
- * test_case_start_servers()
+ * test_case_start_timers()
  ****************************************************************************/
-static void test_case_start_servers(test_case_info_t *tc_info,
-                                    uint32_t lcore,
-                                    uint32_t eth_port,
-                                    uint32_t test_case_id)
-{
-    test_case_start_timer(&tc_info->tci_send_timer,
-                          TEST_GET_TMR_ARG(send, eth_port, test_case_id),
-                          tc_info,
-                          &tc_info->tci_rate_send_info,
-                          test_case_tmr_send_cb,
-                          lcore,
-                          eth_port,
-                          test_case_id);
-}
-
-/*****************************************************************************
- * test_case_start_clients()
- ****************************************************************************/
-static void test_case_start_clients(test_case_info_t *tc_info,
-                                    uint32_t lcore,
-                                    uint32_t eth_port,
-                                    uint32_t test_case_id)
+static void test_case_start_timers(test_case_info_t *tc_info,
+                                   uint32_t lcore,
+                                   uint32_t eth_port,
+                                   uint32_t test_case_id)
 {
     test_case_start_timer(&tc_info->tci_open_timer,
                           TEST_GET_TMR_ARG(open, eth_port, test_case_id),
                           tc_info,
-                          &tc_info->tci_rate_open_info,
+                          &tc_info->tci_open_rate,
                           test_case_tmr_open_cb,
                           lcore,
                           eth_port,
@@ -1146,7 +1028,7 @@ static void test_case_start_clients(test_case_info_t *tc_info,
     test_case_start_timer(&tc_info->tci_close_timer,
                           TEST_GET_TMR_ARG(close, eth_port, test_case_id),
                           tc_info,
-                          &tc_info->tci_rate_close_info,
+                          &tc_info->tci_close_rate,
                           test_case_tmr_close_cb,
                           lcore,
                           eth_port,
@@ -1155,7 +1037,7 @@ static void test_case_start_clients(test_case_info_t *tc_info,
     test_case_start_timer(&tc_info->tci_send_timer,
                           TEST_GET_TMR_ARG(send, eth_port, test_case_id),
                           tc_info,
-                          &tc_info->tci_rate_send_info,
+                          &tc_info->tci_send_rate,
                           test_case_tmr_send_cb,
                           lcore,
                           eth_port,
@@ -1226,6 +1108,8 @@ test_case_execute_tcp_send(test_case_info_t *tc_info,
 
     TRACE_FMT(TST, DEBUG, "TCP_SEND_WAIT data cnt %"PRIu32, sent_cnt);
 
+    /* TODO: Duplicated in test_case_execute_udp_send. */
+    tc_info->tci_rate_stats.tcrs_data_per_s += sent_cnt;
     return sent_cnt;
 }
 
@@ -1390,6 +1274,8 @@ test_case_execute_udp_send(test_case_info_t *tc_info,
     }
     TRACE_FMT(TST, DEBUG, "UDP_SEND data cnt %"PRIu32, sent_cnt);
 
+    /* TODO: Duplicated in test_case_execute_tcp_send. */
+    tc_info->tci_rate_stats.tcrs_data_per_s += sent_cnt;
     return sent_cnt;
 }
 
@@ -1503,20 +1389,18 @@ static int test_case_run_open_clients(test_case_info_t *tc_info,
                                       test_case_runner_cb_t runner)
 {
     test_oper_state_t *ts = &tc_info->tci_state;
-    test_rate_info_t  *open_rinfo = &tc_info->tci_rate_open_info;
+    rate_limit_t      *open_rate = &tc_info->tci_open_rate;
 
-    /* Check if we have TCBs in CLOSED and ready to open.
-     * If so, then issue OPEN and remove them from the list.
-     */
     if (!TEST_CBQ_EMPTY(&ts->tos_to_open_cbs)) {
-        open_rinfo->tri_op.rate += runner(tc_info, &tc_info->tci_cfg_msg,
-                                          test_run_get_avail_rate(open_rinfo));
+        rate_limit_consume(open_rate,
+                           runner(tc_info, &tc_info->tci_cfg_msg,
+                                  rate_limit_available(open_rate)));
     }
 
     /* If we still didn't reach the expected rate for this
      * interval then we should repost if we still have cbs in the list.
      */
-    if (!TEST_RATE_ACHIEVED(open_rinfo)) {
+    if (likely(!rate_limit_reached(open_rate))) {
 
         if (TEST_CBQ_EMPTY(&ts->tos_to_open_cbs)) {
             ts->tos_open_in_progress = false;
@@ -1539,20 +1423,18 @@ static int test_case_run_close_clients(test_case_info_t *tc_info,
                                        test_case_runner_cb_t runner)
 {
     test_oper_state_t *ts = &tc_info->tci_state;
-    test_rate_info_t  *close_rinfo = &tc_info->tci_rate_close_info;
+    rate_limit_t      *close_rate = &tc_info->tci_close_rate;
 
-    /* Check if we have TCBs in CLOSED and ready to open.
-     * If so, then issue OPEN and remove them from the list.
-     */
     if (!TEST_CBQ_EMPTY(&ts->tos_to_close_cbs)) {
-        close_rinfo->tri_op.rate += runner(tc_info, &tc_info->tci_cfg_msg,
-                                           test_run_get_avail_rate(close_rinfo));
+        rate_limit_consume(close_rate,
+                           runner(tc_info, &tc_info->tci_cfg_msg,
+                                  rate_limit_available(close_rate)));
     }
 
     /* If we still didn't reach the expected rate for this
      * interval then we should repost if we still have cbs in the list.
      */
-    if (!TEST_RATE_ACHIEVED(close_rinfo)) {
+    if (likely(!rate_limit_reached(close_rate))) {
 
         if (TEST_CBQ_EMPTY(&ts->tos_to_close_cbs)) {
             ts->tos_close_in_progress = false;
@@ -1575,25 +1457,18 @@ static int test_case_run_send_clients(test_case_info_t *tc_info,
                                       test_case_runner_cb_t runner)
 {
     test_oper_state_t *ts = &tc_info->tci_state;
-    test_rate_info_t  *send_rinfo = &tc_info->tci_rate_send_info;
+    rate_limit_t      *send_rate = &tc_info->tci_send_rate;
 
-    /* Check if we have CBs in CLOSED or INIT and ready to open.
-     * If so, then issue OPEN and remove them from the list.
-     */
     if (!TEST_CBQ_EMPTY(&ts->tos_to_send_cbs)) {
-        uint32_t sent_pkts;
-
-        sent_pkts = runner(tc_info, &tc_info->tci_cfg_msg,
-                           test_run_get_avail_rate(send_rinfo));
-
-        send_rinfo->tri_op.rate += sent_pkts;
-        tc_info->tci_rate_stats.tcrs_data_per_s += sent_pkts;
+        rate_limit_consume(send_rate,
+                           runner(tc_info, &tc_info->tci_cfg_msg,
+                                  rate_limit_available(send_rate)));
     }
 
     /* If we still didn't reach the expected rate for this
      * interval then we should repost if we still have cbs in the list.
      */
-    if (!TEST_RATE_ACHIEVED(send_rinfo)) {
+    if (likely(!rate_limit_reached(send_rate))) {
 
         if (TEST_CBQ_EMPTY(&ts->tos_to_send_cbs)) {
             ts->tos_send_in_progress = false;
@@ -1817,6 +1692,14 @@ static int test_case_init_cb(uint16_t msgid, uint16_t lcore, void *msg)
     rte_timer_init(&tc_info->tci_close_timer);
     rte_timer_init(&tc_info->tci_send_timer);
 
+    /* Initialize open/close/send rate limiter states. */
+    tc_info->tci_state.tos_open_in_progress = false;
+    tc_info->tci_state.tos_open_rate_achieved = false;
+    tc_info->tci_state.tos_close_in_progress = false;
+    tc_info->tci_state.tos_close_rate_achieved = false;
+    tc_info->tci_state.tos_send_in_progress = false;
+    tc_info->tci_state.tos_send_rate_achieved = false;
+
     /* Initialize operational part */
     test_case_init_state(&tc_info->tci_state);
     switch (im->tcim_type) {
@@ -1875,7 +1758,7 @@ static int test_case_start_cb(uint16_t msgid, uint16_t lcore, void *msg)
     if (port_get_rx_queue_id(lcore, sm->tcsm_eth_port) == CORE_PORT_QINVALID) {
         RTE_LOG(ERR, USER1,
                 "[%d:%s()] Received TestCase START on a core that's not handling this port!\n",
-                rte_lcore_index(rte_lcore_id()), __func__);
+                rte_lcore_index(lcore), __func__);
         return 0;
     }
 
@@ -1885,7 +1768,7 @@ static int test_case_start_cb(uint16_t msgid, uint16_t lcore, void *msg)
     if (tc_info->tci_state.tos_running) {
         RTE_LOG(ERR, USER1,
                 "[%d:%s()] Received TestCase START for a test case already running on this port!\n",
-                rte_lcore_index(rte_lcore_id()), __func__);
+                rte_lcore_index(lcore), __func__);
         return 0;
     }
 
@@ -1893,33 +1776,21 @@ static int test_case_start_cb(uint16_t msgid, uint16_t lcore, void *msg)
     case TEST_CASE_TYPE__SERVER:
         server_cfg = &tc_info->tci_cfg_msg.tcim_server;
         app_id = server_cfg->srv_app.as_app_proto;
-
-        if (server_cfg->srv_l4.l4s_proto == L4_PROTO__TCP ||
-                server_cfg->srv_l4.l4s_proto == L4_PROTO__UDP) {
-            APP_SRV_CALL(tc_start, app_id)(&tc_info->tci_cfg_msg);
-            test_case_start_servers(tc_info, lcore, sm->tcsm_eth_port,
-                                    sm->tcsm_test_case_id);
-        } else {
-            return -EINVAL;
-        }
+        APP_SRV_CALL(tc_start, app_id)(&tc_info->tci_cfg_msg);
         break;
     case TEST_CASE_TYPE__CLIENT:
         client_cfg = &tc_info->tci_cfg_msg.tcim_client;
         app_id = client_cfg->cl_app.ac_app_proto;
-
-        if (client_cfg->cl_l4.l4c_proto == L4_PROTO__TCP ||
-                client_cfg->cl_l4.l4c_proto == L4_PROTO__UDP) {
-            APP_CL_CALL(tc_start, app_id)(&tc_info->tci_cfg_msg);
-            test_case_start_clients(tc_info, lcore, sm->tcsm_eth_port,
-                                    sm->tcsm_test_case_id);
-        } else {
-            return -EINVAL;
-        }
+        APP_CL_CALL(tc_start, app_id)(&tc_info->tci_cfg_msg);
         break;
     default:
         assert(false);
         return -EINVAL;
     }
+
+    /* Start the test case open/close/send timers. */
+    test_case_start_timers(tc_info, lcore, sm->tcsm_eth_port,
+                           sm->tcsm_test_case_id);
 
     tc_info->tci_state.tos_running = true;
     return 0;
@@ -1985,7 +1856,6 @@ static int test_case_stop_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 {
     test_case_stop_msg_t *sm;
     test_case_info_t     *tc_info;
-    tpg_rate_t            rate_zero = TPG_RATE(0);
     bool                  all_purged;
     tpg_app_proto_t       app_id;
 
@@ -2006,16 +1876,14 @@ static int test_case_stop_cb(uint16_t msgid, uint16_t lcore __rte_unused,
     /* If we didn't mark the TC as stopping do it now.
      * Notify all the tcbs that they need to go to CLOSED and get freed once
      * they get there.
-     * Change the desired rates to 0 so we don't open/close/anymore.
-     * Cancel the open/close/send timers.
      */
     if (!tc_info->tci_state.tos_stopping) {
-        test_init_rate_info(&tc_info->tci_rate_open_info, &rate_zero,
-                            GCFG_TCP_CLIENT_BURST_MAX);
-        test_init_rate_info(&tc_info->tci_rate_close_info, &rate_zero,
-                            GCFG_TCP_CLIENT_BURST_MAX);
-        test_init_rate_info(&tc_info->tci_rate_send_info, &rate_zero,
-                            GCFG_TCP_CLIENT_BURST_MAX);
+        /* Change the desired rates to 0 so we don't open/close/anymore.
+         * Cancel the open/close/send timers.
+         */
+        test_case_init_rate(&tc_info->tci_open_rate, 0, 0, 0, 0);
+        test_case_init_rate(&tc_info->tci_close_rate, 0, 0, 0, 0);
+        test_case_init_rate(&tc_info->tci_send_rate, 0, 0, 0, 0);
 
         rte_timer_stop(&tc_info->tci_open_timer);
         rte_timer_stop(&tc_info->tci_close_timer);
@@ -2066,7 +1934,6 @@ static int test_case_stats_req_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 {
     test_case_stats_req_msg_t *sm;
     test_case_info_t          *tc_info;
-    uint64_t                   now;
 
     if (MSG_INVALID(msgid, msg, MSG_TEST_CASE_STATS_REQ))
         return -EINVAL;
@@ -2075,19 +1942,14 @@ static int test_case_stats_req_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 
     tc_info = TEST_GET_INFO(sm->tcsrm_eth_port, sm->tcsrm_test_case_id);
 
-    now = rte_get_timer_cycles();
-    tc_info->tci_rate_stats.tcrs_end_time = now;
 
     /* Struct copy the stats! */
     *sm->tcsrm_test_case_stats = tc_info->tci_general_stats;
-    *sm->tcsrm_test_case_rate_stats = tc_info->tci_rate_stats;
     *sm->tcsrm_test_case_app_stats = tc_info->tci_app_stats;
 
     /* Clear the runtime stats. They're aggregated by the test manager.
      * Don't clear the start and end time for the gen stats!
      */
-    bzero(&tc_info->tci_rate_stats, sizeof(tc_info->tci_rate_stats));
-
     switch (tc_info->tci_cfg_msg.tcim_type) {
     case TEST_CASE_TYPE__SERVER:
         /* Clear the gen stats. */
@@ -2106,7 +1968,37 @@ static int test_case_stats_req_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 
     /* Clear the app stats. */
     bzero(&tc_info->tci_app_stats, sizeof(tc_info->tci_app_stats));
+    return 0;
+}
 
+/*****************************************************************************
+ * test_case_rates_stats_req_cb()
+ ****************************************************************************/
+static int test_case_rates_stats_req_cb(uint16_t msgid,
+                                        uint16_t lcore __rte_unused,
+                                        void *msg)
+{
+    test_case_rates_req_msg_t *sm;
+    test_case_info_t          *tc_info;
+    uint64_t                   now;
+
+    if (MSG_INVALID(msgid, msg, MSG_TEST_CASE_RATES_REQ))
+        return -EINVAL;
+
+    sm = msg;
+
+    tc_info = TEST_GET_INFO(sm->tcrrm_eth_port, sm->tcrrm_test_case_id);
+
+    now = rte_get_timer_cycles();
+    tc_info->tci_rate_stats.tcrs_end_time = now;
+
+    /* Struct copy the stats! */
+    *sm->tcrrm_test_case_rate_stats = tc_info->tci_rate_stats;
+
+    /* Clear the rates stats. They're aggregated by the test manager. */
+    bzero(&tc_info->tci_rate_stats, sizeof(tc_info->tci_rate_stats));
+
+    /* Store the new initial timestamp. */
     tc_info->tci_rate_stats.tcrs_start_time = now;
     return 0;
 }
@@ -2127,28 +2019,39 @@ bool test_init(void)
                                      test_case_init_cb);
         if (error)
             break;
+
         error = msg_register_handler(MSG_TEST_CASE_START,
                                      test_case_start_cb);
         if (error)
             break;
+
         error = msg_register_handler(MSG_TEST_CASE_RUN_OPEN,
                                      test_case_run_open_cb);
         if (error)
             break;
+
         error = msg_register_handler(MSG_TEST_CASE_RUN_CLOSE,
                                      test_case_run_close_cb);
         if (error)
             break;
+
         error = msg_register_handler(MSG_TEST_CASE_RUN_SEND,
                                      test_case_run_send_cb);
         if (error)
             break;
+
         error = msg_register_handler(MSG_TEST_CASE_STOP,
                                      test_case_stop_cb);
         if (error)
             break;
+
         error = msg_register_handler(MSG_TEST_CASE_STATS_REQ,
                                      test_case_stats_req_cb);
+        if (error)
+            break;
+
+        error = msg_register_handler(MSG_TEST_CASE_RATES_REQ,
+                                     test_case_rates_stats_req_cb);
         if (error)
             break;
 

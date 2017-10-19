@@ -70,11 +70,11 @@ typedef void (*test_display_cb_t)(ui_win_t *win, void *arg);
 
 #define WIN_SZ(sz, perc) ((sz) * (perc) / 100)
 
-#define TEST_TMR_TO_DISP        100000
-#define TEST_DISPLAY_TMR_TO     GCFG_TEST_STATS_TMR_TO
-#define TEST_STATS_TMR_TO       (TEST_DISPLAY_TMR_TO + TEST_TMR_TO_DISP)
-#define TEST_STATE_TMR_TO       (TEST_STATS_TMR_TO + TEST_TMR_TO_DISP)
-#define TEST_TC_DETAIL_TMR_TO   (TEST_STATE_TMR_TO + TEST_TMR_TO_DISP)
+#define TEST_TMR_TO_DISP      100000 /* 100ms */
+#define TEST_DISPLAY_TMR_TO   900000 /* 900ms */
+#define TEST_STATE_TMR_TO     (TEST_DISPLAY_TMR_TO + TEST_TMR_TO_DISP)
+#define TEST_STATS_TMR_TO     (TEST_STATE_TMR_TO + TEST_TMR_TO_DISP)
+#define TEST_TC_DETAIL_TMR_TO (TEST_STATS_TMR_TO + TEST_TMR_TO_DISP)
 
 /*****************************************************************************
  * Globals
