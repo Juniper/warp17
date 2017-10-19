@@ -252,5 +252,24 @@ static inline void tpg_printf(printer_arg_t *pa, const char *fmt, ...)
 
 #define TPG_MAX(a, b) (((a) > (b)) ? (a) : (b))
 
+/*****************************************************************************
+ * Protobuf related helpers
+ ****************************************************************************/
+
+/*****************************************************************************
+ * Macro for setting optional fields values.
+ ****************************************************************************/
+#define TPG_XLATE_OPTIONAL_SET_FIELD(msg, field, value) \
+    do {                                                \
+        (msg)->field = (value);                         \
+        (msg)->has_##field = true;                      \
+    } while (0)
+
+/*****************************************************************************
+ * Macro for translating active union fields.
+ ****************************************************************************/
+#define TPG_XLATE_UNION_SET_FIELD(out, in, field) \
+    TPG_XLATE_OPTIONAL_SET_FIELD(out, field, (in)->field)
+
 #endif /* _H_TPG_UTILS_ */
 

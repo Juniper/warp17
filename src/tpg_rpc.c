@@ -68,16 +68,6 @@
 #define TPG_RPC_TCP_PORT "42424"
 
 /*****************************************************************************
- * Macro for translating active union fields.
- ****************************************************************************/
-#define TPG_XLATE_UNION_SET_FIELD(out, in, field) \
-    do {                                          \
-        (out)->field = (in)->field;               \
-        (out)->has_##field = true;                \
-    } while (0)
-
-
-/*****************************************************************************
  * Macro helpers for hiding the RPC internals
  ****************************************************************************/
 #define RPC_REQUEST_INIT(in_type, in, out) \

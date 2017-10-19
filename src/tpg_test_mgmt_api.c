@@ -1008,8 +1008,9 @@ int test_mgmt_update_test_case(uint32_t eth_port, uint32_t test_case_id,
     if (!arg)
         return -EINVAL;
 
-    if (arg->ua_rate_open || arg->ua_rate_send || arg->ua_rate_close ||
-            arg->ua_init_delay || arg->ua_uptime || arg->ua_downtime)
+    if (arg->has_ua_rate_open || arg->has_ua_rate_send ||
+            arg->has_ua_rate_close || arg->has_ua_init_delay ||
+            arg->has_ua_uptime || arg->has_ua_downtime)
         tc_type = TEST_CASE_TYPE__CLIENT;
 
     err = test_mgmt_update_test_case_check(eth_port, test_case_id, tc_type,
@@ -1020,26 +1021,26 @@ int test_mgmt_update_test_case(uint32_t eth_port, uint32_t test_case_id,
 
     test_case = &tenv->te_test_cases[test_case_id].cfg;
 
-    if (arg->ua_rate_open)
-        test_case->tc_client.cl_rates.rc_open_rate = *arg->ua_rate_open;
+    if (arg->has_ua_rate_open)
+        test_case->tc_client.cl_rates.rc_open_rate = arg->ua_rate_open;
 
-    if (arg->ua_rate_send)
-        test_case->tc_client.cl_rates.rc_send_rate = *arg->ua_rate_send;
+    if (arg->has_ua_rate_send)
+        test_case->tc_client.cl_rates.rc_send_rate = arg->ua_rate_send;
 
-    if (arg->ua_rate_close)
-        test_case->tc_client.cl_rates.rc_close_rate = *arg->ua_rate_close;
+    if (arg->has_ua_rate_close)
+        test_case->tc_client.cl_rates.rc_close_rate = arg->ua_rate_close;
 
-    if (arg->ua_init_delay)
-        test_case->tc_client.cl_delays.dc_init_delay = *arg->ua_init_delay;
+    if (arg->has_ua_init_delay)
+        test_case->tc_client.cl_delays.dc_init_delay = arg->ua_init_delay;
 
-    if (arg->ua_uptime)
-        test_case->tc_client.cl_delays.dc_uptime = *arg->ua_uptime;
+    if (arg->has_ua_uptime)
+        test_case->tc_client.cl_delays.dc_uptime = arg->ua_uptime;
 
-    if (arg->ua_downtime)
-        test_case->tc_client.cl_delays.dc_downtime = *arg->ua_downtime;
+    if (arg->has_ua_downtime)
+        test_case->tc_client.cl_delays.dc_downtime = arg->ua_downtime;
 
-    if (arg->ua_criteria)
-        test_case->tc_criteria = *arg->ua_criteria;
+    if (arg->has_ua_criteria)
+        test_case->tc_criteria = arg->ua_criteria;
 
     if (arg->has_ua_async)
         test_case->tc_async = arg->ua_async;

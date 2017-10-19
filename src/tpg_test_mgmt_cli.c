@@ -77,13 +77,13 @@
 #define OPT_FILL_CB(comp, field) comp ## _fill_ ## field
 #define OPT_FILL_PARAM_NAME(comp, field) comp ## _fill_ ## field ## _param
 
-#define OPT_FILL_CB_DEFINE(comp, type, field, field_type)        \
-    static void OPT_FILL_CB(comp, field)(__typeof__(type) *dest, \
-                                         void *value)            \
-    {                                                            \
-        bzero(dest, sizeof(*dest));                              \
-        dest->field = *(__typeof__(field_type) *)value;          \
-        dest->has_ ## field = true;                              \
+#define OPT_FILL_CB_DEFINE(comp, type, field, field_type)               \
+    static void OPT_FILL_CB(comp, field)(__typeof__(type) *dest,        \
+                                         void *value)                   \
+    {                                                                   \
+        bzero(dest, sizeof(*dest));                                     \
+        TPG_XLATE_OPTIONAL_SET_FIELD(dest, field,                       \
+                                     *(__typeof__(field_type) *)value); \
     }
 
 #define OPT_FILL_DEFINE(comp, type, field, field_type)                   \
@@ -901,10 +901,8 @@ static void cmd_tests_add_client_parsed(void *parsed_result, struct cmdline *cl,
         TPG_PORT_RANGE(pr->dport_low, pr->dport_high);
 
     if (strncmp(pr->client, TEST_CASE_MCAST_SRC_STR,
-                strlen(TEST_CASE_MCAST_SRC_STR) + 1) == 0) {
-        tc.tc_client.has_cl_mcast_src = true;
-        tc.tc_client.cl_mcast_src = true;
-    }
+                strlen(TEST_CASE_MCAST_SRC_STR) + 1) == 0)
+        TPG_XLATE_OPTIONAL_SET_FIELD(&tc.tc_client, cl_mcast_src, true);
 
     if (test_mgmt_add_test_case(pr->port, &tc, &parg) == 0)
         cmdline_printf(cl,
@@ -1082,11 +1080,11 @@ static void cmd_tests_set_rate_parsed(void *parsed_result, struct cmdline *cl,
         rate = TPG_RATE(pr->rate_val);
 
     if (strncmp(pr->rate_kw, "open", strlen("open")) == 0)
-        update_arg.ua_rate_open = &rate;
+        TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg, ua_rate_open, rate);
     else if (strncmp(pr->rate_kw, "close", strlen("close")) == 0)
-        update_arg.ua_rate_close = &rate;
+        TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg, ua_rate_close, rate);
     else if (strncmp(pr->rate_kw, "send", strlen("send")) == 0)
-        update_arg.ua_rate_send = &rate;
+        TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg, ua_rate_send, rate);
     else
         assert(false);
 
@@ -1205,11 +1203,11 @@ static void cmd_tests_set_timeouts_parsed(void *parsed_result,
         timeout = TPG_DELAY(pr->timeout);
 
     if (strncmp(pr->timeout_kw, "init", strlen("init")) == 0)
-        update_arg.ua_init_delay = &timeout;
+        TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg, ua_init_delay, timeout);
     else if (strncmp(pr->timeout_kw, "uptime", strlen("uptime")) == 0)
-        update_arg.ua_uptime = &timeout;
+        TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg, ua_uptime, timeout);
     else if (strncmp(pr->timeout_kw, "downtime", strlen("downtime")) == 0)
-        update_arg.ua_downtime = &timeout;
+        TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg, ua_downtime, timeout);
     else
         assert(false);
 
@@ -1328,7 +1326,7 @@ static void cmd_tests_set_criteria_parsed(void *parsed_result,
     else
         assert(false);
 
-    update_arg.ua_criteria = &criteria;
+    TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg, ua_criteria, criteria);
 
     if (test_mgmt_update_test_case(pr->port, pr->tcid, &update_arg, &parg) == 0)
         cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",

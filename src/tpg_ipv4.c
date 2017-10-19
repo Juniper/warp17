@@ -357,8 +357,7 @@ void ipv4_store_sockopt(ipv4_sockopt_t *dest, const tpg_ipv4_sockopt_t *options)
  ****************************************************************************/
 void ipv4_load_sockopt(tpg_ipv4_sockopt_t *dest, const ipv4_sockopt_t *options)
 {
-    dest->io_tos = options->io_tos;
-    dest->has_io_tos = true;
+    TPG_XLATE_OPTIONAL_SET_FIELD(dest, io_tos, options->io_tos);
 }
 
 /*****************************************************************************

@@ -1036,8 +1036,7 @@ int port_set_conn_options(uint32_t port, tpg_port_options_t *options)
  ****************************************************************************/
 void port_get_conn_options(uint32_t port, tpg_port_options_t *out)
 {
-    out->po_mtu = port_dev_info[port].pi_mtu;
-    out->has_po_mtu = true;
+    TPG_XLATE_OPTIONAL_SET_FIELD(out, po_mtu, port_dev_info[port].pi_mtu);
 }
 
 /*****************************************************************************

@@ -341,38 +341,30 @@ void tcp_store_sockopt(tcp_sockopt_t *dest, const tpg_tcp_sockopt_t *options)
  ****************************************************************************/
 void tcp_load_sockopt(tpg_tcp_sockopt_t *dest, const tcp_sockopt_t *options)
 {
-    dest->to_win_size = options->tcpo_win_size;
-    dest->has_to_win_size = true;
+    TPG_XLATE_OPTIONAL_SET_FIELD(dest, to_win_size, options->tcpo_win_size);
 
-    dest->to_syn_retry_cnt = options->tcpo_syn_retry_cnt;
-    dest->has_to_syn_retry_cnt = true;
-
-    dest->to_syn_ack_retry_cnt = options->tcpo_syn_ack_retry_cnt;
-    dest->has_to_syn_ack_retry_cnt = true;
-
-    dest->to_data_retry_cnt = options->tcpo_data_retry_cnt;
-    dest->has_to_data_retry_cnt = true;
-
-    dest->to_retry_cnt = options->tcpo_retry_cnt;
-    dest->has_to_retry_cnt = true;
-
-    dest->to_rto = options->tcpo_rto / 1000;
-    dest->has_to_rto = true;
-
-    dest->to_fin_to = options->tcpo_fin_to / 1000;
-    dest->has_to_fin_to = true;
-
-    dest->to_twait_to = options->tcpo_twait_to / 1000;
-    dest->has_to_twait_to = true;
-
-    dest->to_orphan_to = options->tcpo_orphan_to / 1000;
-    dest->has_to_orphan_to = true;
+    TPG_XLATE_OPTIONAL_SET_FIELD(dest, to_syn_retry_cnt,
+                                 options->tcpo_syn_retry_cnt);
+    TPG_XLATE_OPTIONAL_SET_FIELD(dest, to_syn_ack_retry_cnt,
+                                 options->tcpo_syn_ack_retry_cnt);
+    TPG_XLATE_OPTIONAL_SET_FIELD(dest, to_data_retry_cnt,
+                                 options->tcpo_data_retry_cnt);
+    TPG_XLATE_OPTIONAL_SET_FIELD(dest, to_retry_cnt,
+                                 options->tcpo_retry_cnt);
+    TPG_XLATE_OPTIONAL_SET_FIELD(dest, to_rto,
+                                 options->tcpo_rto / 1000);
+    TPG_XLATE_OPTIONAL_SET_FIELD(dest, to_fin_to,
+                                 options->tcpo_fin_to / 1000);
+    TPG_XLATE_OPTIONAL_SET_FIELD(dest, to_twait_to,
+                                 options->tcpo_twait_to / 1000);
+    TPG_XLATE_OPTIONAL_SET_FIELD(dest, to_orphan_to,
+                                 options->tcpo_orphan_to / 1000);
 
     /* Bit flags. */
-    dest->to_skip_timewait = options->tcpo_skip_timewait;
-    dest->has_to_skip_timewait = true;
-    dest->to_ack_delay = options->tcpo_ack_delay;
-    dest->has_to_ack_delay = true;
+    TPG_XLATE_OPTIONAL_SET_FIELD(dest, to_skip_timewait,
+                                 options->tcpo_skip_timewait);
+    TPG_XLATE_OPTIONAL_SET_FIELD(dest, to_ack_delay,
+                                 options->tcpo_ack_delay);
 }
 
 /*****************************************************************************
