@@ -180,12 +180,14 @@ static inline void tpg_printf(printer_arg_t *pa, const char *fmt, ...)
 #define TPG_IP_GE(i1, i2) \
     (TPG_IP_GT((i1), (i2)) || TPG_IP_EQ((i1), (i2)))
 
-#define TPG_IPV4_MCAST_PREFIX 0xE0000000
-#define TPG_IPV4_MCAST_MASK   0xEFFFFFFF
-#define TPG_IPV4_BCAST_VAL    0xFFFFFFFF
+#define TPG_IPV4_MCAST_PREFIX      0xE0000000
+#define TPG_IPV4_MCAST_PREFIX_MASK 0xF0000000
+#define TPG_IPV4_MCAST_MASK        0xEFFFFFFF
+#define TPG_IPV4_BCAST_VAL         0xFFFFFFFF
 
-#define TPG_IP_MCAST(ip) \
-    ((ip)->ip_version == IP_V__IPV4 && ((ip)->ip_v4 & TPG_IPV4_MCAST_PREFIX))
+#define TPG_IP_MCAST(ip)                                                  \
+    ((ip)->ip_version == IP_V__IPV4 &&                                    \
+     ((ip)->ip_v4 & TPG_IPV4_MCAST_PREFIX_MASK) == TPG_IPV4_MCAST_PREFIX)
 
 /* TODO: IPv6 not supported yet. */
 #define TPG_IP_MCAST_MIN(ipv) \
