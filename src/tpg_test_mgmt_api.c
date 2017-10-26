@@ -450,6 +450,24 @@ test_mgmt_validate_server_app(const tpg_test_case_t *cfg,
 }
 
 /*****************************************************************************
+ * test_mgmt_validate_latency()
+ ****************************************************************************/
+static bool test_mgmt_validate_latency(const tpg_test_case_t *cfg,
+                                       printer_arg_t *printer_arg)
+{
+    if (!cfg->has_tc_latency)
+        return true;
+
+    if (cfg->tc_latency.tcs_samples > TPG_TSTAMP_SAMPLES_MAX_BUFSIZE) {
+        tpg_printf(printer_arg, "ERROR: Max allowed samples count is %u!\n",
+                   TPG_TSTAMP_SAMPLES_MAX_BUFSIZE);
+        return false;
+    }
+
+    return true;
+}
+
+/*****************************************************************************
  * test_mgmt_validate_test_case_server()
  ****************************************************************************/
 static bool
@@ -486,6 +504,9 @@ test_mgmt_validate_test_case(const tpg_test_case_t *cfg,
         return false;
 
     if (!test_mgmt_validate_test_case_id(cfg->tc_id, printer_arg))
+        return false;
+
+    if (!test_mgmt_validate_latency(cfg, printer_arg) != 0)
         return false;
 
     switch (cfg->tc_type) {
@@ -597,7 +618,7 @@ test_mgmt_validate_ipv4_sockopt(const tpg_ipv4_sockopt_t *options,
     /* The only option we have for now is TOS and we allow any possible 8-bit
      * value in case the user wants to test with undefined TOS values.
      */
-    if (options->has_io_tos && options->io_tos > UINT8_MAX) {
+    if (options->has_ip4so_tos && options->ip4so_tos > UINT8_MAX) {
         tpg_printf(printer_arg,
                    "ERROR: Invalid IPv4 ToS. Max allowed: %u\n",
                    UINT8_MAX);
@@ -846,6 +867,7 @@ void test_init_defaults(tpg_test_case_t *te, tpg_test_case_type_t type,
     }
 
     te->tc_async = false;
+    te->has_tc_latency = false;
 }
 
 /*****************************************************************************
@@ -1044,6 +1066,15 @@ int test_mgmt_update_test_case(uint32_t eth_port, uint32_t test_case_id,
 
     if (arg->has_ua_async)
         test_case->tc_async = arg->ua_async;
+
+    if (arg->has_ua_latency) {
+        if (arg->ua_latency.has_tcs_samples &&
+                arg->ua_latency.tcs_samples > TPG_TSTAMP_SAMPLES_MAX_BUFSIZE)
+            return -EINVAL;
+
+        test_case->has_tc_latency = arg->has_ua_latency;
+        test_case->tc_latency = arg->ua_latency;
+    }
 
     return 0;
 }
@@ -1426,8 +1457,14 @@ test_mgmt_set_ipv4_sockopt(uint32_t eth_port, uint32_t test_case_id,
     ipv4_load_sockopt(&old_opts,
                       &tenv->te_test_cases[test_case_id].sockopt.so_ipv4);
 
-    if (opts->has_io_tos)
-        old_opts.io_tos = opts->io_tos;
+    if (opts->has_ip4so_rx_tstamp)
+        old_opts.ip4so_rx_tstamp = opts->ip4so_rx_tstamp;
+
+    if (opts->has_ip4so_tx_tstamp)
+        old_opts.ip4so_tx_tstamp = opts->ip4so_tx_tstamp;
+
+    if (opts->has_ip4so_tos)
+        old_opts.ip4so_tos = opts->ip4so_tos;
 
     if (!test_mgmt_validate_ipv4_sockopt(&old_opts, printer_arg))
         return -EINVAL;

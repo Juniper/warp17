@@ -60,7 +60,6 @@
  ****************************************************************************/
 #include <unistd.h>
 
-#include <rte_cycles.h>
 
 #include "tcp_generator.h"
 

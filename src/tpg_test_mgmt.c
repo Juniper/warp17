@@ -59,7 +59,6 @@
  ****************************************************************************/
 #include <unistd.h>
 
-#include <rte_cycles.h>
 
 #include "tcp_generator.h"
 
@@ -95,6 +94,8 @@ static void test_start_test_case(uint32_t eth_port, test_env_t *tcfg);
 static void test_stop_test_case(uint32_t eth_port, tpg_test_case_t *entry,
                                 test_env_oper_state_t *state,
                                 tpg_test_case_state_t new_tc_state);
+static void test_aggregate_latencies(tpg_latency_stats_t *dest,
+                                     tpg_latency_stats_t *source);
 
 /*****************************************************************************
  * test_update_status()
@@ -118,9 +119,12 @@ static void test_update_status(tpg_test_case_t *test_case)
     papp_stats = TEST_CASE_APP_STATS_GET(test_case->tc_eth_port,
                                          test_case->tc_id);
 
+    bzero(&pgen_stats->tcs_latency_stats.tcls_sample_stats,
+          sizeof(pgen_stats->tcs_latency_stats.tcls_sample_stats));
+    pgen_stats->tcs_latency_stats.tcls_sample_stats.ls_min_latency = UINT32_MAX;
+
     /* Initialize the start time. */
     pgen_stats->tcs_start_time = UINT64_MAX;
-
     FOREACH_CORE_IN_PORT_START(core, test_case->tc_eth_port) {
         msg_t                     *msgp;
         test_case_stats_req_msg_t *stats_msg;
@@ -149,6 +153,15 @@ static void test_update_status(tpg_test_case_t *test_case)
                             rte_strerror(-error), -error);
         }
 
+        /* Aggregate all the latency stats */
+        pgen_stats->tcs_latency_stats.tcls_invalid_lat +=
+            gen_stats.tcs_latency_stats.tcls_invalid_lat;
+        test_aggregate_latencies(&pgen_stats->tcs_latency_stats.tcls_stats,
+                                 &gen_stats.tcs_latency_stats.tcls_stats);
+
+        test_aggregate_latencies(&pgen_stats->tcs_latency_stats.tcls_sample_stats,
+                                 &gen_stats.tcs_latency_stats.tcls_sample_stats);
+
         if (is_server) {
             app_id = test_case->tc_server.srv_app.as_app_proto;
 
@@ -164,10 +177,10 @@ static void test_update_status(tpg_test_case_t *test_case)
         } else {
             app_id = test_case->tc_client.cl_app.ac_app_proto;
 
-            pgen_stats->tcs_client.tccs_up          += gen_stats.tcs_client.tccs_up;
-            pgen_stats->tcs_client.tccs_estab       += gen_stats.tcs_client.tccs_estab;
-            pgen_stats->tcs_client.tccs_down        += gen_stats.tcs_client.tccs_down;
-            pgen_stats->tcs_client.tccs_failed      += gen_stats.tcs_client.tccs_failed;
+            pgen_stats->tcs_client.tccs_up     += gen_stats.tcs_client.tccs_up;
+            pgen_stats->tcs_client.tccs_estab  += gen_stats.tcs_client.tccs_estab;
+            pgen_stats->tcs_client.tccs_down   += gen_stats.tcs_client.tccs_down;
+            pgen_stats->tcs_client.tccs_failed += gen_stats.tcs_client.tccs_failed;
 
             pgen_stats->tcs_data_failed += gen_stats.tcs_data_failed;
             pgen_stats->tcs_data_null   += gen_stats.tcs_data_null;
@@ -275,6 +288,10 @@ static void test_init_msg(const tpg_test_case_t *entry,
 
     /* Struct copy. */
     msg->tcim_sockopt = *sockopt;
+
+    /* Copy latency options if any */
+    if (entry->has_tc_latency)
+        msg->tcim_latency = entry->tc_latency;
 }
 
 /*****************************************************************************
@@ -479,6 +496,25 @@ static bool test_check_tc_status(tpg_test_case_t *test_case,
     }
 
     return *passed;
+}
+
+/*****************************************************************************
+ * test_aggregate_latencies()
+ ****************************************************************************/
+void test_aggregate_latencies(tpg_latency_stats_t *dest,
+                              tpg_latency_stats_t *source)
+{
+    dest->ls_max_average_exceeded += source->ls_max_average_exceeded;
+    dest->ls_max_exceeded += source->ls_max_exceeded;
+
+    dest->ls_max_latency = (dest->ls_max_latency >= source->ls_max_latency ?
+                            dest->ls_max_latency : source->ls_max_latency);
+
+    dest->ls_min_latency = (dest->ls_min_latency <= source->ls_min_latency ?
+                            dest->ls_min_latency : source->ls_min_latency);
+
+    dest->ls_samples_count += source->ls_samples_count;
+    dest->ls_sum_latency += source->ls_sum_latency;
 }
 
 /*****************************************************************************
@@ -773,12 +809,15 @@ static int test_start_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
         /* Clear test stats. */
         gen_stats = TEST_CASE_STATS_GET(start_msg->tssm_eth_port, i);
         bzero(gen_stats, sizeof(*gen_stats));
+        gen_stats->tcs_latency_stats.tcls_stats.ls_min_latency = UINT32_MAX;
+        gen_stats->tcs_latency_stats.tcls_sample_stats.ls_min_latency = UINT32_MAX;
 
         rate_stats = TEST_CASE_RATE_STATS_GET(start_msg->tssm_eth_port, i);
         bzero(rate_stats, sizeof(*rate_stats));
 
         app_stats = TEST_CASE_APP_STATS_GET(start_msg->tssm_eth_port, i);
         bzero(app_stats, sizeof(*app_stats));
+
 
         test_init_test_case(entry, &tenv->te_test_cases[i].sockopt);
 

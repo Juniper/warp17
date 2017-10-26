@@ -151,6 +151,7 @@ message Ipv4Statistics {
     required uint32 ips_not_v4               = 12;
     required uint32 ips_reserved_bit_set     = 13;
     required uint32 ips_invalid_pad          = 14;
+    required uint32 ips_invalid_opt          = 15;
 }
 
 message UdpStatistics {

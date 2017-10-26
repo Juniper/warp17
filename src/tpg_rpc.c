@@ -189,7 +189,6 @@ static void tpg_rpc__get_ipv4_sockopt(Warp17_Service *service,
                                       Ipv4SockoptResult_Closure closure,
                                       void *closure_data);
 
-
 static void tpg_rpc__port_start(Warp17_Service *service,
                                 const PortArg *input,
                                 Error_Closure closure,
@@ -520,6 +519,17 @@ int tpg_xlate_tpg_TestStatusResult(const tpg_test_status_result_t *in,
     default:
         return -EINVAL;
     }
+
+    out->tsr_stats->tcs_latency_stats =
+        rte_zmalloc("TPG_RPC_GEN", sizeof(*out->tsr_stats->tcs_latency_stats),
+                    0);
+    if (!out->tsr_stats->tcs_latency_stats)
+        return -ENOMEM;
+
+    err = tpg_xlate_tpg_TestCaseLatencyStats(&in->tsr_stats.tcs_latency_stats,
+                                             out->tsr_stats->tcs_latency_stats);
+    if (err)
+        return err;
 
     /* Translate TestCaseRateStats. */
     err = tpg_xlate_tpg_TestCaseRateStats(&in->tsr_rate_stats,

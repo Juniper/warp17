@@ -153,9 +153,14 @@ static void pkt_trace_tx(packet_control_block_t *pcb, int32_t tx_queue_id,
             switch (ip_hdr->next_proto_id) {
             case IPPROTO_TCP:
                 if (true) {
-                    unsigned int    i;
-                    struct tcp_hdr *tcp_hdr = (struct tcp_hdr *) ip_hdr + 1;
-                    uint32_t       *options = (uint32_t *) (tcp_hdr + 1);
+                    uint32_t        i;
+                    uint32_t        ip_len;
+                    struct tcp_hdr *tcp_hdr;
+                    uint32_t       *options;
+
+                    ip_len = ((ip_hdr->version_ihl & 0x0F) << 2);
+                    tcp_hdr = (struct tcp_hdr *) ((char *) ip_hdr + ip_len);
+                    options = (uint32_t *) (tcp_hdr + 1);
 
                     PKT_TRACE(pcb, TCP, DEBUG, "sport=%u, dport=%u, hdrlen=%u, flags=%c%c%c%c%c%c, csum=0x%4.4X",
                               rte_be_to_cpu_16(tcp_hdr->src_port),
@@ -259,6 +264,11 @@ void pkt_flush_tx_q(uint32_t port, tpg_port_statistics_t *stats)
         INC_STATS_VAL(stats, ps_sent_bytes,
                       rte_pktmbuf_pkt_len(RTE_PER_LCORE(pkt_tx_q)[port][i]));
     }
+
+    if (tstamp_tx_is_running(port, tx_queue_id))
+        tstamp_pktloop_tx_pkt_burst(port, tx_queue_id,
+                                    &RTE_PER_LCORE(pkt_tx_q)[port][0],
+                                    RTE_PER_LCORE(pkt_tx_q_len)[port]);
 
     pkt_sent_cnt = rte_eth_tx_burst(port, tx_queue_id, &RTE_PER_LCORE(pkt_tx_q)[port][0],
                                     RTE_PER_LCORE(pkt_tx_q_len)[port]);
@@ -418,9 +428,13 @@ int pkt_receive_loop(void *arg __rte_unused)
     int32_t                 queue_id;
     global_config_t        *cfg;
     tpg_port_statistics_t  *port_stats;
-    packet_control_block_t *pcb;
+    packet_control_block_t *pcbs;
     uint32_t                port;
 
+    pcbs = rte_zmalloc_socket("local_pcb_pktloop", sizeof(*pcbs) *
+                                                   TPG_RX_BURST_SIZE,
+                              RTE_CACHE_LINE_SIZE,
+                              rte_lcore_to_socket_id(lcore_id));
     cfg = cfg_get_config();
     if (cfg == NULL) {
         RTE_LOG(ERR, USER1, "ERROR: Can't get global config on lcore %d, core index %d\n",
@@ -467,18 +481,6 @@ int pkt_receive_loop(void *arg __rte_unused)
                         lcore_id,
                         lcore_index);
     }
-
-    /* Allocate commonly used variables from local socket memory. The pcb,
-     * and core/port mapping information are used in every loop iteration.
-     * Try to make it as fast as possible by packing the ports/queues we need
-     * to poll (in local_ports and local_qs respectively).
-     */
-    pcb = rte_zmalloc_socket("local_pcb_pktloop", sizeof(*pcb),
-                             RTE_CACHE_LINE_SIZE,
-                             rte_lcore_to_socket_id(lcore_id));
-
-    if (pcb == NULL)
-        TPG_ERROR_ABORT("[%d] Cannot allocate pcb!\n", lcore_index);
 
     RTE_PER_LCORE(pktloop_port_info) = rte_zmalloc_socket("pktloop_port_info_pktloop",
                                                           rte_eth_dev_count() *
@@ -551,8 +553,14 @@ int pkt_receive_loop(void *arg __rte_unused)
                 /*
                  * setup PCB
                  */
-                pcb_minimal_init(pcb, lcore_index, port, buf[i]);
+                pcb_minimal_init(&pcbs[i], lcore_index, port, buf[i]);
+            }
 
+            if (tstamp_rx_is_running(port, qidx))
+                tstamp_pktloop_rx_pkt_burst(port, qidx, buf, pcbs,
+                                            no_rx_buffers);
+
+            for (i = 0; i < no_rx_buffers; i++) {
                 /*
                  * Hand off packet to ethernet driver, as we only support ethernet
                  */
@@ -560,7 +568,7 @@ int pkt_receive_loop(void *arg __rte_unused)
                 INC_STATS_VAL(&port_stats[port], ps_received_bytes,
                               rte_pktmbuf_pkt_len(buf[i]));
 
-                PKT_TRACE(pcb, PKT_RX, DEBUG,
+                PKT_TRACE(&pcbs[i], PKT_RX, DEBUG,
                           "port=%d qid=%d len=%u, ol_flags=0x%16.16"PRIX64", nb_segs=%u",
                           port,
                           queue_id,
@@ -568,13 +576,13 @@ int pkt_receive_loop(void *arg __rte_unused)
                           buf[i]->ol_flags,
                           buf[i]->nb_segs);
 
-                PKT_TRACE(pcb, PKT_RX, DEBUG,
+                PKT_TRACE(&pcbs[i], PKT_RX, DEBUG,
                           "  data_len=%u/%u, rss_hash=0x%8.8X",
                           rte_pktmbuf_pkt_len(buf[i]),
                           buf[i]->buf_len,
                           buf[i]->hash.rss);
 
-                ret_mbuf = eth_receive_pkt(pcb, buf[i]);
+                ret_mbuf = eth_receive_pkt(&pcbs[i], buf[i]);
 
                 if (ret_mbuf != NULL)
                     rte_pktmbuf_free(ret_mbuf);

@@ -90,6 +90,7 @@ SRCS-y += tpg_main.c
 SRCS-y += tpg_memory.c
 SRCS-y += tpg_msg.c
 SRCS-y += tpg_pktloop.c
+SRCS-y += tpg_timestamp.c
 SRCS-y += tpg_port.c
 SRCS-y += tpg_rate.c
 SRCS-y += tpg_ring_if.c

@@ -149,9 +149,10 @@ def xlate_msg_walker(msg_item, walker_ops):
             union_current = new_union
             union_is_anon = new_union_is_anon
         else:
-            if union_current is not None:
+            if union_current is not None or union_is_anon:
                 output += walker_ops.u_leave(union_current, union_is_anon)
                 union_current = None
+                union_is_anon = False
 
         # Strip the array tag if available and update the name
         if field.label == FieldDescriptorProto.LABEL_REPEATED:

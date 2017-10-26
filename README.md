@@ -883,7 +883,7 @@ __NOTE: Only IPv4 is supported for now!__
 		```
 
 * __Customize IPv4 stack settings__: customize the behavior of the IPv4 layer
-  running on thest case with ID `tcid` on port `eth_port`. The following
+  running on test case with ID `tcid` on port `eth_port`. The following
 	settings are customizable:
 
   	- `tos`: the TOS field of the IPv4 header
@@ -898,6 +898,37 @@ __NOTE: Only IPv4 is supported for now!__
 		set tests ipv4-options port <eth_port> test-case-id <tcid> dscp <dscp-name> ecn <ecn-name>
 		```
 
+  	- `tx-timestamp` and `rx-timestamp`: allow warp17 to write/read timestamp
+  	option in the IPv4 header (Warp17 will store timestamps according to
+  	[RFC791, section 3.1](https://tools.ietf.org/html/rfc1122#page-36)).
+  	When RX timestamping is enabled, latency statistics will also be computed.
+
+		__NOTE: This might incur a small performance penalty.__
+
+		```
+		set tests ipv4-options port <eth_port> test-case-id <tcid> tx-timestamp|rx-timestamp <0|1>"
+		```
+
+* __Latency__: latency computation can be enabled ontop of all the application
+  types using _IPv4 options_. The latency config consists of the following
+  optional fields:
+
+    - `max` latency threshold: all incoming packets with a measured latency
+      higher than the configured `max` will be counted as
+      _threshold violations_.
+    - `max-avg` latency threshold: every time the average measured latency
+		  is over the configured `max-avg` a new _threshold violation_ will be
+      counted.
+    - `samples` count: the number of __recent__ samples used for computing
+      recent statistics. __Global__ statistics are computed per test case using
+      all the received samples (not only the most recent ones).
+
+	```
+	set latency port <eth_port> test-case-id <tcid> max <value> max-avg <value> samples <value>
+	```
+
+	__NOTE: Latency configs make sense only if RX timestamping is enabled for the
+  same test case.__
 
 ## Application configuration and statistics commands
 
@@ -1235,6 +1266,10 @@ WARP17 or executed directly in the CLI.
 * __examples/test\_10\_ipv4\_mcast.cfg__: example showing how to configure
   UDP Multicast Source test cases. The example combines UDP Unicast traffic with
   UDP Multicast traffic.
+
+* __examples/test\_11\_ipv4\_lat.cfg__: example showing how to configure
+  latency computation on a TCP test case. _Maximum_ and _average_ thresholds
+  are configured.
 
 # Python scripting API
 WARP17 offers an RPC-based API which allows users to write scripts and automate

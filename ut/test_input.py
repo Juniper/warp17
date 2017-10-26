@@ -42,7 +42,7 @@
 #     test_input.py
 #
 # Description:
-#     Tests for the WARP17 input.
+#     Tests for WARP17 input.
 #
 # Author:
 #     Matteo Triggiani

@@ -63,6 +63,34 @@
 STATS_GLOBAL_DECLARE(tpg_ipv4_statistics_t);
 
 /*****************************************************************************
+ * Pseudo header checksum calculation function for TCP/UDP
+ *
+ * - hdr    Pointer to the IPv4 header.
+ * - l4_len Total l4 data length to calculate checksum for.
+ *
+ ****************************************************************************/
+
+static inline uint16_t ipv4_udptcp_phdr_cksum(const struct ipv4_hdr *hdr,
+                                              uint16_t l4_len)
+{
+    struct ipv4_psd_header {
+        uint32_t src_addr;
+        uint32_t dst_addr;
+        uint8_t  zero;
+        uint8_t  proto;
+        uint16_t len;
+    } __attribute__((__packed__)) ip_psd_hdr;
+
+    ip_psd_hdr.src_addr = hdr->src_addr;
+    ip_psd_hdr.dst_addr = hdr->dst_addr;
+    ip_psd_hdr.zero = 0;
+    ip_psd_hdr.proto = hdr->next_proto_id;
+    ip_psd_hdr.len = rte_cpu_to_be_16(l4_len);
+
+    return rte_raw_cksum(&ip_psd_hdr, sizeof(ip_psd_hdr));
+}
+
+/*****************************************************************************
  * General IPv4 L4 checksum functions for scattered mbufs.
  *
  * - mbuf       Pointer to mbuf chain
@@ -77,28 +105,12 @@ static inline uint16_t ipv4_general_l4_cksum(struct rte_mbuf *mbuf,
                                              uint16_t l4_offset,
                                              uint16_t l4_length)
 {
-    struct ipv4_psd_header {
-            uint32_t src_addr;
-            uint32_t dst_addr;
-            uint8_t  zero;
-            uint8_t  proto;
-            uint16_t len;
-    } __attribute__((__packed__)) ip_psd_hdr;
-
     uint32_t         cksum = 0;
     struct rte_mbuf *mbuf_frag;
     unsigned int     bytes_left = l4_length;
     unsigned int     mbuf_data_len;
 
-    /*
-     * Checksum pseudo header, and data in first fragment
-     */
-    ip_psd_hdr.src_addr = hdr->src_addr;
-    ip_psd_hdr.dst_addr = hdr->dst_addr;
-    ip_psd_hdr.zero = 0;
-    ip_psd_hdr.proto = hdr->next_proto_id;
-    ip_psd_hdr.len = rte_cpu_to_be_16(bytes_left);
-    cksum = rte_raw_cksum(&ip_psd_hdr, sizeof(ip_psd_hdr));
+    cksum = ipv4_udptcp_phdr_cksum(hdr, bytes_left);
 
     mbuf_data_len = rte_pktmbuf_data_len(mbuf) - l4_offset;
     if (bytes_left < mbuf_data_len)
@@ -206,6 +218,39 @@ static inline uint64_t ipv4_mcast_addr_to_eth(uint32_t ip_addr)
 #define IPV4_TOS_INVALID    0xFF
 
 /*****************************************************************************
+ * Ipv4 Options Definitions
+ ****************************************************************************/
+
+#define IPOPT_TS 68             /* IPv4 timestamp option code */
+#define N_TSTAMP 2              /* Len of timestamps in timestamp option */
+                                /* N_TSTAMP is actually 2 because we are willing
+                                 * to parse at most two 32-bit timestamps
+                                 * because that's how we embed our 64-bit
+                                 * timestamps
+                                 */
+
+typedef struct ipv4_option_hdr_s {
+    u_int8_t ipt_code;          /* Ip option code */
+    u_int8_t ipt_len;           /* Size of structure (variable) */
+    u_int8_t ipt_ptr;           /* Index of current entry */
+    u_int8_t ipt_flg_oflow;     /* Flags, see below */
+} __attribute__ ((__packed__)) ipv4_option_hdr_t;
+
+/*
+ * We choose to support "time stamps only, stored in consecutive 32-bit words"
+ * has defined in RFC791 pg 22 in order to improve the memory comsumption
+ */
+typedef struct ipv4_tstamp_option_s {
+    ipv4_option_hdr_t hdr;
+    u_int32_t         data[N_TSTAMP];
+} __attribute__ ((__packed__)) ipv4_tstamp_option_t;
+
+/* Flag bits for ipt_flg */
+#define IPOPT_TS_TSONLY    0 /* timestamps only */
+#define IPOPT_TS_TSANDADDR 1 /* timestamps and addresses */
+#define IPOPT_TS_PRESPEC   3 /* specified modules only */
+
+/*****************************************************************************
  * External's for tpg_ipv4.c
  ****************************************************************************/
 extern bool             ipv4_init(void);
@@ -223,6 +268,8 @@ extern struct rte_mbuf *ipv4_build_hdr_mbuf(l4_control_block_t *l4_cb,
 
 extern const char *ipv4_tos_to_dscp_name(const tpg_ipv4_sockopt_t *options);
 extern const char *ipv4_tos_to_ecn_name(const tpg_ipv4_sockopt_t *options);
+extern const char *ipv4_rx_ts_name(const tpg_ipv4_sockopt_t *options);
+extern const char *ipv4_tx_ts_name(const tpg_ipv4_sockopt_t *options);
 extern uint8_t     ipv4_dscp_ecn_to_tos(const char *dscp,
                                         const char *ecn);
 

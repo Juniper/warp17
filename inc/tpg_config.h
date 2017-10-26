@@ -157,9 +157,12 @@ enum {
 #define GCFG_MBUF_POOL_HDR_NAME        "global_pkt_mbuf_tx_hdr"
 #define GCFG_MBUF_POOLSZ_HDR_DEF       (512 * 1024)
 #define GCFG_MBUF_HDR_CACHE_SIZE       (512)
-/* TODO: No IPv6 supported. No IP Options supported. No TCP options supported. */
-#define GCFG_MBUF_HDR_FRAG_SIZE        (sizeof(struct ether_hdr) + \
-                                        sizeof(struct ipv4_hdr) +  \
+/* TODO: No IPv6 supported. No TCP options supported.
+ * Only IPv4 Tstamp Option supported.
+ */
+#define GCFG_MBUF_HDR_FRAG_SIZE        (sizeof(struct ether_hdr) +     \
+                                        sizeof(struct ipv4_hdr) +      \
+                                        sizeof(ipv4_tstamp_option_t) + \
                                         sizeof(struct tcp_hdr))
 #define GCFG_MBUF_HDR_SIZE             (GCFG_MBUF_HDR_FRAG_SIZE +  \
                                         sizeof(struct rte_mbuf) +  \

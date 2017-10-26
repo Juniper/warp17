@@ -67,6 +67,15 @@
  */
 STATS_DEFINE(tpg_ipv4_statistics_t);
 
+static void ipv4_latency_check(packet_control_block_t *pcb, uint64_t tstamp);
+static int  ipv4_parse_options(struct rte_mbuf *mbuf, uint32_t total_len,
+                               tpg_ipv4_statistics_t *stats,
+                               uint64_t *tstamp_value,
+                               packet_control_block_t *pcb);
+
+static uint64_t ipv4_parse_option_timestamp(struct rte_mbuf *mbuf,
+                                            uint32_t offset);
+
 /*
  * DSCP value to name mapping.
  */
@@ -266,6 +275,11 @@ static void cmd_show_ipv4_statistics_parsed(void *parsed_result __rte_unused,
                          port,
                          option);
 
+        SHOW_32BIT_STATS("Invalid option", tpg_ipv4_statistics_t,
+                         ips_invalid_opt,
+                         port,
+                         option);
+
         cmdline_printf(cl, "\n");
     }
 
@@ -349,7 +363,13 @@ void ipv4_lcore_init(uint32_t lcore_id)
  ****************************************************************************/
 void ipv4_store_sockopt(ipv4_sockopt_t *dest, const tpg_ipv4_sockopt_t *options)
 {
-    dest->io_tos = options->io_tos;
+    /* Bit flags. */
+    dest->ip4so_rx_tstamp = options->ip4so_rx_tstamp;
+    dest->ip4so_tx_tstamp = options->ip4so_tx_tstamp;
+    dest->ip4so_tos = options->ip4so_tos;
+
+    if (dest->ip4so_tx_tstamp)
+        dest->ip4so_hdr_opt_len = sizeof(ipv4_tstamp_option_t);
 }
 
 /*****************************************************************************
@@ -357,7 +377,11 @@ void ipv4_store_sockopt(ipv4_sockopt_t *dest, const tpg_ipv4_sockopt_t *options)
  ****************************************************************************/
 void ipv4_load_sockopt(tpg_ipv4_sockopt_t *dest, const ipv4_sockopt_t *options)
 {
-    TPG_XLATE_OPTIONAL_SET_FIELD(dest, io_tos, options->io_tos);
+    TPG_XLATE_OPTIONAL_SET_FIELD(dest, ip4so_rx_tstamp,
+                                 options->ip4so_rx_tstamp);
+    TPG_XLATE_OPTIONAL_SET_FIELD(dest, ip4so_tx_tstamp,
+                                 options->ip4so_tx_tstamp);
+    TPG_XLATE_OPTIONAL_SET_FIELD(dest, ip4so_tos, options->ip4so_tos);
 }
 
 /*****************************************************************************
@@ -367,7 +391,7 @@ const char *ipv4_tos_to_dscp_name(const tpg_ipv4_sockopt_t *options)
 {
     const char *dscp_name;
 
-    dscp_name = ipv4_dscp_names[IPV4_TOS_TO_DSCP(options->io_tos)];
+    dscp_name = ipv4_dscp_names[IPV4_TOS_TO_DSCP(options->ip4so_tos)];
 
     if (!dscp_name)
         return "UNK";
@@ -380,8 +404,30 @@ const char *ipv4_tos_to_dscp_name(const tpg_ipv4_sockopt_t *options)
  ****************************************************************************/
 const char *ipv4_tos_to_ecn_name(const tpg_ipv4_sockopt_t *options)
 {
-    return ipv4_ecn_names[IPV4_TOS_TO_ECN(options->io_tos)];
+    return ipv4_ecn_names[IPV4_TOS_TO_ECN(options->ip4so_tos)];
 }
+
+/*****************************************************************************
+ * ipv4_tx_ts_name()
+ ****************************************************************************/
+const char *ipv4_tx_ts_name(const tpg_ipv4_sockopt_t *options)
+{
+    if (options->ip4so_tx_tstamp)
+        return "ON";
+    else
+        return "OFF";
+};
+
+/*****************************************************************************
+ * ipv4_rx_ts_name()
+ ****************************************************************************/
+const char *ipv4_rx_ts_name(const tpg_ipv4_sockopt_t *options)
+{
+    if (options->ip4so_rx_tstamp)
+        return "ON";
+    else
+        return "OFF";
+};
 
 /*****************************************************************************
  * ipv4_dscp_ecn_to_tos()
@@ -443,8 +489,27 @@ static struct ipv4_hdr *ipv4_build_hdr(l4_control_block_t *l4_cb,
     if (unlikely(!ip_hdr))
         return NULL;
 
+    if (unlikely(sockopt->so_ipv4.ip4so_tx_tstamp)) {
+        uint16_t              ip_opt_len, offset;
+        ipv4_tstamp_option_t *ip_opt;
+
+        offset = mbuf->l2_len + ip_hdr_len + sizeof(ipv4_option_hdr_t);
+        ip_opt_len = sizeof(ipv4_tstamp_option_t);
+        ip_hdr_len += ip_opt_len;
+
+        ip_opt = (ipv4_tstamp_option_t *) rte_pktmbuf_append(mbuf, ip_opt_len);
+        if (unlikely(ip_opt == NULL))
+            TPG_ERROR_ABORT("ERROR: Failed to allocate ip_opt!\n");
+        ip_opt->hdr.ipt_len = ip_opt_len;
+        ip_opt->hdr.ipt_ptr = ip_opt_len + 1;
+        ip_opt->hdr.ipt_code = IPOPT_TS;
+        ip_opt->hdr.ipt_flg_oflow = IPOPT_TS_TSONLY;
+
+        tstamp_tx_pkt(mbuf, offset, sizeof(ip_opt->data));
+    }
+
     ip_hdr->version_ihl = (4 << 4) | (ip_hdr_len >> 2);
-    ip_hdr->type_of_service = sockopt->so_ipv4.io_tos;
+    ip_hdr->type_of_service = sockopt->so_ipv4.ip4so_tos;
     ip_hdr->total_length = rte_cpu_to_be_16(ip_hdr_len + l4_len);
     ip_hdr->packet_id = rte_rand();
     ip_hdr->fragment_offset = rte_cpu_to_be_16(0);
@@ -536,6 +601,9 @@ struct rte_mbuf *ipv4_receive_pkt(packet_control_block_t *pcb,
     unsigned int           ip_hdr_len;
     tpg_ipv4_statistics_t *stats;
     struct ipv4_hdr       *ip_hdr;
+    uint64_t               ipv4_tstamp_value;
+
+    ipv4_tstamp_value = 0;
 
     stats = STATS_LOCAL(tpg_ipv4_statistics_t, pcb->pcb_port);
 
@@ -644,22 +712,13 @@ struct rte_mbuf *ipv4_receive_pkt(packet_control_block_t *pcb,
         INC_STATS(stats, ips_reserved_bit_set);
     }
 
-    if (PKT_TRACE_ENABLED(pcb)) {
-        unsigned int  i;
-        uint32_t     *options = (uint32_t *) (ip_hdr + 1);
-
-        for (i = 0;
-             i < ((ip_hdr_len - sizeof(struct ipv4_hdr)) / sizeof(uint32_t));
-             i++) {
-
-            PKT_TRACE(pcb, IPV4, DEBUG, "  option word 0x%2.2X: 0x%8.8X",
-                      i,
-                      rte_be_to_cpu_32(options[i]));
-        }
-    }
-
 #endif
 
+    if (unlikely(ip_hdr_len > sizeof(struct ipv4_hdr))) {
+        if (ipv4_parse_options(mbuf, ip_hdr_len, stats, &ipv4_tstamp_value,
+                               pcb))
+            return mbuf;
+    }
     /*
      * Handle checksum...
      */
@@ -716,10 +775,104 @@ struct rte_mbuf *ipv4_receive_pkt(packet_control_block_t *pcb,
     }
 
     if (ip_hdr->next_proto_id == IPPROTO_TCP)
-        return tcp_receive_pkt(pcb, mbuf);
+        mbuf = tcp_receive_pkt(pcb, mbuf);
     else if (ip_hdr->next_proto_id == IPPROTO_UDP)
-        return udp_receive_pkt(pcb, mbuf);
+        mbuf = udp_receive_pkt(pcb, mbuf);
+
+    if (pcb->pcb_sockopt)
+        ipv4_latency_check(pcb, ipv4_tstamp_value);
 
     return mbuf;
 }
 
+/*****************************************************************************
+ * ipv4_parse_options()
+ ****************************************************************************/
+static int ipv4_parse_options(struct rte_mbuf *mbuf, uint32_t total_len,
+                              tpg_ipv4_statistics_t *stats,
+                              uint64_t *tstamp_value,
+                              packet_control_block_t *pcb)
+{
+    uint32_t           offset;
+    uint32_t           std_ipv4_hdr_len;
+    ipv4_option_hdr_t *ip_opt_hdr;
+
+    std_ipv4_hdr_len = sizeof(struct ipv4_hdr);
+    offset = std_ipv4_hdr_len;     /* already processed options length */
+    total_len -= std_ipv4_hdr_len; /* remaining options length to process */
+
+    while (total_len > 0) {
+        if (unlikely(total_len < sizeof(ipv4_option_hdr_t))) {
+            /* Corrupted packet. */
+            INC_STATS(stats, ips_invalid_opt);
+            return -EINVAL;
+        }
+
+        ip_opt_hdr = rte_pktmbuf_mtod_offset(mbuf, ipv4_option_hdr_t *, offset);
+
+        if (unlikely(total_len < ip_opt_hdr->ipt_len)) {
+            /* Corrupted packet. */
+            INC_STATS(stats, ips_invalid_opt);
+            return -EINVAL;
+        }
+
+        /* Parse options (only TS for now). */
+        if (ip_opt_hdr->ipt_code == IPOPT_TS) {
+            if (unlikely(ip_opt_hdr->ipt_len < sizeof(ipv4_tstamp_option_t))) {
+                /* Corrupted packet. */
+                INC_STATS(stats, ips_invalid_opt);
+                return -EINVAL;
+            }
+
+            *tstamp_value = ipv4_parse_option_timestamp(mbuf, offset);
+        } else {
+            PKT_TRACE(pcb, IPV4, DEBUG, "  option code 0x%8.8X",
+                      rte_be_to_cpu_32(ip_opt_hdr->ipt_code));
+        }
+
+        total_len -= ip_opt_hdr->ipt_len;
+        offset    += ip_opt_hdr->ipt_len;
+    }
+
+    return 0;
+}
+
+/*****************************************************************************
+ * ipv4_parse_option_timestamp()
+ ****************************************************************************/
+static uint64_t ipv4_parse_option_timestamp(struct rte_mbuf *mbuf,
+                                            uint32_t offset)
+ {
+    uint32_t              tstamp_support[2];
+    ipv4_tstamp_option_t *ipv4_tstamp_option;
+
+    ipv4_tstamp_option =
+        rte_pktmbuf_mtod_offset(mbuf, ipv4_tstamp_option_t *, offset);
+    tstamp_support[0] = rte_be_to_cpu_32(ipv4_tstamp_option->data[0]);
+    tstamp_support[1] = rte_be_to_cpu_32(ipv4_tstamp_option->data[1]);
+
+    return TSTAMP_JOIN(tstamp_support[1], tstamp_support[0]);
+}
+
+/*****************************************************************************
+ * ipv4_latency_check()
+ ****************************************************************************/
+static void ipv4_latency_check(packet_control_block_t *pcb, uint64_t tstamp)
+{
+    l4_control_block_t *l4cb = NULL;
+
+    if (pcb->pcb_sockopt->so_ipv4.ip4so_rx_tstamp && pcb->pcb_tstamp) {
+        l4cb = container_of(pcb->pcb_sockopt, l4_control_block_t, l4cb_sockopt);
+        test_update_latency(l4cb, tstamp, pcb->pcb_tstamp);
+    }
+}
+
+/*****************************************************************************
+ * ipv4_recalc_tstamp_cksum()
+ ****************************************************************************/
+/*static void ipv4_recalc_tstamp_cksum(struct rte_mbuf *mbuf, uint32_t offset,
+ *                                     uint32_t size)
+ *{
+ *      TODO: support this functionality
+ *}
+ */

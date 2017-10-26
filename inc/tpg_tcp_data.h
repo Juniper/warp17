@@ -76,9 +76,10 @@
 static_assert(sizeof(tcb_buf_hdr_t) <= TCB_MIN_HDRS_SZ,
               "Not enough headroom in the mbuf!");
 
-#define TCB_MTU(tcb) \
-    (RTE_PER_LCORE(local_port_dev_info)[(tcb)->tcb_l4.l4cb_interface].pi_mtu - TCB_MIN_HDRS_SZ)
-
+#define TCB_MTU(tcb)                                                           \
+    (RTE_PER_LCORE(local_port_dev_info)[(tcb)->tcb_l4.l4cb_interface].pi_mtu - \
+     ipv4_get_sockopt(&(tcb)->tcb_l4.l4cb_sockopt)->ip4so_hdr_opt_len -        \
+     TCB_MIN_HDRS_SZ)
 /*****************************************************************************
  * TCP Send related macros
  ****************************************************************************/

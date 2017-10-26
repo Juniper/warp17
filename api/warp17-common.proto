@@ -68,10 +68,11 @@ enum Constants {
     option allow_alias = true;
     option (warp17_constants) = true;
 
-    TPG_TEST_MAX_ENTRIES = 16;
-    TPG_TEST_MAX_L3_INTF = 10;
-    TPG_TS_MAX_STATE     = 12;
-    TPG_HTTP_MAX_OPTIONS = 32;
+    TPG_TEST_MAX_ENTRIES           = 16;
+    TPG_TEST_MAX_L3_INTF           = 10;
+    TPG_TS_MAX_STATE               = 12;
+    TPG_HTTP_MAX_OPTIONS           = 32;
+    TPG_TSTAMP_SAMPLES_MAX_BUFSIZE = 1000;
 }
 
 extend google.protobuf.FieldOptions {

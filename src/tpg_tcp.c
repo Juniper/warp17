@@ -567,6 +567,9 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
             pcb->pcb_trace = true;
 
         PKT_TRACE(pcb, TCP, DEBUG, "tcb found in state(%d)", tcb->tcb_state);
+
+        pcb->pcb_sockopt = &tcb->tcb_l4.l4cb_sockopt;
+
         tsm_dispatch_net_event(tcb, TE_SEGMENT_ARRIVES, pcb);
 
         /* If the stack decided to keep this packet we shouldn' allow the
@@ -615,6 +618,7 @@ static struct tcp_hdr *tcp_build_hdr(tcp_control_block_t *tcb,
     uint16_t        tcp_hdr_len = sizeof(struct tcp_hdr);
     uint16_t        tcp_hdr_offset = rte_pktmbuf_data_len(mbuf);
     struct tcp_hdr *tcp_hdr;
+    uint32_t        ip_hdr_len;
 
     /* TODO: Support options, we need more room */
     tcp_hdr = (struct tcp_hdr *) rte_pktmbuf_append(mbuf, tcp_hdr_len);
@@ -647,8 +651,12 @@ static struct tcp_hdr *tcp_build_hdr(tcp_control_block_t *tcb,
         mbuf->ol_flags |= PKT_TX_TCP_CKSUM | PKT_TX_IPV4;
         mbuf->l4_len = tcp_hdr_len;
 
-        tcp_hdr->cksum = rte_ipv4_phdr_cksum(ipv4_hdr, mbuf->ol_flags);
+        ip_hdr_len = ((ipv4_hdr->version_ihl & 0x0F) << 2);
 
+        tcp_hdr->cksum =
+            ipv4_udptcp_phdr_cksum(ipv4_hdr,
+                                   rte_cpu_to_be_16(ipv4_hdr->total_length) -
+                                        ip_hdr_len);
     } else {
         /*
          * No HW checksum support do it manually, however up to here we can only

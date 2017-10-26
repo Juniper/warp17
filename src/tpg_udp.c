@@ -341,6 +341,9 @@ struct rte_mbuf *udp_receive_pkt(packet_control_block_t *pcb,
         if (unlikely(ucb->ucb_trace))
             pcb->pcb_trace = true;
 
+        if (ucb != NULL)
+            pcb->pcb_sockopt = &ucb->ucb_l4.l4cb_sockopt;
+
         udp_process_incoming(ucb, mbuf);
 
         /* If the stack decided to keep this packet we shouldn' allow the
@@ -365,6 +368,7 @@ static struct udp_hdr *udp_build_hdr(udp_control_block_t *ucb,
     uint16_t        udp_hdr_len = sizeof(struct udp_hdr);
     uint16_t        udp_hdr_offset = rte_pktmbuf_data_len(mbuf);
     struct udp_hdr *udp_hdr;
+    int             ip_hdr_len;
 
     udp_hdr = (struct udp_hdr *) rte_pktmbuf_append(mbuf, udp_hdr_len);
 
@@ -384,12 +388,12 @@ static struct udp_hdr *udp_build_hdr(udp_control_block_t *ucb,
         mbuf->ol_flags |= PKT_TX_UDP_CKSUM | PKT_TX_IPV4;
         mbuf->l4_len = udp_hdr_len;
 
-        udp_hdr->dgram_cksum = rte_ipv4_phdr_cksum(ipv4_hdr, mbuf->ol_flags);
-
+        ip_hdr_len = ((ipv4_hdr->version_ihl & 0x0F) << 2);
+        udp_hdr->dgram_cksum =
+            ipv4_udptcp_phdr_cksum(ipv4_hdr,
+                                   rte_cpu_to_be_16(ipv4_hdr->total_length) -
+                                   (ip_hdr_len));
     } else {
-        /*
-         * No HW checksum support do it manually...
-         */
         /*
          * No HW checksum support do it manually, however up to here we can only
          * calculate the header checksum, so we do...

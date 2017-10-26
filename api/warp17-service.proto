@@ -110,15 +110,16 @@ message TestCaseResult {
 }
 
 message UpdateArg {
-    required TestCaseArg  ua_tc_arg     = 1;
-    optional Rate         ua_rate_open  = 2;
-    optional Rate         ua_rate_send  = 3;
-    optional Rate         ua_rate_close = 4;
-    optional Delay        ua_init_delay = 5;
-    optional Delay        ua_uptime     = 6;
-    optional Delay        ua_downtime   = 7;
-    optional TestCriteria ua_criteria   = 8;
-    optional bool         ua_async      = 9;
+    required TestCaseArg     ua_tc_arg     = 1;
+    optional Rate            ua_rate_open  = 2;
+    optional Rate            ua_rate_send  = 3;
+    optional Rate            ua_rate_close = 4;
+    optional Delay           ua_init_delay = 5;
+    optional Delay           ua_uptime     = 6;
+    optional Delay           ua_downtime   = 7;
+    optional TestCriteria    ua_criteria   = 8;
+    optional bool            ua_async      = 9;
+    optional TestCaseLatency ua_latency    = 10;
 }
 
 message TestCaseClientResult {

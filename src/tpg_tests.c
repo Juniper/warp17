@@ -57,7 +57,6 @@
 /*****************************************************************************
  * Include files
  ****************************************************************************/
-#include <rte_cycles.h>
 
 #include "tcp_generator.h"
 
@@ -120,6 +119,11 @@ static uint32_t test_case_execute_udp_close(test_case_info_t *tc_info,
 static uint32_t test_case_execute_udp_send(test_case_info_t *tc_info,
                                            test_case_init_msg_t *cfg,
                                            uint32_t to_send_cnt);
+static void test_case_update_latency_stats(tpg_latency_stats_t *stats,
+                                           test_oper_latency_state_t *buffer,
+                                           tpg_test_case_latency_t *tc_latency);
+
+static void test_case_latency_init(test_case_info_t *tc_info);
 
 /*****************************************************************************
  * TCP/UDP close functions
@@ -253,6 +257,103 @@ void test_resched_send(test_oper_state_t *ts, uint32_t eth_port,
                              eth_port,
                              test_case_id) == 0) {
         ts->tos_send_in_progress = true;
+    }
+}
+
+/*****************************************************************************
+ * test_latency_state_init
+ ****************************************************************************/
+void test_latency_state_init(test_oper_latency_state_t *buffer, uint32_t len)
+{
+    bzero(buffer, sizeof(*buffer));
+    buffer->tols_length = len;
+}
+
+/*****************************************************************************
+ * test_latency_state_add()
+ ****************************************************************************/
+void test_latency_state_add(test_oper_latency_state_t *buffer, uint64_t tstamp,
+                            tpg_latency_stats_t *tcls_sample_stats)
+{
+    uint32_t position;
+
+    position = (buffer->tols_actual_length + buffer->tols_start_index) %
+        buffer->tols_length;
+
+    if (buffer->tols_actual_length + 1 <= buffer->tols_length) {
+        buffer->tols_timestamps[position] = tstamp;
+        buffer->tols_actual_length++;
+    } else {
+        uint64_t retain_tstamp;
+
+        retain_tstamp = buffer->tols_timestamps[position];
+        buffer->tols_timestamps[position] = tstamp;
+
+        tcls_sample_stats->ls_sum_latency -= retain_tstamp;
+        tcls_sample_stats->ls_samples_count--;
+    }
+
+}
+
+/*****************************************************************************
+ * test_update_latency_stats()
+ ****************************************************************************/
+static void test_update_latency_stats(tpg_latency_stats_t *stats,
+                                      uint64_t latency,
+                                      tpg_test_case_latency_t *tci_latency)
+{
+    int64_t avg = 0;
+
+    if (stats->ls_samples_count > 0)
+        avg = stats->ls_sum_latency / stats->ls_samples_count;
+
+    if (tci_latency->has_tcs_max) {
+        if (latency > tci_latency->tcs_max)
+            INC_STATS(stats, ls_max_exceeded);
+    }
+
+    if (tci_latency->has_tcs_max_avg) {
+        if (avg > tci_latency->tcs_max_avg)
+            INC_STATS(stats, ls_max_average_exceeded);
+    }
+
+    stats->ls_samples_count++;
+    stats->ls_sum_latency += latency;
+
+    if (latency < stats->ls_min_latency)
+        stats->ls_min_latency = latency;
+    if (latency > stats->ls_max_latency)
+        stats->ls_max_latency = latency;
+}
+
+/*****************************************************************************
+ * test_update_latency()
+ ****************************************************************************/
+void test_update_latency(l4_control_block_t *l4cb, uint64_t sent_tstamp,
+                         uint64_t rcv_tstamp)
+{
+    test_case_info_t              *tc_info;
+    tpg_test_case_latency_stats_t *stats;
+    int64_t                        latency;
+
+    tc_info = TEST_GET_INFO(l4cb->l4cb_interface, l4cb->l4cb_test_case_id);
+    stats = &tc_info->tci_general_stats.tcs_latency_stats;
+
+    if (rcv_tstamp < sent_tstamp || sent_tstamp == 0 || rcv_tstamp == 0) {
+        INC_STATS(stats, tcls_invalid_lat);
+        return;
+    }
+
+    latency = rcv_tstamp - sent_tstamp;
+
+    /* Global stats */
+    test_update_latency_stats(&stats->tcls_stats, latency,
+                              &tc_info->tci_latency);
+
+    /* Recent stats */
+    if (tc_info->tci_latency_state.tols_length != 0) {
+        test_latency_state_add(&tc_info->tci_latency_state,
+                               latency, &stats->tcls_sample_stats);
     }
 }
 
@@ -1700,6 +1801,30 @@ static int test_case_init_cb(uint16_t msgid, uint16_t lcore, void *msg)
     tc_info->tci_state.tos_send_in_progress = false;
     tc_info->tci_state.tos_send_rate_achieved = false;
 
+    tc_info->tci_latency = im->tcim_latency;
+
+    if (tc_info->tci_cfg_msg.tcim_sockopt.so_ipv4.ip4so_tx_tstamp) {
+        tstamp_tx_post_cb_t cb = NULL;
+
+        /* TODO: set callback ipv4 recalc if defined(TPG_SW_CHECKSUMMING) or
+         * when the NIC doesn't support checksum offload.
+         * cb = ipv4_recalc_tstamp_cksum(mbuf, offset, size);
+         */
+        tstamp_start_tx(im->tcim_eth_port,
+                        port_get_tx_queue_id(lcore, im->tcim_eth_port), cb);
+    }
+
+    if (tc_info->tci_cfg_msg.tcim_sockopt.so_ipv4.ip4so_rx_tstamp) {
+        tstamp_start_rx(im->tcim_eth_port,
+                        port_get_rx_queue_id(lcore, im->tcim_eth_port));
+        test_case_latency_init(tc_info);
+
+        /* Initialize latency buffer. */
+        test_latency_state_init(&tc_info->tci_latency_state,
+                                tc_info->tci_latency.has_tcs_samples ?
+                                tc_info->tci_latency.tcs_samples : 0);
+    }
+
     /* Initialize operational part */
     test_case_init_state(&tc_info->tci_state);
     switch (im->tcim_type) {
@@ -1736,6 +1861,22 @@ static int test_case_init_cb(uint16_t msgid, uint16_t lcore, void *msg)
 
     tc_info->tci_state.tos_configured = true;
     return 0;
+}
+
+/*****************************************************************************
+ * test_case_latency_init()
+ ****************************************************************************/
+void test_case_latency_init(test_case_info_t *tc_info)
+{
+    /* We don't bzero "test_oper_latency_state_t" we choose to keep recent
+     * stats updated here instead than mgmt core.
+     */
+    bzero(&tc_info->tci_general_stats.tcs_latency_stats,
+          sizeof(tc_info->tci_general_stats.tcs_latency_stats));
+    tc_info->tci_general_stats.tcs_latency_stats.tcls_stats.ls_min_latency =
+        UINT32_MAX;
+    tc_info->tci_general_stats.tcs_latency_stats.tcls_sample_stats
+        .ls_min_latency = UINT32_MAX;
 }
 
 /*****************************************************************************
@@ -1911,6 +2052,16 @@ static int test_case_stop_cb(uint16_t msgid, uint16_t lcore __rte_unused,
     tc_info->tci_state.tos_running = false;
     tc_info->tci_state.tos_configured = false;
 
+    if (tc_info->tci_cfg_msg.tcim_sockopt.so_ipv4.ip4so_tx_tstamp) {
+        tstamp_stop_tx(sm->tcsm_eth_port,
+                       port_get_tx_queue_id(lcore, sm->tcsm_eth_port));
+    }
+
+    if (tc_info->tci_cfg_msg.tcim_sockopt.so_ipv4.ip4so_rx_tstamp) {
+        tstamp_stop_rx(sm->tcsm_eth_port,
+                       port_get_tx_queue_id(lcore, sm->tcsm_eth_port));
+    }
+
     if (tc_info->tci_cfg_msg.tcim_type == TEST_CASE_TYPE__SERVER) {
         app_id = tc_info->tci_cfg_msg.tcim_server.srv_app.as_app_proto;
         APP_SRV_CALL(tc_stop, app_id)(&tc_info->tci_cfg_msg);
@@ -1942,6 +2093,16 @@ static int test_case_stats_req_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 
     tc_info = TEST_GET_INFO(sm->tcsrm_eth_port, sm->tcsrm_test_case_id);
 
+    /* Here we walk through the buffer in order to fill the recent stats */
+    if (tc_info->tci_cfg_msg.tcim_sockopt.so_ipv4.ip4so_rx_tstamp) {
+        tpg_test_case_latency_stats_t *tc_latency_stats;
+
+        tc_latency_stats = &tc_info->tci_general_stats.tcs_latency_stats;
+
+        test_case_update_latency_stats(&tc_latency_stats->tcls_sample_stats,
+                                       &tc_info->tci_latency_state,
+                                       &tc_info->tci_latency);
+    }
 
     /* Struct copy the stats! */
     *sm->tcsrm_test_case_stats = tc_info->tci_general_stats;
@@ -1950,6 +2111,9 @@ static int test_case_stats_req_cb(uint16_t msgid, uint16_t lcore __rte_unused,
     /* Clear the runtime stats. They're aggregated by the test manager.
      * Don't clear the start and end time for the gen stats!
      */
+    if (tc_info->tci_cfg_msg.tcim_sockopt.so_ipv4.ip4so_rx_tstamp)
+        test_case_latency_init(tc_info);
+
     switch (tc_info->tci_cfg_msg.tcim_type) {
     case TEST_CASE_TYPE__SERVER:
         /* Clear the gen stats. */
@@ -2000,7 +2164,50 @@ static int test_case_rates_stats_req_cb(uint16_t msgid,
 
     /* Store the new initial timestamp. */
     tc_info->tci_rate_stats.tcrs_start_time = now;
+
     return 0;
+}
+
+/*****************************************************************************
+ * test_case_update_latency_stats()
+ ****************************************************************************/
+static void test_case_update_latency_stats(tpg_latency_stats_t *stats,
+                                           test_oper_latency_state_t *buffer,
+                                           tpg_test_case_latency_t *tc_latency)
+{
+    uint64_t sum;
+    uint64_t min;
+    uint64_t max;
+    uint64_t i;
+
+    stats->ls_max_exceeded = 0;
+    stats->ls_max_average_exceeded = 0;
+    max = 0;
+    sum = 0;
+    min = UINT32_MAX;
+
+    for (i = 0; i < buffer->tols_actual_length; i++) {
+        sum += buffer->tols_timestamps[i];
+        if (buffer->tols_timestamps[i] < min)
+            min = buffer->tols_timestamps[i];
+        if (buffer->tols_timestamps[i] > max)
+            max = buffer->tols_timestamps[i];
+
+        if (tc_latency->has_tcs_max)
+            if (buffer->tols_timestamps[i] > tc_latency->tcs_max)
+                INC_STATS(stats, ls_max_exceeded);
+
+        if (tc_latency->has_tcs_max_avg)
+            if ((sum / (i+1)) > tc_latency->tcs_max_avg)
+                INC_STATS(stats, ls_max_average_exceeded);
+
+    }
+
+    stats->ls_sum_latency = sum;
+    stats->ls_max_latency = max;
+    stats->ls_min_latency = min;
+    stats->ls_samples_count = buffer->tols_actual_length;
+
 }
 
 /*****************************************************************************

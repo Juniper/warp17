@@ -66,6 +66,7 @@ sys.path.append('../api/generated/py')
 from warp17_ut import Warp17UnitTestCase
 from warp17_ut import Warp17TrafficTestCase
 from warp17_ut import Warp17PortTestCase
+from warp17_ut import Warp17NoTrafficTestCase
 
 from warp17_sockopt_pb2 import *
 from warp17_service_pb2 import *
@@ -241,19 +242,30 @@ class TestIPv4SockOpt(Warp17TrafficTestCase, Warp17UnitTestCase):
     def dscp_ecn_to_tos(dscp_val, ecn_val):
         return ((dscp_val << 2) | ecn_val)
 
-    ##################################################################
+    ###################################################################
     # Overrides of Warp17TrafficTestCase specific to IPv4 stack options
-    ##################################################################
+    ###################################################################
     def get_updates(self):
         for (dscp_name, dscp) in TestIPv4SockOpt.dscp_values:
             for (ecn_name, ecn) in TestIPv4SockOpt.ecn_values:
                 self.lh.info('IPv4 DSCP {} ECN {}'.format(dscp_name, ecn_name))
                 tos = self.dscp_ecn_to_tos(dscp, ecn)
-                yield(Ipv4Sockopt(io_tos=tos), Ipv4Sockopt(io_tos=tos))
+                yield(Ipv4Sockopt(ip4so_tos=tos), Ipv4Sockopt(ip4so_tos=tos))
+
+        self.lh.info('IPV4 ip4so_rx_tstamp')
+        for opt in [True, False]:
+            yield (Ipv4Sockopt(ip4so_rx_tstamp=opt),
+                   Ipv4Sockopt(ip4so_rx_tstamp=opt))
+
+        self.lh.info('IPV4 ip4so_rx_tstamp')
+        for opt in [True, False]:
+            yield (Ipv4Sockopt(ip4so_tx_tstamp=opt),
+                   Ipv4Sockopt(ip4so_tx_tstamp=opt))
+
 
     def get_invalid_updates(self):
-        yield(Ipv4Sockopt(io_tos=TestIPv4SockOpt.MAX_TOS+1),
-              Ipv4Sockopt(io_tos=TestIPv4SockOpt.MAX_TOS+1))
+        yield(Ipv4Sockopt(ip4so_tos=TestIPv4SockOpt.MAX_TOS+1),
+              Ipv4Sockopt(ip4so_tos=TestIPv4SockOpt.MAX_TOS+1))
 
     def update(self, tc_arg, ipv4_opts, expected_err):
         err = self.warp17_call('SetIpv4Sockopt',
@@ -264,7 +276,9 @@ class TestIPv4SockOpt(Warp17TrafficTestCase, Warp17UnitTestCase):
         if expected_err == 0:
             ipv4_opts_res = self.warp17_call('GetIpv4Sockopt', tc_arg)
             self.assertEqual(ipv4_opts_res.i4sr_error.e_code, 0)
-            self.assertTrue(self.compare_opts(ipv4_opts, ipv4_opts_res.i4sr_opts))
+
+            self.assertTrue(
+                self.compare_opts(ipv4_opts, ipv4_opts_res.i4sr_opts))
 
     def update_client(self, tc_arg, cl_ipv4_opts, expected_err=0):
         self.update(tc_arg, cl_ipv4_opts, expected_err)

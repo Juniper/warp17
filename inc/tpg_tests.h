@@ -186,16 +186,17 @@ typedef TAILQ_HEAD(tcp_test_cb_list_s, l4_control_block_s) tlkp_test_cb_list_t;
  ****************************************************************************/
 typedef struct test_case_init_msg_s {
 
-    uint32_t             tcim_eth_port;
-    uint32_t             tcim_test_case_id;
+    uint32_t                tcim_eth_port;
+    uint32_t                tcim_test_case_id;
 
-    tpg_test_case_type_t tcim_type;
+    tpg_test_case_type_t    tcim_type;
     union {
-        tpg_client_t     tcim_client;
-        tpg_server_t     tcim_server;
+        tpg_client_t        tcim_client;
+        tpg_server_t        tcim_server;
     };
 
-    sockopt_t            tcim_sockopt;
+    sockopt_t               tcim_sockopt;
+    tpg_test_case_latency_t tcim_latency;
 
 } __tpg_msg test_case_init_msg_t;
 
@@ -275,6 +276,16 @@ typedef uint32_t (*test_case_runner_cb_t)(test_case_info_t *tc_info,
 typedef void (*test_case_close_cb_t)(l4_control_block_t *l4_cb);
 
 /*****************************************************************************
+ * Test latency state
+ ****************************************************************************/
+typedef struct test_oper_latency_state_s {
+    uint64_t tols_timestamps[TPG_TSTAMP_SAMPLES_MAX_BUFSIZE];
+    uint32_t tols_length;
+    uint32_t tols_actual_length;
+    uint32_t tols_start_index;
+} test_oper_latency_state_t;
+
+/*****************************************************************************
  * Test case info
  ****************************************************************************/
 typedef struct test_case_info_s {
@@ -311,6 +322,9 @@ typedef struct test_case_info_s {
     struct rte_timer tci_open_timer;  /* For TCP only. */
     struct rte_timer tci_close_timer; /* For TCP only. */
     struct rte_timer tci_send_timer;  /* Both TCP & UDP. */
+
+    test_oper_latency_state_t tci_latency_state;
+    tpg_test_case_latency_t   tci_latency;
 
 } test_case_info_t;
 
@@ -350,6 +364,18 @@ extern void test_resched_close(test_oper_state_t *ts, uint32_t eth_port,
                                uint32_t test_case_id);
 extern void test_resched_send(test_oper_state_t *ts, uint32_t eth_port,
                               uint32_t test_case_id);
+
+extern void test_update_latency(l4_control_block_t *l4cb,
+                                uint64_t pkt_orig_tstamp, uint64_t pcb_tstamp);
+
+/*****************************************************************************
+ * Management functions for test_oper_latency_state_t
+ ****************************************************************************/
+extern void test_latency_state_init(test_oper_latency_state_t *buffer,
+                                    uint32_t len);
+extern void
+test_latency_state_add(test_oper_latency_state_t *buffer, uint64_t tstamp,
+                       tpg_latency_stats_t *tcls_sample_stats);
 
 #endif /* _H_TPG_TESTS_ */
 

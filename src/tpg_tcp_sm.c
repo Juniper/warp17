@@ -2425,7 +2425,16 @@ static int tsm_SF_closed(tcp_control_block_t *tcb, tcpEvent_t event,
         /* Here we need to cleanup everything about the tcb and also free
          * any memory we allocated for it. This is equivalent to a silent
          * close call.
+         *
+         * Here we set pcb->pcb_sockopt to NULL because after tcp session
+         * will be closed it won't be valid anymore.
          */
+        if (likely(tsm_arg != NULL)) {
+            packet_control_block_t *pcb;
+
+            pcb = tsm_arg;
+            pcb->pcb_sockopt = NULL;
+        }
         return tcp_close_connection(tcb, TCG_SILENT_CLOSE);
 
     case TE_OPEN:

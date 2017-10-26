@@ -76,6 +76,7 @@ from warp17_server_pb2    import *
 from warp17_client_pb2    import *
 from warp17_test_case_pb2 import *
 from warp17_service_pb2   import *
+from warp17_sockopt_pb2   import *
 
 class TestPerfNames:
     # On some port types we might want to skip sending big data
@@ -93,6 +94,10 @@ class TestPerfNames:
     UDP_MCAST_DATA_SETUP_RATE = 'udp-mcast-data-setup-rate'
 
     HTTP_DATA_SETUP_RATE = 'http-data-setup-rate'
+
+    TIMESTAMP_TCP_RATE = 'timestamp_tcp_rate'
+
+    TIMESTAMP_UDP_RATE = 'timestamp_udp_rate'
 
 class TestPerf(Warp17UnitTestCase):
     """Tests the WARP17 performance."""
@@ -129,6 +134,16 @@ class TestPerf(Warp17UnitTestCase):
 
     def _get_expected_tcp_setup(self):
         return Warp17UnitTestCase.env.get_value(TestPerfNames.TCP_SETUP_RATE,
+                                                section=self.CFG_SEC_UNIT_TEST,
+                                                cast=int)
+
+    def _get_expected_tcp_tstamp(self):
+        return Warp17UnitTestCase.env.get_value(TestPerfNames.TIMESTAMP_TCP_RATE,
+                                                section=self.CFG_SEC_UNIT_TEST,
+                                                cast=int)
+
+    def _get_expected_udp_tstamp(self):
+        return Warp17UnitTestCase.env.get_value(TestPerfNames.TIMESTAMP_UDP_RATE,
                                                 section=self.CFG_SEC_UNIT_TEST,
                                                 cast=int)
 
@@ -174,14 +189,26 @@ class TestPerf(Warp17UnitTestCase):
                          'PortStatus Expected')
         return tc_result
 
-    def _sess_setup_rate(self, sip_cnt, dip_cnt, sport_cnt, dport_cnt,
-                         l4_proto,
-                         rate_ccfg,
-                         app_ccfg,
-                         app_scfg,
-                         expected_rate):
-        sess_cnt = sip_cnt * dip_cnt * sport_cnt * dport_cnt
+    def _set_tstamp(self, eth_port, test_case_id):
 
+        if eth_port == 0:
+            ip4_opt = Ipv4Sockopt(ip4so_tx_tstamp=True)
+        elif eth_port == 1:
+            ip4_opt = Ipv4Sockopt(ip4so_rx_tstamp=True)
+
+        ip4_opt_arg = Ipv4SockoptArg(i4sa_tc_arg=TestCaseArg(tca_eth_port=eth_port,
+                                                             tca_test_case_id=test_case_id),
+                                     i4sa_opts=ip4_opt)
+
+        self.assertEqual(
+            self.warp17_call('SetIpv4Sockopt', ip4_opt_arg).e_code,
+            0, 'SetIpv4Sockopt')
+
+    def _sess_setup_rate(self, sip_cnt, dip_cnt, sport_cnt, dport_cnt, l4_proto,
+                         rate_ccfg, app_ccfg, app_scfg, expected_rate, tstamp,
+                         recent_stats):
+        sess_cnt = sip_cnt * dip_cnt * sport_cnt * dport_cnt
+        s_latency = TestCaseLatency()
         # Adjust the session count so we allow some failures
         sess_cnt -= self._get_sess_allowed_failed()
 
@@ -230,7 +257,10 @@ class TestPerf(Warp17UnitTestCase):
                         tc_async=False)
         self.assertEqual(self.warp17_call('ConfigureTestCase', ccfg).e_code, 0,
                          'ConfigureTestCase')
-
+        if tstamp:
+            self._set_tstamp(eth_port=0, test_case_id=0)
+        if recent_stats:
+            s_latency.tcs_samples = 1000
         l4_scfg = L4Server(l4s_proto=l4_proto,
                            l4s_tcp_udp=TcpUdpServer(tus_ports=b2b_ports(dport_cnt)))
         scfg = TestCase(tc_type=SERVER, tc_eth_port=1, tc_id=0,
@@ -239,10 +269,11 @@ class TestPerf(Warp17UnitTestCase):
                                          srv_app=app_scfg),
                         tc_criteria=TestCriteria(tc_crit_type=SRV_UP,
                                                  tc_srv_up=serv_cnt),
-                        tc_async=False)
+                        tc_async=False, tc_latency=s_latency)
         self.assertEqual(self.warp17_call('ConfigureTestCase', scfg).e_code, 0,
                          'ConfigureTestCase')
-
+        if tstamp:
+            self._set_tstamp(eth_port=1, test_case_id=0)
         # Start server test
         self.assertEqual(self.warp17_call('PortStart',
                                           PortArg(pa_eth_port=1)).e_code,
@@ -306,12 +337,9 @@ class TestPerf(Warp17UnitTestCase):
         return rate
 
     def _sess_setup_rate_averaged(self, sip_cnt, dip_cnt, sport_cnt, dport_cnt,
-                                  l4_proto,
-                                  rate_ccfg,
-                                  app_ccfg,
-                                  app_scfg,
-                                  expected_rate = Rate()):
-
+                                  l4_proto, rate_ccfg, app_ccfg, app_scfg,
+                                  expected_rate=Rate(), tstamp=False,
+                                  recent_stats=False):
         self.assertTrue(self.PERF_RUN_COUNT > 2)
         (min, max, total) = \
                 reduce(lambda (min, max, total), rate: \
@@ -319,12 +347,9 @@ class TestPerf(Warp17UnitTestCase):
                              max if max >= rate else rate,
                              total + rate),
                        [self._sess_setup_rate(sip_cnt, dip_cnt, sport_cnt,
-                                              dport_cnt,
-                                              l4_proto,
-                                              rate_ccfg,
-                                              app_ccfg,
-                                              app_scfg,
-                                              expected_rate)
+                                              dport_cnt, l4_proto, rate_ccfg,
+                                              app_ccfg, app_scfg, expected_rate,
+                                              tstamp,recent_stats)
                         for i in range(0, self.PERF_RUN_COUNT)],
                        (sys.maxint, 0, 0))
         avg_rate = (total - min - max) / float(self.PERF_RUN_COUNT - 2)
@@ -362,119 +387,166 @@ class TestPerf(Warp17UnitTestCase):
                          as_http=HttpServer(hs_resp_code=resp_code,
                                             hs_resp_size=resp_size))
 
-    def test_1_4M_tcp_sess_setup_rate(self):
+    def test_01_4M_tcp_sess_setup_rate(self):
         """Tests setting up 4M TCP sessions (no traffic)."""
         """Port 0 is the client, Port 1 is the server"""
 
-        self.lh.info('Test test_1_4M_tcp_sess_setup_rate')
+        self.lh.info('Test test_01_4M_tcp_sess_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
-                                       dport_cnt=100,
-                                       l4_proto=TCP,
+                                       dport_cnt=100, l4_proto=TCP,
                                        rate_ccfg=self._get_rates_client(),
                                        app_ccfg=self._get_raw_app_client(0),
                                        app_scfg=self._get_raw_app_server(0),
                                        expected_rate=self._get_expected_tcp_setup())
 
-    def test_2_8M_tcp_sess_setup_rate(self):
+    def test_02_8M_tcp_sess_setup_rate(self):
         """Tests setting up 8M TCP sessions (no traffic)."""
 
-        self.lh.info('Test test_2_8M_tcp_sess_setup_rate')
+        self.lh.info('Test test_02_8M_tcp_sess_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=4, dip_cnt=1, sport_cnt=20000,
-                                       dport_cnt=100,
-                                       l4_proto=TCP,
+                                       dport_cnt=100, l4_proto=TCP,
                                        rate_ccfg=self._get_rates_client(),
                                        app_ccfg=self._get_raw_app_client(0),
                                        app_scfg=self._get_raw_app_server(0),
                                        expected_rate=self._get_expected_tcp_setup())
 
-    def test_3_10M_tcp_sess_setup_rate(self):
+    def test_03_10M_tcp_sess_setup_rate(self):
         """Tests setting up 10M TCP sessions (no traffic)."""
 
-        self.lh.info('Test test_3_10M_tcp_sess_setup_rate')
+        self.lh.info('Test test_03_10M_tcp_sess_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=5, dip_cnt=1, sport_cnt=20000,
-                                       dport_cnt=100,
-                                       l4_proto=TCP,
+                                       dport_cnt=100, l4_proto=TCP,
                                        rate_ccfg=self._get_rates_client(),
                                        app_ccfg=self._get_raw_app_client(0),
                                        app_scfg=self._get_raw_app_server(0),
                                        expected_rate=self._get_expected_tcp_setup())
 
-    def test_4_4M_tcp_sess_data_10b_setup_rate(self):
+    def test_04_4M_tcp_sess_data_10b_setup_rate(self):
         """Tests setting up 4M TCP sessions + 10 bytes packet data."""
 
-        self.lh.info('Test test_4_4M_tcp_sess_data_10b_setup_rate')
+        self.lh.info('Test test_04_4M_tcp_sess_data_10b_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
-                                       dport_cnt=100,
-                                       l4_proto=TCP,
+                                       dport_cnt=100, l4_proto=TCP,
                                        rate_ccfg=self._get_rates_client(),
                                        app_ccfg=self._get_raw_app_client(10),
                                        app_scfg=self._get_raw_app_server(10),
                                        expected_rate=self._get_expected_tcp_data_setup())
 
-    def test_5_4M_tcp_sess_data_1024b_setup_rate(self):
+    def test_05_4M_tcp_sess_data_1024b_setup_rate(self):
         """Tests setting up 4M TCP sessions + 1024 byte packet data."""
 
         if self._get_skip_big_data():
             self.skipTest('Big packet data tests skipped')
 
-        self.lh.info('Test test_5_4M_tcp_sess_data_1024b_setup_rate')
+        self.lh.info('Test test_05_4M_tcp_sess_data_1024b_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
-                                       dport_cnt=100,
-                                       l4_proto=TCP,
+                                       dport_cnt=100, l4_proto=TCP,
                                        rate_ccfg=self._get_rates_client(),
                                        app_ccfg=self._get_raw_app_client(1024),
                                        app_scfg=self._get_raw_app_server(1024),
                                        expected_rate=self._get_expected_tcp_data_setup())
 
-    def test_6_4M_tcp_sess_data_1300b_setup_rate(self):
+    def test_06_4M_tcp_sess_data_1300b_setup_rate(self):
         """Tests setting up 4M TCP sessions + 1300 bytes packet data."""
 
         if self._get_skip_big_data():
             self.skipTest('Big packet data tests skipped')
 
-        self.lh.info('Test test_6_4M_tcp_sess_data_1300b_setup_rate')
+        self.lh.info('Test test_06_4M_tcp_sess_data_1300b_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
-                                       dport_cnt=100,
-                                       l4_proto=TCP,
+                                       dport_cnt=100, l4_proto=TCP,
                                        rate_ccfg=self._get_rates_client(),
                                        app_ccfg=self._get_raw_app_client(1300),
                                        app_scfg=self._get_raw_app_server(1300),
                                        expected_rate=self._get_expected_tcp_data_setup())
 
-    def test_7_4M_udp_sess_data_10b_setup_rate(self):
+    def test_07_4M_udp_sess_data_10b_setup_rate(self):
         """Tests setting up 4M UDP sessions + 10 byte packet data."""
 
-        self.lh.info('Test test_7_4M_udp_sess_data_10b_setup_rate')
+        self.lh.info('Test test_07_4M_udp_sess_data_10b_setup_rate')
         # No rate limiting for UDP!
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
-                                       dport_cnt=100,
-                                       l4_proto=UDP,
-                                       rate_ccfg=self._get_rates_client(rate_limit=False),
+                                       dport_cnt=100, l4_proto=UDP,
+                                       rate_ccfg=self._get_rates_client(
+                                           rate_limit=False),
                                        app_ccfg=self._get_raw_app_client(10),
                                        app_scfg=self._get_raw_app_server(10),
                                        expected_rate=self._get_expected_udp_data_setup())
 
-    def test_8_4M_http_sess_data_10b_setup_rate(self):
+    def test_08_4M_http_sess_data_10b_setup_rate(self):
         """Tests setting up 4M HTTP GET/200OK sessions + 10 byte packet data."""
 
-        self.lh.info('Test test_8_4M_http_sess_data_10b_setup_rate')
+        self.lh.info('Test test_08_4M_http_sess_data_10b_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
-                                       dport_cnt=100,
-                                       l4_proto=TCP,
+                                       dport_cnt=100, l4_proto=TCP,
                                        rate_ccfg=self._get_rates_client(),
-                                       app_ccfg=self._get_http_app_client(GET, 10),
-                                       app_scfg=self._get_http_app_server(OK_200, 10),
+                                       app_ccfg=self._get_http_app_client(GET,
+                                                                          10),
+                                       app_scfg=self._get_http_app_server(
+                                           OK_200, 10),
                                        expected_rate=self._get_expected_http_setup())
 
-    def test_9_4M_udp_mcast_flows_data_10b_setup_rate(self):
+    def test_09_4M_udp_mcast_flows_data_10b_setup_rate(self):
         """Tests setting up 4M UDP mcast sessions + 10 byte packet data."""
 
-        self.lh.info('Test test_9_4M_udp_mcast_flows_data_10b_setup_rate')
+        self.lh.info('Test test_09_4M_udp_mcast_flows_data_10b_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
-                                       dport_cnt=100,
-                                       l4_proto=UDP,
+                                       dport_cnt=100, l4_proto=UDP,
                                        rate_ccfg=self._get_rates_client(),
                                        app_ccfg=self._get_raw_app_client(10),
                                        app_scfg=self._get_raw_app_server(0),
                                        expected_rate=self._get_expected_udp_mcast_setup())
 
+    def test_10_timestamp_4M_tcp_sess_setup_rate(self):
+        """Tests setting up 4M TCP sessions (no traffic)."""
+        """Port 0 is the client, Port 1 is the server"""
+
+        self.lh.info('Test test_10_timestamp_4M_tcp_sess_setup_rate')
+        self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
+                                       dport_cnt=100, l4_proto=TCP,
+                                       rate_ccfg=self._get_rates_client(),
+                                       app_ccfg=self._get_raw_app_client(0),
+                                       app_scfg=self._get_raw_app_server(0),
+                                       expected_rate=self._get_expected_tcp_tstamp(),
+                                       tstamp=True)
+
+    def test_11_timestamp_4M_udp_sess_data_10b_setup_rate(self):
+        """Tests setting up 4M UDP sessions + 10 byte packet data."""
+
+        self.lh.info('Test test_11_timestamp_4M_udp_sess_data_10b_setup_rate')
+        # No rate limiting for UDP!
+        self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
+                                       dport_cnt=100, l4_proto=UDP,
+                                       rate_ccfg=self._get_rates_client(
+                                           rate_limit=False),
+                                       app_ccfg=self._get_raw_app_client(10),
+                                       app_scfg=self._get_raw_app_server(10),
+                                       expected_rate=self._get_expected_udp_tstamp(),
+                                       tstamp=True)
+
+    def test_12_recent_timestamp_4M_tcp_sess_setup_rate(self):
+        """Tests setting up 4M TCP sessions (no traffic)."""
+        """Port 0 is the client, Port 1 is the server"""
+
+        self.lh.info('Test test_12_recent_timestamp_4M_tcp_sess_setup_rate')
+        self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
+                                       dport_cnt=100, l4_proto=TCP,
+                                       rate_ccfg=self._get_rates_client(),
+                                       app_ccfg=self._get_raw_app_client(0),
+                                       app_scfg=self._get_raw_app_server(0),
+                                       expected_rate=self._get_expected_tcp_tstamp(),
+                                       tstamp=True, recent_stats=True)
+
+    def test_13_recent_timestamp_4M_udp_sess_data_10b_setup_rate(self):
+        """Tests setting up 4M UDP sessions + 10 byte packet data."""
+
+        self.lh.info('Test test_13_recent_timestamp_4M_udp_sess_data_10b_setup_rate')
+        # No rate limiting for UDP!
+        self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
+                                       dport_cnt=100, l4_proto=UDP,
+                                       rate_ccfg=self._get_rates_client(
+                                           rate_limit=False),
+                                       app_ccfg=self._get_raw_app_client(10),
+                                       app_scfg=self._get_raw_app_server(10),
+                                       expected_rate=self._get_expected_udp_tstamp(),
+                                       tstamp=True, recent_stats=True)

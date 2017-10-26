@@ -76,6 +76,8 @@ message TcpSockopt {
 }
 
 message Ipv4Sockopt {
-    optional uint32 io_tos = 3 [default = 0];
+    optional bool   ip4so_rx_tstamp   = 1 [default = false];
+    optional bool   ip4so_tx_tstamp   = 2 [default = false];
+    optional uint32 ip4so_tos         = 3 [default = 0];
 }
 

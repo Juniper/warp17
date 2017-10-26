@@ -61,28 +61,6 @@
 #define _H_TPG_DATA_
 
 /*****************************************************************************
- * Flags to be used in the mbuf user data when passing data from an
- * application to the WARP17 TCP/IP stack.
- ****************************************************************************/
-#define TPG_APP_UINT64_MBUF_FLAG_STATIC 0x0000000000000001
-
-/*****************************************************************************
- * DATA_SET_STATIC()
- *     Uses the userdata field in the mbuf to mark the fact that the data it
- * points to is static data.
- ****************************************************************************/
-#define DATA_SET_STATIC(mbuf) \
-    ((mbuf)->udata64 |= TPG_APP_UINT64_MBUF_FLAG_STATIC)
-
-/*****************************************************************************
- * DATA_IS_STATIC()
- *     Checks the userdata field in the mbuf for the static flag which
- *     indicates the fact that the data it points to is static data.
- ****************************************************************************/
-#define DATA_IS_STATIC(mbuf) \
-    ((mbuf)->udata64 & TPG_APP_UINT64_MBUF_FLAG_STATIC)
-
-/*****************************************************************************
  * data_seg_attach()
  * NOTE:
  *      In case m was marked as STATIC this function emulates what

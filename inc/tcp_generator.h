@@ -74,6 +74,7 @@
 #include <rte_udp.h>
 #include <rte_errno.h>
 #include <rte_kni.h>
+#include <rte_cycles.h>
 
 #include <termios.h>
 #include <cmdline_parse.h>
@@ -169,6 +170,7 @@ typedef struct test_case_info_s test_case_info_t;
 #include "tpg_trace_filter.h"
 #include "tpg_trace_cli.h"
 #include "tpg_trace_msg.h"
+#include "tpg_sockopts.h"
 
 #include "tpg_pcb.h"
 #include "tpg_cli.h"
@@ -195,6 +197,7 @@ typedef struct test_case_info_s test_case_info_t;
 #include "tpg_tcp_sm.h"
 #include "tpg_tcp.h"
 #include "tpg_memory.h"
+#include "tpg_mbuf_user_data.h"
 #include "tpg_data.h"
 #include "tpg_tcp_data.h"
 #include "tpg_tcp_lookup.h"
@@ -207,6 +210,7 @@ typedef struct test_case_info_s test_case_info_t;
 #include "tpg_port.h"
 #include "tpg_route.h"
 #include "tpg_pktloop.h"
+#include "tpg_timestamp.h"
 
 #include "tpg_test_mgmt.h"
 #include "tpg_test_mgmt_api.h"

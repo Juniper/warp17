@@ -1916,7 +1916,8 @@ cmdline_parse_inst_t cmd_tests_show_tcp_opts = {
 };
 
 /****************************************************************************
- * - "set tests ipv4-options port <eth_port> test-case-id <tcid> option value"
+ * - "set tests ipv4-options port <eth_port> test-case-id <tcid> <option value>
+ * | tx-timestamp <0|1> | rx-timestamp <0|1>"
  ****************************************************************************/
 struct cmd_tests_set_ipv4_opts_result {
     cmdline_fixed_string_t set;
@@ -1929,8 +1930,12 @@ struct cmd_tests_set_ipv4_opts_result {
     cmdline_fixed_string_t tos;
 
     union {
-        uint8_t  opt_val_8;
+        uint8_t opt_val_8;
+        bool    opt_val_bool;
     } opt_u;
+
+    cmdline_fixed_string_t tstx_kw;
+    cmdline_fixed_string_t tsrx_kw;
 };
 
 static cmdline_parse_token_string_t cmd_tests_set_ipv4_opts_T_set =
@@ -1956,9 +1961,20 @@ static cmdline_parse_token_string_t cmd_tests_set_ipv4_opts_T_tos =
 static cmdline_parse_token_num_t cmd_tests_set_ipv4_opts_T_opt_val_8 =
     TOKEN_NUM_INITIALIZER(struct cmd_tests_set_ipv4_opts_result, opt_u.opt_val_8, UINT8);
 
+static cmdline_parse_token_string_t cmd_tests_set_ipv4_opts_T_timestamp_tx =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_ipv4_opts_result, tstx_kw, "tx-timestamp");
+
+static cmdline_parse_token_string_t cmd_tests_set_ipv4_opts_T_timestamp_rx =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_ipv4_opts_result, tsrx_kw, "rx-timestamp");
+
+static cmdline_parse_token_num_t cmd_tests_set_ipv4_opts_T_opt_val_bool =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_ipv4_opts_result, opt_u.opt_val_bool, UINT8);
+
 OPT_FILL_TYPEDEF(ipv4, tpg_ipv4_sockopt_t);
 
-OPT_FILL_DEFINE(ipv4, tpg_ipv4_sockopt_t, io_tos, uint8_t);
+OPT_FILL_DEFINE(ipv4, tpg_ipv4_sockopt_t, ip4so_tos, uint8_t);
+OPT_FILL_DEFINE(ipv4, tpg_ipv4_sockopt_t, ip4so_rx_tstamp, bool);
+OPT_FILL_DEFINE(ipv4, tpg_ipv4_sockopt_t, ip4so_tx_tstamp, bool);
 
 static void cmd_tests_set_ipv4_opts_parsed(void *parsed_result,
                                            struct cmdline *cl,
@@ -1990,7 +2006,7 @@ static void cmd_tests_set_ipv4_opts_parsed(void *parsed_result,
 
 cmdline_parse_inst_t cmd_tests_set_ipv4_opts_tos = {
     .f = cmd_tests_set_ipv4_opts_parsed,
-    .data = (void *) &OPT_FILL_PARAM_NAME(ipv4, io_tos),
+    .data = (void *) &OPT_FILL_PARAM_NAME(ipv4, ip4so_tos),
     .help_str = "set tests ipv4-options port <eth_port> test-case-id <tcid> tos <tos-value>",
     .tokens = {
         (void *)&cmd_tests_set_ipv4_opts_T_set,
@@ -2002,6 +2018,42 @@ cmdline_parse_inst_t cmd_tests_set_ipv4_opts_tos = {
         (void *)&cmd_tests_set_ipv4_opts_T_tcid,
         (void *)&cmd_tests_set_ipv4_opts_T_tos,
         (void *)&cmd_tests_set_ipv4_opts_T_opt_val_8,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_tests_set_ip_opts_tx = {
+    .f = cmd_tests_set_ipv4_opts_parsed,
+    .data = (void *) &OPT_FILL_PARAM_NAME(ipv4, ip4so_tx_tstamp),
+    .help_str = "set tests ipv4-options port <eth_port> test-case-id <tcid> tx-timestamp <0|1>",
+    .tokens = {
+        (void *)&cmd_tests_set_ipv4_opts_T_set,
+        (void *)&cmd_tests_set_ipv4_opts_T_tests,
+        (void *)&cmd_tests_set_ipv4_opts_T_ipv4_options,
+        (void *)&cmd_tests_set_ipv4_opts_T_port_kw,
+        (void *)&cmd_tests_set_ipv4_opts_T_port,
+        (void *)&cmd_tests_set_ipv4_opts_T_tcid_kw,
+        (void *)&cmd_tests_set_ipv4_opts_T_tcid,
+        (void *)&cmd_tests_set_ipv4_opts_T_timestamp_tx,
+        (void *)&cmd_tests_set_ipv4_opts_T_opt_val_bool,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_tests_set_ip_opts_rx = {
+    .f = cmd_tests_set_ipv4_opts_parsed,
+    .data = &OPT_FILL_PARAM_NAME(ipv4, ip4so_rx_tstamp),
+    .help_str = "set tests ipv4-options port <eth_port> test-case-id <tcid> rx-timestamp <0|1>",
+    .tokens = {
+        (void *)&cmd_tests_set_ipv4_opts_T_set,
+        (void *)&cmd_tests_set_ipv4_opts_T_tests,
+        (void *)&cmd_tests_set_ipv4_opts_T_ipv4_options,
+        (void *)&cmd_tests_set_ipv4_opts_T_port_kw,
+        (void *)&cmd_tests_set_ipv4_opts_T_port,
+        (void *)&cmd_tests_set_ipv4_opts_T_tcid_kw,
+        (void *)&cmd_tests_set_ipv4_opts_T_tcid,
+        (void *)&cmd_tests_set_ipv4_opts_T_timestamp_rx,
+        (void *)&cmd_tests_set_ipv4_opts_T_opt_val_bool,
         NULL,
     },
 };
@@ -2070,7 +2122,7 @@ static void cmd_tests_set_ipv4_dscp_ecn_parsed(void *parsed_result,
     tpg_ipv4_sockopt_t                         ipv4_sockopt;
     uint8_t                                    tos;
 
-    fill_param = &OPT_FILL_PARAM_NAME(ipv4, io_tos);
+    fill_param = &OPT_FILL_PARAM_NAME(ipv4, ip4so_tos);
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
 
@@ -2163,11 +2215,13 @@ static void cmd_tests_show_ipv4_opts_parsed(void *parsed_result,
                                    &ipv4_sockopt, &parg) != 0)
         return;
 
-    cmdline_printf(cl, "IPv4 TOS DSCP     ECN\n");
-    cmdline_printf(cl, "-------- ---- -------\n");
-    cmdline_printf(cl, "%6s%x %4s %7s\n", "0x", ipv4_sockopt.io_tos,
+    cmdline_printf(cl, "IPv4 TOS DSCP     ECN TX-TS RX-TS\n");
+    cmdline_printf(cl, "-------- ---- ------- ----- -----\n");
+    cmdline_printf(cl, "%7s%x %4s %7s %5s %5s\n", "0x", ipv4_sockopt.ip4so_tos,
                    ipv4_tos_to_dscp_name(&ipv4_sockopt),
-                   ipv4_tos_to_ecn_name(&ipv4_sockopt));
+                   ipv4_tos_to_ecn_name(&ipv4_sockopt),
+                   ipv4_tx_ts_name(&ipv4_sockopt),
+                   ipv4_rx_ts_name(&ipv4_sockopt));
     cmdline_printf(cl, "\n\n");
 }
 
@@ -2268,11 +2322,132 @@ static void cmd_syslog_parsed(void *parsed_result __rte_unused,
 cmdline_parse_inst_t cmd_syslog = {
     .f = cmd_syslog_parsed,
     .data = NULL,
-    .help_str = "syslog",
+    .help_str = "set syslog <level>",
     .tokens = {
         (void *)&cmd_syslog_T_set,
         (void *)&cmd_syslog_T_lognum,
         (void *)&cmd_syslog_T_level,
+        NULL,
+    },
+};
+
+/****************************************************************************
+ * - "set tests latency port <eth_port> test-case-id <tcid> max <value> max-avg
+ * <value> samples <value>"
+ ****************************************************************************/
+struct cmd_latency_result {
+    cmdline_fixed_string_t set;
+    cmdline_fixed_string_t tests;
+    cmdline_fixed_string_t latency;
+    cmdline_fixed_string_t port_kw;
+    uint32_t               port;
+    cmdline_fixed_string_t tcid_kw;
+    uint32_t               tcid;
+    cmdline_fixed_string_t max_kw;
+    uint32_t               max;
+    cmdline_fixed_string_t max_avg_kw;
+    uint32_t               max_avg;
+    cmdline_fixed_string_t samples_kw;
+    uint32_t               samples;
+};
+
+static cmdline_parse_token_string_t cmd_latency_T_set =
+    TOKEN_STRING_INITIALIZER(struct cmd_latency_result, set, "set");
+static cmdline_parse_token_string_t cmd_latency_T_tests =
+    TOKEN_STRING_INITIALIZER(struct cmd_latency_result, tests, "tests");
+static cmdline_parse_token_string_t cmd_latency_T_latency =
+    TOKEN_STRING_INITIALIZER(struct cmd_latency_result, latency, "latency");
+static cmdline_parse_token_string_t cmd_latency_T_port_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_latency_result, port_kw, "port");
+static cmdline_parse_token_num_t cmd_latency_T_port =
+    TOKEN_NUM_INITIALIZER(struct cmd_latency_result, port, UINT32);
+static cmdline_parse_token_string_t cmd_latency_T_tcid_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_latency_result, tcid_kw, "test-case-id");
+static cmdline_parse_token_num_t cmd_latency_T_tcid =
+    TOKEN_NUM_INITIALIZER(struct cmd_latency_result, tcid, UINT32);
+static cmdline_parse_token_string_t cmd_latency_T_max_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_latency_result, max_kw, "max");
+static cmdline_parse_token_num_t cmd_latency_T_max =
+    TOKEN_NUM_INITIALIZER(struct cmd_latency_result, max, UINT32);
+static cmdline_parse_token_string_t cmd_latency_T_max_avg_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_latency_result, max_avg_kw, "max-avg");
+static cmdline_parse_token_num_t cmd_latency_T_max_avg =
+    TOKEN_NUM_INITIALIZER(struct cmd_latency_result, max_avg, UINT32);
+static cmdline_parse_token_string_t cmd_latency_T_samples_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_latency_result, samples_kw, "samples");
+static cmdline_parse_token_num_t cmd_latency_T_samples =
+    TOKEN_NUM_INITIALIZER(struct cmd_latency_result, samples, UINT32);
+
+static void cmd_latency_parsed(void *parsed_result, struct cmdline *cl,
+                              void *data __rte_unused)
+{
+    printer_arg_t              parg;
+    struct cmd_latency_result *pr;
+    tpg_update_arg_t           update_arg;
+    tpg_ipv4_sockopt_t         ipv4_sockopt;
+
+    tpg_xlate_default_UpdateArg(&update_arg);
+    parg = TPG_PRINTER_ARG(cli_printer, cl);
+    pr = parsed_result;
+
+    if (test_mgmt_get_ipv4_sockopt(pr->port, pr->tcid, &ipv4_sockopt, &parg))
+        return;
+
+    /*
+     * Once we will give possibility of changing test config at runtime thise
+     * should go away.
+     */
+    if (!ipv4_sockopt.ip4so_rx_tstamp) {
+        cmdline_printf(cl,
+                       "WARNING: Seting latency option without RX timestamping "
+                       "enabled in test case %"PRIu32" config on "
+                       "port %"PRIu32"\n",
+                       pr->tcid, pr->port);
+    }
+
+    if (pr->samples) {
+        TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg.ua_latency, tcs_samples,
+                                     pr->samples);
+    }
+
+    if (pr->max) {
+        TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg.ua_latency, tcs_max,
+                                     pr->max);
+    }
+
+    if (pr->max_avg) {
+        TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg.ua_latency, tcs_max_avg,
+                                     pr->max_avg);
+    }
+
+    update_arg.has_ua_latency = true;
+
+    if (test_mgmt_update_test_case(pr->port, pr->tcid, &update_arg, &parg) == 0)
+        cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
+                       pr->port, pr->tcid);
+    else
+        cmdline_printf(cl, "ERROR: Failed updating test case %"PRIu32
+                       " config on port %"PRIu32"\n", pr->tcid, pr->port);
+}
+
+cmdline_parse_inst_t cmd_latency = {
+    .f = cmd_latency_parsed,
+    .data = NULL,
+    .help_str = "set tests latency port <eth_port> test-case-id <tcid> max <value> max-avg <value> samples <value>",
+    .tokens = {
+        (void *)&cmd_latency_T_set,
+        (void *)&cmd_latency_T_tests,
+        (void *)&cmd_latency_T_latency,
+        (void *)&cmd_latency_T_port_kw,
+        (void *)&cmd_latency_T_port,
+        (void *)&cmd_latency_T_tcid_kw,
+        (void *)&cmd_latency_T_tcid,
+        (void *)&cmd_latency_T_max_kw,
+        (void *)&cmd_latency_T_max,
+        (void *)&cmd_latency_T_max_avg_kw,
+        (void *)&cmd_latency_T_max_avg,
+        (void *)&cmd_latency_T_samples_kw,
+        (void *)&cmd_latency_T_samples,
         NULL,
     },
 };
@@ -2302,6 +2477,8 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_set_noasync,
     &cmd_tests_set_async,
     &cmd_tests_set_mtu,
+    &cmd_tests_set_ip_opts_tx,
+    &cmd_tests_set_ip_opts_rx,
     &cmd_tests_set_tcp_opts_win_size,
     &cmd_tests_set_tcp_opts_syn_retry,
     &cmd_tests_set_tcp_opts_syn_ack_retry,
@@ -2319,6 +2496,7 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_show_ipv4_opts,
     &cmd_exit,
     &cmd_syslog,
+    &cmd_latency,
     NULL,
 };
 
