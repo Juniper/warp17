@@ -168,4 +168,34 @@ class TestHttpCfg(Warp17TrafficTestCase, Warp17UnitTestCase):
         self.assertTrue(req_cnt > 0)
         self.assertTrue(resp_cnt > 0)
 
+    def test_multiple_test_cases(self):
+        """Test multiple HTTP simultaneous test cases"""
+
+        # Create an additional client test case to run in parallel.
+        client_tc2 = self.get_client_test_case(eth_port=0, tc_id=1)
+
+        # Just change the source ports to make sure they don't overlap
+        l4_sports = client_tc2.tc_client.cl_l4.l4c_tcp_udp.tuc_sports
+
+        # Use a single new source port (i.e., last source port of the first
+        # test case + 1)
+        client_tc2.tc_client.cl_l4.l4c_tcp_udp.tuc_sports.l4pr_start = l4_sports.l4pr_end + 1
+        client_tc2.tc_client.cl_l4.l4c_tcp_udp.tuc_sports.l4pr_end = l4_sports.l4pr_end + 2
+
+        client_tc1_arg = TestCaseArg(tca_eth_port=0, tca_test_case_id=0)
+        client_tc2_arg = TestCaseArg(tca_eth_port=0, tca_test_case_id=1)
+
+        # Configure the new test case, start the tests and expect all test
+        # cases to pass.
+        self.configureTestCase(client_tc2, 'Client2')
+
+        self.startPorts()
+
+        self.check_test_case_status(client_tc1_arg)
+        self.check_test_case_status(client_tc2_arg)
+
+        self.stopPorts()
+
+        # Cleanup the additional client test case we created.
+        self.delTestCase(client_tc2_arg, 'Client2')
 

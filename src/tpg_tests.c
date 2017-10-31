@@ -757,13 +757,13 @@ static void test_case_init_rate(rate_limit_t *rl, uint32_t desired_rate,
 }
 
 /*****************************************************************************
- * test_case_init_tcp_srv()
+ * test_case_start_tcp_srv()
  ****************************************************************************/
-static void test_case_init_tcp_srv(test_case_info_t *tc_info,
-                                   uint32_t lcore __rte_unused,
-                                   uint32_t eth_port,
-                                   uint32_t test_case_id,
-                                   tpg_server_t *sm)
+static void test_case_start_tcp_srv(test_case_info_t *tc_info,
+                                    uint32_t lcore __rte_unused,
+                                    uint32_t eth_port,
+                                    uint32_t test_case_id,
+                                    tpg_server_t *sm)
 {
     tcp_control_block_t *server_tcb = NULL;
     uint32_t             ip;
@@ -829,13 +829,13 @@ static void test_case_init_tcp_srv(test_case_info_t *tc_info,
 }
 
 /*****************************************************************************
- * test_case_init_udp_srv()
+ * test_case_start_udp_srv()
  ****************************************************************************/
-static void test_case_init_udp_srv(test_case_info_t *tc_info,
-                                   uint32_t lcore __rte_unused,
-                                   uint32_t eth_port,
-                                   uint32_t test_case_id,
-                                   tpg_server_t *sm)
+static void test_case_start_udp_srv(test_case_info_t *tc_info,
+                                    uint32_t lcore __rte_unused,
+                                    uint32_t eth_port,
+                                    uint32_t test_case_id,
+                                    tpg_server_t *sm)
 {
     udp_control_block_t *server_ucb;
     uint32_t             ip;
@@ -902,13 +902,13 @@ static void test_case_init_udp_srv(test_case_info_t *tc_info,
 }
 
 /*****************************************************************************
- * test_case_init_tcp_clients()
+ * test_case_start_tcp_clients()
  ****************************************************************************/
-static void test_case_init_tcp_clients(test_case_info_t *tc_info,
-                                       uint32_t lcore,
-                                       uint32_t eth_port,
-                                       uint32_t test_case_id,
-                                       tpg_client_t *cm)
+static void test_case_start_tcp_clients(test_case_info_t *tc_info,
+                                        uint32_t lcore,
+                                        uint32_t eth_port,
+                                        uint32_t test_case_id,
+                                        tpg_client_t *cm)
 {
     tcp_control_block_t *tcb;
     uint32_t             tcb_count = 0;
@@ -992,13 +992,13 @@ static void test_case_init_tcp_clients(test_case_info_t *tc_info,
 }
 
 /*****************************************************************************
- * test_case_init_udp_clients()
+ * test_case_start_udp_clients()
  ****************************************************************************/
-static void test_case_init_udp_clients(test_case_info_t *tc_info,
-                                       uint32_t lcore __rte_unused,
-                                       uint32_t eth_port __rte_unused,
-                                       uint32_t test_case_id __rte_unused,
-                                       tpg_client_t *cm)
+static void test_case_start_udp_clients(test_case_info_t *tc_info,
+                                        uint32_t lcore __rte_unused,
+                                        uint32_t eth_port __rte_unused,
+                                        uint32_t test_case_id __rte_unused,
+                                        tpg_client_t *cm)
 {
     udp_control_block_t *ucb;
     uint32_t             ucb_count = 0;
@@ -1827,37 +1827,6 @@ static int test_case_init_cb(uint16_t msgid, uint16_t lcore, void *msg)
 
     /* Initialize operational part */
     test_case_init_state(&tc_info->tci_state);
-    switch (im->tcim_type) {
-    case TEST_CASE_TYPE__SERVER:
-        if (im->tcim_server.srv_l4.l4s_proto == L4_PROTO__TCP) {
-            test_case_init_tcp_srv(tc_info, lcore, im->tcim_eth_port,
-                                   im->tcim_test_case_id,
-                                   &im->tcim_server);
-        } else if (im->tcim_server.srv_l4.l4s_proto == L4_PROTO__UDP) {
-            test_case_init_udp_srv(tc_info, lcore, im->tcim_eth_port,
-                                   im->tcim_test_case_id,
-                                   &im->tcim_server);
-        } else {
-            return -EINVAL;
-        }
-        break;
-    case TEST_CASE_TYPE__CLIENT:
-        if (im->tcim_client.cl_l4.l4c_proto == L4_PROTO__TCP) {
-            test_case_init_tcp_clients(tc_info, lcore, im->tcim_eth_port,
-                                       im->tcim_test_case_id,
-                                       &im->tcim_client);
-        } else if (im->tcim_client.cl_l4.l4c_proto == L4_PROTO__UDP) {
-            test_case_init_udp_clients(tc_info, lcore, im->tcim_eth_port,
-                                       im->tcim_test_case_id,
-                                       &im->tcim_client);
-        } else {
-            return -EINVAL;
-        }
-        break;
-    default:
-        assert(false);
-        return -EINVAL;
-    }
 
     tc_info->tci_state.tos_configured = true;
     return 0;
@@ -1913,27 +1882,57 @@ static int test_case_start_cb(uint16_t msgid, uint16_t lcore, void *msg)
         return 0;
     }
 
+    /* Safe to mark the test as running. We shouldn't fail from here on.. */
+    tc_info->tci_state.tos_running = true;
+
+    /* Let the application layer know that the test is starting. The application
+     * will initialize its "global" per test case state. Also start the client
+     * and server sessions and state machines.
+     */
     switch (tc_info->tci_cfg_msg.tcim_type) {
     case TEST_CASE_TYPE__SERVER:
         server_cfg = &tc_info->tci_cfg_msg.tcim_server;
         app_id = server_cfg->srv_app.as_app_proto;
         APP_SRV_CALL(tc_start, app_id)(&tc_info->tci_cfg_msg);
+
+        if (server_cfg->srv_l4.l4s_proto == L4_PROTO__TCP) {
+            test_case_start_tcp_srv(tc_info, lcore, sm->tcsm_eth_port,
+                                    sm->tcsm_test_case_id,
+                                    server_cfg);
+        } else if (server_cfg->srv_l4.l4s_proto == L4_PROTO__UDP) {
+            test_case_start_udp_srv(tc_info, lcore, sm->tcsm_eth_port,
+                                    sm->tcsm_test_case_id,
+                                    server_cfg);
+        } else {
+            return -EINVAL;
+        }
         break;
     case TEST_CASE_TYPE__CLIENT:
         client_cfg = &tc_info->tci_cfg_msg.tcim_client;
         app_id = client_cfg->cl_app.ac_app_proto;
         APP_CL_CALL(tc_start, app_id)(&tc_info->tci_cfg_msg);
+
+        if (client_cfg->cl_l4.l4c_proto == L4_PROTO__TCP) {
+            test_case_start_tcp_clients(tc_info, lcore, sm->tcsm_eth_port,
+                                        sm->tcsm_test_case_id,
+                                        client_cfg);
+        } else if (client_cfg->cl_l4.l4c_proto == L4_PROTO__UDP) {
+            test_case_start_udp_clients(tc_info, lcore, sm->tcsm_eth_port,
+                                        sm->tcsm_test_case_id,
+                                        client_cfg);
+        } else {
+            return -EINVAL;
+        }
         break;
     default:
         assert(false);
         return -EINVAL;
     }
 
-    /* Start the test case open/close/send timers. */
+    /* Start the test case open/close/send timers to trigger new sessions. */
     test_case_start_timers(tc_info, lcore, sm->tcsm_eth_port,
                            sm->tcsm_test_case_id);
 
-    tc_info->tci_state.tos_running = true;
     return 0;
 }
 
