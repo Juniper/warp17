@@ -877,10 +877,8 @@ test_display_stats_ip(ui_win_t *ui_win, int line,
                    "Res Bit",
                    ipv4_stats->ips_reserved_bit_set);
 #endif /* _SPEEDY_PKT_PARSE_ */
-    UI_PRINTLN_WIN(win, line, 0, "%-11s : %16"PRIu32,
-                   "Invalid Pad",
-                   ipv4_stats->ips_invalid_pad);
-    UI_PRINTLN_WIN(win, line, 0, "%-11s : %16"PRIu32
+    UI_PRINTLN_WIN(win, line, 0, "%-11s : %16"PRIu32"  %-15s : %6"PRIu16,
+                   "Invalid Pad", ipv4_stats->ips_invalid_pad,
                    "Invalid option", ipv4_stats->ips_invalid_opt);
 
     UI_PRINTLN_WIN(win, line, 0, "");
