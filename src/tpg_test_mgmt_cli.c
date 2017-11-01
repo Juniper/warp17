@@ -735,9 +735,9 @@ static void cmd_tests_add_tcp_udp_server_parsed(void *parsed_result,
 
     test_init_defaults(&tc, TEST_CASE_TYPE__SERVER, pr->port, pr->tcid);
 
-    if (strncmp(pr->tcp_udp, "tcp", strlen("tcp")) == 0)
+    if (strncmp(pr->tcp_udp, "tcp", strlen("tcp") + 1) == 0)
         tc.tc_server.srv_l4.l4s_proto = L4_PROTO__TCP;
-    else if (strncmp(pr->tcp_udp, "udp", strlen("udp")) == 0)
+    else if (strncmp(pr->tcp_udp, "udp", strlen("udp") + 1) == 0)
         tc.tc_server.srv_l4.l4s_proto = L4_PROTO__UDP;
     else
         assert(false);
@@ -883,9 +883,9 @@ static void cmd_tests_add_client_parsed(void *parsed_result, struct cmdline *cl,
 
     test_init_defaults(&tc, TEST_CASE_TYPE__CLIENT, pr->port, pr->tcid);
 
-    if (strncmp(pr->tcp_udp, "tcp", strlen("tcp")) == 0)
+    if (strncmp(pr->tcp_udp, "tcp", strlen("tcp") + 1) == 0)
         tc.tc_client.cl_l4.l4c_proto = L4_PROTO__TCP;
-    else if (strncmp(pr->tcp_udp, "udp", strlen("udp")) == 0)
+    else if (strncmp(pr->tcp_udp, "udp", strlen("udp") + 1) == 0)
         tc.tc_client.cl_l4.l4c_proto = L4_PROTO__UDP;
 
     tc.tc_client.cl_src_ips =
@@ -1079,11 +1079,11 @@ static void cmd_tests_set_rate_parsed(void *parsed_result, struct cmdline *cl,
     else
         rate = TPG_RATE(pr->rate_val);
 
-    if (strncmp(pr->rate_kw, "open", strlen("open")) == 0)
+    if (strncmp(pr->rate_kw, "open", strlen("open") + 1) == 0)
         TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg, ua_rate_open, rate);
-    else if (strncmp(pr->rate_kw, "close", strlen("close")) == 0)
+    else if (strncmp(pr->rate_kw, "close", strlen("close") + 1) == 0)
         TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg, ua_rate_close, rate);
-    else if (strncmp(pr->rate_kw, "send", strlen("send")) == 0)
+    else if (strncmp(pr->rate_kw, "send", strlen("send") + 1) == 0)
         TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg, ua_rate_send, rate);
     else
         assert(false);
@@ -1202,11 +1202,11 @@ static void cmd_tests_set_timeouts_parsed(void *parsed_result,
     else
         timeout = TPG_DELAY(pr->timeout);
 
-    if (strncmp(pr->timeout_kw, "init", strlen("init")) == 0)
+    if (strncmp(pr->timeout_kw, "init", strlen("init") + 1) == 0)
         TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg, ua_init_delay, timeout);
-    else if (strncmp(pr->timeout_kw, "uptime", strlen("uptime")) == 0)
+    else if (strncmp(pr->timeout_kw, "uptime", strlen("uptime") + 1) == 0)
         TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg, ua_uptime, timeout);
-    else if (strncmp(pr->timeout_kw, "downtime", strlen("downtime")) == 0)
+    else if (strncmp(pr->timeout_kw, "downtime", strlen("downtime") + 1) == 0)
         TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg, ua_downtime, timeout);
     else
         assert(false);
@@ -1313,15 +1313,18 @@ static void cmd_tests_set_criteria_parsed(void *parsed_result,
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
 
-    if (strncmp(pr->criteria_kw, "run-time", strlen("run-time")) == 0)
+    if (strncmp(pr->criteria_kw, "run-time", strlen("run-time") + 1) == 0)
         criteria = CRIT_RUN_TIME(pr->criteria_val);
-    else if (strncmp(pr->criteria_kw, "servers-up", strlen("servers-up")) == 0)
+    else if (strncmp(pr->criteria_kw, "servers-up",
+                     strlen("servers-up") + 1) == 0)
         criteria = CRIT_SRV_UP(pr->criteria_val);
-    else if (strncmp(pr->criteria_kw, "clients-up", strlen("clients-up")) == 0)
+    else if (strncmp(pr->criteria_kw, "clients-up",
+                     strlen("clients-up") + 1) == 0)
         criteria = CRIT_CL_UP(pr->criteria_val);
-    else if (strncmp(pr->criteria_kw, "clients-estab", strlen("clients-estab")) == 0)
+    else if (strncmp(pr->criteria_kw, "clients-estab",
+                     strlen("clients-estab") + 1) == 0)
         criteria = CRIT_CL_ESTAB(pr->criteria_val);
-    else if (strncmp(pr->criteria_kw, "data-MB", strlen("data-MB")) == 0)
+    else if (strncmp(pr->criteria_kw, "data-MB", strlen("data-MB") + 1) == 0)
         criteria = CRIT_DATA_MB(pr->criteria_val);
     else
         assert(false);

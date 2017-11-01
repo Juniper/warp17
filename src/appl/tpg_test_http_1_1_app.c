@@ -1594,9 +1594,9 @@ static void cmd_tests_set_app_http_client_parsed(void *parsed_result, struct cmd
 
     app_client_cfg.ac_app_proto = APP_PROTO__HTTP;
 
-    if (strncmp(pr->method, "GET", strlen("GET")) == 0)
+    if (strncmp(pr->method, "GET", strlen("GET") + 1) == 0)
         http_method = HTTP_METHOD__GET;
-    else if (strncmp(pr->method, "HEAD", strlen("HEAD")) == 0)
+    else if (strncmp(pr->method, "HEAD", strlen("HEAD") + 1) == 0)
         http_method = HTTP_METHOD__HEAD;
     else
         assert(false);
@@ -1863,9 +1863,10 @@ static void cmd_tests_set_app_http_server_parsed(void *parsed_result, struct cmd
 
     app_server_cfg.as_app_proto = APP_PROTO__HTTP;
 
-    if (strncmp(pr->resp_code, "200-OK", strlen("200-OK")) == 0)
+    if (strncmp(pr->resp_code, "200-OK", strlen("200-OK") + 1) == 0)
         http_status_code = HTTP_STATUS_CODE__OK_200;
-    else if (strncmp(pr->resp_code, "404-NOT-FOUND", strlen("404-NOT-FOUND")) == 0)
+    else if (strncmp(pr->resp_code, "404-NOT-FOUND",
+                     strlen("404-NOT-FOUND") + 1) == 0)
         http_status_code = HTTP_STATUS_CODE__NOT_FOUND_404;
     else
         assert(false);
