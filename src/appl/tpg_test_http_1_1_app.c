@@ -1216,7 +1216,7 @@ uint32_t http_server_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
     tpg_http_stats_t *http_stats = &stats->tcas_http;
     uint32_t          delivered = 0;
     bool              invalid = false;
-    bool              header_done;
+    bool              header_done; /* We reach the end of the header */
 
     switch (http_server_data->ha_state) {
     case HTTPS_SRV_PARSE_REQ_HDR:
@@ -1247,6 +1247,8 @@ uint32_t http_server_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
             INC_STATS(http_stats, hsts_no_content_len_cnt);
             /* WARNING! Assuming no content-length implies length 0! */
             http_server_data->ha_content_length = 0;
+            http_server_goto_send_resp(l4, http_server_data);
+            return delivered;
         }
 
         TRACE_FMT(HTTP, DEBUG, "SRV HDR parsed. Content-Length: %"PRIu32,

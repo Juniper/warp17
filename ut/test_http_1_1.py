@@ -71,8 +71,10 @@ from warp17_common_pb2    import *
 from warp17_server_pb2    import *
 from warp17_client_pb2    import *
 from warp17_app_http_pb2  import *
+from warp17_app_raw_pb2  import *
 from warp17_test_case_pb2 import *
 from warp17_service_pb2   import *
+
 
 class TestHttpCfg(Warp17TrafficTestCase, Warp17UnitTestCase):
 
@@ -198,4 +200,75 @@ class TestHttpCfg(Warp17TrafficTestCase, Warp17UnitTestCase):
 
         # Cleanup the additional client test case we created.
         self.delTestCase(client_tc2_arg, 'Client2')
+
+
+class TestHttpRaw(Warp17TrafficTestCase, Warp17UnitTestCase):
+
+    # Allow test cases to run for a while so we actually see requests/responses
+    RUN_TIME_S = 3
+
+    def _raw_client_cfg(self):
+        return AppClient(ac_app_proto=RAW,
+                         ac_raw=RawClient(rc_req_plen=10000,
+                                          rc_resp_plen=20000))
+
+    def _http_server_cfg(self, resp_code=OK_200, resp_size=42,
+                         fields='Content-Type: plain/text'):
+        return AppServer(as_app_proto=HTTP,
+                         as_http=HttpServer(hs_resp_code=resp_code,
+                                            hs_resp_size=resp_size,
+                                            hs_resp_fields=fields))
+
+    #####################################################
+    # Overrides of Warp17TrafficTestCase specific to HTTP
+    #####################################################
+    def get_tc_retry_count(self):
+        """Allow the test to actually finish. Don't be too aggressive with"""
+        """retrying"""
+        return self.RUN_TIME_S + 2
+
+    def get_client_app_cfg(self, eth_port, tc_id):
+        return self._raw_client_cfg()
+
+    def get_client_criteria_cfg(self, eth_port, tc_id, l3_intf_count,
+                                l4_port_count):
+        return TestCriteria(tc_crit_type=RUN_TIME, tc_run_time_s=self.RUN_TIME_S)
+
+    def get_server_app_cfg(self, eth_port, tc_id):
+        return self._http_server_cfg()
+
+    def get_updates(self):
+        yield self._raw_client_cfg(), self._http_server_cfg(OK_200, 0)
+
+    def get_invalid_updates(self):
+        for _ in []: yield ()
+
+    def update_client(self, tc_arg, raw_client, expected_err=0):
+        err = self.warp17_call('UpdateTestCaseAppClient',
+                               UpdClientArg(uca_tc_arg=tc_arg,
+                                            uca_cl_app=raw_client))
+        self.assertEqual(err.e_code, expected_err)
+
+        if expected_err == 0:
+            cl_result = self.warp17_call('GetTestCaseAppClient', tc_arg)
+            self.assertEqual(cl_result.tccr_error.e_code, 0)
+            self.assertTrue(cl_result.tccr_cl_app == raw_client)
+
+    def update_server(self, tc_arg, http_server, expected_err=0):
+        err = self.warp17_call('UpdateTestCaseAppServer',
+                               UpdServerArg(usa_tc_arg=tc_arg,
+                                            usa_srv_app=http_server))
+        self.assertEqual(err.e_code, expected_err)
+
+        if expected_err == 0:
+            srv_result = self.warp17_call('GetTestCaseAppServer', tc_arg)
+            self.assertEqual(srv_result.tcsr_error.e_code, 0)
+            self.assertTrue(srv_result.tcsr_srv_app == http_server)
+
+    def verify_stats(self, cl_result):
+        req_cnt = cl_result.tsr_app_stats.tcas_raw.rsts_req_cnt
+        resp_cnt = cl_result.tsr_app_stats.tcas_raw.rsts_resp_cnt
+        self.lh.info('req_cnt: %(req)u resp_cnt: %(resp)u' % {'req': req_cnt, 'resp': resp_cnt})
+        self.assertEqual(req_cnt, 0)
+        self.assertEqual(resp_cnt, 0)
 
