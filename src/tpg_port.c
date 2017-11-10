@@ -1059,12 +1059,12 @@ void port_get_conn_options(uint32_t port, tpg_port_options_t *out)
 cmdline_arg_parser_res_t port_handle_cmdline_opt(const char *opt_name,
                                                  char *opt_arg)
 {
-    if (strcmp(opt_name, "qmap") == 0)
+    if (strncmp(opt_name, "qmap", strlen("qmap") + 1) == 0)
         return port_handle_cmdline_opt_qmap(opt_arg);
 
-    if (strcmp(opt_name, "qmap-default") == 0) {
-        if (strcmp(optarg, "max-q") == 0 ||
-                strcmp(optarg, "max-c") == 0) {
+    if (strncmp(opt_name, "qmap-default", strlen("qmap-default") + 1) == 0) {
+        if (strncmp(optarg, "max-q", strlen("max-q") + 1) == 0 ||
+                strncmp(optarg, "max-c", strlen("max-c") + 1) == 0) {
             qmap_default = opt_arg;
         } else {
             printf("ERROR: invalid qmap-default value %s!\n", opt_arg);
@@ -1107,9 +1107,9 @@ bool port_handle_cmdline(void)
 
     bzero(&pcore_mask[0], sizeof(pcore_mask[0]) * total_if_count);
 
-    if (strcmp(qmap_default, "max-q") == 0)
+    if (strncmp(qmap_default, "max-q", strlen("max-q") + 1) == 0)
         port_handle_cmdline_opt_qmap_maxq(pcore_mask);
-    else if (strcmp(qmap_default, "max-c") == 0)
+    else if (strncmp(qmap_default, "max-c", strlen("max-c") + 1) == 0)
         port_handle_cmdline_opt_qmap_maxc(pcore_mask);
 
     for (port = 0; port < total_if_count; port++) {

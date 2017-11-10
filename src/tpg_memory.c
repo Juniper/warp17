@@ -243,7 +243,7 @@ cmdline_arg_parser_res_t mem_handle_cmdline_opt(const char *opt_name,
     if (!cfg)
         TPG_ERROR_ABORT("ERROR: Unable to get config!\n");
 
-    if (strcmp(opt_name, "tcb-pool-sz") == 0) {
+    if (strncmp(opt_name, "tcb-pool-sz", strlen("tcb-pool-sz") + 1) == 0) {
         unsigned long  var;
         char          *endptr;
 
@@ -264,7 +264,7 @@ cmdline_arg_parser_res_t mem_handle_cmdline_opt(const char *opt_name,
         return CAPR_CONSUMED;
     }
 
-    if (strcmp(opt_name, "ucb-pool-sz") == 0) {
+    if (strncmp(opt_name, "ucb-pool-sz", strlen("ucb-pool-sz") + 1) == 0) {
         unsigned long  var;
         char          *endptr;
 
@@ -285,7 +285,7 @@ cmdline_arg_parser_res_t mem_handle_cmdline_opt(const char *opt_name,
         return CAPR_CONSUMED;
     }
 
-    if (strcmp(opt_name, "mbuf-pool-sz") == 0) {
+    if (strncmp(opt_name, "mbuf-pool-sz", strlen("mbuf-pool-sz") + 1) == 0) {
         unsigned long  var;
         char          *endptr;
 
@@ -306,7 +306,7 @@ cmdline_arg_parser_res_t mem_handle_cmdline_opt(const char *opt_name,
         return CAPR_CONSUMED;
     }
 
-    if (strcmp(opt_name, "mbuf-sz") == 0) {
+    if (strncmp(opt_name, "mbuf-sz", strlen("mbuf-sz") + 1) == 0) {
         unsigned long  mbuf_size;
         char          *endptr;
 
@@ -328,7 +328,8 @@ cmdline_arg_parser_res_t mem_handle_cmdline_opt(const char *opt_name,
         return CAPR_CONSUMED;
     }
 
-    if (strcmp(opt_name, "mbuf-hdr-pool-sz") == 0) {
+    if (strncmp(opt_name, "mbuf-hdr-pool-sz",
+                strlen("mbuf-hdr-pool-sz") + 1) == 0) {
         unsigned long  var;
         char          *endptr;
 
@@ -349,7 +350,8 @@ cmdline_arg_parser_res_t mem_handle_cmdline_opt(const char *opt_name,
         return CAPR_CONSUMED;
     }
 
-    if (strcmp(opt_name, "mpool-any-sock") == 0) {
+    if (strncmp(opt_name, "mpool-any-sock",
+               strlen("mpool-any-sock") + 1) == 0) {
         cfg->gcfg_mpool_any_sock = true;
         return CAPR_CONSUMED;
     }

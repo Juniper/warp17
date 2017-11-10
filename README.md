@@ -367,6 +367,8 @@ __NOTE: For now WARP17 supports at most 64 cores.__
 
 ### WARP17 command-line arguments
 
+* `--version`: prints version and exit.
+* `--help`: prints the help and exit.
 * `--qmap <port>.<hex_mask>`: bitmask specifying which physical cores will
   control the physical port <eth_port>.
 * `--qmap-default max-c`: maximize the number of independent cores handling

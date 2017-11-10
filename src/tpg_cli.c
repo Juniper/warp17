@@ -432,7 +432,7 @@ cmdline_arg_parser_res_t cli_handle_cmdline_opt(const char *opt_name,
     if (!cfg)
         TPG_ERROR_ABORT("ERROR: Unable to get config!\n");
 
-    if (strcmp(opt_name, "cmd-file") == 0) {
+    if (strncmp(opt_name, "cmd-file", strlen("cmd-file") + 1) == 0) {
         cfg->gcfg_cmd_file = strdup(opt_arg);
         return CAPR_CONSUMED;
     }

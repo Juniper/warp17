@@ -79,7 +79,17 @@ class Warp17InputTestCase(Warp17BaseUnitTestCase):
 
         ret = warp17_stop(Warp17BaseUnitTestCase.env, warp17_proc)
         self.assertEqual(ret, warp17_api.EXIT_FAILURE,
-                         'Error in {0}:"{1}" occurred\n'.format(tname, ret))
+                         'Error in {0}: "{1}" occurred\n'.format(tname, ret))
+
+    def _test_valid_input(self, tname, key, value):
+        Warp17BaseUnitTestCase.env.set_value(key, value)
+
+        warp17_proc = warp17_start(env=Warp17BaseUnitTestCase.env,
+                                   output_args=Warp17BaseUnitTestCase.oargs)
+
+        ret = warp17_stop(Warp17BaseUnitTestCase.env, warp17_proc)
+        self.assertEqual(ret, 0, 'Error in {0}: "{1}" occurred\n'.format(
+                         tname, ret))
 
     def test_tcb_pool_sz(self):
         """Test 'tcb-pool-sz' input, its maximum value has to be uint32max / 1024"""
@@ -93,6 +103,11 @@ class Warp17InputTestCase(Warp17BaseUnitTestCase):
                                  UINT32MAX / 1024 + 1)
         self._test_invalid_input('test_ucb_pool_sz-nonum', 'ucb-pool-sz', '1X')
 
+    def test_version_help(self):
+        """Test 'version'/'help' input, after those warp17 should die"""
+        self._test_valid_input('test_version_help', 'version', None)
+        self._test_valid_input('test_version_help', 'help', None)
+
     def test_mbuf_sz(self):
         """Test 'mbuf-sz' input, its maximum value has to be PORT_MAX_MTU"""
         """and the minimum GCFG_MBUF_SIZE"""
@@ -101,8 +116,6 @@ class Warp17InputTestCase(Warp17BaseUnitTestCase):
         #TODO: reading RTE_PKTMBUF_HEADROOM from dpdk config
         RTE_PKTMBUF_HEADROOM = 128
         GCFG_MBUF_SIZE = 2048 + RTE_PKTMBUF_HEADROOM
-
-        # if (mbuf_size > GCFG_MBUF_SIZE && ) {
 
         # Case one: mbuf_size < PORT_MAX_MTU #
         self._test_invalid_input('test_mbuf_sz-max', 'mbuf-sz',

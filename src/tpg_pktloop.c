@@ -692,7 +692,8 @@ cmdline_arg_parser_res_t pkt_handle_cmdline_opt(const char *opt_name,
     if (!cfg)
         TPG_ERROR_ABORT("ERROR: Unable to get config!\n");
 
-    if (strcmp(opt_name, "pkt-send-drop-rate") == 0) {
+    if (strncmp(opt_name, "pkt-send-drop-rate",
+               strlen("pkt-send-drop-rate") + 1) == 0) {
         unsigned long  var;
         char          *endptr;
 

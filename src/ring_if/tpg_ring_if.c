@@ -111,7 +111,7 @@ cmdline_arg_parser_res_t ring_if_handle_cmdline_opt(const char *opt_name, char *
     unsigned long  val;
     char          *endptr;
 
-    if (strcmp(opt_name, "ring-if-pairs"))
+    if (strncmp(opt_name, "ring-if-pairs", strlen("ring-if-pairs") + 1))
         return CAPR_IGNORED;
 
 #if !defined(TPG_RING_IF)

@@ -67,6 +67,7 @@
 static global_config_t global_config;
 static bool            global_config_initialized;
 cfg_cmdline_arg_parser_t cmdline_parsers[] = {
+    MAIN_CMDLINE_PARSER(),
     PORT_CMDLINE_PARSER(),
     RING_IF_CMDLINE_PARSER(),
     KNI_IF_CMDLINE_PARSER(),
@@ -77,6 +78,7 @@ cfg_cmdline_arg_parser_t cmdline_parsers[] = {
 };
 
 struct option options[] = {
+    MAIN_CMDLINE_OPTIONS(),
     PORT_CMDLINE_OPTIONS(),
     MEM_CMDLINE_OPTIONS(),
     PKTLOOP_CMDLINE_OPTIONS(),
@@ -226,7 +228,7 @@ const char *cfg_get_gtrace_name(gtrace_id_t id)
 }
 
 /*****************************************************************************
- * cfg_print_usage(argv[0])
+ * cfg_print_usage()
  ****************************************************************************/
 void cfg_print_usage(const char *prgname)
 {

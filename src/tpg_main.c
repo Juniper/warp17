@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  *
- * Copyright (c) 2016, Juniper Networks, Inc. All rights reserved.
+ * Copyright (c) 2017, Juniper Networks, Inc. All rights reserved.
  *
  *
  * The contents of this file are subject to the terms of the BSD 3 clause
@@ -57,14 +57,16 @@
 /*****************************************************************************
   * Include files
   ****************************************************************************/
+#include <stdlib.h>
 
 #include "tcp_generator.h"
 
 /*****************************************************************************
  * Global variables
  ****************************************************************************/
-bool     tpg_exit;
-uint64_t cycles_per_us;
+bool      tpg_exit;
+uint64_t  cycles_per_us;
+char     *tpg_prgname;
 
 /*****************************************************************************
  * start_cores()
@@ -118,6 +120,8 @@ int main(int argc, char **argv)
 {
     global_config_t *cfg;
     int              ret;
+
+    tpg_prgname = argv[0];
 
     /*
      * Initialize DPDK infrastructure before we do anything else
@@ -330,3 +334,27 @@ int main(int argc, char **argv)
     return 0;
 }
 
+/*****************************************************************************
+ * main_handle_cmdline_opt()
+ * --version - Returns version and exit
+ ****************************************************************************/
+cmdline_arg_parser_res_t main_handle_cmdline_opt(const char *opt_name,
+                                                 char *opt_arg __rte_unused)
+{
+    if (strncmp(opt_name, "version", strlen("version") + 1) == 0) {
+        printf(TPG_VERSION_PRINTF_STR"\n", TPG_VERSION_PRINTF_ARGS);
+        cli_exit();
+        rpc_destroy();
+        exit(0);
+        return CAPR_CONSUMED;
+    }
+    if (strncmp(opt_name, "help", strlen("help") + 1) == 0) {
+        cfg_print_usage(tpg_prgname);
+        cli_exit();
+        rpc_destroy();
+        exit(0);
+        return CAPR_CONSUMED;
+    }
+
+    return CAPR_IGNORED;
+}

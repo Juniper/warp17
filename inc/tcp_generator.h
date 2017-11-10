@@ -162,6 +162,7 @@ typedef struct test_case_info_s test_case_info_t;
 #include "tpg_stats.h"
 
 #include "tpg_config.h"
+#include "tpg_main.h"
 #include "tpg_msg.h"
 
 #include "tpg_notif.h"

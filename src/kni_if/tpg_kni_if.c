@@ -124,7 +124,7 @@ cmdline_arg_parser_res_t kni_if_handle_cmdline_opt(const char *opt_name,
     unsigned long  val;
     char          *endptr;
 
-    if (strcmp(opt_name, "kni-ifs"))
+    if (strncmp(opt_name, "kni-ifs", strlen("kni-ifs") + 1))
         return CAPR_IGNORED;
 
 #if !defined(TPG_KNI_IF)
