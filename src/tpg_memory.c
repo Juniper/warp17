@@ -163,7 +163,8 @@ static struct rte_mempool *mem_create_local_pool(const char *name, uint32_t core
                                                  uint32_t private_size,
                                                  rte_mempool_ctor_t mp_ctor,
                                                  rte_mempool_obj_ctor_t obj_ctor,
-                                                 uint32_t pool_flags)
+                                                 uint32_t pool_flags,
+                                                 bool mpool_any_sock)
 {
     struct rte_mempool *pool;
     char                pool_name[strlen(name) + 64];
@@ -190,8 +191,30 @@ static struct rte_mempool *mem_create_local_pool(const char *name, uint32_t core
                               rte_lcore_to_socket_id(core),
                               pool_flags);
 
+    if (pool != NULL)
+        return pool;
+
+    RTE_LOG(ERR, USER1, "Failed allocating %s pool on socket %u!\n",
+            pool_name, rte_lcore_to_socket_id(core));
+
+    /* Retry on SOCK_ID_ANY if the config allows that. */
+    if (!mpool_any_sock)
+        return NULL;
+
+    RTE_LOG(INFO, USER1,
+            "Retrying to allocate %s pool on SOCKET_ID_ANY.\n"
+            "WARNING: THIS MIGHT AFFECT PERFORMANCE!\n",
+            pool_name);
+    pool = rte_mempool_create(pool_name, pool_size, obj_size, cache_size,
+                              private_size,
+                              mp_ctor, NULL,
+                              obj_ctor, NULL,
+                              SOCKET_ID_ANY,
+                              pool_flags);
+
     if (pool == NULL) {
-        RTE_LOG(ERR, USER1, "Failed allocating %s pool!\n", pool_name);
+        RTE_LOG(ERR, USER1, "Failed allocating %s pool on SOCKET_ID_ANY!\n",
+                pool_name);
         return NULL;
     }
     return pool;
@@ -205,37 +228,136 @@ static struct rte_mempool *mem_create_local_pool(const char *name, uint32_t core
  *      default: GCFG_UCB_POOL_SIZE
  * --mbuf-pool-sz configuration - size in K (*1024) of the mbuf mempool
  *      default: GCFG_MBUF_POOL_SIZE
+ * --mbuf-sz configuration - size in bytes of the mbuf
+ *      default: GCFG_MBUF_SIZE
  * --mbuf-hdr-pool-sz configuration - size in K (*1024) of the mbuf hdr mempool
  *      default: GCFG_MBUF_HDR_POOL_SIZE
+ * --mpool-any-sock - if set mempool allocation will fallback to allocating
+ *                    from any CPU socket
  ****************************************************************************/
-bool mem_handle_cmdline_opt(const char *opt_name, char *opt_arg)
+cmdline_arg_parser_res_t mem_handle_cmdline_opt(const char *opt_name,
+                                                char *opt_arg)
 {
     global_config_t *cfg = cfg_get_config();
 
     if (!cfg)
         TPG_ERROR_ABORT("ERROR: Unable to get config!\n");
 
-    if (strcmp(opt_name, "tcb-pool-sz") == 0) {
-        cfg->gcfg_tcb_pool_size = atoi(opt_arg) * 1024ULL;
-        return true;
+    if (strncmp(opt_name, "tcb-pool-sz", strlen("tcb-pool-sz") + 1) == 0) {
+        unsigned long  var;
+        char          *endptr;
+
+        errno = 0;
+        var = strtoul(opt_arg, &endptr, 10);
+
+        if ((errno == ERANGE && var == ULONG_MAX) ||
+                (errno != 0 && var == 0) ||
+                *endptr != '\0' ||
+                var > (UINT32_MAX / 1024)) {
+            printf("ERROR: Invalid tcb-pool-sz value %s!\n"
+                   "The value must be lower than %d\n",
+                   opt_arg, (UINT32_MAX / 1024));
+            return CAPR_ERROR;
+        }
+
+        cfg->gcfg_tcb_pool_size = var * 1024;
+        return CAPR_CONSUMED;
     }
 
-    if (strcmp(opt_name, "ucb-pool-sz") == 0) {
-        cfg->gcfg_ucb_pool_size = atoi(opt_arg) * 1024ULL;
-        return true;
+    if (strncmp(opt_name, "ucb-pool-sz", strlen("ucb-pool-sz") + 1) == 0) {
+        unsigned long  var;
+        char          *endptr;
+
+        errno = 0;
+        var = strtoul(opt_arg, &endptr, 10);
+
+        if ((errno == ERANGE && var == ULONG_MAX) ||
+                (errno != 0 && var == 0) ||
+                *endptr != '\0' ||
+                var > (UINT32_MAX / 1024)) {
+            printf("ERROR: Invalid ucb-pool-sz value %s!\n"
+                   "The value must be lower than %d\n",
+                   opt_arg, (UINT32_MAX / 1024));
+            return CAPR_ERROR;
+        }
+
+        cfg->gcfg_ucb_pool_size = var * 1024;
+        return CAPR_CONSUMED;
     }
 
-    if (strcmp(opt_name, "mbuf-pool-sz") == 0) {
-        cfg->gcfg_mbuf_poolsize = atoi(opt_arg) * 1024UL;
-        return true;
+    if (strncmp(opt_name, "mbuf-pool-sz", strlen("mbuf-pool-sz") + 1) == 0) {
+        unsigned long  var;
+        char          *endptr;
+
+        errno = 0;
+        var = strtoul(opt_arg, &endptr, 10);
+
+        if ((errno == ERANGE && var == ULONG_MAX) ||
+                (errno != 0 && var == 0) ||
+                *endptr != '\0' ||
+                var > (UINT32_MAX / 1024)) {
+            printf("ERROR: Invalid mbuf-pool-sz value %s!\n"
+                   "The value must be lower than %d\n",
+                   opt_arg, (UINT32_MAX / 1024));
+            return CAPR_ERROR;
+        }
+
+        cfg->gcfg_mbuf_poolsize = var * 1024;
+        return CAPR_CONSUMED;
     }
 
-    if (strcmp(opt_name, "mbuf-hdr-pool-sz") == 0) {
-        cfg->gcfg_mbuf_hdr_poolsize = atoi(opt_arg) * 1024UL;
-        return true;
+    if (strncmp(opt_name, "mbuf-sz", strlen("mbuf-sz") + 1) == 0) {
+        unsigned long  mbuf_size;
+        char          *endptr;
+
+        errno = 0;
+        mbuf_size = strtoul(opt_arg, &endptr, 10);
+
+        if ((errno == ERANGE && mbuf_size == ULONG_MAX) ||
+                (errno != 0 && mbuf_size == 0) ||
+                *endptr != '\0' ||
+                mbuf_size < GCFG_MBUF_SIZE ||
+                mbuf_size > PORT_MAX_MTU) {
+            printf("ERROR: Invalid mbuf-sz value %s!\n"
+                   "The value must be greater than %d and lower than %d\n",
+                   opt_arg, GCFG_MBUF_SIZE, PORT_MAX_MTU);
+            return CAPR_ERROR;
+        }
+
+        cfg->gcfg_mbuf_size = mbuf_size;
+        return CAPR_CONSUMED;
     }
 
-    return false;
+    if (strncmp(opt_name, "mbuf-hdr-pool-sz",
+                strlen("mbuf-hdr-pool-sz") + 1) == 0) {
+        unsigned long  var;
+        char          *endptr;
+
+        errno = 0;
+        var = strtoul(opt_arg, &endptr, 10);
+
+        if ((errno == ERANGE && var == ULONG_MAX) ||
+                (errno != 0 && var == 0) ||
+                *endptr != '\0' ||
+                var > (UINT32_MAX / 1024)) {
+            printf("ERROR: Invalid mbuf-hdr-pool-sz value %s!\n"
+                   "The value must be lower than %d\n",
+                   opt_arg, (UINT32_MAX / 1024));
+            return CAPR_ERROR;
+        }
+
+        cfg->gcfg_mbuf_hdr_poolsize = var * 1024;
+        return CAPR_CONSUMED;
+    }
+
+    if (strncmp(opt_name, "mpool-any-sock",
+               strlen("mpool-any-sock") + 1) == 0) {
+        cfg->gcfg_mpool_any_sock = true;
+        return CAPR_CONSUMED;
+    }
+
+
+    return CAPR_IGNORED;
 }
 
 /*****************************************************************************
@@ -275,7 +397,8 @@ bool mem_init(void)
                                   sizeof(struct rte_pktmbuf_pool_private),
                                   rte_pktmbuf_pool_init,
                                   rte_pktmbuf_init,
-                                  MEM_MBUF_POOL_FLAGS);
+                                  MEM_MBUF_POOL_FLAGS,
+                                  cfg->gcfg_mpool_any_sock);
 
         if (mbuf_pool[core] == NULL)
             return false;
@@ -288,7 +411,8 @@ bool mem_init(void)
                                   sizeof(struct rte_pktmbuf_pool_private),
                                   rte_pktmbuf_pool_init,
                                   rte_pktmbuf_init,
-                                  MEM_MBUF_POOL_FLAGS);
+                                  MEM_MBUF_POOL_FLAGS,
+                                  cfg->gcfg_mpool_any_sock);
 
         if (mbuf_pool_tx_hdr[core] == NULL)
             return false;
@@ -301,7 +425,8 @@ bool mem_init(void)
                                   sizeof(struct rte_pktmbuf_pool_private),
                                   rte_pktmbuf_pool_init,
                                   rte_pktmbuf_init,
-                                  MEM_MBUF_POOL_FLAGS);
+                                  MEM_MBUF_POOL_FLAGS,
+                                  cfg->gcfg_mpool_any_sock);
 
         if (mbuf_pool_clone[core] == NULL)
             return false;
@@ -314,7 +439,8 @@ bool mem_init(void)
                                   0,
                                   NULL,
                                   NULL,
-                                  MEM_TCB_POOL_FLAGS);
+                                  MEM_TCB_POOL_FLAGS,
+                                  cfg->gcfg_mpool_any_sock);
 
         if (tcb_pool[core] == NULL)
             return false;
@@ -327,7 +453,8 @@ bool mem_init(void)
                                   0,
                                   NULL,
                                   NULL,
-                                  MEM_UCB_POOL_FLAGS);
+                                  MEM_UCB_POOL_FLAGS,
+                                  cfg->gcfg_mpool_any_sock);
 
         if (ucb_pool[core] == NULL)
             return false;

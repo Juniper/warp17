@@ -62,9 +62,3 @@ message L3Intf {
     //TODO count not implemented yet!
     required uint32 l3i_count = 3;
 }
-
-message IpStats {
-    required uint32 is_rx_pkts   = 1;
-    required uint64 is_rx_bytes  = 2;
-}
-

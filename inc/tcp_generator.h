@@ -74,6 +74,7 @@
 #include <rte_udp.h>
 #include <rte_errno.h>
 #include <rte_kni.h>
+#include <rte_cycles.h>
 
 #include <termios.h>
 #include <cmdline_parse.h>
@@ -122,8 +123,10 @@
 #define TPG_BUILD_DATE __DATE__
 #define TPG_BUILD_TIME __TIME__
 
-#define TPG_VERSION_PRINTF_STR  "warp17 v%s @%s, %s"
-#define TPG_VERSION_PRINTF_ARGS TPG_VERSION, TPG_BUILD_TIME, TPG_BUILD_DATE
+#define TPG_VERSION_PRINTF_STR  \
+    "warp17 v%s @%s, %s, revision: %s"
+#define TPG_VERSION_PRINTF_ARGS \
+    TPG_VERSION, TPG_BUILD_TIME, TPG_BUILD_DATE, TPG_BUILD_HASH
 
 /*****************************************************************************
  * Global variables
@@ -135,7 +138,6 @@ extern uint64_t cycles_per_us;
  * Container for all WARP17 includes.
  ****************************************************************************/
 #include "warp17-common.proto.xlate.h"
-#include "warp17-link.proto.xlate.h"
 #include "warp17-l3.proto.xlate.h"
 #include "warp17-app-raw.proto.xlate.h"
 #include "warp17-app-http.proto.xlate.h"
@@ -143,6 +145,7 @@ extern uint64_t cycles_per_us;
 #include "warp17-server.proto.xlate.h"
 #include "warp17-test-case.proto.xlate.h"
 #include "warp17-sockopt.proto.xlate.h"
+#include "warp17-stats.proto.xlate.h"
 #include "warp17-service.proto.xlate.h"
 
 /* Forward declarations to avoid include complaints. Maybe we should move them
@@ -159,6 +162,7 @@ typedef struct test_case_info_s test_case_info_t;
 #include "tpg_stats.h"
 
 #include "tpg_config.h"
+#include "tpg_main.h"
 #include "tpg_msg.h"
 
 #include "tpg_notif.h"
@@ -167,11 +171,13 @@ typedef struct test_case_info_s test_case_info_t;
 #include "tpg_trace_filter.h"
 #include "tpg_trace_cli.h"
 #include "tpg_trace_msg.h"
+#include "tpg_sockopts.h"
 
 #include "tpg_pcb.h"
-#include "tpg_arp.h"
 #include "tpg_cli.h"
 #include "tpg_timer.h"
+
+#include "tpg_rate.h"
 
 #include "tpg_sockopts.h"
 #include "tpg_tests.h"
@@ -186,18 +192,20 @@ typedef struct test_case_info_s test_case_info_t;
 #include "tpg_lookup.h"
 
 #include "tpg_ethernet.h"
+#include "tpg_arp.h"
 #include "tpg_ipv4.h"
 
 #include "tpg_tcp_sm.h"
 #include "tpg_tcp.h"
 #include "tpg_memory.h"
+#include "tpg_mbuf.h"
+#include "tpg_timestamp.h"
 #include "tpg_data.h"
 #include "tpg_tcp_data.h"
 #include "tpg_tcp_lookup.h"
 #include "tpg_udp.h"
 #include "tpg_udp_lookup.h"
 
-#include "tpg_memory.h"
 #include "tpg_kni_if.h"
 #include "tpg_ring_if.h"
 #include "tpg_port.h"
@@ -206,6 +214,7 @@ typedef struct test_case_info_s test_case_info_t;
 
 #include "tpg_test_mgmt.h"
 #include "tpg_test_mgmt_api.h"
+#include "tpg_test_mgmt_cli.h"
 #include "tpg_test_stats.h"
 
 /*****************************************************************************

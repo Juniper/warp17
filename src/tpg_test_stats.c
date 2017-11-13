@@ -59,8 +59,6 @@
  ****************************************************************************/
 #include <signal.h>
 
-#include <rte_cycles.h>
-
 #include "tcp_generator.h"
 
 /*****************************************************************************
@@ -70,11 +68,11 @@ typedef void (*test_display_cb_t)(ui_win_t *win, void *arg);
 
 #define WIN_SZ(sz, perc) ((sz) * (perc) / 100)
 
-#define TEST_TMR_TO_DISP        100000
-#define TEST_DISPLAY_TMR_TO     GCFG_TEST_STATS_TMR_TO
-#define TEST_STATS_TMR_TO       (TEST_DISPLAY_TMR_TO + TEST_TMR_TO_DISP)
-#define TEST_STATE_TMR_TO       (TEST_STATS_TMR_TO + TEST_TMR_TO_DISP)
-#define TEST_TC_DETAIL_TMR_TO   (TEST_STATE_TMR_TO + TEST_TMR_TO_DISP)
+#define TEST_TMR_TO_DISP      100000 /* 100ms */
+#define TEST_DISPLAY_TMR_TO   900000 /* 900ms */
+#define TEST_STATE_TMR_TO     (TEST_DISPLAY_TMR_TO + TEST_TMR_TO_DISP)
+#define TEST_STATS_TMR_TO     (TEST_STATE_TMR_TO + TEST_TMR_TO_DISP)
+#define TEST_TC_DETAIL_TMR_TO (TEST_STATS_TMR_TO + TEST_TMR_TO_DISP)
 
 /*****************************************************************************
  * Globals
@@ -113,6 +111,13 @@ static int cmd_test_show_stats_cli(char *buf, uint32_t size);
 
 static void ui_printer(void *arg, const char *fmt, va_list ap);
 
+static void test_state_show_latency(printer_arg_t *printer_arg,
+                                    tpg_latency_stats_t *ts_stats,
+                                    const tpg_test_case_t *te);
+
+static void test_config_show_latency(const tpg_test_case_t *te,
+                                     printer_arg_t *printer_arg);
+
 /*****************************************************************************
  * String constants.
  ****************************************************************************/
@@ -138,25 +143,51 @@ const char *test_entry_state(tpg_test_case_state_t state)
 }
 
 /*****************************************************************************
+ * test_entry_server_type()
+ ****************************************************************************/
+static const char *test_entry_server_type(const tpg_server_t *entry)
+{
+    switch (entry->srv_l4.l4s_proto) {
+    case L4_PROTO__TCP:
+        return "TCP SRV";
+    case L4_PROTO__UDP:
+        return "UDP SRV";
+    default:
+        return "<UNKNOWN>";
+    }
+}
+
+/*****************************************************************************
+ * test_entry_client_type()
+ ****************************************************************************/
+static const char *test_entry_client_type(const tpg_client_t *entry)
+{
+    switch (entry->cl_l4.l4c_proto) {
+    case L4_PROTO__TCP:
+        return "TCP CL";
+    case L4_PROTO__UDP:
+        if (entry->cl_mcast_src)
+            return "UDP MCAST SRC";
+        else
+            return "UDP CL";
+    default:
+        return "<UNKNOWN>";
+    }
+}
+
+/*****************************************************************************
  * test_entry_type()
  ****************************************************************************/
 const char *test_entry_type(const tpg_test_case_t *entry)
 {
-    if (entry->tc_type == TEST_CASE_TYPE__SERVER &&
-            entry->tc_server.srv_l4.l4s_proto == L4_PROTO__TCP) {
-        return "TCP SRV";
-    } else if (entry->tc_type == TEST_CASE_TYPE__SERVER &&
-            entry->tc_server.srv_l4.l4s_proto == L4_PROTO__UDP) {
-        return "UDP SRV";
-    } else  if (entry->tc_type == TEST_CASE_TYPE__CLIENT &&
-            entry->tc_client.cl_l4.l4c_proto == L4_PROTO__TCP) {
-        return "TCP CL";
-    } else if (entry->tc_type == TEST_CASE_TYPE__CLIENT &&
-            entry->tc_client.cl_l4.l4c_proto == L4_PROTO__UDP) {
-        return "UDP CL";
+    switch (entry->tc_type) {
+    case TEST_CASE_TYPE__SERVER:
+        return test_entry_server_type(&entry->tc_server);
+    case TEST_CASE_TYPE__CLIENT:
+        return test_entry_client_type(&entry->tc_client);
+    default:
+        return "<UNKNOWN>";
     }
-
-    return "<UNKNOWN>";
 }
 
 /*****************************************************************************
@@ -346,10 +377,52 @@ static void test_config_show_tc_app(const tpg_test_case_t *te,
 }
 
 /*****************************************************************************
+ * test_config_show_ipv4_sockopt()
+ ****************************************************************************/
+static void test_config_show_ipv4_sockopt(printer_arg_t *printer_arg,
+                                          tpg_ipv4_sockopt_t ipv4_sockopt)
+{
+    tpg_printf(printer_arg, "\n");
+
+    if (ipv4_sockopt.ip4so_rx_tstamp) {
+        tpg_printf(printer_arg, "%-16s : %-16s\n",
+                   "Tstamp Receiving", "Enabled");
+
+    }
+    if (ipv4_sockopt.ip4so_tx_tstamp) {
+        tpg_printf(printer_arg, "%-16s : %-16s\n",
+                   "Tstamp Trans", "Enabled");
+
+    }
+
+}
+
+/*****************************************************************************
+ * test_config_show_latency()
+ ****************************************************************************/
+void test_config_show_latency(const tpg_test_case_t *te,
+                              printer_arg_t *printer_arg) {
+    if (te->has_tc_latency) {
+        tpg_printf(printer_arg, "\n");
+        if (te->tc_latency.has_tcs_max)
+            tpg_printf(printer_arg, "%-16s : [%"PRIu32"]\n", "Max Latency",
+                       te->tc_latency.tcs_max);
+        if (te->tc_latency.has_tcs_max_avg)
+            tpg_printf(printer_arg, "%-16s : [%"PRIu32"]\n",
+                       "Max Avg Latency", te->tc_latency.tcs_max_avg);
+        if (te->tc_latency.has_tcs_samples)
+            tpg_printf(printer_arg, "%-16s : [%"PRIu32"]\n", "Max Samples",
+                       te->tc_latency.tcs_samples);
+    }
+}
+
+/*****************************************************************************
  * test_config_show_tc()
  ****************************************************************************/
 void test_config_show_tc(const tpg_test_case_t *te, printer_arg_t *printer_arg)
 {
+    tpg_ipv4_sockopt_t ipv4_sockopt;
+
     tpg_printf(printer_arg, "%-16s : %s\n", "Test type", test_entry_type(te));
     tpg_printf(printer_arg, "%-16s : %s\n", "Async",
                (te->tc_async ? "true" : "false"));
@@ -397,6 +470,12 @@ void test_config_show_tc(const tpg_test_case_t *te, printer_arg_t *printer_arg)
         assert(false);
     }
 
+    if (!test_mgmt_get_ipv4_sockopt(te->tc_eth_port, te->tc_id, &ipv4_sockopt,
+                                    printer_arg))
+        test_config_show_ipv4_sockopt(printer_arg, ipv4_sockopt);
+
+    test_config_show_latency(te, printer_arg);
+
     tpg_printf(printer_arg, "\n");
     test_config_show_tc_app(te, printer_arg);
 }
@@ -409,7 +488,7 @@ void test_state_show_tcs_hdr(uint32_t eth_port, printer_arg_t *printer_arg)
 {
     /* Print the header */
     tpg_printf(printer_arg, "Port %"PRIu32 "\n", eth_port);
-    tpg_printf(printer_arg, "%4s %11s %20s %10s %10s %20s\n",
+    tpg_printf(printer_arg, "%4s %15s %20s %10s %10s %20s\n",
                "TcId", "Type", "Criteria", "State", "Runtime",
                "Quick stats");
 }
@@ -437,7 +516,7 @@ void test_state_show_tcs(uint32_t eth_port, printer_arg_t *printer_arg)
         test_entry_quickstats(&entry, &state, quick_stat_buf,
                               sizeof(quick_stat_buf));
 
-        tpg_printf(printer_arg, "%4"PRIu32" %11s %20s %10s %9.2lfs %20s\n",
+        tpg_printf(printer_arg, "%4"PRIu32" %15s %20s %10s %9.2lfs %20s\n",
                    tcid,
                    test_entry_type(&entry),
                    crit_buf,
@@ -454,6 +533,7 @@ void test_state_show_stats(const tpg_test_case_t *te,
                            printer_arg_t *printer_arg)
 {
     tpg_test_case_rate_stats_t rate_stats;
+    tpg_test_case_stats_t      test_stats;
     tpg_test_case_app_stats_t  app_stats;
     tpg_app_proto_t            app_id;
 
@@ -462,12 +542,42 @@ void test_state_show_stats(const tpg_test_case_t *te,
                                            printer_arg) != 0)
         return;
 
-    tpg_printf(printer_arg, "%13s %13s %13s\n", "Estab/s", "Closed/s",
-               "Data Send/s");
-    tpg_printf(printer_arg, "%13"PRIu32 " %13"PRIu32 " %13"PRIu32"\n",
+    if (test_mgmt_get_test_case_stats(te->tc_eth_port, te->tc_id,
+                                      &test_stats,
+                                      printer_arg) != 0)
+        return;
+
+    tpg_printf(printer_arg, "%13s %13s %13s\n",
+               "Estab/s", "Closed/s", "Data Send/s");
+    tpg_printf(printer_arg, "%13"PRIu32 " %13"PRIu32 " %13"PRIu32 "\n",
                rate_stats.tcrs_estab_per_s,
                rate_stats.tcrs_closed_per_s,
                rate_stats.tcrs_data_per_s);
+
+    if (test_mgmt_rx_tstamp_enabled(te)) {
+        tpg_test_case_latency_stats_t *latency_stats;
+
+        latency_stats = &test_stats.tcs_latency_stats;
+
+        tpg_printf(printer_arg, "\n");
+
+        tpg_printf(printer_arg, "Global latency statistics: ");
+        test_state_show_latency(printer_arg, &latency_stats->tcls_stats, te);
+        tpg_printf(printer_arg, "\n");
+        if (te->has_tc_latency) {
+            if (te->tc_latency.has_tcs_samples) {
+                tpg_printf(printer_arg, "Recent latency statistics: ");
+                test_state_show_latency(printer_arg,
+                                        &latency_stats->tcls_sample_stats,
+                                        te);
+                tpg_printf(printer_arg, "\n");
+            }
+        }
+        tpg_printf(printer_arg, "%13s\n", "Invalid lat");
+        tpg_printf(printer_arg, "%13"PRIu32"\n",
+                   latency_stats->tcls_invalid_lat);
+        tpg_printf(printer_arg, "\n");
+    }
 
     if (test_mgmt_get_test_case_app_stats(te->tc_eth_port, te->tc_id,
                                           &app_stats,
@@ -483,6 +593,95 @@ void test_state_show_stats(const tpg_test_case_t *te,
     }
 
     tpg_printf(printer_arg, "\n");
+}
+
+/*****************************************************************************
+ * test_latency_stats_valid()
+ ****************************************************************************/
+static bool test_latency_stats_valid(tpg_latency_stats_t *ts_stats)
+{
+    if (ts_stats->ls_max_exceeded == 0 &&
+        ts_stats->ls_max_average_exceeded == 0 &&
+        ts_stats->ls_min_latency == UINT32_MAX &&
+        ts_stats->ls_max_latency == 0 &&
+        ts_stats->ls_sum_latency == 0 &&
+        ts_stats->ls_samples_count == 0)
+        return false;
+    return true;
+}
+
+/*****************************************************************************
+ * test_state_show_latency()
+ ****************************************************************************/
+static void test_state_show_latency(printer_arg_t *printer_arg,
+                                    tpg_latency_stats_t *ts_stats,
+                                    const tpg_test_case_t *te)
+{
+    float local_average;
+
+    if (!test_latency_stats_valid(ts_stats)) {
+        tpg_printf(printer_arg, "[Samples: %13s]\n", "N/A");
+        tpg_printf(printer_arg, "%13s %13s %13s\n", "Min lat/us", "Max lat/us",
+                   "Avg lat/us");
+        tpg_printf(printer_arg, "%13s %13s %13s\n", "N/A", "N/A", "N/A");
+
+        return;
+    }
+
+    local_average = ((ts_stats->ls_samples_count == 0) ? 0 :
+                     ts_stats->ls_sum_latency / ts_stats->ls_samples_count);
+
+    tpg_printf(printer_arg, "[Samples: %13"PRIu64"]\n",
+        ts_stats->ls_samples_count);
+    if (te->has_tc_latency) {
+        if (te->tc_latency.has_tcs_max || te->tc_latency.has_tcs_max_avg) {
+            tpg_printf(printer_arg, "%13s %13s\n", "Max exc", "Max avg exc");
+            tpg_printf(printer_arg, "%13"PRIu32" %13"PRIu32 "\n",
+                       ts_stats->ls_max_exceeded,
+                       ts_stats->ls_max_average_exceeded);
+        }
+    }
+    tpg_printf(printer_arg, "%13s %13s %13s\n", "Min lat/us", "Max lat/us",
+               "Avg lat/us");
+    tpg_printf(printer_arg, "%13"PRIu32" %13"PRIu32 " %13.0f\n",
+               ts_stats->ls_min_latency, ts_stats->ls_max_latency,
+               local_average);
+
+}
+
+/*****************************************************************************
+ * test_show_link_rate()
+ ****************************************************************************/
+void test_show_link_rate(uint32_t eth_port, printer_arg_t *printer_arg)
+{
+    uint64_t             link_speed_bytes;
+    double               usage_tx;
+    double               usage_rx;
+    struct rte_eth_link  link_info;
+    struct rte_eth_stats link_rate_stats;
+
+    port_link_info_get(eth_port, &link_info);
+    port_link_rate_stats_get(eth_port, &link_rate_stats);
+
+    link_speed_bytes = (uint64_t)link_info.link_speed * 1000 * 1000 / 8;
+
+    if (link_info.link_status) {
+        usage_tx = (double)link_rate_stats.obytes * 100 / link_speed_bytes;
+        usage_rx = (double)link_rate_stats.ibytes * 100 / link_speed_bytes;
+    } else {
+        usage_tx = 0;
+        usage_rx = 0;
+    }
+
+    tpg_printf(printer_arg,
+               "Port %"PRIu32": link %s, speed %d%s, duplex %s%s, TX: %.2lf%% RX: %.2lf%%\n",
+               eth_port,
+               LINK_STATE(&link_info),
+               LINK_SPEED(&link_info),
+               LINK_SPEED_SZ(&link_info),
+               LINK_DUPLEX(&link_info),
+               usage_tx,
+               usage_rx);
 }
 
 /*****************************************************************************
@@ -525,6 +724,7 @@ static void test_display_stats_test_state(ui_win_t *ui_win,
         UI_HLINE_PRINT(ui_win->uw_win, "=", ui_win->uw_cols - 2);
 
         test_state_show_tcs(port, &parg);
+        wprintw(ui_win->uw_win, "\n");
     }
 }
 
@@ -560,39 +760,20 @@ static void test_display_stats_test_detail(ui_win_t *ui_win,
         test_state_show_stats(&tc, &parg);
     }
 }
+
 /*****************************************************************************
  * test_display_stats_hdr()
  ****************************************************************************/
 static int __tpg_display_func
-test_display_stats_hdr(ui_win_t *ui_win, int line, uint32_t port,
-                       struct rte_eth_link *link_info,
-                       struct rte_eth_stats *link_rate_stats)
+test_display_stats_hdr(ui_win_t *ui_win, int line, uint32_t port)
 {
-    WINDOW   *win = ui_win->uw_win;
-    double    usage_tx;
-    double    usage_rx;
-    uint64_t  link_speed_bytes;
+    WINDOW        *win = ui_win->uw_win;
+    printer_arg_t  parg = TPG_PRINTER_ARG(ui_printer, win);
 
-    link_speed_bytes = (uint64_t)link_info->link_speed * 1000 * 1000 / 8;
+    test_show_link_rate(port, &parg);
 
-    if (link_info->link_status) {
-        usage_tx = (double)link_rate_stats->obytes * 100 / link_speed_bytes;
-        usage_rx = (double)link_rate_stats->ibytes * 100 / link_speed_bytes;
-    } else {
-        usage_tx = 0;
-        usage_rx = 0;
-    }
-
-    UI_PRINTLN_WIN(win, line, 0,
-                   "Port %"PRIu32": link %s, speed %d%s, "
-                   "duplex %s%s, TX: %.2lf%% RX: %.2lf%%",
-                   port,
-                   LINK_STATE(link_info),
-                   LINK_SPEED(link_info),
-                   LINK_SPEED_SZ(link_info),
-                   LINK_DUPLEX(link_info),
-                   usage_tx,
-                   usage_rx);
+    /* Take into account the link rate display (one line). */
+    line++;
     UI_HLINE_WIN(win, line, 0, '=', ui_win->uw_cols - 2);
 
     return line;
@@ -605,7 +786,7 @@ static int __tpg_display_func
 test_display_stats_link(ui_win_t *ui_win, int line,
                         struct rte_eth_stats *link_stats,
                         struct rte_eth_stats *link_rate_stats,
-                        port_statistics_t *ptotal_stats)
+                        tpg_port_statistics_t *ptotal_stats)
 {
     WINDOW *win = ui_win->uw_win;
 
@@ -623,16 +804,16 @@ test_display_stats_link(ui_win_t *ui_win, int line,
                    ptotal_stats->ps_received_bytes);
     UI_PRINTLN_WIN(win, line, 0, "%10s %15"PRIu64" %10"PRIu64" %15"PRIu64,
                    "Tx Pkts", link_stats->opackets, link_rate_stats->opackets,
-                   ptotal_stats->ps_send_pkts);
+                   ptotal_stats->ps_sent_pkts);
     UI_PRINTLN_WIN(win, line, 0, "%10s %15"PRIu64" %10"PRIu64" %15"PRIu64,
                    "Tx Bytes", link_stats->obytes, link_rate_stats->obytes,
-                   ptotal_stats->ps_send_bytes);
+                   ptotal_stats->ps_sent_bytes);
     UI_PRINTLN_WIN(win, line, 0, "%10s %15"PRIu64" %10"PRIu64" %15s",
                    "Rx Err", link_stats->ierrors, link_rate_stats->ierrors,
                    "N/A");
     UI_PRINTLN_WIN(win, line, 0, "%10s %15"PRIu64" %10"PRIu64" %15"PRIu32,
                    "Tx Err", link_stats->oerrors, link_rate_stats->oerrors,
-                   ptotal_stats->ps_send_failure);
+                   ptotal_stats->ps_sent_failure);
     UI_PRINTLN_WIN(win, line, 0, "%10s %15"PRIu64" %10"PRIu64" %15s",
                    "Rx No Mbuf", link_stats->rx_nombuf,
                    link_rate_stats->rx_nombuf,
@@ -648,7 +829,7 @@ test_display_stats_link(ui_win_t *ui_win, int line,
  ****************************************************************************/
 static int __tpg_display_func
 test_display_stats_ip(ui_win_t *ui_win, int line,
-                      ipv4_statistics_t *ipv4_stats)
+                      tpg_ipv4_statistics_t *ipv4_stats)
 {
     WINDOW *win = ui_win->uw_win;
 
@@ -691,6 +872,10 @@ test_display_stats_ip(ui_win_t *ui_win, int line,
                    "Res Bit",
                    ipv4_stats->ips_reserved_bit_set);
 #endif /* _SPEEDY_PKT_PARSE_ */
+    UI_PRINTLN_WIN(win, line, 0, "%-11s : %16"PRIu32"  %-15s : %6"PRIu16,
+                   "Invalid Pad", ipv4_stats->ips_invalid_pad,
+                   "Invalid option", ipv4_stats->ips_invalid_opt);
+
     UI_PRINTLN_WIN(win, line, 0, "");
 
     return line;
@@ -700,7 +885,8 @@ test_display_stats_ip(ui_win_t *ui_win, int line,
  * test_display_stats_tsm()
  ****************************************************************************/
 static int __tpg_display_func
-test_display_stats_tsm(ui_win_t *ui_win, int line, tsm_statistics_t *tsm_stats)
+test_display_stats_tsm(ui_win_t *ui_win, int line,
+                       tpg_tsm_statistics_t *tsm_stats)
 {
     tcpState_t  tcp_state;
     int         tcp_col = 0;
@@ -765,26 +951,27 @@ static void test_display_stats(ui_win_t *ui_win, void *arg)
     tpg_test_case_rate_stats_t  rate_stats;
     WINDOW                     *win = ui_win->uw_win;
     int                         line = 0;
+    printer_arg_t               parg = TPG_PRINTER_ARG(ui_printer, win);
 
-    struct rte_eth_link         link_info;
     struct rte_eth_stats        link_stats;
     struct rte_eth_stats        link_rate_stats;
 
-    port_statistics_t           ptotal_stats;
-    ipv4_statistics_t           ipv4_stats;
-    tsm_statistics_t            tsm_stats;
+    tpg_port_statistics_t       ptotal_stats;
+    tpg_ipv4_statistics_t       ipv4_stats;
+    tpg_tsm_statistics_t        tsm_stats;
 
     test_aggregate_rate_stats(port, &rate_stats);
-    port_link_info_get(port, &link_info);
     port_link_stats_get(port, &link_stats);
     port_link_rate_stats_get(port, &link_rate_stats);
-    port_total_stats_get(port, &ptotal_stats);
-    ipv4_total_stats_get(port, &ipv4_stats);
-    tsm_total_stats_get(port, &tsm_stats);
+    if (test_mgmt_get_port_stats(port, &ptotal_stats, &parg) != 0)
+        return;
+    if (test_mgmt_get_ipv4_stats(port, &ipv4_stats, &parg) != 0)
+        return;
+    if (test_mgmt_get_tsm_stats(port, &tsm_stats, &parg) != 0)
+        return;
 
     /* Print the header. */
-    line = test_display_stats_hdr(ui_win, line, port, &link_info,
-                                  &link_rate_stats);
+    line = test_display_stats_hdr(ui_win, line, port);
 
     UI_PRINTLN_WIN(win, line, 0, "%8s %12s %12s %12s", "CL s/s",
                    "Established", "Closed", "Data");

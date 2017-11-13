@@ -60,33 +60,45 @@
 #ifndef _H_TPG_ETHERNET_
 #define _H_TPG_ETHERNET_
 
+STATS_GLOBAL_DECLARE(tpg_eth_statistics_t);
+
 /*****************************************************************************
- * Ethernet statistics
+ * Static inlines for tpg_ethernet.c
  ****************************************************************************/
-typedef struct ethernet_statistics_s {
+static inline uint64_t eth_mac_to_uint64(uint8_t *mac)
+{
+    uint64_t uint64_mac;
 
-    uint64_t es_etype_arp;
-    uint64_t es_etype_ipv4;
-    uint64_t es_etype_ipv6;
-    uint64_t es_etype_other;
-    uint64_t es_etype_vlan;
+    uint64_mac = (uint64_t) mac[0] << 40 |
+                 (uint64_t) mac[1] << 32 |
+                 (uint64_t) mac[2] << 24 |
+                 (uint64_t) mac[3] << 16 |
+                 (uint64_t) mac[4] << 8 |
+                 (uint64_t) mac[5];
 
-    /* Unlikly uint16_t error counters */
+    return uint64_mac;
+}
 
-    uint16_t es_to_small_fragment;
-
-} ethernet_statistics_t;
+static inline void eth_uint64_to_mac(uint64_t uint64_mac, uint8_t *mac)
+{
+    mac[0] = (uint64_mac >> 40) & 0xff;
+    mac[1] = (uint64_mac >> 32) & 0xff;
+    mac[2] = (uint64_mac >> 24) & 0xff;
+    mac[3] = (uint64_mac >> 16) & 0xff;
+    mac[4] = (uint64_mac >> 8) & 0xff;
+    mac[5] = uint64_mac & 0xff;
+}
 
 /*****************************************************************************
- * External's for tpg_ethernet.c
+ * Externals for tpg_ethernet.c
  ****************************************************************************/
 extern bool             eth_init(void);
 extern void             eth_lcore_init(uint32_t lcore_id);
-extern int              eth_build_eth_hdr(struct rte_mbuf *mbuf,
-                                          uint64_t dst_mac, uint64_t src_mac,
-                                          uint16_t ether_type);
 extern struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
                                         struct rte_mbuf *mbuf);
+extern struct rte_mbuf *eth_build_hdr_mbuf(uint32_t port, uint64_t dst_mac,
+                                           uint64_t src_mac,
+                                           uint16_t ether_type);
 
 #endif /* _H_TPG_ETHERNET_ */
 

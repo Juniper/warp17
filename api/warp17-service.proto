@@ -55,12 +55,12 @@
 //
 
 import "warp17-common.proto";
-import "warp17-link.proto";
 import "warp17-l3.proto";
 import "warp17-client.proto";
 import "warp17-server.proto";
 import "warp17-test-case.proto";
 import "warp17-sockopt.proto";
+import "warp17-stats.proto";
 
 option py_generic_services = true;
 option cc_generic_services = true;
@@ -110,15 +110,16 @@ message TestCaseResult {
 }
 
 message UpdateArg {
-    required TestCaseArg  ua_tc_arg     = 1;
-    optional Rate         ua_rate_open  = 2;
-    optional Rate         ua_rate_send  = 3;
-    optional Rate         ua_rate_close = 4;
-    optional Delay        ua_init_delay = 5;
-    optional Delay        ua_uptime     = 6;
-    optional Delay        ua_downtime   = 7;
-    optional TestCriteria ua_criteria   = 8;
-    optional bool         ua_async      = 9;
+    required TestCaseArg     ua_tc_arg     = 1;
+    optional Rate            ua_rate_open  = 2;
+    optional Rate            ua_rate_send  = 3;
+    optional Rate            ua_rate_close = 4;
+    optional Delay           ua_init_delay = 5;
+    optional Delay           ua_uptime     = 6;
+    optional Delay           ua_downtime   = 7;
+    optional TestCriteria    ua_criteria   = 8;
+    optional bool            ua_async      = 9;
+    optional TestCaseLatency ua_latency    = 10;
 }
 
 message TestCaseClientResult {
@@ -152,7 +153,7 @@ message PortOptionsArg {
 
 message PortOptionsResult {
     required Error       por_error = 1;
-    required PortOptions por_opts = 2;
+    required PortOptions por_opts  = 2;
 }
 
 message TcpSockoptArg {
@@ -162,7 +163,32 @@ message TcpSockoptArg {
 
 message TcpSockoptResult {
     required Error      tor_error = 1;
-    required TcpSockopt tor_opts = 2;
+    required TcpSockopt tor_opts  = 2;
+}
+
+message Ipv4SockoptArg {
+    required TestCaseArg i4sa_tc_arg = 1;
+    required Ipv4Sockopt i4sa_opts   = 2;
+}
+
+message Ipv4SockoptResult {
+    required Error       i4sr_error = 1;
+    required Ipv4Sockopt i4sr_opts  = 2;
+}
+
+message StatsResult {
+    required Error           sr_error = 1;
+    required PortStatistics  sr_port  = 2;
+    required PhyStatistics   sr_phy   = 3;
+    required EthStatistics   sr_eth   = 4;
+    required ArpStatistics   sr_arp   = 5;
+    required RouteStatistics sr_route = 6;
+    required Ipv4Statistics  sr_ipv4  = 7;
+    required UdpStatistics   sr_udp   = 8;
+    required TcpStatistics   sr_tcp   = 9;
+    required TsmStatistics   sr_tsm   = 10;
+    required MsgStatistics   sr_msg   = 11;
+    required TimerStatistics sr_timer = 12;
 }
 
 message TestStatusResult {
@@ -178,12 +204,6 @@ message TestStatusResult {
     required TestCaseStats     tsr_stats      =  6;
     required TestCaseRateStats tsr_rate_stats =  7;
     required TestCaseAppStats  tsr_app_stats  =  8;
-
-    /* NOTE: the following stats are not split per test-case! They are global
-     * port stats.
-     */
-    required LinkStats         tsr_link_stats =  9;
-    required IpStats           tsr_ip_stats   = 10;
 }
 
 service Warp17 {
@@ -203,11 +223,15 @@ service Warp17 {
     rpc GetPortOptions(PortArg)               returns (PortOptionsResult);
     rpc SetTcpSockopt(TcpSockoptArg)          returns (Error);
     rpc GetTcpSockopt(TestCaseArg)            returns (TcpSockoptResult);
+    rpc SetIpv4Sockopt(Ipv4SockoptArg)        returns (Error);
+    rpc GetIpv4Sockopt(TestCaseArg)           returns (Ipv4SockoptResult);
 
     /* Operational calls. */
     rpc PortStart(PortArg)                    returns (Error);
     rpc PortStop(PortArg)                     returns (Error);
     rpc GetTestStatus(TestCaseArg)            returns (TestStatusResult);
+    rpc GetStatistics(PortArg)                returns (StatsResult);
+    rpc ClearStatistics(PortArg)              returns (Error);
 
     /* Partial port configs: : FOR WARP17 INTERNAL USE ONLY! */
     rpc ConfigureL3Intf(L3IntfArg)            returns (Error);

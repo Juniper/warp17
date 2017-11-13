@@ -65,7 +65,8 @@ include $(RTE_SDK)/mk/rte.vars.mk
 
 # binary name
 APP = warp17
-VERSION = \"$(shell cat $(SRCDIR)/VERSION)\"
+VERSION    = \"$(shell cat $(SRCDIR)/VERSION)\"
+BUILD_HASH = \"$(shell git rev-parse HEAD 2> /dev/null || echo "N/A")\"
 
 # Include sec, and 3rd party source directory in build process
 VPATH := $(SRCDIR)/src
@@ -89,7 +90,9 @@ SRCS-y += tpg_main.c
 SRCS-y += tpg_memory.c
 SRCS-y += tpg_msg.c
 SRCS-y += tpg_pktloop.c
+SRCS-y += tpg_timestamp.c
 SRCS-y += tpg_port.c
+SRCS-y += tpg_rate.c
 SRCS-y += tpg_ring_if.c
 SRCS-y += tpg_route.c
 SRCS-y += tpg_rpc.c
@@ -142,6 +145,7 @@ CFLAGS += -DTPG_NO_DEBUG_LOGS
 CFLAGS += -DDBG_TRACE_ALL_RX
 CFLAGS += -DDBG_TRACE_ALL_TX
 CFLAGS += -DTPG_VERSION=$(VERSION)
+CFLAGS += -DTPG_BUILD_HASH=$(BUILD_HASH)
 
 ifeq ($(WARP17_RELEASE),)
 CFLAGS += -g
@@ -164,6 +168,9 @@ endif
 ifneq ($(WARP17_KNI_IF),)
 CFLAGS += -DTPG_KNI_IF -DTPG_SW_CHECKSUMMING
 endif
+
+# For strcasestr and asprintf
+CFLAGS += -D_GNU_SOURCE
 
 LDFLAGS += -lncurses
 LDFLAGS += -lprotobuf-c

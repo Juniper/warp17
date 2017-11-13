@@ -65,7 +65,7 @@
 /* Define TCP SM global statistics. Each thread has its own set of locally
  * allocated stats which are accessible through STATS_GLOBAL(type, core, port).
  */
-STATS_DEFINE(tsm_statistics_t);
+STATS_DEFINE(tpg_tsm_statistics_t);
 
 /* Callback to be executed whenever an interesting event happens. */
 notif_cb_t tcp_notif_cb;
@@ -99,7 +99,6 @@ static int tsm_SF_close_wait(tcp_control_block_t *tcb, tcpEvent_t event,
                              void *tsm_arg);
 static int tsm_SF_closed(tcp_control_block_t *tcb, tcpEvent_t event,
                          void *tsm_arg);
-
 /*****************************************************************************
  * State functions call table
  ****************************************************************************/
@@ -165,7 +164,7 @@ static const char *eventNames[TE_MAX_EVENT] = {
 
 #define TCP_TOO_MANY_RETRIES(tcb, limit, stat_fld)            \
     ((tcb)->tcb_retrans_cnt != (limit) ? false :              \
-        (INC_STATS(STATS_LOCAL(tsm_statistics_t,              \
+        (INC_STATS(STATS_LOCAL(tpg_tsm_statistics_t,          \
                                (tcb)->tcb_l4.l4cb_interface), \
                    stat_fld),                                 \
          true))
@@ -208,7 +207,7 @@ static int tsm_send_data(tcp_control_block_t *tcb, tsm_data_arg_t *data)
     if (!win_was_full && tcp_snd_win_full(tcb)) {
         TCP_NOTIF(TCB_NOTIF_SEG_WIN_UNAVAILABLE, tcb);
 
-        INC_STATS(STATS_LOCAL(tsm_statistics_t, tcb->tcb_l4.l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_tsm_statistics_t, tcb->tcb_l4.l4cb_interface),
                   tsms_snd_win_full);
     }
 
@@ -227,13 +226,13 @@ static void tsm_retrans_data(tcp_control_block_t *tcb)
 
     retrans_bytes = tcp_data_retrans(tcb);
 
-    INC_STATS_VAL(STATS_LOCAL(tsm_statistics_t, tcb->tcb_l4.l4cb_interface),
+    INC_STATS_VAL(STATS_LOCAL(tpg_tsm_statistics_t, tcb->tcb_l4.l4cb_interface),
                   tsms_retrans_bytes,
                   retrans_bytes);
     if (!win_was_full && tcp_snd_win_full(tcb)) {
         TCP_NOTIF(TCB_NOTIF_SEG_WIN_UNAVAILABLE, tcb);
 
-        INC_STATS(STATS_LOCAL(tsm_statistics_t, tcb->tcb_l4.l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_tsm_statistics_t, tcb->tcb_l4.l4cb_interface),
                   tsms_snd_win_full);
     }
 }
@@ -276,7 +275,7 @@ static void tsm_cleanup_retrans_queu(tcp_control_block_t *tcb, uint32_t seg_ack)
         if (retrans->tr_data_mbufs)
             retrans->tr_data_mbufs->pkt_len = mbuf->pkt_len - mbuf->data_len;
 
-        rte_pktmbuf_free_seg(mbuf);
+        pkt_mbuf_free_seg(mbuf);
     }
 
     if (acked_bytes) {
@@ -289,11 +288,15 @@ static void tsm_cleanup_retrans_queu(tcp_control_block_t *tcb, uint32_t seg_ack)
         mbuf = retrans->tr_data_mbufs;
         retrans->tr_data_mbufs = retrans->tr_data_mbufs->next;
 
-        rte_pktmbuf_free_seg(mbuf);
+        pkt_mbuf_free_seg(mbuf);
     }
 
-    if (retrans->tr_data_mbufs == NULL)
+    if (retrans->tr_data_mbufs == NULL) {
         retrans->tr_last_mbuf = NULL;
+
+        /* Everything was acked so we can cancel the retransmission timer. */
+        tcp_timer_rto_cancel(&tcb->tcb_l4);
+    }
 
     /* Update SND.UNA based on what was acked. */
     tcb->tcb_snd.una = seg_ack;
@@ -306,7 +309,7 @@ static void tsm_cleanup_retrans_queu(tcp_control_block_t *tcb, uint32_t seg_ack)
     if (win_was_full && !tcp_snd_win_full(tcb)) {
         TCP_NOTIF(TCB_NOTIF_SEG_WIN_AVAILABLE, tcb);
 
-        DEC_STATS(STATS_LOCAL(tsm_statistics_t, tcb->tcb_l4.l4cb_interface),
+        DEC_STATS(STATS_LOCAL(tpg_tsm_statistics_t, tcb->tcb_l4.l4cb_interface),
                   tsms_snd_win_full);
     }
 }
@@ -352,10 +355,10 @@ static uint32_t tsm_handle_incoming(tcp_control_block_t *tcb,
     }
 
     if (!was_missing && !LIST_EMPTY(&tcb->tcb_rcv_buf)) {
-        INC_STATS(STATS_LOCAL(tsm_statistics_t, tcb->tcb_l4.l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_tsm_statistics_t, tcb->tcb_l4.l4cb_interface),
                   tsms_missing_seq);
     } else if (was_missing && LIST_EMPTY(&tcb->tcb_rcv_buf)) {
-        DEC_STATS(STATS_LOCAL(tsm_statistics_t, tcb->tcb_l4.l4cb_interface),
+        DEC_STATS(STATS_LOCAL(tpg_tsm_statistics_t, tcb->tcb_l4.l4cb_interface),
                   tsms_missing_seq);
     }
 
@@ -392,6 +395,27 @@ static bool tsm_do_receive_acceptance_test(tcp_control_block_t *tcb,
             rc = true;
     }
     return rc;
+}
+
+/*****************************************************************************
+ * tsm_need_ack()
+ ****************************************************************************/
+static bool tsm_need_ack(tcp_control_block_t *tcb)
+{
+    tcp_sockopt_t *tcp_opts;
+
+    tcp_opts = tcp_get_sockopt(&tcb->tcb_l4.l4cb_sockopt);
+
+    if (!tcp_opts->tcpo_ack_delay)
+        return true;
+
+    if (tcb->tcb_active && test_client_sm_has_data_pending(&tcb->tcb_l4))
+        return false;
+
+    if (!tcb->tcb_active && test_server_sm_has_data_pending(&tcb->tcb_l4))
+        return false;
+
+    return true;
 }
 
 /*****************************************************************************
@@ -497,14 +521,14 @@ int tsm_dispatch_event(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_enter_state(tcp_control_block_t *tcb, tcpState_t state,
                            void *tsm_arg)
 {
-    tsm_statistics_t *stats;
+    tpg_tsm_statistics_t *stats;
 
     if (tcb == NULL || state >= TS_MAX_STATE)
         return -EINVAL;
 
     TCB_CHECK(tcb);
 
-    stats = STATS_LOCAL(tsm_statistics_t, tcb->tcb_l4.l4cb_interface);
+    stats = STATS_LOCAL(tpg_tsm_statistics_t, tcb->tcb_l4.l4cb_interface);
 
     /* We clone TCBs from LISTEN so we shouldn't decrement if the previous
      * state is LISTEN.
@@ -571,12 +595,12 @@ void tsm_initialize_statemachine(tcp_control_block_t *tcb, bool active)
  ****************************************************************************/
 void tsm_terminate_statemachine(tcp_control_block_t *tcb)
 {
-    tsm_statistics_t *stats;
+    tpg_tsm_statistics_t *stats;
 
     TCB_CHECK(tcb);
 
     if (tcb->tcb_state != TS_INIT) {
-        stats = STATS_LOCAL(tsm_statistics_t, tcb->tcb_l4.l4cb_interface);
+        stats = STATS_LOCAL(tpg_tsm_statistics_t, tcb->tcb_l4.l4cb_interface);
         assert(stats->tsms_tcb_states[tcb->tcb_state] > 0);
         DEC_STATS(stats, tsms_tcb_states[tcb->tcb_state]);
     }
@@ -698,8 +722,8 @@ static int tsm_SF_listen(tcp_control_block_t *tcb, tcpEvent_t event,
                     /* TODO: how do we handle server allocation errors? */
                     return -ENOMEM;
                 }
-                new_tcb->tcb_l4.l4cb_dst_addr.ip_v4 =
-                    rte_be_to_cpu_32(pcb->pcb_ipv4->src_addr);
+                new_tcb->tcb_l4.l4cb_dst_addr =
+                    TPG_IPV4(rte_be_to_cpu_32(pcb->pcb_ipv4->src_addr));
                 new_tcb->tcb_l4.l4cb_dst_port =
                     rte_be_to_cpu_16(pcb->pcb_tcp->src_port);
 
@@ -1293,8 +1317,12 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
              * seventh, process the segment text,
              */
             if (seg_len && tsm_handle_incoming(tcb, pcb, seg_seq, seg_len)) {
-                /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
+                /* If there both client and server won't send other data
+                 * send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK>
+                 */
+
+                if (tsm_need_ack(tcb))
+                    tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
             }
 
             /*
@@ -2397,7 +2425,16 @@ static int tsm_SF_closed(tcp_control_block_t *tcb, tcpEvent_t event,
         /* Here we need to cleanup everything about the tcb and also free
          * any memory we allocated for it. This is equivalent to a silent
          * close call.
+         *
+         * Here we set pcb->pcb_sockopt to NULL because after tcp session
+         * will be closed it won't be valid anymore.
          */
+        if (likely(tsm_arg != NULL)) {
+            packet_control_block_t *pcb;
+
+            pcb = tsm_arg;
+            pcb->pcb_sockopt = NULL;
+        }
         return tcp_close_connection(tcb, TCG_SILENT_CLOSE);
 
     case TE_OPEN:
@@ -2469,7 +2506,7 @@ bool tsm_init(void)
     /*
      * Allocate memory for TCP SM statistics, and clear all of them
      */
-    if (STATS_GLOBAL_INIT(tsm_statistics_t, "tsm_stats") == NULL) {
+    if (STATS_GLOBAL_INIT(tpg_tsm_statistics_t, "tsm_stats") == NULL) {
         RTE_LOG(ERR, USER1,
                 "ERROR: Failed allocating TCP SM statistics memory!\n");
         return false;
@@ -2484,36 +2521,10 @@ bool tsm_init(void)
 void tsm_lcore_init(uint32_t lcore_id)
 {
     /* Init the local stats. */
-    if (STATS_LOCAL_INIT(tsm_statistics_t, "tsm_stats", lcore_id) == NULL) {
+    if (STATS_LOCAL_INIT(tpg_tsm_statistics_t, "tsm_stats", lcore_id) == NULL) {
         TPG_ERROR_ABORT("[%d:%s() Failed to allocate per lcore tsm_stats!\n",
                         rte_lcore_index(lcore_id),
                         __func__);
-    }
-}
-
-/*****************************************************************************
- * tsm_total_stats_get()
- ****************************************************************************/
-void tsm_total_stats_get(uint32_t port, tsm_statistics_t *total_stats)
-{
-    uint32_t          core;
-    int               state;
-    tsm_statistics_t *tsm_stats;
-
-    bzero(total_stats, sizeof(*total_stats));
-
-    STATS_FOREACH_CORE(tsm_statistics_t, port, core, tsm_stats) {
-        for (state = 0; state < TS_MAX_STATE; state++) {
-            total_stats->tsms_tcb_states[state] +=
-                tsm_stats->tsms_tcb_states[state];
-        }
-
-        total_stats->tsms_syn_to += tsm_stats->tsms_syn_to;
-        total_stats->tsms_synack_to += tsm_stats->tsms_synack_to;
-        total_stats->tsms_retry_to += tsm_stats->tsms_retry_to;
-        total_stats->tsms_retrans_bytes += tsm_stats->tsms_retrans_bytes;
-        total_stats->tsms_missing_seq += tsm_stats->tsms_missing_seq;
-        total_stats->tsms_snd_win_full += tsm_stats->tsms_snd_win_full;
     }
 }
 
@@ -2542,18 +2553,20 @@ static void cmd_show_tsm_statistics_parsed(void *parsed_result __rte_unused,
                                            struct cmdline *cl,
                                            void *data)
 {
-    int port;
-    int core;
-    int option = (intptr_t) data;
-    int state;
+    int           port;
+    int           core;
+    int           option = (intptr_t) data;
+    int           state;
+    printer_arg_t parg = TPG_PRINTER_ARG(cli_printer, cl);
 
     for (port = 0; port < rte_eth_dev_count(); port++) {
         /*
          * Calculate totals first
          */
-        tsm_statistics_t    total_stats;
+        tpg_tsm_statistics_t total_stats;
 
-        tsm_total_stats_get(port, &total_stats);
+        if (test_mgmt_get_tsm_stats(port, &total_stats, &parg) != 0)
+            continue;
 
         /*
          * Display individual counters
@@ -2567,9 +2580,9 @@ static void cmd_show_tsm_statistics_parsed(void *parsed_result __rte_unused,
         }
 
         if (option == 'd') {
-            tsm_statistics_t *tsm_stats;
+            tpg_tsm_statistics_t *tsm_stats;
 
-            STATS_FOREACH_CORE(tsm_statistics_t, port, core, tsm_stats) {
+            STATS_FOREACH_CORE(tpg_tsm_statistics_t, port, core, tsm_stats) {
                 int idx = rte_lcore_index(core);
 
                 cmdline_printf(cl, "    - core idx %3.3u :\n", idx);
@@ -2584,22 +2597,27 @@ static void cmd_show_tsm_statistics_parsed(void *parsed_result __rte_unused,
 
         cmdline_printf(cl, "\n");
 
-        SHOW_32BIT_STATS("SYN retrans TO", tsm_statistics_t, tsms_syn_to,
+        SHOW_32BIT_STATS("SYN retrans TO", tpg_tsm_statistics_t, tsms_syn_to,
                          port,
                          option);
-        SHOW_32BIT_STATS("SYN/ACK retrans TO", tsm_statistics_t, tsms_synack_to,
+        SHOW_32BIT_STATS("SYN/ACK retrans TO", tpg_tsm_statistics_t,
+                         tsms_synack_to,
                          port,
                          option);
-        SHOW_32BIT_STATS("Retrans TO", tsm_statistics_t, tsms_retry_to,
+        SHOW_32BIT_STATS("Retrans TO", tpg_tsm_statistics_t,
+                         tsms_retry_to,
                          port,
                          option);
-        SHOW_64BIT_STATS("Retrans bytes", tsm_statistics_t, tsms_retrans_bytes,
+        SHOW_64BIT_STATS("Retrans bytes", tpg_tsm_statistics_t,
+                         tsms_retrans_bytes,
                          port,
                          option);
-        SHOW_32BIT_STATS("Missing seq", tsm_statistics_t, tsms_missing_seq,
+        SHOW_32BIT_STATS("Missing seq", tpg_tsm_statistics_t,
+                         tsms_missing_seq,
                          port,
                          option);
-        SHOW_32BIT_STATS("SND win full", tsm_statistics_t, tsms_snd_win_full,
+        SHOW_32BIT_STATS("SND win full", tpg_tsm_statistics_t,
+                         tsms_snd_win_full,
                          port,
                          option);
 

@@ -75,20 +75,22 @@ enum HttpStatusCode {
 }
 
 message HttpClient {
-    required HttpMethod hc_req_method       = 1;
-    required string     hc_req_object_name  = 2;
-    required string     hc_req_host_name    = 3;
-    required uint32     hc_req_size         = 4;
+    required HttpMethod hc_req_method      = 1;
+    required string     hc_req_object_name = 2;
+    required string     hc_req_host_name   = 3;
+    required uint32     hc_req_size        = 4;
+    optional string     hc_req_fields      = 5;
 }
 
 message HttpServer {
-    required HttpStatusCode hs_resp_code  = 1;
-    required uint32         hs_resp_size  = 2;
+    required HttpStatusCode hs_resp_code   = 1;
+    required uint32         hs_resp_size   = 2;
+    optional string         hs_resp_fields = 3;
 }
 
 message HttpStats {
-    required uint32 hsts_req_cnt            = 1;
-    required uint32 hsts_resp_cnt           = 2;
+    required uint64 hsts_req_cnt            = 1;
+    required uint64 hsts_resp_cnt           = 2;
     required uint32 hsts_invalid_msg_cnt    = 3;
     required uint32 hsts_no_content_len_cnt = 4;
     required uint32 hsts_transfer_enc_cnt   = 5;

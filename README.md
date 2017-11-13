@@ -150,30 +150,46 @@ available, details can be found in the respective [documentation](ovf/README.md)
 sudo apt-get install build-essential python ncurses-dev
 ```
 
-### Install DPDK 16.11
+### Install DPDK 16.11.2
 
-* Download [DPDK 16.11](http://dpdk.org/browse/dpdk/refs/)
+* Download [DPDK 16.11.2](http://dpdk.org/rel/)
 
 	```
-	tar xf dpdk-16.11.tar.xz
-	cd dpdk-16.11
-
+	tar xf dpdk-16.11.2.tar.xz
+	cd dpdk-stable-16.11.2
 	```
 
 * Install DPDK:
 
 	```
-	make install T=x86_64-native-linuxapp-gcc
+	make config T=x86_64-native-linuxapp-gcc
+	make
+	sudo make install
 	```
 
 * Load the `igb_uio` DPDK module, either as shown below or by running the
   `$RTE_SDK/tools/dpdk-setup.sh` script and selecting option
-  `[16] Insert IGB UIO module`:
+  `[2] Insert IGB UIO module`:
 
-	```
-	sudo modprobe uio
-	sudo insmod x86_64-native-linuxapp-gcc/kmod/igb_uio.ko
-	```
+	- add the following modules to `/etc/modules`:
+
+		```
+		#
+		# DPDK additions
+		#
+		uio
+		igb_uio
+		rte_kni
+		```
+
+	- reload all modules:
+
+		```
+		sudo depmod -a
+		sudo modprobe uio
+		sudo modprobe igb_uio
+		sudo modprobe rte_kni
+		```
 
 * Enable at least 32 1G hugepages and configure them (see section 2.3.2.1 from
 the [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/sys_reqs.html)):
@@ -209,11 +225,17 @@ the [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/sys_reqs.html)):
 		nodev           /mnt/huge_1GB   hugetlbfs pagesize=1GB  0       0
 		```
 
+		- remount:
+
+		```
+		sudo mount /mnt/huge_1GB
+		```
+
 * Export the path to the DPDK SDK (where DPDK was installed) into the variable
 RTE_SDK. For example:
 
 	```
-	export RTE_SDK=/home/<user>/src/dpdk-16.11
+	export RTE_SDK=/usr/local/share/dpdk
 	```
 
 * Export the target of the DPDK SDK into the variable RTE_TARGET. For example:
@@ -233,7 +255,7 @@ RTE_SDK. For example:
 * If using Ubuntu Server 14.04 LTS then just install:
 
 	```
-	sudo apt-get install libprotobuf-c0 libprotobuf-c0-dev libprotobuf8 libprotoc8 protobuf-c-	compiler
+	sudo apt-get install libprotobuf-c0 libprotobuf-c0-dev libprotobuf8 libprotoc8 protobuf-c-compiler
 	```
 
 * Otherwise (Ubuntu version >= 15.10):
@@ -262,13 +284,14 @@ RTE_SDK. For example:
 		sudo dpkg -i protobuf-c-compiler_0.15-1build1_amd64.deb
 
 ## Get WARP17
-Get the `warp17-<ver>.tgz` archive or clone the desired release.
+Get the `warp17-<ver>.tgz` archive or clone the desired
+[release](https://github.com/Juniper/warp17/releases).
 
 ## Compile WARP17
 
 ```
 tar xfz warp17-<ver>.tgz
-cd warp17
+cd warp17-<ver>
 make
 ```
 
@@ -300,7 +323,7 @@ deactivate
 
 Use the `$RTE_SDK/tools/dpdk-setup.sh` script (as described in the
 [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/quick_start.html)). Select
-which ports to be controlled by the IGB UIO module: option `[22] Bind
+which ports to be controlled by the IGB UIO module: option `[8] Bind
 Ethernet/Crypto device to IGB UIO module`.
 
 # How to run
@@ -344,6 +367,8 @@ __NOTE: For now WARP17 supports at most 64 cores.__
 
 ### WARP17 command-line arguments
 
+* `--version`: prints version and exit.
+* `--help`: prints the help and exit.
 * `--qmap <port>.<hex_mask>`: bitmask specifying which physical cores will
   control the physical port <eth_port>.
 * `--qmap-default max-c`: maximize the number of independent cores handling
@@ -361,9 +386,14 @@ __NOTE: For now WARP17 supports at most 64 cores.__
 * `--mbuf-pool-sz`: configure the size of the packet pool. The size of the
   pool will be given by the argument of this option multiplied by 1024. By
   default 768K packets are allocated.
+* `--mbuf-sz`: configure the size of a packet fragment (mbuf) in bytes. By
+  default fragments are 2048 bytes.
 * `--mbuf-hdr-pool-sz`: configure the size of the packet headers pool. The
   size of the pool will be given by the argument of this option multiplied by
   1024. By default 512K packet headers are allocated.
+* `--mpool-any-sock`: configure if memory pools should be created from
+  any available memory if the local socket memory is exhausted. By default
+  this feature is disabled as it might affect performance.
 * `--ring-if-pairs`: configure the number of _in-memory-ring-based_ interfaces.
   __NOTE: please check section
   [Using In-Memory-Ring-Based Interfaces](#using-in-memory-ring-based-interfaces)
@@ -541,18 +571,19 @@ data from the built in HTTP server trough Linux. We assume no physical ports
 are configured, if you have them make sure you increase all the referenced
 ports:
 
-* Load the `rte_kni` DPDK module, either as shown below or by running the
-  `$RTE_SDK/tools/dpdk-setup.sh` script and selecting option
-  `[18] Insert KNI module`:
+* Load the `rte_kni` DPDK module (if needed), either as shown below or by
+  running the `$RTE_SDK/tools/dpdk-setup.sh` script and selecting option
+  `[4] Insert KNI module`:
 
 ```
-sudo insmod $RTE_SDK/x86_64-native-linuxapp-gcc/kmod/rte_kni.ko
+sudo modprobe rte_kni
 ```
 
-* Start WARP17:
+* Start WARP17 while blacklisting all physical devices (just for the purpose of
+  this test as otherwise the KNI interface name might differ):
 
 ```
-./build/warp17 -c FC3 -n 4  -m 32768 -- --kni-ifs 1
+./build/warp17 -c FC3 -n 4  -m 32768 -w 0000:00:00.0 -- --kni-ifs 1
 ```
 
 * Configure the Linux kernel interface:
@@ -635,6 +666,19 @@ __NOTE: Only IPv4 is supported for now!__
 	add tests client tcp|udp port <eth_port> test-case-id <tcid>
 	                 src <ip-range> sport <l4-ports>
 	                 dest <ip-range> dport <l4-ports>
+	```
+
+* __Configure multicast source test cases (per port)__: configure a multicast
+  source test case with ID `test-case-id` on `eth_port`. The underlying L4
+  traffic can only be UDP. The source IP/l4-port and destination IP/l4-port
+  ranges define the `<src_ip, src_port:dst_ip, dst_port>` UDP multicast streams
+  that will be generated. By default, the application (L5-L7) traffic will be
+  RAW traffic. Destination IP ranges must be valid IP Multicast ranges.
+
+	```
+	add tests multicast-src udp port <eth_port> test-case-id <tcid>
+	                        src <ip-range> sport <l4-ports>
+	                        dest <ip-mcast-range> dport <l4-ports>
 	```
 
 * __Configure test profile timeouts__: each test has a specific timeout profile
@@ -829,8 +873,64 @@ __NOTE: Only IPv4 is supported for now!__
       not.
 
 		```
-		set tests tcp-options port <eth_port> test-case-id <tcid> twait-skip <true|false>
+		set tests tcp-options port <eth_port> test-case-id <tcid> twait-skip <1|0>
 		```
+
+    - `ack-delay`: boolean to decide if `ACK` should be delayed (according to
+       [RFC1122, section 4.2.3.2](https://tools.ietf.org/html/rfc1122#section-4.2.3.2))
+       or not. By default `ACK` delay will be __disabled__.
+
+		```
+		set tests tcp-options port <eth_port> test-case-id <tcid> ack-delay <1|0>
+		```
+
+* __Customize IPv4 stack settings__: customize the behavior of the IPv4 layer
+  running on test case with ID `tcid` on port `eth_port`. The following
+	settings are customizable:
+
+  	- `tos`: the TOS field of the IPv4 header
+
+		```
+		set tests ipv4-options port <eth_port> test-case-id <tcid> tos <tos-value>
+		```
+
+  	- `dscp` and `ecn`: the DSCP/ECN field of the IPv4 header
+
+		```
+		set tests ipv4-options port <eth_port> test-case-id <tcid> dscp <dscp-name> ecn <ecn-name>
+		```
+
+  	- `tx-timestamp` and `rx-timestamp`: allow warp17 to write/read timestamp
+  	option in the IPv4 header (Warp17 will store timestamps according to
+  	[RFC791, section 3.1](https://tools.ietf.org/html/rfc1122#page-36)).
+  	When RX timestamping is enabled, latency statistics will also be computed.
+
+		__NOTE: This might incur a small performance penalty.__
+
+		```
+		set tests ipv4-options port <eth_port> test-case-id <tcid> tx-timestamp|rx-timestamp <0|1>"
+		```
+
+* __Latency__: latency computation can be enabled on top of all the application
+  types using _IPv4 options_ or RAW timestamping. The latency config consists
+  of the following optional fields:
+
+    - `max` latency threshold: all incoming packets with a measured latency
+      higher than the configured `max` will be counted as
+      _threshold violations_.
+    - `max-avg` latency threshold: every time the average measured latency
+		  is over the configured `max-avg` a new _threshold violation_ will be
+      counted.
+    - `samples` count: the number of __recent__ samples used for computing
+      recent statistics. __Global__ statistics are computed per test case using
+      all the received samples (not only the most recent ones).
+
+	```
+	set latency port <eth_port> test-case-id <tcid> max <value> max-avg <value> samples <value>
+	```
+
+	__NOTE: Latency configs make sense only if RX timestamping is enabled for the
+  same test case.__
 
 ## Application configuration and statistics commands
 
@@ -851,12 +951,30 @@ defined the client or server test cases.
 		set tests client http port <eth_port> test-case-id <tcid> GET|HEAD <host-name> <obj-name> req-size <req-size>
 		```
 
+    - __HTTP 1.1 request fields__: Any user specified fields can be added to the
+      HTTP request. The only constraint is that `Content-Length` cannot be
+      explicitly set by the user. Use a `set` command for each of the HTTP
+      fields that need to be set:
+
+		```
+		set tests client http port <eth_port> test-case-id <tcid> http-field <plain text HTTP field>
+		```
+
     - __HTTP 1.1 server configuration__: _200 OK_/_404 NOT FOUND_ responses are
       supported. A `resp-size` must also be specified (0 is also valid) in order
       to define the size of the body of the HTTP response.
 
 		```
 		set tests server http port <eth_port> test-case-id <tcid> 200-OK|404-NOT-FOUND resp-size <resp-size>
+		```
+
+    - __HTTP 1.1 response fields__: Any user specified fields can be added to
+      the HTTP response. The only constraint is that `Content-Length` cannot be
+      explicitly set by the user. Use a `set` command for each of the HTTP
+      fields that need to be set:
+
+		```
+		set tests server http port <eth_port> test-case-id <tcid> http-field <plain text HTTP field>
 		```
 
     - __HTTP 1.1 global stats__: display (detailed) statistics for the ethernet ports
@@ -877,12 +995,21 @@ defined the client or server test cases.
 	sizes match between clients and servers!__
 
 	```
-	set tests client raw port <eth_port> test-case-id <tcid>data-req-plen <len> data-resp-  plen <len>
+	set tests client raw port <eth_port> test-case-id <tcid>data-req-plen <len> data-resp-plen <len> [rx-timestamp] [tx-timestamp]
 	```
 
 	```
-	set tests server raw port <eth_port> test-case-id <tcid>data-req-plen <len> data-resp-  plen <len>
+	set tests server raw port <eth_port> test-case-id <tcid>data-req-plen <len> data-resp-plen <len> [rx-timestamp] [tx-timestamp]
 	```
+
+	Both CLI commands support additional RX/TX timestamping options. If
+	`rx-timestamp` is set, the Warp17 traffic engine will timestamp packets at
+	ingress and the RAW application will compute latency statistics when
+	incoming packets have TX timestamp information embedded in their payload. If
+	`tx-timestamp` is set RAW application clients will embed TX timestamps in the
+	first 16 bytes of the application payload. The RX/TX timestamps are both
+	computed early in the packet loop in order to be as precise as possible when
+	measuring latency.
 
 ## Displaying test information
 
@@ -1056,6 +1183,22 @@ ethernet port.
 	show memory statistics [details]
 	```
 
+* __Modifying Log Levels__: allow the user to change the syslog verbosity.
+
+    ```
+    set syslog <level>
+    ```
+
+    Available log levels (corresponding to DPDK log levels):
+    - `EMERG`: System is unusable.
+    - `ALERT`: Action must be taken immediately.
+    - `CRIT`: Critical conditions.
+    - `ERR`: Error conditions.
+    - `WARNING`: Warning conditions.
+    - `NOTICE`: Normal but significant condition.
+    - `INFO`: Informational.
+    - `DEBUG`: Debug-level messages.
+
 # UI
 
 `show tests ui` displays an UI which allows monitoring the test execution.
@@ -1125,6 +1268,24 @@ WARP17 or executed directly in the CLI.
   be used when having (multiple) routers in between the client and server
   ports.
 
+* __examples/test\_8\_http\_fields.cfg__: example showing how to configure
+  various HTTP fields in the requests/responses (e.g., `Content-Type`).
+
+* __examples/test\_9\_ipv4\_tos.cfg__: example showing how to configure
+  various TOS or DSCP/ECN values as part of the IPv4 options of the test cases.
+
+* __examples/test\_10\_ipv4\_mcast.cfg__: example showing how to configure
+  UDP Multicast Source test cases. The example combines UDP Unicast traffic with
+  UDP Multicast traffic.
+
+* __examples/test\_11\_ipv4\_latency.cfg__: example showing how to configure
+  latency measurement on a TCP test case. _Maximum_ and _average_ thresholds
+  are configured.
+
+* __examples/test\_12\_raw\_latency.cfg__: example showing how to configure
+  latency measurement using application layer timestamping on TCP and UDP
+  test cases.
+
 # Python scripting API
 WARP17 offers an RPC-based API which allows users to write scripts and automate
 the tests that WARP17 would run. WARP17 listens to incoming RPC connections on TCP
@@ -1146,9 +1307,12 @@ A short example about how to use Perl to script WARP17 can be found in
 `examples/perl/test_1_http_4M.pl`. Requirements for running the Perl scripts:
 
 ```
-sudo apt-get install python2.7-dev
-sudo apt-get install cpanminus
+sudo apt-get install python2.7-dev cpanminus
 sudo cpanm Inline::Python
+```
+
+```
+sudo perl -I ./perl/ examples/perl/test_1_http_4M.pl
 ```
 
 # Contributing a new L7 Application implementation

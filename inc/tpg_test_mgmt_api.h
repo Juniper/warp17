@@ -261,9 +261,34 @@ test_mgmt_set_tcp_sockopt(uint32_t eth_port, uint32_t test_case_id,
  *  0 on success
  */
 extern __tpg_api_func int
-test_mgmt_get_tcp_sockopt(uint32_t eth_port, uint32_t test_case_id,
-                          tpg_tcp_sockopt_t *out,
-                          printer_arg_t *printer_arg);
+test_mgmt_get_ipv4_sockopt(uint32_t eth_port, uint32_t test_case_id,
+                           tpg_ipv4_sockopt_t *out,
+                           printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -EALREADY: tests already started on port.
+ *  -ENOENT: no such test case exists.
+ *  -EINVAL: when arguments are wrong.
+ *  -E*: when internal errors occur
+ *  0 on success.
+ */
+ extern __tpg_api_func int
+ test_mgmt_set_ipv4_sockopt(uint32_t eth_port, uint32_t test_case_id,
+                            const tpg_ipv4_sockopt_t *options,
+                            printer_arg_t *printer_arg);
+
+ /*
+  * Returns:
+  *  -ENOENT: test_case_id not found.
+  *  -EINVAL: invalid arguments or wrong test case type.
+  *  0 on success
+  */
+ extern __tpg_api_func int
+ test_mgmt_get_tcp_sockopt(uint32_t eth_port, uint32_t test_case_id,
+                           tpg_tcp_sockopt_t *out,
+                           printer_arg_t *printer_arg);
+
 
 /*
  * Returns:
@@ -315,6 +340,132 @@ extern __tpg_api_func int
 test_mgmt_get_test_case_app_stats(uint32_t eth_port, uint32_t test_case_id,
                                   tpg_test_case_app_stats_t *out,
                                   printer_arg_t *printer_arg);
+
+/*
+* Returns:
+*  -EINVAL: port not valid.
+*  0 on success
+*/
+extern __tpg_api_func int
+test_mgmt_get_port_stats(uint32_t eth_port, tpg_port_statistics_t *total_stats,
+                         printer_arg_t *printer_arg);
+
+/*
+* Returns:
+*  -EINVAL: port not valid.
+*  0 on success
+*/
+extern __tpg_api_func int
+test_mgmt_get_phy_stats(uint32_t eth_port, tpg_phy_statistics_t *total_stats,
+                        printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -EINVAL: port not valid.
+ *  0 on success
+ */
+extern __tpg_api_func int
+test_mgmt_get_eth_stats(uint32_t eth_port,
+                        tpg_eth_statistics_t *total_stats,
+                        printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -EINVAL: port not valid.
+ *  0 on success
+ */
+extern __tpg_api_func int
+test_mgmt_get_arp_stats(uint32_t eth_port,
+                        tpg_arp_statistics_t *total_stats,
+                        printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -EINVAL: port not valid.
+ *  0 on success
+ */
+extern __tpg_api_func int
+test_mgmt_get_route_stats(uint32_t eth_port,
+                          tpg_route_statistics_t *total_stats,
+                          printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -EINVAL: port not valid.
+ *  0 on success
+ */
+extern int
+test_mgmt_get_ipv4_stats(uint32_t eth_port,
+                         tpg_ipv4_statistics_t *total_ipv4_stats,
+                         printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -EINVAL: port not valid.
+ *  0 on success
+ */
+extern __tpg_api_func int
+test_mgmt_get_udp_stats(uint32_t eth_port,
+                        tpg_udp_statistics_t *total_udp_stats,
+                        printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -EINVAL: port not valid.
+ *  0 on success
+ */
+extern __tpg_api_func int
+test_mgmt_get_tcp_stats(uint32_t eth_port,
+                        tpg_tcp_statistics_t *total_tcp_stats,
+                        printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -EINVAL: port not valid.
+ *  0 on success
+ */
+extern __tpg_api_func int
+test_mgmt_get_tsm_stats(uint32_t eth_port, tpg_tsm_statistics_t *total_stats,
+                        printer_arg_t *printer_arg);
+
+/*
+ * Always returns SUCCESS:
+ *  0 on success
+ */
+extern __tpg_api_func int
+test_mgmt_get_msg_stats(tpg_msg_statistics_t *total_stats,
+                        printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -EINVAL: port not valid.
+ *  0 on success
+ */
+extern __tpg_api_func int
+test_mgmt_get_timer_stats(uint32_t eth_port,
+                          tpg_timer_statistics_t *total_stats,
+                          printer_arg_t *printer_arg);
+/*
+ * Returns:
+ *  -EINVAL: when arguments are wrong.
+ *  0 on success.
+ */
+extern __tpg_api_func int
+test_mgmt_clear_statistics(uint32_t eth_port, printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  true if rx timestamping is enabled for this test case + sockopt combination
+ *  false otherwise
+ */
+extern bool test_mgmt_rx_tstamp_enabled(const tpg_test_case_t *entry);
+
+/*
+ * Returns:
+ *  true if tx timestamping is enabled for this test case + sockopt combination
+ *  false otherwise
+ */
+extern bool test_mgmt_tx_tstamp_enabled(const tpg_test_case_t *entry);
 
 #endif /* _H_TPG_TEST_MGMT_API */
 

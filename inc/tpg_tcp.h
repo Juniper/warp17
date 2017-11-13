@@ -61,41 +61,6 @@
 #define _H_TPG_TCP_
 
 /*****************************************************************************
- * TCP statistics
- ****************************************************************************/
-typedef struct tcp_statistics_s {
-
-    uint64_t ts_received_pkts;
-    uint64_t ts_received_bytes;
-
-    uint64_t ts_sent_ctrl_pkts;
-    uint64_t ts_sent_ctrl_bytes;
-
-    uint64_t ts_sent_data_pkts;
-    uint64_t ts_sent_data_bytes;
-
-    uint64_t ts_tcb_malloced;
-    uint64_t ts_tcb_freed;
-    uint64_t ts_tcb_not_found;
-    uint64_t ts_tcb_alloc_err;
-
-
-    /* Unlikely uint16_t error counters */
-
-    uint16_t ts_to_small_fragment;
-    uint16_t ts_hdr_to_small;
-    uint16_t ts_invalid_checksum;
-    uint16_t ts_failed_ctrl_pkts;
-    uint16_t ts_failed_data_pkts;
-    uint16_t ts_failed_data_clone;
-
-#ifndef _SPEEDY_PKT_PARSE_
-    uint16_t ts_reserved_bit_set;
-#endif
-
-} __rte_cache_aligned tcp_statistics_t;
-
-/*****************************************************************************
  * TCP Retransmission definition
  ****************************************************************************/
 typedef struct tcb_retrans_s {
@@ -112,7 +77,9 @@ typedef struct tcb_retrans_s {
 typedef struct tcb_buf_hdr_s {
     LIST_ENTRY(tcb_buf_hdr_s) tbh_entry;
 
+
     struct rte_mbuf *tbh_mbuf;
+    uint64_t         tbh_tstamp;
     uint32_t         tbh_seg_seq;
 } tcb_buf_hdr_t;
 
@@ -264,6 +231,22 @@ typedef struct tcp_control_block_s {
 /*****************************************************************************
  * Inlines for tpg_tcp.c
  ****************************************************************************/
+
+/*****************************************************************************
+ * tcb_buf_hdr_init()
+ ****************************************************************************/
+static inline void tcb_buf_hdr_init(tcb_buf_hdr_t *hdr, struct rte_mbuf *mbuf,
+                                    uint64_t tstamp,
+                                    uint32_t tcp_seg_seq)
+{
+    hdr->tbh_mbuf = mbuf,
+    hdr->tbh_tstamp = tstamp;
+    hdr->tbh_seg_seq = tcp_seg_seq;
+}
+
+/*****************************************************************************
+ * tcp_snd_win_full()
+ ****************************************************************************/
 static inline bool tcp_snd_win_full(tcp_control_block_t *tcb)
 {
     return SEG_EQ(tcb->tcb_snd.wnd,
@@ -274,8 +257,8 @@ static inline bool tcp_snd_win_full(tcp_control_block_t *tcb)
  * Globals for tpg_tcp.c
  ****************************************************************************/
 /* TCP stats are also updated in tpg_tcp_data.c */
-STATS_GLOBAL_DECLARE(tcp_statistics_t);
-STATS_LOCAL_DECLARE(tcp_statistics_t);
+STATS_GLOBAL_DECLARE(tpg_tcp_statistics_t);
+STATS_LOCAL_DECLARE(tpg_tcp_statistics_t);
 
 /*****************************************************************************
  * Externals for tpg_tcp.c
@@ -286,11 +269,6 @@ extern void             tcp_store_sockopt(tcp_sockopt_t *dest,
                                           const tpg_tcp_sockopt_t *options);
 extern void             tcp_load_sockopt(tpg_tcp_sockopt_t *dest,
                                          const tcp_sockopt_t *options);
-extern struct tcp_hdr  *tcp_build_tcp_hdr(struct rte_mbuf *mbuf,
-                                          tcp_control_block_t *tcb,
-                                          struct ipv4_hdr *ipv4hdr,
-                                          uint32_t sseq,
-                                          uint32_t flags);
 extern struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
                                         struct rte_mbuf *mbuf);
 extern bool             tcp_send_data_pkt(tcp_control_block_t *tcb,

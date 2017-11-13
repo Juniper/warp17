@@ -89,15 +89,25 @@ function check_no_commits {
 }
 
 function check_perf_file_version {
-    perf_file=$1
-    major=$2
-    minor=$3
+    local perf_file=$1
+    local major=$2
+    local minor=$3
+
     # stores the version in $ver
     build_version $major $minor
 
-    count=$(grep -c "warp17 v$ver" $perf_file)
+    local count=$(grep -c "warp17 v$ver" $perf_file)
     [ $count != 1 ] &&
     die "Expecting version $ver! Please provide results from the current version!"
+}
+
+function check_release_notes {
+    local rnfile=$1
+    local ver=$2
+
+    local count=$(head -n 1 $rnfile | grep -c "v$ver:\$")
+    [ $count != 1 ] &&
+    die "Missing release notes for version $ver!"
 }
 
 function inc_version {
@@ -163,16 +173,24 @@ done
 ([[ -z $type ]] || [[ -z $descr ]] || [[ -z $perf_file ]] || [[ -z $remote ]]) &&
 usage $0
 
+# Check that we're on the master branch and that there are no pending commits
+# or changes.
 check_master
 check_no_commits
 
 major=$(cat $vfile | cut -d '.' -f 1)
 minor=$(cat $vfile | cut -d '.' -f 2)
 
+# Check that the supplied performance results are from the current version.
 check_perf_file_version $perf_file $major $minor
 
-# stores the version in $ver
+# Stores the version in $ver
 inc_version $type $major $minor
+
+rnfile=RELEASE_NOTES
+
+# Check that the relase notes are up to date (matching the new version).
+check_release_notes $rnfile $ver
 
 tag_name=v$ver
 perf_results=$(grep -E 'test_|Average' $perf_file)

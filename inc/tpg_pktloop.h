@@ -67,7 +67,9 @@
     CMDLINE_OPT_ARG("pkt-send-drop-rate", true)
 
 #define PKTLOOP_CMDLINE_PARSER() \
-    CMDLINE_ARG_PARSER(pkt_handle_cmdline_opt, NULL)
+    CMDLINE_ARG_PARSER(pkt_handle_cmdline_opt, NULL,                                \
+"  --pkt-send-drop-rate:       If set then one packet every 'pkt-send-drop-rate'\n" \
+"                              will be dropped at TX.(per lcore)\n")
 
 /*****************************************************************************
  * Pkt loop module message type codes.
@@ -115,12 +117,14 @@ RTE_DECLARE_PER_LCORE(port_info_t *, local_port_dev_info);
 /*****************************************************************************
  * External's for tpg_pktloop.c
  ****************************************************************************/
-extern int  pkt_send(uint32_t port, struct rte_mbuf *mbuf, bool trace);
-extern void pkt_flush_tx_q(uint32_t port, port_statistics_t *stats);
-extern int  pkt_receive_loop(void *arg __rte_unused);
+extern int                      pkt_send(uint32_t port, struct rte_mbuf *mbuf, bool trace);
+extern void                     pkt_flush_tx_q(uint32_t port,
+                                               tpg_port_statistics_t *stats);
+extern int                      pkt_receive_loop(void *arg __rte_unused);
 
-extern bool pkt_handle_cmdline_opt(const char *opt_name, char *opt_arg);
-extern bool pkt_loop_init(void);
+extern cmdline_arg_parser_res_t pkt_handle_cmdline_opt(const char *opt_name,
+                                                       char *opt_arg);
+extern bool                     pkt_loop_init(void);
 
 /*****************************************************************************
  * Static inlines
@@ -146,7 +150,6 @@ static inline bool pkt_send_with_hash(uint32_t interface,
 
     return pkt_send(interface, pkt, trace);
 }
-
 
 #endif /* _H_TPG_PKTLOOP_ */
 

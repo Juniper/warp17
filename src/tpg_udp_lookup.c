@@ -134,15 +134,16 @@ void tlkp_udp_lcore_init(uint32_t lcore_id)
  ****************************************************************************/
 udp_control_block_t *tlkp_alloc_ucb(void)
 {
-    void *ucb;
+    udp_control_block_t *ucb;
 
-    if (rte_mempool_generic_get(mem_get_ucb_local_pool(), &ucb, 1, NULL,
+    if (rte_mempool_generic_get(mem_get_ucb_local_pool(), (void *)&ucb, 1, NULL,
                                 MEMPOOL_F_SC_GET))
         return NULL;
 
-    L4_CB_ALLOC_INIT(&((udp_control_block_t *)ucb)->ucb_l4,
-                     tlkp_ucb_mpool_alloc_in_use,
-                     ucb_l4cb_max_id);
+    tlkp_alloc_cb_init(ucb, &ucb->ucb_l4, offsetof(udp_control_block_t, ucb_l4),
+                       mem_get_ucb_local_pool(),
+                       tlkp_ucb_mpool_alloc_in_use,
+                       ucb_l4cb_max_id);
 
     return ucb;
 }

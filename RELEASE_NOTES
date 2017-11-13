@@ -1,3 +1,64 @@
+v1.5:
+-----
+FEATURES:
+- Add link rate statistics out side UI.
+- Make mbuf fragment size configurable.
+- Add CLI/RPC command for clearing all statistics.
+- Add protobuf infrastructure for querying/clearing all types of stats.
+- Add `set syslog` CLI for changing log level.
+- Add proper cmdline parsing and usage printing.
+- Add support for TCP Delayed Ack (rfc1122, section 4.2.3.2).
+- Add --mpool-any-sock command line option.
+- Add support for custom HTTP fields.
+- Add support for configuring ToS/DSCP/ECN.
+- Add UDP multicast-src test cases.
+- Add support for latency measurement.
+
+FIXED ISSUES:
+- Fix memory allocation for def gw.
+- Fix L4 requeuing for RAW application traffic.
+- Cancel TCP retransmission timers once data is ack-ed.
+- Add workaround for changing X(L)710 port states.
+- Trim IP packets if padding was present.
+- Fix TCP segment reassembly.
+- Fix computation of "TCP data bytes sent".
+- Fix clearing of (extended) link stats.
+- Fix test case rate limits (open/close/send).
+- Fix Multicast IP address detection.
+
+KNOWN ISSUES:
+- See v1.4.
+
+API CHANGES:
+- Change RawStats and HttpStats (request/responses) to uint64.
+- Remove LinkStats and IpStats from TestStatusResult.
+- Add SetIpv4Sockopt/GetIpv4Sockopt RPC APIs for configuring IPv4 socket
+  options.
+- Add GetStatistics/ClearStatistics RPC APIs for querying/clearing per-port
+  statistics.
+- Add required tcs_latency_stats field in TestCaseStats returned by the
+  GetTestStatus RPC API.
+- Add optional tc_latency config field to TestCase config messages.
+
+v1.4:
+-----
+FEATURES:
+- Upgrade to DPDK 16.11.
+- Add KNI interface support.
+- Add exit CLI command.
+
+FIXED ISSUES:
+- Fix UI link speed computation.
+- Fix setting MTU for XL710 NICs.
+- Fix TCP FIN retransmission.
+- Update VM usage documentation.
+
+KNOWN ISSUES:
+- See v1.3
+
+API CHANGES:
+- No changes.
+
 v1.3:
 -----
 FEATURES:

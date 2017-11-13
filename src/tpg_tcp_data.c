@@ -70,7 +70,7 @@ static uint32_t tcp_data_store_send(tcp_control_block_t *tcb, tsm_data_arg_t *da
     retrans = &tcb->tcb_retrans;
 
     if (data_mbuf->pkt_len > TCB_AVAIL_SEND(tcb)) {
-        rte_pktmbuf_free(data_mbuf);
+        pkt_mbuf_free(data_mbuf);
         return 0;
     }
 
@@ -146,7 +146,7 @@ static bool tcp_data_send_segment(tcp_control_block_t *tcb,
 
     clone = data_clone_seg(seg_data, seg_data_len, data_offset);
     if (unlikely(!clone)) {
-        INC_STATS(STATS_LOCAL(tcp_statistics_t, tcb->tcb_l4.l4cb_interface),
+        INC_STATS(STATS_LOCAL(tpg_tcp_statistics_t, tcb->tcb_l4.l4cb_interface),
                   ts_failed_data_clone);
         return false;
     }
@@ -285,8 +285,18 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
     if (SEG_LE(seg_seq + seg_len, tcb->tcb_rcv.nxt))
         return 0;
 
-    new_hdr.tbh_mbuf = pcb->pcb_mbuf;
-    new_hdr.tbh_seg_seq = seg_seq;
+    /* The first part of the data might be a retransmission so just skip it. */
+    if (unlikely(SEG_LT(seg_seq, tcb->tcb_rcv.nxt) &&
+                    SEG_GT(seg_seq + seg_len, tcb->tcb_rcv.nxt))) {
+        if (unlikely(!data_mbuf_adj(pcb->pcb_mbuf,
+                                    SEG_DIFF(tcb->tcb_rcv.nxt, seg_seq)))) {
+            assert(false);
+        }
+        seg_len -= SEG_DIFF(tcb->tcb_rcv.nxt, seg_seq);
+        seg_seq = tcb->tcb_rcv.nxt;
+    }
+
+    tcb_buf_hdr_init(&new_hdr, pcb->pcb_mbuf, pcb->pcb_tstamp, seg_seq);
 
     /* Walk the list of tcb buffers to see where the start of the seg fits.
      * After this loop seg will point to the segment extended by the new data or
@@ -302,7 +312,9 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
         if (TCB_RCVBUF_CONTAINED(&new_hdr, cur))
             goto deliver_data;
 
-        /* Either we fit before the current buffer or somewhere inside it. */
+        /* Either we fit before the current buffer, immediately after or
+         * somewhere inside it.
+         */
         if (SEG_LT(new_hdr.tbh_seg_seq, cur->tbh_seg_seq)) {
             MBUF_STORE_RCVBUF_HDR(new_hdr.tbh_mbuf, &new_hdr);
             seg = MBUF_TO_RCVBUF_HDR(new_hdr.tbh_mbuf);
@@ -313,8 +325,14 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
                 LIST_INSERT_AFTER(prev, seg, tbh_entry);
 
             break;
+        } else if (SEG_EQ(cur->tbh_seg_seq + cur->tbh_mbuf->pkt_len,
+                          new_hdr.tbh_seg_seq)) {
+            data_mbuf_merge(cur->tbh_mbuf, new_hdr.tbh_mbuf);
+            seg = cur;
+            break;
         } else if (SEG_LE(cur->tbh_seg_seq, new_hdr.tbh_seg_seq) &&
-                    SEG_LT(new_hdr.tbh_seg_seq, cur->tbh_seg_seq + cur->tbh_mbuf->pkt_len)) {
+                        SEG_LT(new_hdr.tbh_seg_seq,
+                               cur->tbh_seg_seq + cur->tbh_mbuf->pkt_len)) {
             if (unlikely(!data_mbuf_adj(new_hdr.tbh_mbuf,
                                         SEG_DIFF(cur->tbh_seg_seq + cur->tbh_mbuf->pkt_len,
                                                  new_hdr.tbh_seg_seq)))) {
@@ -361,7 +379,7 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
             old_seg = old_seg->tbh_entry.le_next;
 
             LIST_REMOVE(tmp, tbh_entry);
-            rte_pktmbuf_free(tmp->tbh_mbuf);
+            pkt_mbuf_free(tmp->tbh_mbuf);
         }
     }
 
@@ -392,7 +410,8 @@ deliver_data:
         seg = tcb->tcb_rcv_buf.lh_first;
         seg_delivered = app_deliver_cb(&tcb->tcb_l4, &tcb->tcb_l4.l4cb_app_data,
                                        &tc_info->tci_app_stats,
-                                       seg->tbh_mbuf);
+                                       seg->tbh_mbuf,
+                                       seg->tbh_tstamp);
         delivered += seg_delivered;
         tcb->tcb_rcv.nxt += seg_delivered;
         TCP_NOTIF(TCB_NOTIF_SEG_RECEIVED, tcb);
@@ -400,7 +419,7 @@ deliver_data:
         if (seg_delivered == seg->tbh_mbuf->pkt_len) {
             LIST_REMOVE(seg, tbh_entry);
             /* Free the whole chain. */
-            rte_pktmbuf_free(seg->tbh_mbuf);
+            pkt_mbuf_free(seg->tbh_mbuf);
         } else {
             /* Advance in the segment with the data we delivered. */
             seg->tbh_mbuf = data_adj_chain(seg->tbh_mbuf, seg_delivered);

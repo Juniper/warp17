@@ -66,6 +66,27 @@
  ****************************************************************************/
 static global_config_t global_config;
 static bool            global_config_initialized;
+cfg_cmdline_arg_parser_t cmdline_parsers[] = {
+    MAIN_CMDLINE_PARSER(),
+    PORT_CMDLINE_PARSER(),
+    RING_IF_CMDLINE_PARSER(),
+    KNI_IF_CMDLINE_PARSER(),
+    MEM_CMDLINE_PARSER(),
+    PKTLOOP_CMDLINE_PARSER(),
+    CLI_CMDLINE_PARSER(),
+    CMDLINE_ARG_PARSER(NULL, NULL, NULL),
+};
+
+struct option options[] = {
+    MAIN_CMDLINE_OPTIONS(),
+    PORT_CMDLINE_OPTIONS(),
+    MEM_CMDLINE_OPTIONS(),
+    PKTLOOP_CMDLINE_OPTIONS(),
+    CLI_CMDLINE_OPTIONS(),
+    RING_IF_CMDLINE_OPTIONS(),
+    KNI_IF_CMDLINE_OPTIONS(),
+    {.name = NULL},
+};
 
 static const char * const gtrace_names[TRACE_MAX] = {
     [TRACE_PKT_TX] = "TX",
@@ -115,7 +136,11 @@ bool cfg_init(void)
     global_config.gcfg_test_tmr_step = GCFG_TEST_TMR_STEP;
 
     global_config.gcfg_test_max_tc_runtime = GCFG_TEST_MAX_TC_RUNTIME;
-    global_config.gcfg_rate_min_interval_size = GCFG_RATE_MIN_INTERVAL_SIZE;
+
+    global_config.gcfg_rate_min_interval_size =
+        GCFG_RATE_MIN_INTERVAL_SIZE;
+    global_config.gcfg_rate_no_lim_interval_size =
+        GCFG_RATE_NO_LIM_INTERVAL_SIZE;
 
     global_config_initialized = true;
     return true;
@@ -127,44 +152,48 @@ bool cfg_init(void)
 bool cfg_handle_command_line(int argc, char **argv)
 {
     cfg_cmdline_arg_parser_t *cmdline_parser;
+    cmdline_arg_parser_res_t  cmd_return;
     int                       opt;
     int                       optind;
 
-    static struct option options[] = {
-        PORT_CMDLINE_OPTIONS(),
-        MEM_CMDLINE_OPTIONS(),
-        PKTLOOP_CMDLINE_OPTIONS(),
-        CLI_CMDLINE_OPTIONS(),
-        RING_IF_CMDLINE_OPTIONS(),
-        KNI_IF_CMDLINE_OPTIONS(),
-        {.name = NULL},
-    };
-
-    static cfg_cmdline_arg_parser_t cmdline_parsers[] = {
-        PORT_CMDLINE_PARSER(),
-        RING_IF_CMDLINE_PARSER(),
-        KNI_IF_CMDLINE_PARSER(),
-        MEM_CMDLINE_PARSER(),
-        PKTLOOP_CMDLINE_PARSER(),
-        CLI_CMDLINE_PARSER(),
-        CMDLINE_ARG_PARSER(NULL, NULL),
-    };
-
     while ((opt = getopt_long(argc, argv, "", options, &optind)) != -1) {
-        if (opt != 0)
-            TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s\n",
-                           "invalid options supplied!");
+        if (opt != 0) {
+            cfg_print_usage(argv[0]);
+            TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: invalid options supplied!\n");
+            return false;
+        }
 
         for (cmdline_parser = &cmdline_parsers[0];
              cmdline_parser->cap_arg_parser != NULL;
              cmdline_parser++) {
-            if (cmdline_parser->cap_arg_parser(options[optind].name, optarg))
-                break;
+            cmd_return = cmdline_parser->cap_arg_parser(options[optind].name,
+                                                        optarg);
+            /* All times the argument was ignored, pass to the next parser.
+             * If I find the correct parser and get a match or a bad value
+             * then stop parsing.
+             */
+            if (cmd_return == CAPR_IGNORED)
+                continue;
+            break;
         }
-        if (cmdline_parser->cap_arg_parser != NULL)
+        switch (cmd_return) {
+        case CAPR_ERROR:
+            cfg_print_usage(argv[0]);
+            TPG_ERROR_EXIT(EXIT_FAILURE,
+                           "ERROR: invalid option value supplied!\n");
+            return false;
+        case CAPR_IGNORED:
+            cfg_print_usage(argv[0]);
+            TPG_ERROR_EXIT(EXIT_FAILURE,
+                           "ERROR: invalid options supplied!\n");
+            return false;
+        case CAPR_CONSUMED:
             continue;
-
-        TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: invalid options supplied!\n");
+        default:
+            TPG_ERROR_EXIT(EXIT_FAILURE,
+                           "ERROR: unknown parser return value!\n");
+            return false;
+        }
     }
 
     /* Announce all modules that the command line arg is done. */
@@ -198,3 +227,19 @@ const char *cfg_get_gtrace_name(gtrace_id_t id)
     return gtrace_names[id];
 }
 
+/*****************************************************************************
+ * cfg_print_usage()
+ ****************************************************************************/
+void cfg_print_usage(const char *prgname)
+{
+    cfg_cmdline_arg_parser_t *cmdline_parser;
+
+    printf("%s options:\n", prgname);
+
+    for (cmdline_parser = &cmdline_parsers[0];
+         cmdline_parser->cap_arg_parser != NULL;
+         cmdline_parser++) {
+        if (cmdline_parser->cap_usage != NULL)
+            printf("%s", cmdline_parser->cap_usage);
+    }
+}

@@ -60,7 +60,6 @@
  ****************************************************************************/
 #include <unistd.h>
 
-#include <rte_cycles.h>
 
 #include "tcp_generator.h"
 
@@ -69,6 +68,11 @@
  * Local definitions
  ****************************************************************************/
 #define PORT_PMASK_STR_MAXLEN 512
+
+/* "Sleep" time after port start/stop operations on i40e. See
+ * port_dev_hw_sync.
+ */
+#define PORT_I40E_SYNC_DELAY_S 10
 
 /*****************************************************************************
  * Global variables
@@ -81,7 +85,7 @@ static const char *qmap_default;
 /* Define PORT global statistics. Each thread has its own set of locally
  * allocated stats which are accessible through STATS_GLOBAL(type, core, port).
  */
-STATS_DEFINE(port_statistics_t);
+STATS_DEFINE(tpg_port_statistics_t);
 
 port_port_cfg_t          *port_port_cfg; /* Array of [port] holding the ports core config */
 port_core_cfg_t          *port_core_cfg; /* Array of [core] holding the q mappings. */
@@ -241,11 +245,57 @@ static void port_request_update(uint32_t port, enum pktloop_msg_types req_type)
 }
 
 /*****************************************************************************
+ * port_dev_hw_sync()
+ * WARNING: HACK: there is an issue in the i40e DPDK PMD (or FW)
+ * and the Firmware might be in an inconsistent state immediately after
+ * rte_eth_dev_start/rte_eth_dev_stop:
+ * http://dpdk.org/ml/archives/users/2017-July/002200.html
+ *
+ * Try to emulate the same behavior as DPDK's test-pmd and introduce a
+ * sufficient delay.. Retrieving the link state is not always enough.
+ * http://dpdk.org/browse/dpdk/tree/app/test-pmd/testpmd.c?h=v16.11&id=d3bfeaaabfd37ecc7d7d2edf2a3b60cc2d913cc9#n1646
+ *
+ ****************************************************************************/
+static void port_dev_hw_sync(uint32_t port)
+{
+    if (strncmp(port_dev_info[port].pi_dev_info.driver_name,
+                "net_i40e",
+                strlen("net_i40e") + 1) == 0) {
+        RTE_LOG(WARNING, USER1,
+                "WARNING: Sleeping for %u seconds in order to avoid i40e FW sync issues!\n",
+                PORT_I40E_SYNC_DELAY_S);
+        sleep(PORT_I40E_SYNC_DELAY_S);
+    }
+}
+
+/*****************************************************************************
+ * port_dev_hw_start()
+ ****************************************************************************/
+static int port_dev_hw_start(uint32_t port)
+{
+    int rc = rte_eth_dev_start(port);
+
+    if (rc == 0)
+        port_dev_hw_sync(port);
+
+    return rc;
+}
+
+/*****************************************************************************
+ * port_dev_hw_stop()
+ ****************************************************************************/
+static void port_dev_hw_stop(uint32_t port)
+{
+    rte_eth_dev_stop(port);
+    port_dev_hw_sync(port);
+}
+
+/*****************************************************************************
  * port_dev_start()
  ****************************************************************************/
 static int port_dev_start(uint32_t port)
 {
-    int rc = rte_eth_dev_start(port);
+    int rc = port_dev_hw_start(port);
 
     /* Tell the packet cores to start polling the port. */
     port_request_update(port, MSG_PKTLOOP_START_PORT);
@@ -260,7 +310,7 @@ static void port_dev_stop(uint32_t port)
     /* Tell the packet cores to stop polling the port. */
     port_request_update(port, MSG_PKTLOOP_STOP_PORT);
 
-    rte_eth_dev_stop(port);
+    port_dev_hw_stop(port);
 }
 
 /*****************************************************************************
@@ -367,6 +417,8 @@ static int port_set_conn_options_internal(uint32_t port,
  ****************************************************************************/
 static bool port_adjust_info(uint32_t port)
 {
+    struct ether_addr mac_addr;
+
     /* Adjust reta_size. RETA size may be 0 in case we're running on a VF.
      * e.g: for Intel 82599 10G.
      */
@@ -393,6 +445,10 @@ static bool port_adjust_info(uint32_t port)
             port_dev_info[port].pi_dev_info.pci_dev->device.numa_node != -1)
         port_dev_info[port].pi_numa_node =
             port_dev_info[port].pi_dev_info.pci_dev->device.numa_node;
+
+    /* Prefetch the port MAC address. */
+    rte_eth_macaddr_get(port, &mac_addr);
+    port_dev_info[port].pi_mac_addr = eth_mac_to_uint64(mac_addr.addr_bytes);
 
     return true;
 }
@@ -478,6 +534,17 @@ static bool port_setup_port(uint8_t port)
                 "ERROR: Number of rx_/tx_rings(%d) is larger than hardware supports(%u/%u)!\n",
                 number_of_rings, port_dev_info[port].pi_dev_info.max_rx_queues,
                 port_dev_info[port].pi_dev_info.max_tx_queues);
+        return false;
+    }
+
+    if ((cfg->gcfg_mbuf_size - RTE_PKTMBUF_HEADROOM) <=
+            port_dev_info[port].pi_dev_info.min_rx_bufsize) {
+        TPG_ERROR_EXIT(EXIT_FAILURE,
+                       "ERROR: invalid mbuf-sz value %d!\n"
+                       "The value must be greater or equal to %d\n",
+                       cfg->gcfg_mbuf_size,
+                       port_dev_info[port].pi_dev_info.min_rx_bufsize +
+                           RTE_PKTMBUF_HEADROOM);
         return false;
     }
 
@@ -571,7 +638,7 @@ static bool port_setup_port(uint8_t port)
                         cfg->gcfg_mbuf_size - RTE_PKTMBUF_HEADROOM :
                         PORT_MAX_MTU);
 
-    rc = rte_eth_dev_start(port);
+    rc = port_dev_hw_start(port);
     if (rc < 0) {
         RTE_LOG(ERR, USER1,
                 "ERROR: Failed rte_eth_dev_start(%u), returned %s(%d)!\n",
@@ -599,6 +666,7 @@ static bool port_parse_mappings(char *pcore_mask, uint32_t pcore_mask_len)
     char     *core_mask     = pcore_mask;
     uint32_t  core_mask_len = pcore_mask_len;
     uint64_t  intmask;
+    char     *endptr;
     long int  port;
     int       core;
 
@@ -640,8 +708,10 @@ static bool port_parse_mappings(char *pcore_mask, uint32_t pcore_mask_len)
     }
 
     errno = 0;
-    intmask = strtoll(core_mask, NULL, 16);
-    if (errno)
+    intmask = strtoull(core_mask, &endptr, 16);
+    if ((errno == ERANGE && intmask == ULLONG_MAX) ||
+            (errno != 0 && intmask == 0) ||
+            *endptr != '\0')
         return false;
 
     RTE_LCORE_FOREACH_SLAVE(core) {
@@ -673,15 +743,16 @@ static bool port_parse_mappings(char *pcore_mask, uint32_t pcore_mask_len)
 /*****************************************************************************
  * port_handle_cmdline_opt_qmap()
  ****************************************************************************/
-static bool port_handle_cmdline_opt_qmap(char *qmap_str)
+static cmdline_arg_parser_res_t port_handle_cmdline_opt_qmap(char *qmap_str)
 {
     uint32_t    i;
     const char *old;
     const char *new;
 
-    if (qmap_args_cnt == TPG_ETH_DEV_MAX)
-        TPG_ERROR_EXIT(EXIT_FAILURE,
-                       "ERROR: too many qmap arguments supplied!\n");
+    if (qmap_args_cnt == TPG_ETH_DEV_MAX) {
+        printf("ERROR: too many qmap arguments supplied!\n");
+        return CAPR_ERROR;
+    }
 
     /* Make sure we don't already have a qmap argument for the same
      * port.
@@ -693,13 +764,12 @@ static bool port_handle_cmdline_opt_qmap(char *qmap_str)
              old++, new++)
             ;
         if (*old == *new && *old == '.') {
-            TPG_ERROR_EXIT(EXIT_FAILURE,
-                           "ERROR: Qmap supplied multiple times for same port!\n");
-            return false;
+            printf("ERROR: Qmap supplied multiple times for same port!\n");
+            return CAPR_ERROR;
         }
     }
     qmap_args[qmap_args_cnt++] = qmap_str;
-    return true;
+    return CAPR_CONSUMED;
 }
 
 /*****************************************************************************
@@ -937,28 +1007,6 @@ void port_link_rate_stats_get(uint32_t port, struct rte_eth_stats *total_rstats)
 }
 
 /*****************************************************************************
- * port_total_stats_get()
- *****************************************************************************/
-void port_total_stats_get(uint32_t port, port_statistics_t *total_port_stats)
-{
-    const port_statistics_t *port_stats;
-    uint32_t                 core;
-
-    bzero(total_port_stats, sizeof(*total_port_stats));
-    STATS_FOREACH_CORE(port_statistics_t, port, core, port_stats) {
-        total_port_stats->ps_received_pkts += port_stats->ps_received_pkts;
-        total_port_stats->ps_received_bytes += port_stats->ps_received_bytes;
-
-        total_port_stats->ps_send_pkts += port_stats->ps_send_pkts;
-        total_port_stats->ps_send_bytes += port_stats->ps_send_bytes;
-        total_port_stats->ps_send_failure += port_stats->ps_send_failure;
-        total_port_stats->ps_send_sim_failure += port_stats->ps_send_sim_failure;
-
-        total_port_stats->ps_rx_ring_if_failed += port_stats->ps_rx_ring_if_failed;
-    }
-}
-
-/*****************************************************************************
  * port_set_conn_options()
  ****************************************************************************/
 int port_set_conn_options(uint32_t port, tpg_port_options_t *options)
@@ -987,8 +1035,7 @@ int port_set_conn_options(uint32_t port, tpg_port_options_t *options)
  ****************************************************************************/
 void port_get_conn_options(uint32_t port, tpg_port_options_t *out)
 {
-    out->po_mtu = port_dev_info[port].pi_mtu;
-    out->has_po_mtu = true;
+    TPG_XLATE_OPTIONAL_SET_FIELD(out, po_mtu, port_dev_info[port].pi_mtu);
 }
 
 /*****************************************************************************
@@ -1009,24 +1056,24 @@ void port_get_conn_options(uint32_t port, tpg_port_options_t *out)
  * "--qmap-default max-c"
  *
  ****************************************************************************/
-bool port_handle_cmdline_opt(const char *opt_name, char *opt_arg)
+cmdline_arg_parser_res_t port_handle_cmdline_opt(const char *opt_name,
+                                                 char *opt_arg)
 {
-    if (strcmp(opt_name, "qmap") == 0)
+    if (strncmp(opt_name, "qmap", strlen("qmap") + 1) == 0)
         return port_handle_cmdline_opt_qmap(opt_arg);
 
-    if (strcmp(opt_name, "qmap-default") == 0) {
-        if (strcmp(optarg, "max-q") == 0 ||
-                strcmp(optarg, "max-c") == 0) {
+    if (strncmp(opt_name, "qmap-default", strlen("qmap-default") + 1) == 0) {
+        if (strncmp(optarg, "max-q", strlen("max-q") + 1) == 0 ||
+                strncmp(optarg, "max-c", strlen("max-c") + 1) == 0) {
             qmap_default = opt_arg;
         } else {
-            TPG_ERROR_EXIT(EXIT_FAILURE,
-                           "ERROR: invalid qmap-default value %s!\n",
-                           opt_arg);
+            printf("ERROR: invalid qmap-default value %s!\n", opt_arg);
+            return CAPR_ERROR;
         }
-        return true;
+        return CAPR_CONSUMED;
     }
 
-    return false;
+    return CAPR_IGNORED;
 }
 
 /*****************************************************************************
@@ -1039,13 +1086,17 @@ bool port_handle_cmdline(void)
     uint32_t port;
 
     if (qmap_args_cnt) {
-        if (qmap_default)
+        if (qmap_default) {
             TPG_ERROR_EXIT(EXIT_FAILURE,
                            "ERROR: Cannot supply both qmap and qmap-default at the same time!\n");
+            return false;
+        }
 
-        if (qmap_args_cnt != total_if_count)
+        if (qmap_args_cnt != total_if_count) {
             TPG_ERROR_EXIT(EXIT_FAILURE,
                            "ERROR: Qmap not specified for all interfaces!\n");
+            return false;
+        }
 
         return true;
     }
@@ -1056,9 +1107,9 @@ bool port_handle_cmdline(void)
 
     bzero(&pcore_mask[0], sizeof(pcore_mask[0]) * total_if_count);
 
-    if (strcmp(qmap_default, "max-q") == 0)
+    if (strncmp(qmap_default, "max-q", strlen("max-q") + 1) == 0)
         port_handle_cmdline_opt_qmap_maxq(pcore_mask);
-    else if (strcmp(qmap_default, "max-c") == 0)
+    else if (strncmp(qmap_default, "max-c", strlen("max-c") + 1) == 0)
         port_handle_cmdline_opt_qmap_maxc(pcore_mask);
 
     for (port = 0; port < total_if_count; port++) {
@@ -1118,59 +1169,61 @@ static void cmd_show_port_statistics_parsed(void *parsed_result __rte_unused,
                                             struct cmdline *cl,
                                             void *data)
 {
-    int port;
-    int option = (intptr_t) data;
+    int           port;
+    int           option = (intptr_t) data;
+    printer_arg_t parg = TPG_PRINTER_ARG(cli_printer, cl);
 
     for (port = 0; port < rte_eth_dev_count(); port++) {
 
         /*
          * Calculate totals first
          */
-        port_statistics_t        total_stats;
+        tpg_port_statistics_t total_stats;
 
-        port_total_stats_get(port, &total_stats);
+        if (test_mgmt_get_port_stats(port, &total_stats, &parg) != 0)
+            continue;
 
         /*
          * Display individual counters
          */
         cmdline_printf(cl, "Port %d software statistics:\n", port);
 
-        SHOW_64BIT_STATS("Received packets", port_statistics_t,
+        SHOW_64BIT_STATS("Received packets", tpg_port_statistics_t,
                          ps_received_pkts,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Received bytes", port_statistics_t,
+        SHOW_64BIT_STATS("Received bytes", tpg_port_statistics_t,
                          ps_received_bytes,
                          port,
                          option);
 
         cmdline_printf(cl, "\n");
 
-        SHOW_64BIT_STATS("Sent packets", port_statistics_t,
-                         ps_send_pkts,
+        SHOW_64BIT_STATS("Sent packets", tpg_port_statistics_t,
+                         ps_sent_pkts,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Sent bytes", port_statistics_t,
-                         ps_send_bytes,
+        SHOW_64BIT_STATS("Sent bytes", tpg_port_statistics_t,
+                         ps_sent_bytes,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("Sent failures", port_statistics_t,
-                         ps_send_failure,
+        SHOW_64BIT_STATS("Sent failures", tpg_port_statistics_t,
+                         ps_sent_failure,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("RX Ring If failures", port_statistics_t,
-                         ps_rx_ring_if_failed,
+        SHOW_64BIT_STATS("RX Ring If failures", tpg_port_statistics_t,
+                         ps_received_ring_if_failed,
                          port,
                          option);
 
         cmdline_printf(cl, "\n");
 
-        SHOW_64BIT_STATS("Simulated failures", port_statistics_t,
-                         ps_send_sim_failure,
+        SHOW_64BIT_STATS("Simulated failures", tpg_port_statistics_t,
+                         ps_sent_sim_failure,
                          port,
                          option);
 
@@ -1601,10 +1654,12 @@ static bool port_interfaces_init(void)
     /* Parse qmappings for all ethernet ports AND virtual interfaces. */
     for (i = 0; i < qmap_args_cnt; i++) {
         qmap = qmap_args[i];
-        if (!port_parse_mappings(qmap, strlen(qmap)))
+        if (!port_parse_mappings(qmap, strlen(qmap))) {
             TPG_ERROR_EXIT(EXIT_FAILURE,
                            "ERROR: Failed initializing qmap %s!\n",
                            qmap);
+            return false;
+        }
     }
 
     /* Initialize port_info for all physical ports. Ring-if port_info is
@@ -1673,7 +1728,7 @@ bool port_init(void)
     /*
      * Allocate memory for port statistics, and clear all of them
      */
-    if (STATS_GLOBAL_INIT(port_statistics_t, "port_stats") == NULL) {
+    if (STATS_GLOBAL_INIT(tpg_port_statistics_t, "port_stats") == NULL) {
         RTE_LOG(ERR, USER1,
                 "ERROR: Failed allocating PORT statistics memory!\n");
         return false;
@@ -1719,7 +1774,8 @@ bool port_init(void)
 void port_lcore_init(uint32_t lcore_id)
 {
     /* Init the local stats. */
-    if (STATS_LOCAL_INIT(port_statistics_t, "port_stats", lcore_id) == NULL) {
+    if (STATS_LOCAL_INIT(tpg_port_statistics_t,
+                         "port_stats", lcore_id) == NULL) {
         TPG_ERROR_ABORT("[%d:%s() Failed to allocate per lcore port_stats!\n",
                         rte_lcore_index(lcore_id),
                         __func__);

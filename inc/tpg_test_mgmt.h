@@ -129,6 +129,7 @@ typedef struct test_env_tmr_arg_s {
 typedef struct test_env_oper_state_s {
 
     struct rte_timer      teos_timer;
+    struct rte_timer      teos_rates_timer;
     test_env_tmr_arg_t    teos_timer_arg;
     tpg_test_case_state_t teos_test_case_state;
     tpg_test_criteria_t   teos_result;

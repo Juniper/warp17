@@ -91,6 +91,9 @@ typedef struct packet_control_block_s {
     uint16_t             pcb_l4_len;
     uint16_t             pcb_l5_len;
 
+    uint64_t             pcb_tstamp;
+    sockopt_t           *pcb_sockopt;
+
 } packet_control_block_t;
 
 static inline __attribute__((always_inline))
@@ -107,6 +110,7 @@ void pcb_minimal_init(packet_control_block_t *pcb, uint32_t core_index,
     pcb->pcb_hash_valid = false;
 
     pcb->pcb_mbuf_stored = false;
+    pcb->pcb_sockopt = NULL;
 }
 
 #endif /* _H_TPG_PCB_ */

@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  *
- * Copyright (c) 2016, Juniper Networks, Inc. All rights reserved.
+ * Copyright (c) 2017, Juniper Networks, Inc. All rights reserved.
  *
  *
  * The contents of this file are subject to the terms of the BSD 3 clause
@@ -57,15 +57,16 @@
 /*****************************************************************************
   * Include files
   ****************************************************************************/
-#include <rte_cycles.h>
+#include <stdlib.h>
 
 #include "tcp_generator.h"
 
 /*****************************************************************************
  * Global variables
  ****************************************************************************/
-bool     tpg_exit;
-uint64_t cycles_per_us;
+bool      tpg_exit;
+uint64_t  cycles_per_us;
+char     *tpg_prgname;
 
 /*****************************************************************************
  * start_cores()
@@ -120,9 +121,12 @@ int main(int argc, char **argv)
     global_config_t *cfg;
     int              ret;
 
+    tpg_prgname = argv[0];
+
     /*
      * Initialize DPDK infrastructure before we do anything else
      */
+    rte_set_application_usage_hook(cfg_print_usage);
     ret = rte_eal_init(argc, argv);
     if (ret < 0)
         rte_panic("Cannot init EAL\n");
@@ -131,6 +135,7 @@ int main(int argc, char **argv)
      * Initialize RTE timer library
      */
     rte_timer_subsystem_init();
+
     /*
      * Precalculate the number of cycles per us so we don't do it everytime.
      */
@@ -145,126 +150,153 @@ int main(int argc, char **argv)
     /*
      * General checks
      */
-    if (rte_lcore_count() < 3)
+    if (rte_lcore_count() < 3) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s\n",
                        "WARP17 needs at least three cores!");
+    }
     /* We only support at most 64 cores right now (to make parsing easier). */
-    if (rte_lcore_count() > (sizeof(uint64_t) * 8))
+    if (rte_lcore_count() > (sizeof(uint64_t) * 8)) {
         TPG_ERROR_EXIT(EXIT_FAILURE,
                        "ERROR: WARP17 supports at most %"PRIu32" cores!\n",
                        (uint32_t)sizeof(uint64_t) * 8);
-    if (rte_eth_dev_count() > TPG_ETH_DEV_MAX)
+    }
+    if (rte_eth_dev_count() > TPG_ETH_DEV_MAX) {
         TPG_ERROR_EXIT(EXIT_FAILURE,
                        "ERROR: WARP17 works with at most %u ports!\n",
                        TPG_ETH_DEV_MAX);
+    }
 
     /*
      * Initialize various submodules
      */
 
-    if (!cli_init())
+    if (!cli_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the command line interface");
+    }
 
-    if (!rpc_init())
+    if (!rpc_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the RPC server");
+    }
 
-    if (!cfg_init())
+    if (!cfg_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s\n",
                        "Failed initializing default configuration!\n");
+    }
 
     if (!cfg_handle_command_line(argc, argv))
         exit(EXIT_FAILURE); /* Error reporting is handled by the function itself */
 
-    if (!trace_init())
+    if (!trace_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the tracing module");
+    }
 
-    if (!trace_filter_init())
+    if (!trace_filter_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the trace filter module");
+    }
 
-    if (!mem_init())
+    if (!mem_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed allocating required mbufs");
+    }
 
     /* WARNING: Careful when adding code above this point. Up until ports are
      * initialized DPDK can't know that there might be ring interfaces that
      * still need to be created. Therefore any call to rte_eth_dev_count()
      * doesn't include them.
      */
-    if (!port_init())
+    if (!port_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the Ethernets ports");
+    }
 
-    if (!msg_sys_init())
+    if (!msg_sys_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the message queues");
+    }
 
-    if (!test_mgmt_init())
+    if (!test_mgmt_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing test mgmt");
+    }
 
-    if (!test_init())
+    if (!test_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing tests");
+    }
 
-    if (!eth_init())
+    if (!eth_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the Ethernets pkt handler");
+    }
 
-    if (!arp_init())
+    if (!arp_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the ARP pkt handler");
+    }
 
-    if (!route_init())
+    if (!route_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the ROUTE module");
+    }
 
-    if (!ipv4_init())
+    if (!ipv4_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the IPv4 pkt handler");
+    }
 
-    if (!tcp_init())
+    if (!tcp_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the TCP pkt handler");
+    }
 
-    if (!udp_init())
+    if (!udp_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the UDP pkt handler");
+    }
 
-    if (!tlkp_init())
+    if (!tlkp_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the Session lookup engine");
+    }
 
-    if (!tlkp_tcp_init())
+    if (!tlkp_tcp_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the TCP lookup engine");
+    }
 
-    if (!tlkp_udp_init())
+    if (!tlkp_udp_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the UDP lookup engine");
+    }
 
-    if (!tsm_init())
+    if (!tsm_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the TSM module");
+    }
 
-    if (!timer_init())
+    if (!timer_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the TCP timers module");
+    }
 
-    if (!pkt_loop_init())
+    if (!pkt_loop_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the pkt loop");
+    }
 
-    if (!raw_init())
+    if (!raw_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the RAW Application module");
+    }
 
-    if (!http_init())
+    if (!http_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
                        "Failed initializing the RAW Application module");
+    }
 
     start_cores();
 
@@ -273,9 +305,10 @@ int main(int argc, char **argv)
      */
     cfg = cfg_get_config();
     if (cfg != NULL && cfg->gcfg_cmd_file) {
-        if (!cli_run_input_file(cfg->gcfg_cmd_file))
+        if (!cli_run_input_file(cfg->gcfg_cmd_file)) {
             TPG_ERROR_EXIT(EXIT_FAILURE, "Failed to run command file: %s!\n",
                            cfg->gcfg_cmd_file);
+        }
     }
 
     /*
@@ -301,3 +334,27 @@ int main(int argc, char **argv)
     return 0;
 }
 
+/*****************************************************************************
+ * main_handle_cmdline_opt()
+ * --version - Returns version and exit
+ ****************************************************************************/
+cmdline_arg_parser_res_t main_handle_cmdline_opt(const char *opt_name,
+                                                 char *opt_arg __rte_unused)
+{
+    if (strncmp(opt_name, "version", strlen("version") + 1) == 0) {
+        printf(TPG_VERSION_PRINTF_STR"\n", TPG_VERSION_PRINTF_ARGS);
+        cli_exit();
+        rpc_destroy();
+        exit(0);
+        return CAPR_CONSUMED;
+    }
+    if (strncmp(opt_name, "help", strlen("help") + 1) == 0) {
+        cfg_print_usage(tpg_prgname);
+        cli_exit();
+        rpc_destroy();
+        exit(0);
+        return CAPR_CONSUMED;
+    }
+
+    return CAPR_IGNORED;
+}

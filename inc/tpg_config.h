@@ -65,25 +65,43 @@
  ****************************************************************************/
 #define CMDLINE_OPT_ARG(knob_name, knob_has_arg) \
     ((struct option) {.name = (knob_name), .has_arg = (knob_has_arg)})
+/*
+ * Return type for cfg_handle_cmdline_arg_cb_t,
+ * helps to figure out what is going wrong
+ */
+typedef enum cmdline_arg_parser_res_s {
+    /*
+     * CAPR_CONSUMED: means that the given option and the value has been parsed
+     *                in a proper way.
+     * CAPR_ERROR: means that the given option wasn't been recognized by the
+     *             current parser
+     * CAPR_IGNORED: means that the given option was recognized but the give
+     *               wasn't fit the option range/accepted values
+     */
+    CAPR_CONSUMED,
+    CAPR_ERROR,
+    CAPR_IGNORED
+} cmdline_arg_parser_res_t;
 
 /* To be called whenever when a command line arg is found. */
-typedef bool (*cfg_handle_cmdline_arg_cb_t)(const char *arg_name,
-                                            char *opt_arg);
+typedef cmdline_arg_parser_res_t (*cfg_handle_cmdline_arg_cb_t)
+                                 (const char *arg_name, char *opt_arg);
 
 /* To be called whenever the parsing of the command line is done. */
 typedef bool (*cfg_handle_cmdline_cb_t)(void);
 
 typedef struct cmdline_arg_parser_s {
 
-    cfg_handle_cmdline_arg_cb_t cap_arg_parser;
-    cfg_handle_cmdline_cb_t     cap_handler;
+    cfg_handle_cmdline_arg_cb_t  cap_arg_parser;
+    cfg_handle_cmdline_cb_t      cap_handler;
+    const char                  *cap_usage;
 
 } cfg_cmdline_arg_parser_t;
 
-#define CMDLINE_ARG_PARSER(arg_parser, handler)                  \
+#define CMDLINE_ARG_PARSER(arg_parser, handler, usage)           \
     ((cfg_cmdline_arg_parser_t) {.cap_arg_parser = (arg_parser), \
-                                 .cap_handler = (handler)})
-
+                                 .cap_handler    = (handler),    \
+                                 .cap_usage      = (usage)})
 /*****************************************************************************
  * Global configuration, and defaults
  ****************************************************************************/
@@ -139,9 +157,12 @@ enum {
 #define GCFG_MBUF_POOL_HDR_NAME        "global_pkt_mbuf_tx_hdr"
 #define GCFG_MBUF_POOLSZ_HDR_DEF       (512 * 1024)
 #define GCFG_MBUF_HDR_CACHE_SIZE       (512)
-/* TODO: No IPv6 supported. No IP Options supported. No TCP options supported. */
-#define GCFG_MBUF_HDR_FRAG_SIZE        (sizeof(struct ether_hdr) + \
-                                        sizeof(struct ipv4_hdr) +  \
+/* TODO: No IPv6 supported. No TCP options supported.
+ * Only IPv4 Tstamp Option supported.
+ */
+#define GCFG_MBUF_HDR_FRAG_SIZE        (sizeof(struct ether_hdr) +     \
+                                        sizeof(struct ipv4_hdr) +      \
+                                        sizeof(ipv4_tstamp_option_t) + \
                                         sizeof(struct tcp_hdr))
 #define GCFG_MBUF_HDR_SIZE             (GCFG_MBUF_HDR_FRAG_SIZE +  \
                                         sizeof(struct rte_mbuf) +  \
@@ -205,13 +226,14 @@ enum {
 #define GCFG_UDP_CLIENT_BURST_MAX      16
 
 #define GCFG_TEST_MGMT_TMR_TO          500000    /* 500ms */
-#define GCFG_TEST_STATS_TMR_TO         1000000   /* 1s */
+#define GCFG_TEST_MGMT_RATES_TMR_TO    1000000   /* 1s */
 #define GCFG_TEST_MAX_TC_RUNTIME       600000000 /* 10min */
 
 /*
  * Test defaults.
  */
-#define GCFG_RATE_MIN_INTERVAL_SIZE    1000      /* 1ms*/
+#define GCFG_RATE_MIN_INTERVAL_SIZE    100      /* 100us */
+#define GCFG_RATE_NO_LIM_INTERVAL_SIZE 10000    /* 10ms  */
 
 typedef struct global_config_s {
 
@@ -231,6 +253,8 @@ typedef struct global_config_s {
     uint32_t gcfg_ucb_pool_size;
     uint32_t gcfg_ucb_pool_cache_size;
 
+    bool     gcfg_mpool_any_sock;
+
     uint32_t gcfg_msgq_size;
 
     uint32_t gcfg_slow_tmr_max;
@@ -248,6 +272,7 @@ typedef struct global_config_s {
     uint32_t gcfg_test_max_tc_runtime;
 
     uint32_t gcfg_rate_min_interval_size;
+    uint32_t gcfg_rate_no_lim_interval_size;
 
     const char *gcfg_cmd_file;
 
@@ -360,6 +385,7 @@ extern bool             cfg_init(void);
 extern bool             cfg_handle_command_line(int argc, char **argv);
 extern global_config_t *cfg_get_config(void);
 extern const char      *cfg_get_gtrace_name(gtrace_id_t id);
+extern void             cfg_print_usage(const char *prgname);
 
 #endif /* _H_TPG_CONFIG_ */
 

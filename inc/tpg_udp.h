@@ -60,31 +60,6 @@
 #ifndef _H_TPG_UDP_
 #define _H_TPG_UDP_
 
-/*****************************************************************************
- * UDP statistics
- ****************************************************************************/
-typedef struct udp_statistics_s {
-
-    uint64_t us_received_pkts;
-    uint64_t us_received_bytes;
-
-    uint64_t us_sent_pkts;
-    uint64_t us_sent_bytes;
-
-    uint64_t us_ucb_malloced;
-    uint64_t us_ucb_freed;
-    uint64_t us_ucb_not_found;
-    uint64_t us_ucb_alloc_err;
-
-
-    /* Unlikely uint16_t error counters */
-
-    uint16_t us_to_small_fragment;
-    uint16_t us_invalid_checksum;
-    uint16_t us_failed_pkts;
-
-} __rte_cache_aligned udp_statistics_t;
-
 typedef enum udpState {
 
     US_INIT,
@@ -146,8 +121,15 @@ extern notif_cb_t udp_notif_cb;
     (sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr) + \
      sizeof(struct udp_hdr) + ETHER_CRC_LEN)
 
-#define UCB_MTU(ucb) \
-    (RTE_PER_LCORE(local_port_dev_info)[(ucb)->ucb_l4.l4cb_interface].pi_mtu - UCB_MIN_HDRS_SZ)
+#define UCB_MTU(ucb)                                                           \
+    (RTE_PER_LCORE(local_port_dev_info)[(ucb)->ucb_l4.l4cb_interface].pi_mtu - \
+     ipv4_get_sockopt(&(ucb)->ucb_l4.l4cb_sockopt)->ip4so_hdr_opt_len -        \
+     UCB_MIN_HDRS_SZ)
+
+/*****************************************************************************
+ * Globals for tpg_udp.c
+ ****************************************************************************/
+STATS_GLOBAL_DECLARE(tpg_udp_statistics_t);
 
 /*****************************************************************************
  * Externals for tpg_udp.c

@@ -153,9 +153,14 @@ static void pkt_trace_tx(packet_control_block_t *pcb, int32_t tx_queue_id,
             switch (ip_hdr->next_proto_id) {
             case IPPROTO_TCP:
                 if (true) {
-                    unsigned int    i;
-                    struct tcp_hdr *tcp_hdr = (struct tcp_hdr *) ip_hdr + 1;
-                    uint32_t       *options = (uint32_t *) (tcp_hdr + 1);
+                    uint32_t        i;
+                    uint32_t        ip_len;
+                    struct tcp_hdr *tcp_hdr;
+                    uint32_t       *options;
+
+                    ip_len = ((ip_hdr->version_ihl & 0x0F) << 2);
+                    tcp_hdr = (struct tcp_hdr *) ((char *) ip_hdr + ip_len);
+                    options = (uint32_t *) (tcp_hdr + 1);
 
                     PKT_TRACE(pcb, TCP, DEBUG, "sport=%u, dport=%u, hdrlen=%u, flags=%c%c%c%c%c%c, csum=0x%4.4X",
                               rte_be_to_cpu_16(tcp_hdr->src_port),
@@ -225,7 +230,7 @@ static void pkt_trace_tx(packet_control_block_t *pcb, int32_t tx_queue_id,
 /*****************************************************************************
  * pkt_flush_tx_q()
  ****************************************************************************/
-void pkt_flush_tx_q(uint32_t port, port_statistics_t *stats)
+void pkt_flush_tx_q(uint32_t port, tpg_port_statistics_t *stats)
 {
     int32_t                tx_queue_id;
     int                    lcore_id = rte_lcore_id();
@@ -255,10 +260,15 @@ void pkt_flush_tx_q(uint32_t port, port_statistics_t *stats)
         pcb.pcb_trace = RTE_PER_LCORE(pkt_tx_q_trace)[port][i];
         pkt_trace_tx(&pcb, tx_queue_id, RTE_PER_LCORE(pkt_tx_q)[port][i], false);
 
-        INC_STATS(stats, ps_send_pkts);
-        INC_STATS_VAL(stats, ps_send_bytes,
+        INC_STATS(stats, ps_sent_pkts);
+        INC_STATS_VAL(stats, ps_sent_bytes,
                       rte_pktmbuf_pkt_len(RTE_PER_LCORE(pkt_tx_q)[port][i]));
     }
+
+    if (tstamp_tx_is_running(port, tx_queue_id))
+        tstamp_pktloop_tx_pkt_burst(port, tx_queue_id,
+                                    &RTE_PER_LCORE(pkt_tx_q)[port][0],
+                                    RTE_PER_LCORE(pkt_tx_q_len)[port]);
 
     pkt_sent_cnt = rte_eth_tx_burst(port, tx_queue_id, &RTE_PER_LCORE(pkt_tx_q)[port][0],
                                     RTE_PER_LCORE(pkt_tx_q_len)[port]);
@@ -268,15 +278,15 @@ void pkt_flush_tx_q(uint32_t port, port_statistics_t *stats)
      * Free the ones we couldn't send but first log them.
      */
     for (i = pkt_sent_cnt; i < RTE_PER_LCORE(pkt_tx_q_len)[port]; i++) {
-        INC_STATS(stats, ps_send_failure);
-        DEC_STATS(stats, ps_send_pkts);
-        DEC_STATS_VAL(stats, ps_send_bytes,
+        INC_STATS(stats, ps_sent_failure);
+        DEC_STATS(stats, ps_sent_pkts);
+        DEC_STATS_VAL(stats, ps_sent_bytes,
                       rte_pktmbuf_pkt_len(RTE_PER_LCORE(pkt_tx_q)[port][i]));
 
         pcb.pcb_trace = RTE_PER_LCORE(pkt_tx_q_trace)[port][i];
         pkt_trace_tx(&pcb, tx_queue_id, RTE_PER_LCORE(pkt_tx_q)[port][i], true);
 
-        rte_pktmbuf_free(RTE_PER_LCORE(pkt_tx_q)[port][i]);
+        pkt_mbuf_free(RTE_PER_LCORE(pkt_tx_q)[port][i]);
     }
 
     /* Reinitialize the burst tx queue. */
@@ -291,16 +301,16 @@ void pkt_flush_tx_q(uint32_t port, port_statistics_t *stats)
  ****************************************************************************/
 int pkt_send(uint32_t port, struct rte_mbuf *mbuf, bool trace)
 {
-    port_statistics_t *stats;
+    tpg_port_statistics_t *stats;
 
-    stats = STATS_LOCAL(port_statistics_t, port);
+    stats = STATS_LOCAL(tpg_port_statistics_t, port);
 
     /* If we should simulate a packet drop, do it here! */
     if (unlikely(RTE_PER_LCORE(pkt_send_simulate_drop_rate) != 0)) {
         if (unlikely(rte_rand() %
                 RTE_PER_LCORE(pkt_send_simulate_drop_rate) == 0)) {
-            INC_STATS(stats, ps_send_sim_failure);
-            rte_pktmbuf_free(mbuf);
+            INC_STATS(stats, ps_sent_sim_failure);
+            pkt_mbuf_free(mbuf);
             return false;
         }
     }
@@ -322,7 +332,7 @@ static uint16_t pkt_rx_burst(uint8_t port_id, uint16_t queue_id,
                              struct rte_mbuf **rx_pkts,
                              const uint16_t nb_pkts,
                              port_info_t *port_info,
-                             port_statistics_t *stats)
+                             tpg_port_statistics_t *stats)
 {
     uint16_t no_rx_buffers;
 
@@ -339,14 +349,14 @@ static uint16_t pkt_rx_burst(uint8_t port_id, uint16_t queue_id,
 
             rx_pkts[i] = data_copy_chain(orig_mbuf, mem_get_mbuf_local_pool());
             if (unlikely(rx_pkts[i] == NULL)) {
-                INC_STATS(stats, ps_rx_ring_if_failed);
+                INC_STATS(stats, ps_received_ring_if_failed);
 
                 rx_pkts[i] = rx_pkts[no_rx_buffers - 1];
                 no_rx_buffers--;
             } else {
                 i++;
             }
-            rte_pktmbuf_free(orig_mbuf);
+            pkt_mbuf_free(orig_mbuf);
         }
     }
 #endif /* defined(TPG_RING_IF) */
@@ -417,10 +427,14 @@ int pkt_receive_loop(void *arg __rte_unused)
     int                     lcore_index = rte_lcore_index(lcore_id);
     int32_t                 queue_id;
     global_config_t        *cfg;
-    port_statistics_t      *port_stats;
-    packet_control_block_t *pcb;
+    tpg_port_statistics_t  *port_stats;
+    packet_control_block_t *pcbs;
     uint32_t                port;
 
+    pcbs = rte_zmalloc_socket("local_pcb_pktloop", sizeof(*pcbs) *
+                                                   TPG_RX_BURST_SIZE,
+                              RTE_CACHE_LINE_SIZE,
+                              rte_lcore_to_socket_id(lcore_id));
     cfg = cfg_get_config();
     if (cfg == NULL) {
         RTE_LOG(ERR, USER1, "ERROR: Can't get global config on lcore %d, core index %d\n",
@@ -461,24 +475,12 @@ int pkt_receive_loop(void *arg __rte_unused)
     /*
      * Get per core port stats pointer.
      */
-    port_stats = STATS_LOCAL_NAME(port_statistics_t);
+    port_stats = STATS_LOCAL_NAME(tpg_port_statistics_t);
     if (port_stats == NULL) {
         TPG_ERROR_ABORT("Can't get port stats pointer on lcore %d, lindex %d\n",
                         lcore_id,
                         lcore_index);
     }
-
-    /* Allocate commonly used variables from local socket memory. The pcb,
-     * and core/port mapping information are used in every loop iteration.
-     * Try to make it as fast as possible by packing the ports/queues we need
-     * to poll (in local_ports and local_qs respectively).
-     */
-    pcb = rte_zmalloc_socket("local_pcb_pktloop", sizeof(*pcb),
-                             RTE_CACHE_LINE_SIZE,
-                             rte_lcore_to_socket_id(lcore_id));
-
-    if (pcb == NULL)
-        TPG_ERROR_ABORT("[%d] Cannot allocate pcb!\n", lcore_index);
 
     RTE_PER_LCORE(pktloop_port_info) = rte_zmalloc_socket("pktloop_port_info_pktloop",
                                                           rte_eth_dev_count() *
@@ -551,8 +553,14 @@ int pkt_receive_loop(void *arg __rte_unused)
                 /*
                  * setup PCB
                  */
-                pcb_minimal_init(pcb, lcore_index, port, buf[i]);
+                pcb_minimal_init(&pcbs[i], lcore_index, port, buf[i]);
+            }
 
+            if (tstamp_rx_is_running(port, qidx))
+                tstamp_pktloop_rx_pkt_burst(port, qidx, buf, pcbs,
+                                            no_rx_buffers);
+
+            for (i = 0; i < no_rx_buffers; i++) {
                 /*
                  * Hand off packet to ethernet driver, as we only support ethernet
                  */
@@ -560,7 +568,7 @@ int pkt_receive_loop(void *arg __rte_unused)
                 INC_STATS_VAL(&port_stats[port], ps_received_bytes,
                               rte_pktmbuf_pkt_len(buf[i]));
 
-                PKT_TRACE(pcb, PKT_RX, DEBUG,
+                PKT_TRACE(&pcbs[i], PKT_RX, DEBUG,
                           "port=%d qid=%d len=%u, ol_flags=0x%16.16"PRIX64", nb_segs=%u",
                           port,
                           queue_id,
@@ -568,16 +576,16 @@ int pkt_receive_loop(void *arg __rte_unused)
                           buf[i]->ol_flags,
                           buf[i]->nb_segs);
 
-                PKT_TRACE(pcb, PKT_RX, DEBUG,
+                PKT_TRACE(&pcbs[i], PKT_RX, DEBUG,
                           "  data_len=%u/%u, rss_hash=0x%8.8X",
                           rte_pktmbuf_pkt_len(buf[i]),
                           buf[i]->buf_len,
                           buf[i]->hash.rss);
 
-                ret_mbuf = eth_receive_pkt(pcb, buf[i]);
+                ret_mbuf = eth_receive_pkt(&pcbs[i], buf[i]);
 
                 if (ret_mbuf != NULL)
-                    rte_pktmbuf_free(ret_mbuf);
+                    pkt_mbuf_free(ret_mbuf);
             }
 
             /* Flush the bulk tx queue in case we still have packets pending. */
@@ -676,19 +684,37 @@ static int pkt_loop_stop_port_cb(uint16_t msgid, uint16_t lcore, void *msg)
  * --pkt-send-drop-rate - if set then one packet every 'pkt-send-drop-rate' will
  *      be dropped at TX. (per lcore)
  ****************************************************************************/
-bool pkt_handle_cmdline_opt(const char *opt_name, char *opt_arg)
+cmdline_arg_parser_res_t pkt_handle_cmdline_opt(const char *opt_name,
+                                                char *opt_arg)
 {
     global_config_t *cfg = cfg_get_config();
 
     if (!cfg)
         TPG_ERROR_ABORT("ERROR: Unable to get config!\n");
 
-    if (strcmp(opt_name, "pkt-send-drop-rate") == 0) {
-        cfg->gcfg_pkt_send_drop_rate = atoi(opt_arg);
-        return true;
+    if (strncmp(opt_name, "pkt-send-drop-rate",
+               strlen("pkt-send-drop-rate") + 1) == 0) {
+        unsigned long  var;
+        char          *endptr;
+
+        errno = 0;
+        var = strtoul(opt_arg, &endptr, 10);
+
+        if ((errno == ERANGE && var == ULONG_MAX) ||
+                (errno != 0 && var == 0) ||
+                *endptr != '\0' ||
+                var > UINT32_MAX) {
+            printf("ERROR: pkt-send-drop-rate %s!\n"
+                   "The value must be lower than %d\n",
+                   opt_arg, UINT32_MAX);
+            return CAPR_ERROR;
+        }
+
+        cfg->gcfg_pkt_send_drop_rate = var;
+        return CAPR_CONSUMED;
     }
 
-    return false;
+    return CAPR_IGNORED;
 }
 
 /*****************************************************************************

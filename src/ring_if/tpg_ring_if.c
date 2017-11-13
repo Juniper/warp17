@@ -106,28 +106,39 @@ uint32_t ring_if_get_count(void)
 /*****************************************************************************
  * ring_if_handle_cmdline_opt()
  ****************************************************************************/
-bool ring_if_handle_cmdline_opt(const char *opt_name, char *opt_arg)
+cmdline_arg_parser_res_t ring_if_handle_cmdline_opt(const char *opt_name, char *opt_arg)
 {
-    if (strcmp(opt_name, "ring-if-pairs"))
-        return false;
+    unsigned long  val;
+    char          *endptr;
+
+    if (strncmp(opt_name, "ring-if-pairs", strlen("ring-if-pairs") + 1))
+        return CAPR_IGNORED;
 
 #if !defined(TPG_RING_IF)
-    TPG_ERROR_EXIT(EXIT_FAILURE,
-                   "ERROR: Recompile with TPG_RING_IF enabled for ring interface support!\n");
-    return false;
+    printf("ERROR: Recompile with TPG_RING_IF enabled for ring interface support!\n");
+    return CAPR_ERROR;
 #endif /* !defined(TPG_RING_IF) */
 
     errno = 0;
-    ring_if_pairs = strtol(opt_arg, NULL, 10);
-    if (errno != 0)
-        TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: Invalid ring interface count!\n");
+    val = strtoul(opt_arg, &endptr, 10);
+    if ((errno == ERANGE && val == ULONG_MAX) ||
+            (errno != 0 && val == 0) ||
+            *endptr != '\0' ||
+            val > UINT32_MAX) {
+        printf("ERROR: Invalid ring interface count %s!\n", opt_arg);
+        return CAPR_ERROR;
+    }
 
-    if (rte_eth_dev_count() + ring_if_pairs * 2 > TPG_ETH_DEV_MAX)
-        TPG_ERROR_EXIT(EXIT_FAILURE,
-                       "ERROR: Total number of ring interfaces and ethernet ports must be less than (or equal) %u!\n",
-                       TPG_ETH_DEV_MAX);
+    ring_if_pairs = val;
 
-    return true;
+    if (rte_eth_dev_count() + ring_if_pairs * 2 > TPG_ETH_DEV_MAX) {
+        printf("ERROR: Total number of ring interfaces and ethernet ports must be less than\n"
+                   " (or equal) %u!\n",
+               TPG_ETH_DEV_MAX);
+        return CAPR_ERROR;
+    }
+
+    return CAPR_CONSUMED;
 }
 
 /*****************************************************************************

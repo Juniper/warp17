@@ -77,7 +77,7 @@ from warp17_client_pb2    import *
 from warp17_test_case_pb2 import *
 from warp17_service_pb2   import *
 
-class Warp17UnitTestCase(unittest.TestCase):
+class Warp17BaseUnitTestCase(unittest.TestCase):
     """WARP17 Unit Test base class. Sets up the common variables."""
 
     @classmethod
@@ -94,21 +94,37 @@ class Warp17UnitTestCase(unittest.TestCase):
         out_file = dirpath + '/' + cls.__name__ + '.out'
         log_file = dirpath + '/' + cls.__name__ + '.log'
 
-        oargs = Warp17OutputArgs(out_file)
-        Warp17UnitTestCase.lh = LogHelper(name=cls.__name__, filename=log_file)
+        Warp17BaseUnitTestCase.oargs = Warp17OutputArgs(out_file)
 
-        Warp17UnitTestCase.env = env
+        Warp17BaseUnitTestCase.lh = LogHelper(name=cls.__name__,
+                                              filename=log_file)
 
-        Warp17UnitTestCase.warp17_call = partial(warp17_method_call,
-                                                 env.get_host_name(),
-                                                 env.get_rpc_port(),
-                                                 Warp17_Stub)
+        Warp17BaseUnitTestCase.env = env
 
-        Warp17UnitTestCase.warp17_proc = warp17_start(env=env, output_args=oargs)
-        # Wait until WARP17 actually starts.
-        warp17_wait(env=env, logger=Warp17UnitTestCase.lh)
-        # Detailed error messages
+        Warp17BaseUnitTestCase.warp17_call = partial(warp17_method_call,
+                                                     env.get_host_name(),
+                                                     env.get_rpc_port(),
+                                                     Warp17_Stub)
         Warp17UnitTestCase.longMessage = True
+
+
+    @classmethod
+    def cleanEnv(self):
+        """cleans the Warp17BaseUnitTestCase enviroment"""
+        Warp17BaseUnitTestCase.env = Warp17Env()
+
+class Warp17UnitTestCase(Warp17BaseUnitTestCase):
+    """WARP17 Unit Test base class. Sets up the common variables."""
+
+    @classmethod
+    def setUpClass(cls):
+        super(Warp17UnitTestCase, cls).setUpClass()
+        Warp17UnitTestCase.warp17_proc = warp17_start(env=Warp17BaseUnitTestCase.env,
+                                                      output_args=Warp17BaseUnitTestCase.oargs)
+        # Wait until WARP17 actually starts.
+        warp17_wait(env=Warp17BaseUnitTestCase.env,
+                    logger=Warp17BaseUnitTestCase.lh)
+        # Detailed error messages
 
     @classmethod
     def tearDownClass(cls):
@@ -273,13 +289,18 @@ class Warp17TrafficTestCase():
                         tc_criteria=criteria,
                         tc_async=False)
 
-    def verify_stats(self, cl_result):
+    def verify_stats(self, cl_result, srv_result, cl_update, srv_update):
         """Override in child class if specific app stats should be verified."""
 
         req_cnt = cl_result.tsr_app_stats.tcas_raw.rsts_req_cnt
         resp_cnt = cl_result.tsr_app_stats.tcas_raw.rsts_resp_cnt
-        self.assertTrue(req_cnt > 0, 'req_cnt: %(req)u' % {'req': req_cnt})
-        self.assertTrue(resp_cnt > 0, 'resp_cnt: %(resp)u' % {'resp': resp_cnt})
+        self.assertTrue(req_cnt > 0, 'cl req_cnt: {}'.format(req_cnt))
+        self.assertTrue(resp_cnt > 0, 'cl resp_cnt: {}'.format(resp_cnt))
+
+        req_cnt = srv_result.tsr_app_stats.tcas_raw.rsts_req_cnt
+        resp_cnt = srv_result.tsr_app_stats.tcas_raw.rsts_resp_cnt
+        self.assertTrue(req_cnt > 0, 'srv req_cnt: {}'.format(req_cnt))
+        self.assertTrue(resp_cnt > 0, 'srv resp_cnt: {}'.format(resp_cnt))
 
     def compare_opts(self, expected, result):
         for field in [f for f in expected.DESCRIPTOR.fields if expected.HasField(f.name)]:
@@ -290,6 +311,53 @@ class Warp17TrafficTestCase():
                 return False
 
         return True
+
+    def startPorts(self, expected=0):
+        self.assertEqual(self.warp17_call('PortStart',
+                                          self._tc_arg_server).e_code,
+                         expected,
+                         'Port Start Server')
+        self.assertEqual(self.warp17_call('PortStart',
+                                          self._tc_arg_client).e_code,
+                         expected,
+                         'Port Start Client')
+
+    def stopPorts(self, expected_e_code=None):
+        result = self.warp17_call('PortStop', self._tc_arg_client)
+        if expected_e_code:
+            self.assertEqual(result.e_code, expected_e_code, 'Port Stop Client')
+
+        result = self.warp17_call('PortStop', self._tc_arg_server)
+        if expected_e_code:
+            self.assertEqual(result.e_code, expected_e_code, 'Port Stop Server')
+
+    def check_test_case_status(self, tc_arg, expected_status=PASSED):
+        for i in range(0, self.get_tc_retry_count()):
+            cl_result = self.warp17_call('GetTestStatus', tc_arg)
+            self.assertEqual(cl_result.tsr_error.e_code, 0, 'GetTestStatus')
+            if cl_result.tsr_state == expected_status:
+                break
+            self.lh.debug('still waiting for test to pass...')
+            time.sleep(1)
+
+        self.assertTrue(cl_result.tsr_state == expected_status, 'Retry count')
+
+        return cl_result
+
+    def configurePort(self, port_cfg, descr, expected_e_code=0):
+        self.assertEqual(self.warp17_call('ConfigurePort', port_cfg).e_code,
+                         0,
+                         'Configure {} Port'.format(descr))
+
+    def configureTestCase(self, tc_cfg, descr, expected_e_code=0):
+        self.assertEqual(self.warp17_call('ConfigureTestCase', tc_cfg).e_code,
+                         expected_e_code,
+                         'Configure {} Test Case'.format(descr))
+
+    def delTestCase(self, tc_arg, descr, expected_e_code=0):
+        self.assertEqual(self.warp17_call('DelTestCase', tc_arg).e_code,
+                         expected_e_code,
+                         'Delete {} Test Case'.format(descr))
 
     def setUp(self):
         self._port_cfg_client = self.get_port_cfg(eth_port=0)
@@ -307,34 +375,20 @@ class Warp17TrafficTestCase():
                                           tca_test_case_id=self._tc_server.tc_id)
 
         # Configure ports
-        self.assertEqual(self.warp17_call('ConfigurePort', self._port_cfg_client).e_code,
-                         0,
-                         'Configure Client Port')
-        self.assertEqual(self.warp17_call('ConfigurePort', self._port_cfg_server).e_code,
-                         0,
-                         'Configure Server Port')
+        self.configurePort(self._port_cfg_client, 'Client')
+        self.configurePort(self._port_cfg_server, 'Server')
 
         # Configure test cases:
-        self.assertEqual(self.warp17_call('ConfigureTestCase', self._tc_client).e_code,
-                         0,
-                         'Configure Client Test Case')
-        self.assertEqual(self.warp17_call('ConfigureTestCase', self._tc_server).e_code,
-                         0,
-                         'Configure Server Test Case')
-
+        self.configureTestCase(self._tc_client, 'Client')
+        self.configureTestCase(self._tc_server, 'Server')
 
     def tearDown(self):
         # Stop test cases (in case they were running)
-        self.warp17_call('PortStop', self._port_arg_client)
-        self.warp17_call('PortStop', self._port_arg_server)
+        self.stopPorts()
 
         # Delete test cases
-        self.assertEqual(self.warp17_call('DelTestCase', self._tc_arg_client).e_code,
-                         0,
-                         'Delete Client Test Case')
-        self.assertEqual(self.warp17_call('DelTestCase', self._tc_arg_server).e_code,
-                         0,
-                         'Delete Server Test Case')
+        self.delTestCase(self._tc_arg_client, 'Client')
+        self.delTestCase(self._tc_arg_server, 'Server')
 
     def test_update_valid(self):
         """Tests updates with valid configs."""
@@ -393,25 +447,16 @@ class Warp17TrafficTestCase():
         """Tests updates when tests are already running"""
 
         self.lh.info('Running: test_update_test_running')
-        self.assertEqual(self.warp17_call('PortStart', self._tc_arg_client).e_code,
-                         0,
-                         'Port Start Client')
-        self.assertEqual(self.warp17_call('PortStart', self._tc_arg_server).e_code,
-                         0,
-                         'Port Start Server')
 
         for (cl_update, srv_update) in self.get_updates():
+            self.startPorts()
+
             self.update_client(self._tc_arg_client, cl_update,
                                expected_err=-errno.EALREADY)
             self.update_server(self._tc_arg_server, srv_update,
                                expected_err=-errno.EALREADY)
 
-        self.assertEqual(self.warp17_call('PortStop', self._tc_arg_client).e_code,
-                         0,
-                         'Port Stop Client')
-        self.assertEqual(self.warp17_call('PortStop', self._tc_arg_server).e_code,
-                         0,
-                         'Port Stop Server')
+            self.stopPorts(expected_e_code=0)
 
     def test_update_invalid_config(self):
         """Tests updates with invalid configs"""
@@ -431,31 +476,13 @@ class Warp17TrafficTestCase():
             self.update_client(self._tc_arg_client, cl_update)
             self.update_server(self._tc_arg_server, srv_update)
 
-            # Start servers
-            self.assertEqual(self.warp17_call('PortStart', self._tc_arg_server).e_code,
-                             0,
-                             'Port Start Server')
+            self.startPorts()
 
-            # Start clients
-            self.assertEqual(self.warp17_call('PortStart', self._tc_arg_client).e_code,
-                             0,
-                             'Port Start Client')
+            cl_result = self.check_test_case_status(self._tc_arg_client)
+            srv_result = self.check_test_case_status(self._tc_arg_server)
+            self.verify_stats(cl_result, srv_result, cl_update, srv_update)
 
-            for i in range(0, self.get_tc_retry_count()):
-                cl_result = self.warp17_call('GetTestStatus', self._tc_arg_client)
-                self.assertEqual(cl_result.tsr_error.e_code, 0, 'GetTestStatus')
-                if cl_result.tsr_state == PASSED:
-                    break
-                self.lh.debug('still waiting for test to pass...')
-                time.sleep(1)
-
-            self.assertTrue(cl_result.tsr_state == PASSED, 'Retry count')
-
-            self.verify_stats(cl_result)
-
-            # Stop clients & servers
-            self.warp17_call('PortStop', self._tc_arg_server)
-            self.warp17_call('PortStop', self._tc_arg_client)
+            self.stopPorts()
 
 class Warp17NoTrafficTestCase(Warp17TrafficTestCase):
 

@@ -219,5 +219,9 @@ extern void test_server_sm_tcp_snd_win_unavail(tcp_control_block_t *tcb,
 extern void test_server_sm_udp_state_change(udp_control_block_t *ucb,
                                             test_case_info_t *ctx);
 
+extern bool test_server_sm_has_data_pending(l4_control_block_t *l4_cb);
+
+extern bool test_client_sm_has_data_pending(l4_control_block_t *l4_cb);
+
 #endif /* _H_TPG_TESTS_SM_ */
 

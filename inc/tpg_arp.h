@@ -60,31 +60,7 @@
 #ifndef _H_TPG_ARP_
 #define _H_TPG_ARP_
 
-/*****************************************************************************
- * ARP statistics
- ****************************************************************************/
-typedef struct arp_statistics_s {
-
-    uint64_t as_received_req;
-    uint64_t as_received_rep;
-    uint64_t as_received_other;
-
-    uint64_t as_req_not_mine;
-
-    uint64_t as_sent_req;
-    uint64_t as_sent_req_failed;
-    uint64_t as_sent_rep;
-    uint64_t as_sent_rep_failed;
-
-    /* Unlikly uint16_t error counters */
-
-    uint16_t as_to_small_fragment;
-    uint16_t as_invalid_hw_space;
-    uint16_t as_invalid_proto_space;
-    uint16_t as_invalid_hw_len;
-    uint16_t as_invalid_proto_len;
-
-} arp_statistics_t;
+STATS_GLOBAL_DECLARE(tpg_arp_statistics_t);
 
 /*****************************************************************************
  * ARP table handling definitions
@@ -133,30 +109,6 @@ static inline bool arp_is_entry_in_use(arp_entry_t *arp)
     return true;
 }
 
-static inline uint64_t arp_mac_to_uint64(uint8_t *mac)
-{
-    uint64_t uint64_mac;
-
-    uint64_mac = (uint64_t) mac[0] << 40 |
-                 (uint64_t) mac[1] << 32 |
-                 (uint64_t) mac[2] << 24 |
-                 (uint64_t) mac[3] << 16 |
-                 (uint64_t) mac[4] << 8 |
-                 (uint64_t) mac[5];
-
-    return uint64_mac;
-}
-
-static inline void arp_uint64_to_mac(uint64_t uint64_mac, uint8_t *mac)
-{
-    mac[0] = (uint64_mac >> 40) & 0xff;
-    mac[1] = (uint64_mac >> 32) & 0xff;
-    mac[2] = (uint64_mac >> 24) & 0xff;
-    mac[3] = (uint64_mac >> 16) & 0xff;
-    mac[4] = (uint64_mac >> 8) & 0xff;
-    mac[5] = uint64_mac & 0xff;
-}
-
 static inline void arp_set_mac_in_entry_as_uint64(arp_entry_t *arp,
                                                   uint64_t mac)
 {
@@ -167,8 +119,7 @@ static inline void arp_set_mac_in_entry_as_uint64(arp_entry_t *arp,
 static inline void arp_set_mac_in_entry_as_uint8(arp_entry_t *arp,
                                                  uint8_t *mac)
 {
-    arp_set_mac_in_entry_as_uint64(arp,
-                                   arp_mac_to_uint64(mac));
+    arp_set_mac_in_entry_as_uint64(arp, eth_mac_to_uint64(mac));
 }
 
 static inline uint64_t arp_get_mac_from_entry_as_uint64(arp_entry_t *arp)
@@ -179,16 +130,13 @@ static inline uint64_t arp_get_mac_from_entry_as_uint64(arp_entry_t *arp)
 static inline void arp_get_mac_from_entry_as_uint8(arp_entry_t *arp,
                                                    uint8_t *mac)
 {
-    arp_uint64_to_mac(arp_get_mac_from_entry_as_uint64(arp),
-                      mac);
+    eth_uint64_to_mac(arp_get_mac_from_entry_as_uint64(arp), mac);
 }
 
 static inline uint64_t arp_get_entry_flags(arp_entry_t *arp)
 {
     return arp->ae_mac_flags & TPG_ARP_UINT64_FLAGS_MASK;
 }
-
-#define TPG_USE_PORT_MAC      0xffff000000000001
 
 #define TPG_ARP_MAC_NOT_FOUND TPG_ARP_FLAG_INCOMPLETE
 

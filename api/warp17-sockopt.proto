@@ -72,5 +72,12 @@ message TcpSockopt {
     optional uint32 to_orphan_to         =  9 [default = 100];  // in msec
 
     optional bool   to_skip_timewait     = 10 [default = false];
+    optional bool   to_ack_delay         = 11 [default = false];
+}
+
+message Ipv4Sockopt {
+    optional bool   ip4so_rx_tstamp   = 1 [default = false];
+    optional bool   ip4so_tx_tstamp   = 2 [default = false];
+    optional uint32 ip4so_tos         = 3 [default = 0];
 }
 

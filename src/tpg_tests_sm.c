@@ -871,3 +871,12 @@ void test_server_sm_udp_state_change(udp_control_block_t *ucb,
     test_server_sm_dispatch_event(&ucb->ucb_l4, TST_SRVE_UDP_STATE_CHG, ctx);
 }
 
+bool test_server_sm_has_data_pending(l4_control_block_t *l4_cb)
+{
+    return TEST_SRV_STATE(l4_cb) == TST_SRVS_SENDING;
+}
+
+bool test_client_sm_has_data_pending(l4_control_block_t *l4_cb)
+{
+    return TEST_CL_STATE(l4_cb) == TST_CLS_SENDING;
+}

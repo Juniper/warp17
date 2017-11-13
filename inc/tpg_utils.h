@@ -143,6 +143,9 @@ static inline void tpg_printf(printer_arg_t *pa, const char *fmt, ...)
 
 #define TPG_RATE_IS_INF(x) (!(x)->has_r_value)
 
+#define TPG_RATE_VAL_DEFAULT(x) \
+    (TPG_RATE_IS_INF(x) ? UINT32_MAX : TPG_RATE_VAL(x))
+
 /*****************************************************************************
  * TPG ip print utils
  ****************************************************************************/
@@ -160,6 +163,10 @@ static inline void tpg_printf(printer_arg_t *pa, const char *fmt, ...)
 #define TPG_IPV4(val) \
     ((tpg_ip_t) {.ip_version = IP_V__IPV4, .ip_v4 = (val)})
 
+/* TODO: IPv6 not supported yet. */
+#define TPG_IPV6(val) \
+    ((tpg_ip_t) {.ip_version = IP_V__IPV6})
+
 #define TPG_IP_GT(i1, i2)                          \
     ((i1)->ip_version == (i2)->ip_version &&       \
      ((i1)->ip_version == IP_V__IPV4 &&            \
@@ -172,6 +179,26 @@ static inline void tpg_printf(printer_arg_t *pa, const char *fmt, ...)
 
 #define TPG_IP_GE(i1, i2) \
     (TPG_IP_GT((i1), (i2)) || TPG_IP_EQ((i1), (i2)))
+
+#define TPG_IPV4_MCAST_PREFIX      0xE0000000
+#define TPG_IPV4_MCAST_PREFIX_MASK 0xF0000000
+#define TPG_IPV4_MCAST_MASK        0xEFFFFFFF
+#define TPG_IPV4_BCAST_VAL         0xFFFFFFFF
+
+#define TPG_IP_MCAST(ip)                                                  \
+    ((ip)->ip_version == IP_V__IPV4 &&                                    \
+     ((ip)->ip_v4 & TPG_IPV4_MCAST_PREFIX_MASK) == TPG_IPV4_MCAST_PREFIX)
+
+/* TODO: IPv6 not supported yet. */
+#define TPG_IP_MCAST_MIN(ipv) \
+    ((ipv) ? TPG_IPV4(TPG_IPV4_MCAST_PREFIX) : TPG_IPV6(0))
+
+/* TODO: IPv6 not supported yet. */
+#define TPG_IP_MCAST_MAX(ipv) \
+    ((ipv) ? TPG_IPV4(TPG_IPV4_MCAST_MASK) : TPG_IPV6(0))
+
+#define TPG_IP_BCAST(ip) \
+    ((ip)->ip_version == IP_V__IPV4 && ((ip)->ip_v4 == TPG_IPV4_BCAST_VAL))
 
 /*****************************************************************************
  * TPG ip range initializer
@@ -229,6 +256,31 @@ static inline void tpg_printf(printer_arg_t *pa, const char *fmt, ...)
 #define TPG_MIN(a, b) (((a) < (b)) ? (a) : (b))
 
 #define TPG_MAX(a, b) (((a) > (b)) ? (a) : (b))
+
+/*****************************************************************************
+ * Protobuf related helpers
+ ****************************************************************************/
+
+/*****************************************************************************
+ * Macro for setting optional fields values.
+ ****************************************************************************/
+#define TPG_XLATE_OPTIONAL_SET_FIELD(msg, field, value) \
+    do {                                                \
+        (msg)->field = (value);                         \
+        (msg)->has_##field = true;                      \
+    } while (0)
+
+/*****************************************************************************
+ * Macro for translating active union fields.
+ ****************************************************************************/
+#define TPG_XLATE_UNION_SET_FIELD(out, in, field) \
+    TPG_XLATE_OPTIONAL_SET_FIELD(out, field, (in)->field)
+
+/*****************************************************************************
+ * Macro for getting the value of an optional boolean field.
+ ****************************************************************************/
+#define TPG_XLATE_OPT_BOOL(obj, field) \
+    ((obj)->has_##field && (obj)->field)
 
 #endif /* _H_TPG_UTILS_ */
 

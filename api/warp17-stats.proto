@@ -1,0 +1,254 @@
+//
+// DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
+//
+// Copyright (c) 2017, Juniper Networks, Inc. All rights reserved.
+//
+//
+// The contents of this file are subject to the terms of the BSD 3 clause
+// License (the "License"). You may not use this file except in compliance
+// with the License.
+//
+// You can obtain a copy of the license at
+// https://github.com/Juniper/warp17/blob/master/LICENSE.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice,
+// this list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+// contributors may be used to endorse or promote products derived from this
+// software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+// POSSIBILITY OF SUCH DAMAGE.
+//
+// File name:
+//     warp17-stats.proto
+//
+// Description:
+//     WARP17 RPC statistics definitions.
+//
+// Author:
+//     Dumitru Ceara
+//
+// Initial Created:
+//     05/19/2017
+//
+// Notes:
+//
+//
+
+import "warp17-common.proto";
+
+message PortStatistics {
+    required uint64 ps_received_pkts           = 1;
+    required uint64 ps_received_bytes          = 2;
+
+    required uint64 ps_sent_pkts               = 3;
+    required uint64 ps_sent_bytes              = 4;
+    required uint64 ps_sent_failure            = 5;
+
+    required uint64 ps_received_ring_if_failed = 6;
+    required uint64 ps_sent_sim_failure        = 7;
+}
+
+message PhyStatistics {
+    required uint64 pys_rx_pkts     = 1;
+    required uint64 pys_rx_bytes    = 2;
+    required uint64 pys_tx_pkts     = 3;
+    required uint64 pys_tx_bytes    = 4;
+
+    required uint64 pys_rx_errors   = 5;
+    required uint64 pys_tx_errors   = 6;
+
+    required uint32 pys_link_speed  = 7;
+}
+
+message EthStatistics {
+    required uint64 es_etype_arp         = 1;
+    required uint64 es_etype_ipv4        = 2;
+    required uint64 es_etype_ipv6        = 3;
+    required uint64 es_etype_other       = 4;
+    required uint64 es_etype_vlan        = 5;
+
+    // TODO: Following stats should be uint16 because they’re not expected
+    // to happen too often but no such type exists.
+
+    required uint32 es_to_small_fragment = 6;
+    required uint32 es_no_tx_mbuf        = 7;
+}
+
+message ArpStatistics {
+    required uint64 as_received_req        = 1;
+    required uint64 as_received_rep        = 2;
+    required uint64 as_received_other      = 3;
+
+    required uint64 as_req_not_mine        = 4;
+
+    required uint64 as_sent_req            = 5;
+    required uint64 as_sent_req_failed     = 6;
+    required uint64 as_sent_rep            = 7;
+    required uint64 as_sent_rep_failed     = 8;
+
+    // TODO: Following stats should be uint16 because they’re not expected
+    // to happen too often but no such type exists.
+
+    required uint32 as_to_small_fragment   = 9;
+    required uint32 as_invalid_hw_space    = 10;
+    required uint32 as_invalid_proto_space = 11;
+    required uint32 as_invalid_hw_len      = 12;
+    required uint32 as_invalid_proto_len   = 13;
+}
+
+message RouteStatistics {
+
+    required uint32 rs_intf_add        = 1;
+    required uint32 rs_intf_del        = 2;
+    required uint32 rs_gw_add          = 3;
+    required uint32 rs_gw_del          = 4;
+
+    // Error counters.
+    required uint32 rs_tbl_full        = 5;
+    required uint32 rs_intf_nomem      = 6;
+    required uint32 rs_intf_notfound   = 7;
+    required uint32 rs_gw_nointf       = 8;
+    required uint32 rs_nh_not_found    = 9;
+    required uint32 rs_route_not_found = 10;
+}
+
+message Ipv4Statistics {
+    required uint64 ips_received_pkts        = 1;
+    required uint64 ips_received_bytes       = 2;
+    required uint64 ips_protocol_icmp        = 3;
+    required uint64 ips_protocol_tcp         = 4;
+    required uint64 ips_protocol_udp         = 5;
+    required uint64 ips_protocol_other       = 6;
+
+    // TODO: Following stats should be uint16 because they’re not expected
+    // to happen too often but no such type exists.
+
+    required uint32 ips_to_small_fragment    = 7;
+    required uint32 ips_hdr_to_small         = 8;
+    required uint32 ips_invalid_checksum     = 9;
+    required uint32 ips_total_length_invalid = 10;
+    required uint32 ips_received_frags       = 11;
+
+    required uint32 ips_not_v4               = 12;
+    required uint32 ips_reserved_bit_set     = 13;
+    required uint32 ips_invalid_pad          = 14;
+    required uint32 ips_invalid_opt          = 15;
+}
+
+message UdpStatistics {
+    required uint64 us_received_pkts     = 1;
+    required uint64 us_received_bytes    = 2;
+
+    required uint64 us_sent_pkts         = 3;
+    required uint64 us_sent_ctrl_bytes   = 4;
+    required uint64 us_sent_data_bytes   = 5;
+
+    required uint64 us_ucb_malloced      = 6;
+    required uint64 us_ucb_freed         = 7;
+    required uint64 us_ucb_not_found     = 8;
+    required uint64 us_ucb_alloc_err     = 9;
+
+    // TODO: Following stats should be uint16 because they’re not expected
+    // to happen too often but no such type exists.
+
+    required uint32 us_to_small_fragment = 10;
+    required uint32 us_invalid_checksum  = 11;
+    required uint32 us_failed_pkts       = 12;
+}
+
+message TcpStatistics {
+    required uint64 ts_received_pkts   = 1;
+    required uint64 ts_received_bytes  = 2;
+
+    required uint64 ts_sent_ctrl_pkts  = 3;
+    required uint64 ts_sent_ctrl_bytes = 4;
+
+    required uint64 ts_sent_data_pkts  = 5;
+    required uint64 ts_sent_data_bytes = 6;
+
+    required uint64 ts_tcb_malloced    = 7;
+    required uint64 ts_tcb_freed       = 8;
+    required uint64 ts_tcb_not_found   = 9;
+    required uint64 ts_tcb_alloc_err   = 10;
+
+    // TODO: Following stats should be uint16 because they’re not expected
+    // to happen too often but no such type exists.
+
+    required uint32 ts_to_small_fragment = 11;
+    required uint32 ts_hdr_to_small      = 12;
+    required uint32 ts_invalid_checksum  = 13;
+    required uint32 ts_failed_ctrl_pkts  = 14;
+    required uint32 ts_failed_data_pkts  = 15;
+    required uint32 ts_failed_data_clone = 16;
+
+    required uint32 ts_reserved_bit_set  = 17;
+}
+
+message TsmStatistics {
+    repeated uint32 tsms_tcb_states    = 1 [(warp17_array_size) = 'TPG_TS_MAX_STATE'];
+
+    required uint32 tsms_syn_to        = 2;
+    required uint32 tsms_synack_to     = 3;
+    required uint32 tsms_retry_to      = 4;
+
+    required uint64 tsms_retrans_bytes = 5;
+
+    required uint32 tsms_missing_seq   = 6;
+    required uint32 tsms_snd_win_full  = 7;
+}
+
+message MsgStatistics {
+    required uint64 ms_rcvd      = 1;
+    required uint64 ms_snd       = 2;
+    required uint64 ms_poll      = 3;
+
+    required uint64 ms_err       = 4;
+    required uint64 ms_proc_err  = 5;
+
+    required uint64 ms_alloc     = 6;
+    required uint64 ms_alloc_err = 7;
+    required uint64 ms_free      = 8;
+}
+
+message TimerStatistics {
+    required uint64 tts_rto_set            = 1;
+    required uint64 tts_rto_cancelled      = 2;
+    required uint64 tts_rto_fired          = 3;
+
+    required uint64 tts_slow_set           = 4;
+    required uint64 tts_slow_cancelled     = 5;
+    required uint64 tts_slow_fired         = 6;
+
+    required uint64 tts_test_set           = 7;
+    required uint64 tts_test_cancelled     = 8;
+    required uint64 tts_test_fired         = 9;
+
+    // TODO: Following stats should be uint16 because they’re not expected
+    // to happen too often but no such type exists.
+    required uint32 tts_rto_failed         = 10;
+    required uint32 tts_slow_failed        = 11;
+    required uint32 tts_test_failed        = 12;
+    required uint32 tts_l4cb_null          = 13;
+    required uint32 tts_l4cb_invalid_flags = 14;
+    required uint32 tts_timeout_overflow   = 15;
+}

@@ -57,15 +57,23 @@
 message RawClient {
     required uint32 rc_req_plen  = 1;
     required uint32 rc_resp_plen = 2;
+    optional bool   rc_rx_tstamp = 3 [default = false];
+    optional bool   rc_tx_tstamp = 4 [default = false];
 }
 
 message RawServer {
     required uint32 rs_req_plen  = 1;
     required uint32 rs_resp_plen = 2;
+    optional bool   rs_rx_tstamp = 3 [default = false];
+    optional bool   rs_tx_tstamp = 4 [default = false];
 }
 
 message RawStats {
-    required uint32 rsts_req_cnt  = 1;
-    required uint32 rsts_resp_cnt = 2;
+    required uint64 rsts_req_cnt  = 1;
+    required uint64 rsts_resp_cnt = 2;
+
+    required uint32 rsts_tstamp_no_phys_addr = 3;
+    required uint32 rsts_tstamp_no_mbuf      = 4;
+    required uint32 rsts_tstamp_no_win       = 5;
 }
 

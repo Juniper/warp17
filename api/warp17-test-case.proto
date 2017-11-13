@@ -107,18 +107,34 @@ message TestCaseClientStats {
     required uint32 tccs_failed = 4;
 }
 
+message LatencyStats {
+    required uint32 ls_max_exceeded         = 1;
+    required uint32 ls_max_average_exceeded = 2;
+    required uint32 ls_min_latency          = 3;
+    required uint32 ls_max_latency          = 4;
+    required uint64 ls_sum_latency          = 5;
+    required uint64 ls_samples_count        = 6;
+}
+
+message TestCaseLatencyStats {
+    required LatencyStats tcls_stats        = 1;
+    required LatencyStats tcls_sample_stats = 2;
+    required uint32       tcls_invalid_lat  = 3;
+}
+
 message TestCaseStats {
     /* The user will do the translation. */
     option (warp17_xlate_tpg) = false;
 
-    optional TestCaseServerStats tcs_server      = 1 [(warp17_union_anon) = true];
-    optional TestCaseClientStats tcs_client      = 2 [(warp17_union_anon) = true];
+    optional TestCaseServerStats  tcs_server        = 1 [(warp17_union_anon) = true];
+    optional TestCaseClientStats  tcs_client        = 2 [(warp17_union_anon) = true];
 
-    required uint32              tcs_data_failed = 3;
-    required uint32              tcs_data_null   = 4;
+    required uint32               tcs_data_failed   = 3;
+    required uint32               tcs_data_null     = 4;
 
-    required uint64              tcs_start_time  = 5;
-    required uint64              tcs_end_time    = 6;
+    required uint64               tcs_start_time    = 5;
+    required uint64               tcs_end_time      = 6;
+    required TestCaseLatencyStats tcs_latency_stats = 7;
 }
 
 message TestCaseRateStats {
@@ -140,17 +156,24 @@ message TestCaseAppStats {
 
 }
 
-message TestCase {
-    required TestCaseType tc_type     = 1;
+message TestCaseLatency {
+    optional uint32 tcs_max     = 1 [default = 0];
+    optional uint32 tcs_max_avg = 2 [default = 0];
+    optional uint32 tcs_samples = 3 [default = 0];
+}
 
-    required uint32       tc_eth_port = 2;
-    required uint32       tc_id       = 3;
+message TestCase {
+    required TestCaseType    tc_type     = 1;
+
+    required uint32          tc_eth_port = 2;
+    required uint32          tc_id       = 3;
 
     /* Add different Test Case configs below as optionals. */
-    optional Client       tc_client   = 4 [(warp17_union_anon) = true];
-    optional Server       tc_server   = 5 [(warp17_union_anon) = true];
+    optional Client          tc_client   = 4 [(warp17_union_anon) = true];
+    optional Server          tc_server   = 5 [(warp17_union_anon) = true];
 
-    required TestCriteria tc_criteria = 6;
-    required bool         tc_async    = 7;
+    required TestCriteria    tc_criteria = 6;
+    required bool            tc_async    = 7;
+    optional TestCaseLatency tc_latency  = 8;
 }
 

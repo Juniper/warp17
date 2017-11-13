@@ -59,7 +59,6 @@
  ****************************************************************************/
 #include <unistd.h>
 
-#include <rte_cycles.h>
 
 #include "tcp_generator.h"
 
@@ -90,10 +89,13 @@ tpg_test_case_app_stats_t *test_runtime_app_stats;
 /*****************************************************************************
  * Forward declarations.
  ****************************************************************************/
+static void test_update_rates(tpg_test_case_t *test_case);
 static void test_start_test_case(uint32_t eth_port, test_env_t *tcfg);
 static void test_stop_test_case(uint32_t eth_port, tpg_test_case_t *entry,
                                 test_env_oper_state_t *state,
                                 tpg_test_case_state_t new_tc_state);
+static void test_aggregate_latencies(tpg_latency_stats_t *dest,
+                                     tpg_latency_stats_t *source);
 
 /*****************************************************************************
  * test_update_status()
@@ -102,8 +104,6 @@ static void test_update_status(tpg_test_case_t *test_case)
 {
     tpg_test_case_stats_t       gen_stats;
     tpg_test_case_stats_t      *pgen_stats;
-    tpg_test_case_rate_stats_t  rate_stats;
-    tpg_test_case_rate_stats_t *prate_stats;
     tpg_test_case_app_stats_t   app_stats;
     tpg_test_case_app_stats_t  *papp_stats;
     int                         error = 0;
@@ -116,21 +116,18 @@ static void test_update_status(tpg_test_case_t *test_case)
 
     pgen_stats = TEST_CASE_STATS_GET(test_case->tc_eth_port,
                                      test_case->tc_id);
-    prate_stats = TEST_CASE_RATE_STATS_GET(test_case->tc_eth_port,
-                                           test_case->tc_id);
     papp_stats = TEST_CASE_APP_STATS_GET(test_case->tc_eth_port,
                                          test_case->tc_id);
 
-    /* Initialize rates. */
-    bzero(prate_stats, sizeof(*prate_stats));
+    bzero(&pgen_stats->tcs_latency_stats.tcls_sample_stats,
+          sizeof(pgen_stats->tcs_latency_stats.tcls_sample_stats));
+    pgen_stats->tcs_latency_stats.tcls_sample_stats.ls_min_latency = UINT32_MAX;
 
     /* Initialize the start time. */
     pgen_stats->tcs_start_time = UINT64_MAX;
-
     FOREACH_CORE_IN_PORT_START(core, test_case->tc_eth_port) {
         msg_t                     *msgp;
         test_case_stats_req_msg_t *stats_msg;
-        uint64_t                   duration;
         tpg_app_proto_t            app_id;
 
         /* Skip non-packet cores */
@@ -138,7 +135,7 @@ static void test_update_status(tpg_test_case_t *test_case)
             continue;
 
         bzero(&gen_stats, sizeof(gen_stats));
-        bzero(&rate_stats, sizeof(rate_stats));
+        bzero(&app_stats, sizeof(app_stats));
 
         msgp = MSG_LOCAL(smsg);
         msg_init(msgp, MSG_TEST_CASE_STATS_REQ, core, 0);
@@ -147,14 +144,23 @@ static void test_update_status(tpg_test_case_t *test_case)
         stats_msg->tcsrm_eth_port = test_case->tc_eth_port;
         stats_msg->tcsrm_test_case_id = test_case->tc_id;
         stats_msg->tcsrm_test_case_stats = &gen_stats;
-        stats_msg->tcsrm_test_case_rate_stats = &rate_stats;
         stats_msg->tcsrm_test_case_app_stats = &app_stats;
 
         /* BLOCK waiting for msg to be processed */
         error = msg_send(msgp, 0);
-        if (error)
+        if (error) {
             TPG_ERROR_ABORT("ERROR: Failed to send stats req msg: %s(%d)!\n",
                             rte_strerror(-error), -error);
+        }
+
+        /* Aggregate all the latency stats */
+        pgen_stats->tcs_latency_stats.tcls_invalid_lat +=
+            gen_stats.tcs_latency_stats.tcls_invalid_lat;
+        test_aggregate_latencies(&pgen_stats->tcs_latency_stats.tcls_stats,
+                                 &gen_stats.tcs_latency_stats.tcls_stats);
+
+        test_aggregate_latencies(&pgen_stats->tcs_latency_stats.tcls_sample_stats,
+                                 &gen_stats.tcs_latency_stats.tcls_sample_stats);
 
         if (is_server) {
             app_id = test_case->tc_server.srv_app.as_app_proto;
@@ -171,10 +177,10 @@ static void test_update_status(tpg_test_case_t *test_case)
         } else {
             app_id = test_case->tc_client.cl_app.ac_app_proto;
 
-            pgen_stats->tcs_client.tccs_up          += gen_stats.tcs_client.tccs_up;
-            pgen_stats->tcs_client.tccs_estab       += gen_stats.tcs_client.tccs_estab;
-            pgen_stats->tcs_client.tccs_down        += gen_stats.tcs_client.tccs_down;
-            pgen_stats->tcs_client.tccs_failed      += gen_stats.tcs_client.tccs_failed;
+            pgen_stats->tcs_client.tccs_up     += gen_stats.tcs_client.tccs_up;
+            pgen_stats->tcs_client.tccs_estab  += gen_stats.tcs_client.tccs_estab;
+            pgen_stats->tcs_client.tccs_down   += gen_stats.tcs_client.tccs_down;
+            pgen_stats->tcs_client.tccs_failed += gen_stats.tcs_client.tccs_failed;
 
             pgen_stats->tcs_data_failed += gen_stats.tcs_data_failed;
             pgen_stats->tcs_data_null   += gen_stats.tcs_data_null;
@@ -187,6 +193,55 @@ static void test_update_status(tpg_test_case_t *test_case)
 
         if (gen_stats.tcs_end_time > pgen_stats->tcs_end_time)
             pgen_stats->tcs_end_time = gen_stats.tcs_end_time;
+
+    } FOREACH_CORE_IN_PORT_END()
+
+    if (is_server)
+        pgen_stats->tcs_server.tcss_up += srv_up;
+}
+
+/*****************************************************************************
+ * test_update_rates()
+ ****************************************************************************/
+static void test_update_rates(tpg_test_case_t *test_case)
+{
+    tpg_test_case_rate_stats_t  rate_stats;
+    tpg_test_case_rate_stats_t *prate_stats;
+    int                         error = 0;
+    uint32_t                    core;
+    MSG_LOCAL_DEFINE(test_case_rates_req_msg_t, smsg);
+
+    prate_stats = TEST_CASE_RATE_STATS_GET(test_case->tc_eth_port,
+                                           test_case->tc_id);
+
+    /* Initialize rates. */
+    bzero(prate_stats, sizeof(*prate_stats));
+
+    FOREACH_CORE_IN_PORT_START(core, test_case->tc_eth_port) {
+        msg_t                     *msgp;
+        test_case_rates_req_msg_t *stats_msg;
+        uint64_t                   duration;
+
+        /* Skip non-packet cores */
+        if (!cfg_is_pkt_core(core))
+            continue;
+
+        bzero(&rate_stats, sizeof(rate_stats));
+
+        msgp = MSG_LOCAL(smsg);
+        msg_init(msgp, MSG_TEST_CASE_RATES_REQ, core, 0);
+
+        stats_msg = MSG_INNER(test_case_rates_req_msg_t, msgp);
+        stats_msg->tcrrm_eth_port = test_case->tc_eth_port;
+        stats_msg->tcrrm_test_case_id = test_case->tc_id;
+        stats_msg->tcrrm_test_case_rate_stats = &rate_stats;
+
+        /* BLOCK waiting for msg to be processed */
+        error = msg_send(msgp, 0);
+        if (error) {
+            TPG_ERROR_ABORT("ERROR: Failed to send rates req msg: %s(%d)!\n",
+                            rte_strerror(-error), -error);
+        }
 
         prate_stats->tcrs_start_time = rate_stats.tcrs_start_time / cycles_per_us;
         prate_stats->tcrs_end_time = rate_stats.tcrs_end_time / cycles_per_us;
@@ -203,29 +258,7 @@ static void test_update_status(tpg_test_case_t *test_case)
         prate_stats->tcrs_data_per_s +=
             rate_stats.tcrs_data_per_s * (uint64_t)TPG_SEC_TO_USEC /
             duration;
-
     } FOREACH_CORE_IN_PORT_END()
-
-    if (is_server)
-        pgen_stats->tcs_server.tcss_up += srv_up;
-}
-
-/*****************************************************************************
- * test_init_rate_per_core()
- ****************************************************************************/
-static void test_init_rate_per_core(tpg_rate_t *rate, uint32_t core_cnt,
-                                    bool is_last_core,
-                                    const tpg_rate_t *desired)
-{
-    if (TPG_RATE_IS_INF(desired)) {
-        *rate = TPG_RATE_INF();
-        return;
-    }
-    if (!is_last_core)
-        *rate = TPG_RATE(TPG_RATE_VAL(desired) / core_cnt);
-    else
-        *rate = TPG_RATE(TPG_RATE_VAL(desired) / core_cnt +
-                         TPG_RATE_VAL(desired) % core_cnt);
 }
 
 /*****************************************************************************
@@ -233,9 +266,7 @@ static void test_init_rate_per_core(tpg_rate_t *rate, uint32_t core_cnt,
  ****************************************************************************/
 static void test_init_msg(const tpg_test_case_t *entry,
                           const sockopt_t *sockopt,
-                          test_case_init_msg_t *msg,
-                          uint32_t core_no,
-                          uint32_t core_total)
+                          test_case_init_msg_t *msg)
 {
     msg->tcim_eth_port = entry->tc_eth_port;
     msg->tcim_test_case_id = entry->tc_id;
@@ -245,22 +276,6 @@ static void test_init_msg(const tpg_test_case_t *entry,
     case TEST_CASE_TYPE__CLIENT:
         /* Struct copy. */
         msg->tcim_client = entry->tc_client;
-
-        /* Update the rates for clients. Need to take the number of PKT Cores
-         * into account.
-         */
-        test_init_rate_per_core(&msg->tcim_client.cl_rates.rc_open_rate,
-                                core_total,
-                                (core_no == core_total),
-                                &entry->tc_client.cl_rates.rc_open_rate);
-        test_init_rate_per_core(&msg->tcim_client.cl_rates.rc_close_rate,
-                                core_total,
-                                (core_no == core_total),
-                                &entry->tc_client.cl_rates.rc_close_rate);
-        test_init_rate_per_core(&msg->tcim_client.cl_rates.rc_send_rate,
-                                core_total,
-                                (core_no == core_total),
-                                &entry->tc_client.cl_rates.rc_send_rate);
         break;
     case TEST_CASE_TYPE__SERVER:
         /* Struct copy. */
@@ -273,6 +288,14 @@ static void test_init_msg(const tpg_test_case_t *entry,
 
     /* Struct copy. */
     msg->tcim_sockopt = *sockopt;
+
+    /* Copy latency options if any */
+    if (entry->has_tc_latency)
+        msg->tcim_latency = entry->tc_latency;
+
+    /* Determine if RX/TX timestamping should be enabled. */
+    msg->tcim_rx_tstamp = test_mgmt_rx_tstamp_enabled(entry);
+    msg->tcim_tx_tstamp = test_mgmt_tx_tstamp_enabled(entry);
 }
 
 /*****************************************************************************
@@ -283,13 +306,9 @@ static void test_init_test_case(tpg_test_case_t *entry,
 {
     uint32_t core;
     int      error;
-    uint32_t core_total = port_get_core_count(entry->tc_eth_port);
-    uint32_t core_cnt = 0;
 
     FOREACH_CORE_IN_PORT_START(core, entry->tc_eth_port) {
         msg_t *msgp;
-
-        core_cnt++;
 
         /* Skip non-packet cores */
         if (!cfg_is_pkt_core(core))
@@ -302,9 +321,7 @@ static void test_init_test_case(tpg_test_case_t *entry,
             return;
         }
 
-        test_init_msg(entry, sockopt, MSG_INNER(test_case_init_msg_t, msgp),
-                      core_cnt,
-                      core_total);
+        test_init_msg(entry, sockopt, MSG_INNER(test_case_init_msg_t, msgp));
 
         /* Send the message and forget about it! */
         error = msg_send(msgp, MSG_SND_FLAG_NOWAIT);
@@ -486,9 +503,28 @@ static bool test_check_tc_status(tpg_test_case_t *test_case,
 }
 
 /*****************************************************************************
+ * test_aggregate_latencies()
+ ****************************************************************************/
+void test_aggregate_latencies(tpg_latency_stats_t *dest,
+                              tpg_latency_stats_t *source)
+{
+    dest->ls_max_average_exceeded += source->ls_max_average_exceeded;
+    dest->ls_max_exceeded += source->ls_max_exceeded;
+
+    dest->ls_max_latency = (dest->ls_max_latency >= source->ls_max_latency ?
+                            dest->ls_max_latency : source->ls_max_latency);
+
+    dest->ls_min_latency = (dest->ls_min_latency <= source->ls_min_latency ?
+                            dest->ls_min_latency : source->ls_min_latency);
+
+    dest->ls_samples_count += source->ls_samples_count;
+    dest->ls_sum_latency += source->ls_sum_latency;
+}
+
+/*****************************************************************************
  * test_entry_tmr_cb()
  ****************************************************************************/
-static void test_entry_tmr_cb(struct rte_timer *tmr, void *arg)
+static void test_entry_tmr_cb(struct rte_timer *tmr __rte_unused, void *arg)
 {
     bool                   done;
     test_env_tmr_arg_t    *tmr_arg  = arg;
@@ -526,9 +562,10 @@ static void test_entry_tmr_cb(struct rte_timer *tmr, void *arg)
          * test cases must be explicitly stopped!
          */
         if (entry->tc_type != TEST_CASE_TYPE__SERVER) {
+            rte_timer_stop(&state->teos_timer);
+            rte_timer_stop(&state->teos_rates_timer);
             test_stop_test_case(eth_port, entry, state,
                                 state->teos_test_case_state);
-            rte_timer_stop(tmr);
         }
     }
 
@@ -551,6 +588,19 @@ static void test_entry_tmr_cb(struct rte_timer *tmr, void *arg)
 
         tenv->te_test_running = false;
     }
+}
+
+/*****************************************************************************
+ * test_entry_rates_tmr_cb()
+ ****************************************************************************/
+static void test_entry_rates_tmr_cb(struct rte_timer *tmr __rte_unused,
+                                    void *arg)
+{
+    test_env_tmr_arg_t *tmr_arg  = arg;
+    test_env_t         *tenv     = tmr_arg->teta_test_env;
+    uint32_t            tcid     = tmr_arg->teta_test_case_id;
+
+    test_update_rates(&tenv->te_test_cases[tcid].cfg);
 }
 
 /*****************************************************************************
@@ -613,6 +663,12 @@ static void test_start_test_case(uint32_t eth_port, test_env_t *tenv)
                     PERIODICAL,
                     rte_lcore_id(),
                     test_entry_tmr_cb,
+                    &state->teos_timer_arg);
+    rte_timer_reset(&state->teos_rates_timer,
+                    GCFG_TEST_MGMT_RATES_TMR_TO * cycles_per_us,
+                    PERIODICAL,
+                    rte_lcore_id(),
+                    test_entry_rates_tmr_cb,
                     &state->teos_timer_arg);
 
     /* Mark if we need to start more tests later. */
@@ -741,6 +797,7 @@ static int test_start_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
     for (i = 0; i < TPG_TEST_MAX_ENTRIES; i++) {
         state = &tenv->te_test_cases[i].state;
         rte_timer_init(&state->teos_timer);
+        rte_timer_init(&state->teos_rates_timer);
         state->teos_timer_arg.teta_eth_port = start_msg->tssm_eth_port;
         state->teos_timer_arg.teta_test_case_id = i;
         state->teos_timer_arg.teta_test_env = tenv;
@@ -756,6 +813,8 @@ static int test_start_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
         /* Clear test stats. */
         gen_stats = TEST_CASE_STATS_GET(start_msg->tssm_eth_port, i);
         bzero(gen_stats, sizeof(*gen_stats));
+        gen_stats->tcs_latency_stats.tcls_stats.ls_min_latency = UINT32_MAX;
+        gen_stats->tcs_latency_stats.tcls_sample_stats.ls_min_latency = UINT32_MAX;
 
         rate_stats = TEST_CASE_RATE_STATS_GET(start_msg->tssm_eth_port, i);
         bzero(rate_stats, sizeof(*rate_stats));
@@ -763,13 +822,10 @@ static int test_start_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
         app_stats = TEST_CASE_APP_STATS_GET(start_msg->tssm_eth_port, i);
         bzero(app_stats, sizeof(*app_stats));
 
+
         test_init_test_case(entry, &tenv->te_test_cases[i].sockopt);
 
     } TEST_CASE_FOREACH_END()
-
-    /* Clear port stats. */
-    rte_eth_stats_reset(start_msg->tssm_eth_port);
-    rte_eth_xstats_reset(start_msg->tssm_eth_port);
 
     /* Start first test and it's associated timer. In the timer callback we
      * either wait for completion of the test (if async == false) or start
@@ -812,6 +868,7 @@ static int test_stop_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
     TEST_CASE_FOREACH_START(tenv, i, entry, state) {
         /* Cancel test case timers. */
         rte_timer_stop(&state->teos_timer);
+        rte_timer_stop(&state->teos_rates_timer);
 
         test_stop_test_case(stop_msg->tssm_eth_port, entry, state,
                             TEST_CASE_STATE__STOPPED);

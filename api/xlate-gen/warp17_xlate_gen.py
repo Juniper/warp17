@@ -368,10 +368,6 @@ def hdr_m_gen_optional_field(item, field, field_name):
     if is_type_ptr(field.type):
         return hdr_m_gen_required_field(item, field, field_name)
 
-    if field.type == FieldDescriptorProto.TYPE_MESSAGE:
-        return [line(gen_var_decl(gen_message_type(field) + '*',
-                                  field_name))]
-
     return \
         [line(gen_var_decl('bool', 'has_' + field_name)),
          line(gen_var_decl(gen_type(field), field_name))]
@@ -463,13 +459,14 @@ def xlate_protoc_m_gen_msg_optional(item, field, field_name, union_name,
                                                         'in->' + field.name)])
 
     return gen_if('in->' + field.name + ' != NULL',
-                  true_inst = [gen_alloc('out->' + field_name,
-                                         gen_sizeof('*out->' + field_name))] + \
-                               gen_alloc_err('out->' + field_name) + \
-                              [gen_msg_protoc_xlate(field.type_name,
-                                                    'out->' + field_name,
+                  true_inst = [gen_assign('out->has_' + field_name, 'true'),
+                               gen_msg_protoc_xlate(field.type_name,
+                                                    '&out->' + field_name,
                                                     'in->' + field.name)],
-                  false_inst = [gen_assign('out->' + field_name, 'NULL')])
+                  false_inst = [gen_assign('out->has_' + field_name, 'false'),
+                                gen_fcall_stmt('bzero',
+                                               ['&out->' + field_name,
+                                                gen_sizeof('out->' + field_name)])])
 
 def xlate_protoc_m_gen_scalar_optional(item, field, field_name, union_name,
                                        union_anon):
@@ -486,6 +483,8 @@ def xlate_protoc_m_gen_scalar_optional(item, field, field_name, union_name,
         elif union_name is None:
             assign_default = [gen_assign('out->' + field_name,
                                          field.default_value)]
+    elif is_type_ptr(field.type):
+        assign_default = [gen_assign('out->' + field_name, 'NULL')]
 
     if is_type_ptr(field.type):
         if is_type_str(field.type):
@@ -639,13 +638,13 @@ def xlate_tpg_m_gen_optional(item, field, field_name, union_name, union_anon):
         return xlate_tpg_m_gen_required(item, field, field_name)
 
     if field.type == FieldDescriptorProto.TYPE_MESSAGE:
-        return gen_if('in->' + field_name + ' != NULL',
+        return gen_if('in->has_' + field_name,
                       true_inst = [gen_alloc('out->' + field.name,
                                              gen_sizeof('*out->' + field.name))] + \
                                    gen_alloc_err('out->' + field.name) + \
                                   [gen_msg_tpg_xlate_stmt(field.type_name,
                                                           'out->' + field.name,
-                                                          'in->' + field_name)])
+                                                          '&in->' + field_name)])
 
     return gen_if('in->has_' + field_name,
                   true_inst = [gen_assign('out->' + field.name,
@@ -654,7 +653,7 @@ def xlate_tpg_m_gen_optional(item, field, field_name, union_name, union_anon):
                                           'in->has_' + field_name)])
 
 def xlate_tpg_m_gen_msg_repeated(item, field, field_name, array_size):
-    return gen_for('i', '0', 'in->' + field_name + '_count',
+    return gen_for('i', '0', 'out->n_' + field.name,
                    body_inst = \
                        [gen_alloc('out->' + field.name + '[i]',
                                   gen_sizeof('*out->' + field.name + '[i]'))] + \
@@ -664,7 +663,7 @@ def xlate_tpg_m_gen_msg_repeated(item, field, field_name, array_size):
                                                '&in->' + field_name + '[i]')])
 
 def xlate_tpg_m_gen_scalar_repeated(item, field, field_name, array_size):
-    return gen_for('i', '0', 'in->' + field_name + '_count',
+    return gen_for('i', '0', 'out->n_' + field.name,
                    body_inst = [gen_assign('out->' + field.name + '[i]',
                                            'in->' + field_name + '[i]')])
 
@@ -805,15 +804,7 @@ def xlate_tpg_free_m_repeated(item, field, field_name, array_size):
                                                 array_size)
 
 def xlate_tpg_free_m_optional(item, field, field_name, union_name, union_anon):
-    if field.type != FieldDescriptorProto.TYPE_MESSAGE:
-        return []
-
-    if not union_name is None or union_anon:
-        return []
-
-    return [
-        gen_free('ptr->' + field.name)
-    ]
+    return []
 
 def xlate_tpg_free_m_field(item, field, field_name, union_name, union_anon,
                            array_size):

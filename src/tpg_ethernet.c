@@ -65,7 +65,7 @@
 /* Define Ethernet global statistics. Each thread has its own set of locally
  * allocated stats which are accessible through STATS_GLOBAL(type, core, port).
  */
-STATS_DEFINE(ethernet_statistics_t);
+STATS_DEFINE(tpg_eth_statistics_t);
 
 /*****************************************************************************
  * CLI commands
@@ -92,57 +92,54 @@ static void cmd_show_ethernet_statistics_parsed(void *parsed_result __rte_unused
                                                 struct cmdline *cl,
                                                 void *data)
 {
-    int port;
-    int core;
-    int option = (intptr_t) data;
+    int           port;
+    int           option = (intptr_t) data;
+    printer_arg_t parg = TPG_PRINTER_ARG(cli_printer, cl);
 
     for (port = 0; port < rte_eth_dev_count(); port++) {
 
         /*
          * Calculate totals first
          */
-        ethernet_statistics_t  total_stats;
-        ethernet_statistics_t *eth_stats;
+        tpg_eth_statistics_t total_stats;
 
-        bzero(&total_stats, sizeof(total_stats));
-        STATS_FOREACH_CORE(ethernet_statistics_t, port, core, eth_stats) {
-            total_stats.es_etype_arp += eth_stats->es_etype_arp;
-            total_stats.es_etype_ipv4 += eth_stats->es_etype_ipv4;
-            total_stats.es_etype_ipv6 += eth_stats->es_etype_ipv6;
-            total_stats.es_etype_vlan += eth_stats->es_etype_vlan;
-            total_stats.es_etype_other += eth_stats->es_etype_other;
-            total_stats.es_to_small_fragment += eth_stats->es_to_small_fragment;
-        }
+        if (test_mgmt_get_eth_stats(port, &total_stats, &parg) != 0)
+            continue;
 
         /*
          * Display individual counters
          */
         cmdline_printf(cl, "Port %d ethernet statistics:\n", port);
 
-        SHOW_64BIT_STATS("etype ARP  (0x0806)", ethernet_statistics_t,
+        SHOW_64BIT_STATS("etype ARP  (0x0806)", tpg_eth_statistics_t,
                          es_etype_arp,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("etype IPv4 (0x0800)", ethernet_statistics_t,
+        SHOW_64BIT_STATS("etype IPv4 (0x0800)", tpg_eth_statistics_t,
                          es_etype_ipv4,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("etype IPv6 (0x86DD)", ethernet_statistics_t,
+        SHOW_64BIT_STATS("etype IPv6 (0x86DD)", tpg_eth_statistics_t,
                          es_etype_ipv6,
                          port,
                          option);
 
-        SHOW_64BIT_STATS("etype VLAN (0x8100)", ethernet_statistics_t,
+        SHOW_64BIT_STATS("etype VLAN (0x8100)", tpg_eth_statistics_t,
                          es_etype_vlan,
                          port,
                          option);
 
         cmdline_printf(cl, "\n");
 
-        SHOW_16BIT_STATS("small mbuf fragment", ethernet_statistics_t,
+        SHOW_32BIT_STATS("small mbuf fragment", tpg_eth_statistics_t,
                          es_to_small_fragment,
+                         port,
+                         option);
+
+        SHOW_32BIT_STATS("no tx mbuf", tpg_eth_statistics_t,
+                         es_no_tx_mbuf,
                          port,
                          option);
 
@@ -201,7 +198,7 @@ bool eth_init(void)
     /*
      * Allocate memory for ethernet statistics, and clear all of them
      */
-    if (STATS_GLOBAL_INIT(ethernet_statistics_t, "eth_stats") == NULL) {
+    if (STATS_GLOBAL_INIT(tpg_eth_statistics_t, "eth_stats") == NULL) {
         RTE_LOG(ERR, USER1,
                 "ERROR: Failed allocating ethernet statistics memory!\n");
         return false;
@@ -216,7 +213,7 @@ bool eth_init(void)
 void eth_lcore_init(uint32_t lcore_id)
 {
     /* Init the local stats. */
-    if (STATS_LOCAL_INIT(ethernet_statistics_t, "eth_stats",
+    if (STATS_LOCAL_INIT(tpg_eth_statistics_t, "eth_stats",
                          lcore_id) == NULL) {
         TPG_ERROR_ABORT("[%d:%s() Failed to allocate per lcore eth stats!\n",
                         rte_lcore_index(lcore_id),
@@ -225,27 +222,45 @@ void eth_lcore_init(uint32_t lcore_id)
 }
 
 /*****************************************************************************
- * eth_build_eth_hdr()
+ * eth_build_hdr_mbuf()
  ****************************************************************************/
-int eth_build_eth_hdr(struct rte_mbuf *mbuf, uint64_t dst_mac,
-                      uint64_t src_mac, uint16_t ether_type)
+struct rte_mbuf *eth_build_hdr_mbuf(uint32_t port, uint64_t dst_mac,
+                                    uint64_t src_mac,
+                                    uint16_t ether_type)
 {
     struct ether_hdr *eth;
+    struct rte_mbuf  *mbuf;
 
+    mbuf = pkt_mbuf_alloc(mem_get_mbuf_local_pool_tx_hdr());
+    if (unlikely(!mbuf)) {
+        RTE_LOG(DEBUG, USER1,
+                "[%d:%s()] ERR: Failed mbuf hdr alloc for send on port %d\n",
+                rte_lcore_index(rte_lcore_id()),
+                __func__,
+                port);
+
+        INC_STATS(STATS_LOCAL(tpg_eth_statistics_t, port), es_no_tx_mbuf);
+
+        return NULL;
+    }
+
+    mbuf->port = port;
+
+    /*
+     * Build ethernet header
+     */
     eth = (struct ether_hdr *) rte_pktmbuf_append(mbuf,
                                                   sizeof(struct ether_hdr));
 
-    if (eth == NULL)
-        return -ENOMEM;
+    if (unlikely(!eth)) {
+        pkt_mbuf_free(mbuf);
+        return NULL;
+    }
 
-    arp_uint64_to_mac(dst_mac, eth->d_addr.addr_bytes);
+    eth_uint64_to_mac(dst_mac, eth->d_addr.addr_bytes);
+    eth_uint64_to_mac(src_mac, eth->s_addr.addr_bytes);
 
-    if (src_mac == TPG_USE_PORT_MAC)
-        rte_eth_macaddr_get(mbuf->port, &eth->s_addr);
-    else
-        arp_uint64_to_mac(src_mac, eth->s_addr.addr_bytes);
-
-    eth->ether_type =  rte_cpu_to_be_16(ether_type);
+    eth->ether_type = rte_cpu_to_be_16(ether_type);
 
     if (true) {
         /*
@@ -255,7 +270,7 @@ int eth_build_eth_hdr(struct rte_mbuf *mbuf, uint64_t dst_mac,
         mbuf->l2_len = sizeof(struct ether_hdr);
     }
 
-    return sizeof(struct ether_hdr);
+    return mbuf;
 }
 
 /*****************************************************************************
@@ -274,7 +289,7 @@ struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
         RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: mbuf fragment to small for ether_hdr!\n",
                 pcb->pcb_core_index, __func__);
 
-        INC_STATS(STATS_LOCAL(ethernet_statistics_t, pcb->pcb_port),
+        INC_STATS(STATS_LOCAL(tpg_eth_statistics_t, pcb->pcb_port),
                   es_to_small_fragment);
         return mbuf;
     }
@@ -302,7 +317,7 @@ struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
      */
     if (unlikely(etype == ETHER_TYPE_VLAN)) {
 
-        INC_STATS(STATS_LOCAL(ethernet_statistics_t, pcb->pcb_port),
+        INC_STATS(STATS_LOCAL(tpg_eth_statistics_t, pcb->pcb_port),
                   es_etype_vlan);
 
         rte_pktmbuf_adj(mbuf, sizeof(struct ether_hdr));
@@ -316,7 +331,7 @@ struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
                 RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: mbuf fragment to small for vlan_hdr!\n",
                         pcb->pcb_core_index, __func__);
 
-                INC_STATS(STATS_LOCAL(ethernet_statistics_t, pcb->pcb_port),
+                INC_STATS(STATS_LOCAL(tpg_eth_statistics_t, pcb->pcb_port),
                           es_to_small_fragment);
                 return mbuf;
             }
@@ -342,25 +357,25 @@ struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
     switch (etype) {
 
     case ETHER_TYPE_IPv4:
-        INC_STATS(STATS_LOCAL(ethernet_statistics_t, pcb->pcb_port),
+        INC_STATS(STATS_LOCAL(tpg_eth_statistics_t, pcb->pcb_port),
                   es_etype_ipv4);
         mbuf = ipv4_receive_pkt(pcb, mbuf);
         break;
 
     case ETHER_TYPE_ARP:
-        INC_STATS(STATS_LOCAL(ethernet_statistics_t, pcb->pcb_port),
+        INC_STATS(STATS_LOCAL(tpg_eth_statistics_t, pcb->pcb_port),
                   es_etype_arp);
         mbuf = arp_receive_pkt(pcb, mbuf);
         break;
 
     case ETHER_TYPE_IPv6:
         /* TODO: handle IPv6 */
-        INC_STATS(STATS_LOCAL(ethernet_statistics_t, pcb->pcb_port),
+        INC_STATS(STATS_LOCAL(tpg_eth_statistics_t, pcb->pcb_port),
                   es_etype_ipv6);
         break;
 
     default:
-        INC_STATS(STATS_LOCAL(ethernet_statistics_t, pcb->pcb_port),
+        INC_STATS(STATS_LOCAL(tpg_eth_statistics_t, pcb->pcb_port),
                   es_etype_other);
         break;
     }

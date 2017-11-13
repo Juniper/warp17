@@ -61,32 +61,7 @@
 #ifndef _H_TPG_TIMER_
 #define _H_TPG_TIMER_
 
-/*****************************************************************************
- * Timer statistics
- ****************************************************************************/
-typedef struct timer_statistics_s {
-
-    uint64_t tts_rto_set;
-    uint64_t tts_rto_cancelled;
-    uint64_t tts_rto_fired;
-
-    uint64_t tts_slow_set;
-    uint64_t tts_slow_cancelled;
-    uint64_t tts_slow_fired;
-
-    uint64_t tts_test_set;
-    uint64_t tts_test_cancelled;
-    uint64_t tts_test_fired;
-
-    /* Unlikely uint16_t error counters */
-    uint16_t tts_rto_failed;
-    uint16_t tts_slow_failed;
-    uint16_t tts_test_failed;
-    uint16_t tts_l4cb_null;
-    uint16_t tts_l4cb_invalid_flags;
-    uint16_t tts_timeout_overflow;
-
-} __rte_cache_aligned timer_statistics_t;
+STATS_GLOBAL_DECLARE(tpg_timer_statistics_t);
 
 /*****************************************************************************
  * Timer definitions

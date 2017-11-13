@@ -68,7 +68,11 @@
     CMDLINE_OPT_ARG("ring-if-pairs", true)
 
 #define RING_IF_CMDLINE_PARSER() \
-    CMDLINE_ARG_PARSER(ring_if_handle_cmdline_opt, NULL)
+    CMDLINE_ARG_PARSER(ring_if_handle_cmdline_opt, NULL,                       \
+"  --ring-if-pairs:            Configure the number of in-memory-ring-based\n" \
+"                              interfaces. NOTE: please check section Using\n" \
+"                              In-Memory-Ring-Based Interfaces for more\n"     \
+"                              information.\n")
 
 /*****************************************************************************
  * Globals
@@ -81,10 +85,10 @@
 /*****************************************************************************
  * Externals for tpg_ring_if.c
  ****************************************************************************/
-extern uint32_t ring_if_get_count(void);
-extern bool     ring_if_handle_cmdline_opt(const char *opt_name,
-                                           char *opt_arg);
-extern bool     ring_if_init(void);
+extern uint32_t                 ring_if_get_count(void);
+extern cmdline_arg_parser_res_t ring_if_handle_cmdline_opt(const char *opt_name,
+                                                           char *opt_arg);
+extern bool                     ring_if_init(void);
 
 /*****************************************************************************
  * End of include file

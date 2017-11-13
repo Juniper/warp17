@@ -73,6 +73,14 @@ typedef enum {
 
 } raw_state_t;
 
+/* Latency payload to be embedded in RAW packets. */
+typedef struct raw_latency_data_s {
+
+    uint64_t rld_magic;
+    uint32_t rld_tstamp[2];
+
+} __attribute__((__packed__)) raw_latency_data_t;
+
 /*****************************************************************************
  * "RAW" application (random fixed size request response)
  ****************************************************************************/
@@ -82,6 +90,10 @@ typedef struct raw_app_s {
     uint16_t    ra_resp_size;
 
     uint16_t    ra_remaining_count;
+    uint8_t     ra_rx_tstamp_size; /* 0 if no tx timestamping enabled. */
+    uint8_t     ra_tx_tstamp_size; /* 0 if no rx timestamping enabled. */
+
+    raw_latency_data_t ra_tx_tstamp; /* Storage for the outgoing timestamp. */
 
     raw_state_t ra_state;
 
@@ -93,8 +105,10 @@ typedef struct raw_app_s {
 extern void raw_client_default_cfg(tpg_test_case_t *cfg);
 extern void raw_server_default_cfg(tpg_test_case_t *cfg);
 
-extern bool raw_validate_cfg(const tpg_test_case_t *cfg,
-                             printer_arg_t *printer_arg);
+extern bool raw_client_validate_cfg(const tpg_test_case_t *cfg,
+                                    printer_arg_t *printer_arg);
+extern bool raw_server_validate_cfg(const tpg_test_case_t *cfg,
+                                    printer_arg_t *printer_arg);
 
 extern void raw_client_print_cfg(const tpg_test_case_t *cfg,
                                  printer_arg_t *printer_arg);
@@ -106,7 +120,8 @@ extern void raw_delete_cfg(const tpg_test_case_t *cfg);
 extern void raw_client_init(app_data_t *app_data, test_case_init_msg_t *init_msg);
 extern void raw_server_init(app_data_t *app_data, test_case_init_msg_t *init_msg);
 
-extern void raw_tc_start(test_case_init_msg_t *init_msg);
+extern void raw_client_tc_start(test_case_init_msg_t *init_msg);
+extern void raw_server_tc_start(test_case_init_msg_t *init_msg);
 extern void raw_tc_stop(test_case_init_msg_t *init_msg);
 
 extern void raw_client_conn_up(l4_control_block_t *l4, app_data_t *app_data,
@@ -120,11 +135,13 @@ extern void raw_conn_down(l4_control_block_t *l4, app_data_t *app_data,
 extern uint32_t raw_client_deliver_data(l4_control_block_t *l4,
                                         app_data_t *app_data,
                                         tpg_test_case_app_stats_t *stats,
-                                        struct rte_mbuf *rx_data);
+                                        struct rte_mbuf *rx_data,
+                                        uint64_t rx_tstamp);
 extern uint32_t raw_server_deliver_data(l4_control_block_t *l4,
                                         app_data_t *app_data,
                                         tpg_test_case_app_stats_t *stats,
-                                        struct rte_mbuf *rx_data);
+                                        struct rte_mbuf *rx_data,
+                                        uint64_t rx_tstamp);
 
 extern struct rte_mbuf *raw_send_data(l4_control_block_t *l4,
                                       app_data_t *app_data,

@@ -83,7 +83,7 @@ struct rte_ring *msg_local_queues[RTE_MAX_LCORE] __rte_cache_aligned;
 /* Define MSG global statistics. Each thread has its own set of locally
  * allocated stats which are accessible through STATS_GLOBAL(type, core, port).
  */
-STATS_DEFINE(msg_statistics_t);
+STATS_DEFINE(tpg_msg_statistics_t);
 
 /*****************************************************************************
  * Forward declarations
@@ -169,7 +169,7 @@ static int msg_do_send(msg_t *msg, struct rte_ring *queue, uint32_t snd_flags)
     if (!nowait && likely(to_free))
         MSG_FLAG_RESET_TO_FREE(msg);
 
-    INC_STATS(STATS_LOCAL(msg_statistics_t, 0), ms_snd);
+    INC_STATS(STATS_LOCAL(tpg_msg_statistics_t, 0), ms_snd);
 
     rte_atomic32_set(&msg->msg_state, MSG_STATE_QUEUED);
 
@@ -191,7 +191,7 @@ static int msg_do_send(msg_t *msg, struct rte_ring *queue, uint32_t snd_flags)
     }
 
     if (unlikely(error != 0))
-        INC_STATS(STATS_LOCAL(msg_statistics_t, 0), ms_err);
+        INC_STATS(STATS_LOCAL(tpg_msg_statistics_t, 0), ms_err);
 
     return error;
 }
@@ -216,7 +216,7 @@ bool msg_sys_init(void)
     /*
      * Allocate memory for MSG statistics, and clear all of them
      */
-    if (STATS_GLOBAL_INIT(msg_statistics_t, "msg_stats") == NULL) {
+    if (STATS_GLOBAL_INIT(tpg_msg_statistics_t, "msg_stats") == NULL) {
         RTE_LOG(ERR, USER1,
                 "ERROR: Failed allocating MSG statistics memory!\n");
         return false;
@@ -272,7 +272,7 @@ bool msg_sys_init(void)
 bool msg_sys_lcore_init(uint32_t lcore_id)
 {
     /* Init the local stats. */
-    if (STATS_LOCAL_INIT(msg_statistics_t, "msg_stats", lcore_id) == NULL) {
+    if (STATS_LOCAL_INIT(tpg_msg_statistics_t, "msg_stats", lcore_id) == NULL) {
         TPG_ERROR_ABORT("[%d:%s() Failed to allocate per lcore msg_stats!\n",
                         rte_lcore_index(lcore_id),
                         __func__);
@@ -316,13 +316,13 @@ msg_t *msg_alloc(uint16_t msgid, uint32_t msg_size, uint16_t dest_lcore)
 
     msg = rte_malloc("msg", sizeof(*msg) + msg_size, 0);
     if (!msg) {
-        INC_STATS(STATS_LOCAL(msg_statistics_t, 0), ms_alloc_err);
+        INC_STATS(STATS_LOCAL(tpg_msg_statistics_t, 0), ms_alloc_err);
         return NULL;
     }
 
     msg_init(msg, msgid, dest_lcore, MSG_FLAG_TO_FREE);
 
-    INC_STATS(STATS_LOCAL(msg_statistics_t, 0), ms_alloc);
+    INC_STATS(STATS_LOCAL(tpg_msg_statistics_t, 0), ms_alloc);
     return msg;
 }
 
@@ -331,7 +331,7 @@ msg_t *msg_alloc(uint16_t msgid, uint32_t msg_size, uint16_t dest_lcore)
  ***************************************************************************/
 void msg_free(msg_t *msg)
 {
-    INC_STATS(STATS_LOCAL(msg_statistics_t, 0), ms_free);
+    INC_STATS(STATS_LOCAL(tpg_msg_statistics_t, 0), ms_free);
 
     /* TODO: It would probably be better to use a mempool as the messages
      * *might* be freed sometimes by pkt cores.
@@ -419,7 +419,7 @@ static int msg_poll_queue(struct rte_ring *queue)
     if (unlikely(!queue))
         return -EINVAL;
 
-    INC_STATS(STATS_LOCAL(msg_statistics_t, 0), ms_poll);
+    INC_STATS(STATS_LOCAL(tpg_msg_statistics_t, 0), ms_poll);
 
     error = rte_ring_dequeue(queue, &msg);
 
@@ -427,10 +427,10 @@ static int msg_poll_queue(struct rte_ring *queue)
     if (likely(error == -ENOENT))
         return 0;
 
-    INC_STATS(STATS_LOCAL(msg_statistics_t, 0), ms_rcvd);
+    INC_STATS(STATS_LOCAL(tpg_msg_statistics_t, 0), ms_rcvd);
     error = msg_process(msg);
     if (unlikely(error)) {
-        INC_STATS(STATS_LOCAL(msg_statistics_t, 0), ms_proc_err);
+        INC_STATS(STATS_LOCAL(tpg_msg_statistics_t, 0), ms_proc_err);
         return error;
     }
     return 0;
@@ -478,62 +478,57 @@ static void cmd_show_msg_statistics_parsed(void *parsed_result __rte_unused,
                                            struct cmdline *cl,
                                            void *data)
 {
-    int               core;
-    int               option = (intptr_t)data;
-    msg_statistics_t  total_stats;
-    msg_statistics_t *msg_stats;
+    int                   option = (intptr_t)data;
+    tpg_msg_statistics_t  total_stats;
 
     /*
      * Calculate totals first
      */
-
-    bzero(&total_stats, sizeof(total_stats));
-
-    STATS_FOREACH_CORE(msg_statistics_t, 0, core, msg_stats) {
-        total_stats.ms_rcvd += msg_stats->ms_rcvd;
-        total_stats.ms_snd += msg_stats->ms_snd;
-        total_stats.ms_poll += msg_stats->ms_poll;
-
-        total_stats.ms_err += msg_stats->ms_err;
-        total_stats.ms_proc_err += msg_stats->ms_proc_err;
-    }
+    if (test_mgmt_get_msg_stats(&total_stats, NULL) != 0)
+        return;
 
     /*
      * Display individual counters
      */
     cmdline_printf(cl, "MSG statistics:\n");
 
-    SHOW_64BIT_STATS_ALL_CORES("Messages rcvd", msg_statistics_t, ms_rcvd, 0,
+    SHOW_64BIT_STATS_ALL_CORES("Messages rcvd", tpg_msg_statistics_t, ms_rcvd,
+                               0,
                                option);
 
-    SHOW_64BIT_STATS_ALL_CORES("Messages sent", msg_statistics_t, ms_snd, 0,
+    SHOW_64BIT_STATS_ALL_CORES("Messages sent", tpg_msg_statistics_t, ms_snd,
+                               0,
                                option);
 
-    SHOW_64BIT_STATS_ALL_CORES("Messages polled", msg_statistics_t, ms_poll, 0,
+    SHOW_64BIT_STATS_ALL_CORES("Messages polled", tpg_msg_statistics_t, ms_poll,
+                               0,
                                option);
 
     cmdline_printf(cl, "\n");
 
-    SHOW_64BIT_STATS_ALL_CORES("Messages errors", msg_statistics_t, ms_err, 0,
+    SHOW_64BIT_STATS_ALL_CORES("Messages errors", tpg_msg_statistics_t, ms_err,
+                               0,
                                option);
 
-    SHOW_64BIT_STATS_ALL_CORES("Messages proc err", msg_statistics_t,
+    SHOW_64BIT_STATS_ALL_CORES("Messages proc err", tpg_msg_statistics_t,
                                ms_proc_err,
                                0,
                                option);
 
     cmdline_printf(cl, "\n");
 
-    SHOW_64BIT_STATS_ALL_CORES("Messages allocated", msg_statistics_t, ms_alloc,
+    SHOW_64BIT_STATS_ALL_CORES("Messages allocated", tpg_msg_statistics_t,
+                               ms_alloc,
                                0,
                                option);
 
-    SHOW_64BIT_STATS_ALL_CORES("Messages alloc err", msg_statistics_t,
+    SHOW_64BIT_STATS_ALL_CORES("Messages alloc err", tpg_msg_statistics_t,
                                ms_alloc_err,
                                0,
                                option);
 
-    SHOW_64BIT_STATS_ALL_CORES("Messages freed", msg_statistics_t, ms_free, 0,
+    SHOW_64BIT_STATS_ALL_CORES("Messages freed", tpg_msg_statistics_t, ms_free,
+                               0,
                                option);
 
 }

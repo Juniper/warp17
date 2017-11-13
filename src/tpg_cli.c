@@ -71,6 +71,17 @@ static rte_atomic32_t         cli_cmdline_initialized;
 static tpg_cli_override_cb_t  cli_override;
 
 /*****************************************************************************
+ * Wrapper on top of the DPDK string parser which also strips begin/end
+ * quotes.
+ ****************************************************************************/
+struct cmdline_token_ops cli_token_quoted_string_ops = {
+	.parse = cli_parse_quoted_string,
+	.complete_get_nb = cmdline_complete_get_nb_string,
+	.complete_get_elt = cmdline_complete_get_elt_string,
+	.get_help = cmdline_get_help_string,
+};
+
+/*****************************************************************************
  * cli_printer()
  ****************************************************************************/
 void cli_printer(void *printer_arg, const char *fmt, va_list ap)
@@ -413,18 +424,57 @@ void cli_interact(void)
  * cli_handle_cmdline_opt()
  * --cmd-file - file containing startup commands
  ****************************************************************************/
-bool cli_handle_cmdline_opt(const char *opt_name, char *opt_arg)
+cmdline_arg_parser_res_t cli_handle_cmdline_opt(const char *opt_name,
+                                                char *opt_arg)
 {
     global_config_t *cfg = cfg_get_config();
 
     if (!cfg)
         TPG_ERROR_ABORT("ERROR: Unable to get config!\n");
 
-    if (strcmp(opt_name, "cmd-file") == 0) {
+    if (strncmp(opt_name, "cmd-file", strlen("cmd-file") + 1) == 0) {
         cfg->gcfg_cmd_file = strdup(opt_arg);
-        return true;
+        return CAPR_CONSUMED;
     }
 
-    return false;
+    return CAPR_IGNORED;
+}
+
+/*****************************************************************************
+ * cli_parse_quoted_string()
+ *  NOTES:
+ *      Strips begin and end quotes if present. Just a wrapper on top of
+ *      the DPDK string parser.
+ ****************************************************************************/
+int cli_parse_quoted_string(cmdline_parse_token_hdr_t *tk, const char *buf,
+                            void *res, unsigned ressize)
+{
+    int   token_len = cmdline_parse_string(tk, buf, res, ressize);
+    char *result = res;
+
+    if (token_len < 1)
+        return token_len;
+
+    if (result) {
+        /* Don't allow one lonely single or double quote. */
+        if (token_len == 1 && (result[0] == '"' || result[0] == '\''))
+            return -1;
+
+        /* Strip quotes if in pairs. */
+        if ((result[0] == '"' && result[token_len - 1] == '"') ||
+                (result[0] == '\'' && result[token_len - 1] == '\'')) {
+            memmove(&result[0], &result[1], token_len - 2);
+            result[token_len - 2] = 0;
+            return token_len;
+        }
+
+        /* Don't allow qoutes that don't close. */
+        if (result[0] == '"' || result[0] == '\'')
+            return -1;
+        if (result[token_len - 1] == '"' || result[token_len - 1] == '\'')
+            return -1;
+    }
+
+    return token_len;
 }
 

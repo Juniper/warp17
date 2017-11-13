@@ -80,6 +80,7 @@ typedef struct tcp_sockopt_s {
 
     /* Flags */
     uint32_t tcpo_skip_timewait : 1;
+    uint32_t tcpo_ack_delay : 1;
 
 } tcp_sockopt_t;
 
@@ -89,6 +90,13 @@ typedef struct udp_sockopt_s {
 
 typedef struct ipv4_sockopt_s {
 
+    uint32_t ip4so_rx_tstamp : 1;
+    uint32_t ip4so_tx_tstamp : 1;
+
+    uint8_t  ip4so_tos;
+    uint8_t  ip4so_hdr_opt_len; /* Len of "ipv4_option_hdr_t" needed in order
+                                 * to calculate MTU.
+                                 */
 } ipv4_sockopt_t;
 
 typedef struct ipv6_sockopt_s {
