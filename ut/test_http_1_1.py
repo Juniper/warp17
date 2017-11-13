@@ -64,17 +64,16 @@ sys.path.append('./lib')
 sys.path.append('../python')
 sys.path.append('../api/generated/py')
 
-from warp17_ut  import Warp17UnitTestCase
-from warp17_ut  import Warp17TrafficTestCase
+from warp17_ut import Warp17UnitTestCase
+from warp17_ut import Warp17TrafficTestCase
 
 from warp17_common_pb2    import *
 from warp17_server_pb2    import *
 from warp17_client_pb2    import *
 from warp17_app_http_pb2  import *
-from warp17_app_raw_pb2  import *
+from warp17_app_raw_pb2   import *
 from warp17_test_case_pb2 import *
 from warp17_service_pb2   import *
-
 
 class TestHttpCfg(Warp17TrafficTestCase, Warp17UnitTestCase):
 
@@ -122,8 +121,9 @@ class TestHttpCfg(Warp17TrafficTestCase, Warp17UnitTestCase):
              for req_size in [0, 42, 65535]
              for resp_code in [OK_200, NOT_FOUND_404]
              for resp_size in [0, 42, 65535]]:
-            self.lh.info('REQ METHOD %(met)s REQSZ %(req_sz)u RESP CODE %(resp)s RESP SZ %(resp_sz)u' % \
-                         {'met': str(method), 'req_sz': req_size, 'resp': str(resp_code), 'resp_sz': resp_size})
+            self.lh.info('REQ METHOD {} REQSZ {} RESP CODE {} RESP SZ {}'.
+                        format(str(method), req_size, str(resp_code),
+                               resp_size))
             yield (self._http_client_cfg(method, req_size),
                    self._http_server_cfg(resp_code, resp_size))
 
@@ -132,12 +132,12 @@ class TestHttpCfg(Warp17TrafficTestCase, Warp17UnitTestCase):
             [(method, resp_code)
              for method in [POST, PUT, DELETE, CONNECT, OPTIONS, TRACE]
              for resp_code in [FORBIDDEN_403]]:
-            self.lh.info('REQ METHOD %(met)s RESP CODE %(resp)s' % \
-                         {'met': str(method), 'resp': str(resp_code)})
+            self.lh.info('REQ METHOD {} RESP CODE {}'.
+                        format(str(method), str(resp_code)))
             yield (self._http_client_cfg(method),
                    self._http_server_cfg(resp_code))
         for fields in ['Content-Length: 42']:
-            self.lh.info('FIELDS %(fld)s' % {'fld': fields})
+            self.lh.info('FIELDS {}'.format(fields))
             yield (self._http_client_cfg(fields=fields),
                    self._http_server_cfg(fields=fields))
 
@@ -163,10 +163,16 @@ class TestHttpCfg(Warp17TrafficTestCase, Warp17UnitTestCase):
             self.assertEqual(srv_result.tcsr_error.e_code, 0)
             self.assertTrue(srv_result.tcsr_srv_app == http_server)
 
-    def verify_stats(self, cl_result):
+    def verify_stats(self, cl_result, srv_result, cl_update, srv_update):
         req_cnt = cl_result.tsr_app_stats.tcas_http.hsts_req_cnt
         resp_cnt = cl_result.tsr_app_stats.tcas_http.hsts_resp_cnt
-        self.lh.info('req_cnt: %(req)u resp_cnt: %(resp)u' % {'req': req_cnt, 'resp': resp_cnt})
+        self.lh.info('cl req_cnt: {} resp_cnt: {}'.format(req_cnt, resp_cnt))
+        self.assertTrue(req_cnt > 0)
+        self.assertTrue(resp_cnt > 0)
+
+        req_cnt = srv_result.tsr_app_stats.tcas_http.hsts_req_cnt
+        resp_cnt = srv_result.tsr_app_stats.tcas_http.hsts_resp_cnt
+        self.lh.info('srv req_cnt: {} resp_cnt: {}'.format(req_cnt, resp_cnt))
         self.assertTrue(req_cnt > 0)
         self.assertTrue(resp_cnt > 0)
 
@@ -265,10 +271,16 @@ class TestHttpRaw(Warp17TrafficTestCase, Warp17UnitTestCase):
             self.assertEqual(srv_result.tcsr_error.e_code, 0)
             self.assertTrue(srv_result.tcsr_srv_app == http_server)
 
-    def verify_stats(self, cl_result):
+    def verify_stats(self, cl_result, srv_result, cl_update, srv_update):
         req_cnt = cl_result.tsr_app_stats.tcas_raw.rsts_req_cnt
         resp_cnt = cl_result.tsr_app_stats.tcas_raw.rsts_resp_cnt
-        self.lh.info('req_cnt: %(req)u resp_cnt: %(resp)u' % {'req': req_cnt, 'resp': resp_cnt})
+        self.lh.info('req_cnt: {} resp_cnt: {}'.format(req_cnt, resp_cnt))
+        self.assertEqual(req_cnt, 0)
+        self.assertEqual(resp_cnt, 0)
+
+        req_cnt = srv_result.tsr_app_stats.tcas_http.hsts_req_cnt
+        resp_cnt = srv_result.tsr_app_stats.tcas_http.hsts_resp_cnt
+        self.lh.info('srv req_cnt: {} resp_cnt: {}'.format(req_cnt, resp_cnt))
         self.assertEqual(req_cnt, 0)
         self.assertEqual(resp_cnt, 0)
 

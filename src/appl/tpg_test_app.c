@@ -65,32 +65,39 @@
  ****************************************************************************/
 
 DECLARE_APP_CB_ARRAY(app_default_cfg_cb_t, app_default_cfg_handlers) = {
-    DEFINE_APP_CB(APP_PROTO__RAW, raw_client_default_cfg, raw_server_default_cfg),
-    DEFINE_APP_CB(APP_PROTO__HTTP, http_client_default_cfg, http_server_default_cfg),
+    DEFINE_APP_CB(APP_PROTO__RAW, raw_client_default_cfg,
+                  raw_server_default_cfg),
+    DEFINE_APP_CB(APP_PROTO__HTTP, http_client_default_cfg,
+                  http_server_default_cfg),
 };
 
 DECLARE_APP_CB_ARRAY(app_validate_cfg_cb_t, app_validate_cfg_handlers) = {
-    DEFINE_APP_CB(APP_PROTO__RAW, raw_validate_cfg, raw_validate_cfg),
-    DEFINE_APP_CB(APP_PROTO__HTTP, http_client_validate_cfg, http_server_validate_cfg),
+    DEFINE_APP_CB(APP_PROTO__RAW, raw_client_validate_cfg,
+                  raw_server_validate_cfg),
+    DEFINE_APP_CB(APP_PROTO__HTTP, http_client_validate_cfg,
+                  http_server_validate_cfg),
 };
 
 DECLARE_APP_CB_ARRAY(app_print_cfg_cb_t, app_print_cfg_handlers) = {
     DEFINE_APP_CB(APP_PROTO__RAW, raw_client_print_cfg, raw_server_print_cfg),
-    DEFINE_APP_CB(APP_PROTO__HTTP, http_client_print_cfg, http_server_print_cfg),
+    DEFINE_APP_CB(APP_PROTO__HTTP, http_client_print_cfg,
+                  http_server_print_cfg),
 };
 
 DECLARE_APP_CB_ARRAY(app_delete_cfg_cb_t, app_delete_cfg_handlers) = {
     DEFINE_APP_CB(APP_PROTO__RAW, raw_delete_cfg, raw_delete_cfg),
-    DEFINE_APP_CB(APP_PROTO__HTTP, http_client_delete_cfg, http_server_delete_cfg),
+    DEFINE_APP_CB(APP_PROTO__HTTP, http_client_delete_cfg,
+                  http_server_delete_cfg),
 };
 
 DECLARE_APP_CB_ARRAY(app_init_cb_t, app_init_handlers) = {
     DEFINE_APP_CB(APP_PROTO__RAW, raw_client_init, raw_server_init),
-    DEFINE_APP_CB(APP_PROTO__HTTP, http_client_server_init, http_client_server_init),
+    DEFINE_APP_CB(APP_PROTO__HTTP, http_client_server_init,
+                  http_client_server_init),
 };
 
 DECLARE_APP_CB_ARRAY(app_tc_start_stop_cb_t, app_tc_start_handlers) = {
-    DEFINE_APP_CB(APP_PROTO__RAW, raw_tc_start, raw_tc_start),
+    DEFINE_APP_CB(APP_PROTO__RAW, raw_client_tc_start, raw_server_tc_start),
     DEFINE_APP_CB(APP_PROTO__HTTP, http_client_tc_start, http_server_tc_start),
 };
 
@@ -106,7 +113,8 @@ DECLARE_APP_CB_ARRAY(app_conn_up_cb_t, app_conn_up_handlers) = {
 
 DECLARE_APP_CB_ARRAY(app_conn_down_cb_t, app_conn_down_handlers) = {
     DEFINE_APP_CB(APP_PROTO__RAW, raw_conn_down, raw_conn_down),
-    DEFINE_APP_CB(APP_PROTO__HTTP, http_client_server_conn_down, http_client_server_conn_down),
+    DEFINE_APP_CB(APP_PROTO__HTTP, http_client_server_conn_down,
+                  http_client_server_conn_down),
 };
 
 DECLARE_APP_CB_ARRAY(app_deliver_cb_t, app_deliver_handlers) = {
@@ -118,12 +126,14 @@ DECLARE_APP_CB_ARRAY(app_deliver_cb_t, app_deliver_handlers) = {
 
 DECLARE_APP_CB_ARRAY(app_send_cb_t, app_send_handlers) = {
     DEFINE_APP_CB(APP_PROTO__RAW, raw_send_data, raw_send_data),
-    DEFINE_APP_CB(APP_PROTO__HTTP, http_client_send_data, http_server_send_data),
+    DEFINE_APP_CB(APP_PROTO__HTTP, http_client_send_data,
+                  http_server_send_data),
 };
 
 DECLARE_APP_CB_ARRAY(app_data_sent_cb_t, app_data_sent_handlers) = {
-    DEFINE_APP_CB(APP_PROTO__RAW, raw_client_data_sent,  raw_server_data_sent),
-    DEFINE_APP_CB(APP_PROTO__HTTP, http_client_data_sent,  http_server_data_sent),
+    DEFINE_APP_CB(APP_PROTO__RAW, raw_client_data_sent, raw_server_data_sent),
+    DEFINE_APP_CB(APP_PROTO__HTTP, http_client_data_sent,
+                  http_server_data_sent),
 };
 
 DECLARE_APP_CB_ARRAY(app_stats_add_cb_t, app_stats_add_handlers) = {

@@ -91,6 +91,7 @@ message EthStatistics {
     // to happen too often but no such type exists.
 
     required uint32 es_to_small_fragment = 6;
+    required uint32 es_no_tx_mbuf        = 7;
 }
 
 message ArpStatistics {

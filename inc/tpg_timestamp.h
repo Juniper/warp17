@@ -39,7 +39,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  * File name:
- *     tpg_timestamp.c
+ *     tpg_timestamp.h
  *
  * Description:
  *     Timestamp management module.
@@ -57,8 +57,8 @@
 /*****************************************************************************
  * Multiple include protection
  ****************************************************************************/
-#ifndef _H_TPG_TIMESTAMP
-#define _H_TPG_TIMESTAMP
+#ifndef _H_TPG_TIMESTAMP_
+#define _H_TPG_TIMESTAMP_
 
 /*
  * Those functions are useful for splitting in two different 32 unsigned int
@@ -82,11 +82,21 @@
 
 /*****************************************************************************
  * tstamp_tx_post_cb_t
+ * @param mbuf_hdr
+ *        pointer to the beginning of the packet where one (or multiple)
+ *        timestamps were stored
+ * @param mbuf_seg
+ *        pointer to the segment inside the packet where the current timestamp
+ *        was stored
  * @param offset
  *        offset inside the header where the tx tstamp is stored
  *        (i.e., offset-of-timestamp-field-in-ip-option + sizeof(ipv4_hdr))
+ * @param size
+ *        size of the stored timestamp (in bytes)
  ****************************************************************************/
-typedef void (*tstamp_tx_post_cb_t)(struct rte_mbuf *mbuf, uint32_t offset,
+typedef void (*tstamp_tx_post_cb_t)(struct rte_mbuf *mbuf_hdr,
+                                    struct rte_mbuf *mbuf_seg,
+                                    uint32_t offset,
                                     uint32_t size);
 
 /*****************************************************************************
@@ -108,14 +118,15 @@ typedef struct tstamp_info_s {
  * Functions declarations
  ****************************************************************************/
 
-extern void tstamp_start_rx(uint32_t port, unsigned int rss_queue);
-extern void tstamp_stop_rx(uint32_t port, unsigned int rss_queue);
+extern void tstamp_start_rx(uint32_t port, uint32_t rss_queue);
+extern void tstamp_stop_rx(uint32_t port, uint32_t rss_queue);
 extern bool tstamp_rx_is_running(uint32_t port, uint32_t rss_queue);
 
-extern void tstamp_start_tx(uint32_t port, unsigned int rss_queue,
+extern void tstamp_start_tx(uint32_t port, uint32_t rss_queue,
                             tstamp_tx_post_cb_t cb);
-extern void tstamp_stop_tx(uint32_t port, unsigned int rss_queue);
+extern void tstamp_stop_tx(uint32_t port, uint32_t rss_queue);
 extern bool tstamp_tx_is_running(uint32_t port, uint32_t rss_queue);
+
 extern void tstamp_tx_pkt(struct rte_mbuf *mbuf, uint32_t offset,
                           uint32_t size);
 
@@ -127,5 +138,25 @@ extern void tstamp_pktloop_tx_pkt_burst(uint32_t eth_port, int32_t queue_id,
                                         struct rte_mbuf **tx_mbufs,
                                         uint32_t count);
 
-#endif /* _H_TPG_TIMESTAMP */
+/*****************************************************************************
+ * Static inlines
+ ****************************************************************************/
+
+/*****************************************************************************
+ * tstamp_data_append()
+ *      Propagate any timestamping information from a payload mbuf (`data`) to
+ *      its header mbuf (`hdr`).
+ ****************************************************************************/
+static inline void tstamp_data_append(struct rte_mbuf *hdr,
+                                      struct rte_mbuf *data)
+{
+    if (unlikely(DATA_IS_TSTAMP(data))) {
+        tstamp_tx_pkt(hdr, DATA_GET_TSTAMP_OFFSET(data) + hdr->pkt_len,
+                      DATA_GET_TSTAMP_SIZE(data));
+    } else if (unlikely(DATA_IS_TSTAMP_MULTI(data))) {
+        DATA_SET_TSTAMP_MULTI(hdr);
+    }
+}
+
+#endif /* _H_TPG_TIMESTAMP_ */
 

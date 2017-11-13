@@ -286,7 +286,7 @@ void pkt_flush_tx_q(uint32_t port, tpg_port_statistics_t *stats)
         pcb.pcb_trace = RTE_PER_LCORE(pkt_tx_q_trace)[port][i];
         pkt_trace_tx(&pcb, tx_queue_id, RTE_PER_LCORE(pkt_tx_q)[port][i], true);
 
-        rte_pktmbuf_free(RTE_PER_LCORE(pkt_tx_q)[port][i]);
+        pkt_mbuf_free(RTE_PER_LCORE(pkt_tx_q)[port][i]);
     }
 
     /* Reinitialize the burst tx queue. */
@@ -310,7 +310,7 @@ int pkt_send(uint32_t port, struct rte_mbuf *mbuf, bool trace)
         if (unlikely(rte_rand() %
                 RTE_PER_LCORE(pkt_send_simulate_drop_rate) == 0)) {
             INC_STATS(stats, ps_sent_sim_failure);
-            rte_pktmbuf_free(mbuf);
+            pkt_mbuf_free(mbuf);
             return false;
         }
     }
@@ -356,7 +356,7 @@ static uint16_t pkt_rx_burst(uint8_t port_id, uint16_t queue_id,
             } else {
                 i++;
             }
-            rte_pktmbuf_free(orig_mbuf);
+            pkt_mbuf_free(orig_mbuf);
         }
     }
 #endif /* defined(TPG_RING_IF) */
@@ -585,7 +585,7 @@ int pkt_receive_loop(void *arg __rte_unused)
                 ret_mbuf = eth_receive_pkt(&pcbs[i], buf[i]);
 
                 if (ret_mbuf != NULL)
-                    rte_pktmbuf_free(ret_mbuf);
+                    pkt_mbuf_free(ret_mbuf);
             }
 
             /* Flush the bulk tx queue in case we still have packets pending. */

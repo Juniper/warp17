@@ -72,8 +72,8 @@ RTE_DEFINE_PER_LCORE(tstamp_info_t, tstamp_tc_per_port_t)[TPG_ETH_DEV_MAX];
 /*****************************************************************************
  * tstamp_start()
  ****************************************************************************/
-void tstamp_start_tx(uint32_t port, unsigned int rss_queue __rte_unused,
-                  tstamp_tx_post_cb_t cb)
+void tstamp_start_tx(uint32_t port, uint32_t rss_queue __rte_unused,
+                     tstamp_tx_post_cb_t cb)
 {
     /* TODO: we’ll need rss_queue later if we decide to do timestamping on
      * single queues instead of the whole port
@@ -88,7 +88,7 @@ void tstamp_start_tx(uint32_t port, unsigned int rss_queue __rte_unused,
 /*****************************************************************************
  * tstamp_stop()
  ****************************************************************************/
-void tstamp_stop_tx(uint32_t port, unsigned int rss_queue __rte_unused)
+void tstamp_stop_tx(uint32_t port, uint32_t rss_queue __rte_unused)
 {
     assert(RTE_PER_LCORE(tstamp_tc_per_port_t)[port].tstamp_tx_per_port > 0);
     RTE_PER_LCORE(tstamp_tc_per_port_t)[port].tstamp_tx_per_port--;
@@ -97,7 +97,7 @@ void tstamp_stop_tx(uint32_t port, unsigned int rss_queue __rte_unused)
 /*****************************************************************************
  * tstamp_start()
  ****************************************************************************/
-void tstamp_start_rx(uint32_t port, unsigned int rss_queue __rte_unused)
+void tstamp_start_rx(uint32_t port, uint32_t rss_queue __rte_unused)
 {
     /* TODO: we’ll need rss_queue later if we decide to do timestamping on
      * single queues instead of the whole port
@@ -111,7 +111,7 @@ void tstamp_start_rx(uint32_t port, unsigned int rss_queue __rte_unused)
 /*****************************************************************************
  * tstamp_stop()
  ****************************************************************************/
-void tstamp_stop_rx(uint32_t port, unsigned int rss_queue __rte_unused)
+void tstamp_stop_rx(uint32_t port, uint32_t rss_queue __rte_unused)
 {
     assert(RTE_PER_LCORE(tstamp_tc_per_port_t)[port].tstamp_rx_per_port > 0);
     RTE_PER_LCORE(tstamp_tc_per_port_t)[port].tstamp_rx_per_port--;
@@ -138,15 +138,9 @@ bool tstamp_rx_is_running(uint32_t port, uint32_t rss_queue __rte_unused)
  ****************************************************************************/
 void tstamp_tx_pkt(struct rte_mbuf *mbuf, uint32_t offset, uint32_t size)
 {
-    tstamp_tx_post_cb_t cb;
-
     DATA_SET_TSTAMP_OFFSET(mbuf, offset);
     DATA_SET_TSTAMP_SIZE(mbuf, size);
     DATA_SET_TSTAMP(mbuf);
-
-    cb = RTE_PER_LCORE(tstamp_tc_per_port_t)[mbuf->port].tstamp_cb;
-    if (unlikely(cb != NULL))
-        cb(mbuf, offset, size);
 }
 
 /*****************************************************************************
@@ -169,29 +163,56 @@ void tstamp_pktloop_rx_pkt_burst(uint32_t eth_port __rte_unused,
 }
 
 /*****************************************************************************
+ * tstamp_pktloop_tx_pkt()
+ *      If needed, timestamp an mbuf segment inside a packet.
+ ****************************************************************************/
+static void tstamp_pktloop_tx_pkt(struct rte_mbuf *hdr,
+                                  struct rte_mbuf *seg)
+{
+    uint64_t             timestamp;
+    uint32_t            *tstamp_ptr;
+    uint32_t             offset;
+    uint32_t             size;
+    tstamp_tx_post_cb_t  cb;
+
+    offset = (uint32_t) DATA_GET_TSTAMP_OFFSET(seg);
+    size   = (uint32_t) DATA_GET_TSTAMP_SIZE(seg);
+
+    tstamp_ptr = (uint32_t *)data_mbuf_mtod_offset(seg, offset);
+    timestamp  = rte_get_timer_cycles() / cycles_per_us;
+
+    tstamp_ptr[0] = rte_cpu_to_be_32(TSTAMP_SPLIT_LOW(timestamp));
+    tstamp_ptr[1] = rte_cpu_to_be_32(TSTAMP_SPLIT_HIGH(timestamp));
+
+    cb = RTE_PER_LCORE(tstamp_tc_per_port_t)[hdr->port].tstamp_cb;
+    if (unlikely(cb != NULL))
+        cb(hdr, seg, offset, size);
+}
+
+/*****************************************************************************
  * tstamp_pktloop_tx_pkt_burst()
+ *      If needed, timestamp a burst of outgoing packets.
  ****************************************************************************/
 void tstamp_pktloop_tx_pkt_burst(uint32_t eth_port __rte_unused,
                                  int32_t queue_id __rte_unused,
                                  struct rte_mbuf **tx_mbufs, uint32_t count)
 {
-    uint             i;
-    uint64_t         timestamp;
-    uint32_t         offset;
-    uint32_t        *tstamp_ptr;
-    struct rte_mbuf *mbuf;
+    uint32_t i;
 
     for (i = 0; i < count; i++) {
-        mbuf = tx_mbufs[i];
-        if (likely(!DATA_IS_TSTAMP(mbuf)))
+        struct rte_mbuf *mbuf = tx_mbufs[i];
+
+        if (likely(!DATA_IS_TSTAMP(mbuf) && !DATA_IS_TSTAMP_MULTI(mbuf)))
             continue;
 
-        offset = (uint32_t) DATA_GET_TSTAMP_OFFSET(mbuf);
-        assert(offset >= mbuf->l2_len + sizeof(struct ipv4_hdr) +
-                             sizeof(ipv4_option_hdr_t));
-        tstamp_ptr = rte_pktmbuf_mtod_offset(mbuf, uint32_t *, offset);
-        timestamp = rte_get_timer_cycles() / cycles_per_us;
-        tstamp_ptr[0] = rte_cpu_to_be_32(TSTAMP_SPLIT_LOW(timestamp));
-        tstamp_ptr[1] = rte_cpu_to_be_32(TSTAMP_SPLIT_HIGH(timestamp));
+        if (unlikely(DATA_IS_TSTAMP_MULTI(mbuf))) {
+            /* Check each particle if it needs timestamping. */
+            for (; mbuf; mbuf = mbuf->next) {
+                if (DATA_IS_TSTAMP(mbuf))
+                    tstamp_pktloop_tx_pkt(tx_mbufs[i], mbuf);
+            }
+        } else {
+            tstamp_pktloop_tx_pkt(mbuf, mbuf);
+        }
     }
 }

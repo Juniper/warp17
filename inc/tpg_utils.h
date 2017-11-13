@@ -276,5 +276,11 @@ static inline void tpg_printf(printer_arg_t *pa, const char *fmt, ...)
 #define TPG_XLATE_UNION_SET_FIELD(out, in, field) \
     TPG_XLATE_OPTIONAL_SET_FIELD(out, field, (in)->field)
 
+/*****************************************************************************
+ * Macro for getting the value of an optional boolean field.
+ ****************************************************************************/
+#define TPG_XLATE_OPT_BOOL(obj, field) \
+    ((obj)->has_##field && (obj)->field)
+
 #endif /* _H_TPG_UTILS_ */
 

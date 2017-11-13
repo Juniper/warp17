@@ -1707,6 +1707,7 @@ int test_mgmt_get_eth_stats(uint32_t eth_port,
         total_stats->es_etype_vlan += eth_stats->es_etype_vlan;
         total_stats->es_etype_other += eth_stats->es_etype_other;
         total_stats->es_to_small_fragment += eth_stats->es_to_small_fragment;
+        total_stats->es_no_tx_mbuf += eth_stats->es_no_tx_mbuf;
     }
 
     return 0;
@@ -2040,3 +2041,54 @@ int test_mgmt_clear_statistics(uint32_t eth_port, printer_arg_t *printer_arg)
 
     return 0;
 }
+
+/*****************************************************************************
+ * test_mgmt_rx_tstamp_enabled()
+ ****************************************************************************/
+bool test_mgmt_rx_tstamp_enabled(const tpg_test_case_t *entry)
+{
+    const test_env_t *tenv = test_mgmt_get_port_env(entry->tc_eth_port);
+    const sockopt_t  *sockopt = &tenv->te_test_cases[entry->tc_id].sockopt;
+
+    if (sockopt->so_ipv4.ip4so_rx_tstamp)
+        return true;
+
+    switch (entry->tc_type) {
+    case TEST_CASE_TYPE__CLIENT:
+        return entry->tc_client.cl_app.ac_app_proto == APP_PROTO__RAW &&
+                    TPG_XLATE_OPT_BOOL(&entry->tc_client.cl_app.ac_raw,
+                                       rc_rx_tstamp);
+    case TEST_CASE_TYPE__SERVER:
+        return entry->tc_server.srv_app.as_app_proto == APP_PROTO__RAW &&
+                    TPG_XLATE_OPT_BOOL(&entry->tc_server.srv_app.as_raw,
+                                       rs_rx_tstamp);
+    default:
+        return false;
+    }
+}
+
+/*****************************************************************************
+ * test_mgmt_tx_tstamp_enabled()
+ ****************************************************************************/
+bool test_mgmt_tx_tstamp_enabled(const tpg_test_case_t *entry)
+{
+    const test_env_t *tenv = test_mgmt_get_port_env(entry->tc_eth_port);
+    const sockopt_t  *sockopt = &tenv->te_test_cases[entry->tc_id].sockopt;
+
+    if (sockopt->so_ipv4.ip4so_tx_tstamp)
+        return true;
+
+    switch (entry->tc_type) {
+    case TEST_CASE_TYPE__CLIENT:
+        return entry->tc_client.cl_app.ac_app_proto == APP_PROTO__RAW &&
+                    TPG_XLATE_OPT_BOOL(&entry->tc_client.cl_app.ac_raw,
+                                       rc_tx_tstamp);
+    case TEST_CASE_TYPE__SERVER:
+        return entry->tc_server.srv_app.as_app_proto == APP_PROTO__RAW &&
+                    TPG_XLATE_OPT_BOOL(&entry->tc_server.srv_app.as_raw,
+                                       rs_tx_tstamp);
+    default:
+        return false;
+    }
+}
+

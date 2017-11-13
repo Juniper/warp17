@@ -78,7 +78,6 @@ from warp17_sockopt_pb2   import *
 
 UINT32MAX = 0xFFFFFFFF
 
-
 class TestApi(Warp17UnitTestCase):
     """Tests the functionality of the API."""
     """Assumes a B2B setup with two ports."""

@@ -911,9 +911,9 @@ __NOTE: Only IPv4 is supported for now!__
 		set tests ipv4-options port <eth_port> test-case-id <tcid> tx-timestamp|rx-timestamp <0|1>"
 		```
 
-* __Latency__: latency computation can be enabled ontop of all the application
-  types using _IPv4 options_. The latency config consists of the following
-  optional fields:
+* __Latency__: latency computation can be enabled on top of all the application
+  types using _IPv4 options_ or RAW timestamping. The latency config consists
+  of the following optional fields:
 
     - `max` latency threshold: all incoming packets with a measured latency
       higher than the configured `max` will be counted as
@@ -995,12 +995,21 @@ defined the client or server test cases.
 	sizes match between clients and servers!__
 
 	```
-	set tests client raw port <eth_port> test-case-id <tcid>data-req-plen <len> data-resp-  plen <len>
+	set tests client raw port <eth_port> test-case-id <tcid>data-req-plen <len> data-resp-plen <len> [rx-timestamp] [tx-timestamp]
 	```
 
 	```
-	set tests server raw port <eth_port> test-case-id <tcid>data-req-plen <len> data-resp-  plen <len>
+	set tests server raw port <eth_port> test-case-id <tcid>data-req-plen <len> data-resp-plen <len> [rx-timestamp] [tx-timestamp]
 	```
+
+	Both CLI commands support additional RX/TX timestamping options. If
+	`rx-timestamp` is set, the Warp17 traffic engine will timestamp packets at
+	ingress and the RAW application will compute latency statistics when
+	incoming packets have TX timestamp information embedded in their payload. If
+	`tx-timestamp` is set RAW application clients will embed TX timestamps in the
+	first 16 bytes of the application payload. The RX/TX timestamps are both
+	computed early in the packet loop in order to be as precise as possible when
+	measuring latency.
 
 ## Displaying test information
 
@@ -1269,9 +1278,13 @@ WARP17 or executed directly in the CLI.
   UDP Multicast Source test cases. The example combines UDP Unicast traffic with
   UDP Multicast traffic.
 
-* __examples/test\_11\_ipv4\_lat.cfg__: example showing how to configure
-  latency computation on a TCP test case. _Maximum_ and _average_ thresholds
+* __examples/test\_11\_ipv4\_latency.cfg__: example showing how to configure
+  latency measurement on a TCP test case. _Maximum_ and _average_ thresholds
   are configured.
+
+* __examples/test\_12\_raw\_latency.cfg__: example showing how to configure
+  latency measurement using application layer timestamping on TCP and UDP
+  test cases.
 
 # Python scripting API
 WARP17 offers an RPC-based API which allows users to write scripts and automate

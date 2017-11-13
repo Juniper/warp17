@@ -134,6 +134,11 @@ typedef struct l4_control_block_s {
     /* Application level state storage. */
     app_data_t       l4cb_app_data;
 
+    /* Physical control block address. If the phys address can't be computed
+     * (e.g., non-contiguous mempools) this field will be RTE_BAD_PHYS_ADDR.
+     */
+    phys_addr_t      l4cb_phys_addr;
+
 } l4_control_block_t;
 
 typedef LIST_HEAD(tlkp_hash_bucket_s, l4_control_block_s) tlkp_hash_bucket_t;
@@ -340,7 +345,7 @@ void l4_cb_check(l4_control_block_t *cb)
 #define L4_CB_ID(cb) 0
 #define L4_CB_ID_SET(cb, val) ((void)(cb), (void)(val))
 #define L4_CB_VALID(cb) true
-#define L4_CB_ALLOC_INIT(cb, mask, max)
+#define L4_CB_ALLOC_INIT(cb, mask, max) ((void)(cb), (void)(mask), (void)(max))
 #define L4_CB_FREE_DEINIT(cb, mask, max)
 #define L4_CB_MPOOL_INIT(mpool, mask, max, l4_cb_offset)
 #define L4_CB_CHECK(cb) (void)0
@@ -378,6 +383,19 @@ void l4_cb_check(l4_control_block_t *cb)
 /*****************************************************************************
  * Inlines for tpg_lookup.c
  ****************************************************************************/
+static inline __attribute__((__always_inline__))
+void tlkp_alloc_cb_init(void *container, l4_control_block_t *cb,
+                        size_t offset_in_container,
+                        struct rte_mempool *mp,
+                        rte_atomic16_t *alloc_in_use_count,
+                        uint32_t max_id)
+{
+    L4_CB_ALLOC_INIT(cb, alloc_in_use_count, max_id);
+
+    cb->l4cb_phys_addr =
+        rte_mempool_virt2phy(mp, container) + offset_in_container;
+}
+
 /*****************************************************************************
  * tlkp_get_hash_bucket()
  ****************************************************************************/

@@ -77,7 +77,9 @@ typedef struct tcb_retrans_s {
 typedef struct tcb_buf_hdr_s {
     LIST_ENTRY(tcb_buf_hdr_s) tbh_entry;
 
+
     struct rte_mbuf *tbh_mbuf;
+    uint64_t         tbh_tstamp;
     uint32_t         tbh_seg_seq;
 } tcb_buf_hdr_t;
 
@@ -228,6 +230,22 @@ typedef struct tcp_control_block_s {
 
 /*****************************************************************************
  * Inlines for tpg_tcp.c
+ ****************************************************************************/
+
+/*****************************************************************************
+ * tcb_buf_hdr_init()
+ ****************************************************************************/
+static inline void tcb_buf_hdr_init(tcb_buf_hdr_t *hdr, struct rte_mbuf *mbuf,
+                                    uint64_t tstamp,
+                                    uint32_t tcp_seg_seq)
+{
+    hdr->tbh_mbuf = mbuf,
+    hdr->tbh_tstamp = tstamp;
+    hdr->tbh_seg_seq = tcp_seg_seq;
+}
+
+/*****************************************************************************
+ * tcp_snd_win_full()
  ****************************************************************************/
 static inline bool tcp_snd_win_full(tcp_control_block_t *tcb)
 {

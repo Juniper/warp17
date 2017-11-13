@@ -275,7 +275,7 @@ static void tsm_cleanup_retrans_queu(tcp_control_block_t *tcb, uint32_t seg_ack)
         if (retrans->tr_data_mbufs)
             retrans->tr_data_mbufs->pkt_len = mbuf->pkt_len - mbuf->data_len;
 
-        rte_pktmbuf_free_seg(mbuf);
+        pkt_mbuf_free_seg(mbuf);
     }
 
     if (acked_bytes) {
@@ -288,7 +288,7 @@ static void tsm_cleanup_retrans_queu(tcp_control_block_t *tcb, uint32_t seg_ack)
         mbuf = retrans->tr_data_mbufs;
         retrans->tr_data_mbufs = retrans->tr_data_mbufs->next;
 
-        rte_pktmbuf_free_seg(mbuf);
+        pkt_mbuf_free_seg(mbuf);
     }
 
     if (retrans->tr_data_mbufs == NULL) {

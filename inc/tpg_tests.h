@@ -198,6 +198,9 @@ typedef struct test_case_init_msg_s {
     sockopt_t               tcim_sockopt;
     tpg_test_case_latency_t tcim_latency;
 
+    uint32_t                tcim_rx_tstamp : 1;
+    uint32_t                tcim_tx_tstamp : 1;
+
 } __tpg_msg test_case_init_msg_t;
 
 typedef struct test_case_start_msg_s {
@@ -367,15 +370,6 @@ extern void test_resched_send(test_oper_state_t *ts, uint32_t eth_port,
 
 extern void test_update_latency(l4_control_block_t *l4cb,
                                 uint64_t pkt_orig_tstamp, uint64_t pcb_tstamp);
-
-/*****************************************************************************
- * Management functions for test_oper_latency_state_t
- ****************************************************************************/
-extern void test_latency_state_init(test_oper_latency_state_t *buffer,
-                                    uint32_t len);
-extern void
-test_latency_state_add(test_oper_latency_state_t *buffer, uint64_t tstamp,
-                       tpg_latency_stats_t *tcls_sample_stats);
 
 #endif /* _H_TPG_TESTS_ */
 

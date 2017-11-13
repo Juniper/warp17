@@ -151,6 +151,5 @@ static inline bool pkt_send_with_hash(uint32_t interface,
     return pkt_send(interface, pkt, trace);
 }
 
-
 #endif /* _H_TPG_PKTLOOP_ */
 

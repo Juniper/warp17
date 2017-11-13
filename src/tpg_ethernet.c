@@ -138,6 +138,11 @@ static void cmd_show_ethernet_statistics_parsed(void *parsed_result __rte_unused
                          port,
                          option);
 
+        SHOW_32BIT_STATS("no tx mbuf", tpg_eth_statistics_t,
+                         es_no_tx_mbuf,
+                         port,
+                         option);
+
         cmdline_printf(cl, "\n");
     }
 }
@@ -226,13 +231,15 @@ struct rte_mbuf *eth_build_hdr_mbuf(uint32_t port, uint64_t dst_mac,
     struct ether_hdr *eth;
     struct rte_mbuf  *mbuf;
 
-    mbuf = rte_pktmbuf_alloc(mem_get_mbuf_local_pool_tx_hdr());
+    mbuf = pkt_mbuf_alloc(mem_get_mbuf_local_pool_tx_hdr());
     if (unlikely(!mbuf)) {
-        RTE_LOG(ERR, USER2,
+        RTE_LOG(DEBUG, USER1,
                 "[%d:%s()] ERR: Failed mbuf hdr alloc for send on port %d\n",
                 rte_lcore_index(rte_lcore_id()),
                 __func__,
                 port);
+
+        INC_STATS(STATS_LOCAL(tpg_eth_statistics_t, port), es_no_tx_mbuf);
 
         return NULL;
     }
@@ -246,7 +253,7 @@ struct rte_mbuf *eth_build_hdr_mbuf(uint32_t port, uint64_t dst_mac,
                                                   sizeof(struct ether_hdr));
 
     if (unlikely(!eth)) {
-        rte_pktmbuf_free(mbuf);
+        pkt_mbuf_free(mbuf);
         return NULL;
     }
 

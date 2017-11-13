@@ -263,7 +263,8 @@ void test_resched_send(test_oper_state_t *ts, uint32_t eth_port,
 /*****************************************************************************
  * test_latency_state_init
  ****************************************************************************/
-void test_latency_state_init(test_oper_latency_state_t *buffer, uint32_t len)
+static void test_latency_state_init(test_oper_latency_state_t *buffer,
+                                    uint32_t len)
 {
     bzero(buffer, sizeof(*buffer));
     buffer->tols_length = len;
@@ -272,8 +273,9 @@ void test_latency_state_init(test_oper_latency_state_t *buffer, uint32_t len)
 /*****************************************************************************
  * test_latency_state_add()
  ****************************************************************************/
-void test_latency_state_add(test_oper_latency_state_t *buffer, uint64_t tstamp,
-                            tpg_latency_stats_t *tcls_sample_stats)
+static void test_latency_state_add(test_oper_latency_state_t *buffer,
+                                   uint64_t tstamp,
+                                   tpg_latency_stats_t *tcls_sample_stats)
 {
     uint32_t position;
 
@@ -1803,7 +1805,7 @@ static int test_case_init_cb(uint16_t msgid, uint16_t lcore, void *msg)
 
     tc_info->tci_latency = im->tcim_latency;
 
-    if (tc_info->tci_cfg_msg.tcim_sockopt.so_ipv4.ip4so_tx_tstamp) {
+    if (tc_info->tci_cfg_msg.tcim_tx_tstamp) {
         tstamp_tx_post_cb_t cb = NULL;
 
         /* TODO: set callback ipv4 recalc if defined(TPG_SW_CHECKSUMMING) or
@@ -1811,10 +1813,11 @@ static int test_case_init_cb(uint16_t msgid, uint16_t lcore, void *msg)
          * cb = ipv4_recalc_tstamp_cksum(mbuf, offset, size);
          */
         tstamp_start_tx(im->tcim_eth_port,
-                        port_get_tx_queue_id(lcore, im->tcim_eth_port), cb);
+                        port_get_tx_queue_id(lcore, im->tcim_eth_port),
+                        cb);
     }
 
-    if (tc_info->tci_cfg_msg.tcim_sockopt.so_ipv4.ip4so_rx_tstamp) {
+    if (tc_info->tci_cfg_msg.tcim_rx_tstamp) {
         tstamp_start_rx(im->tcim_eth_port,
                         port_get_rx_queue_id(lcore, im->tcim_eth_port));
         test_case_latency_init(tc_info);
@@ -2051,14 +2054,14 @@ static int test_case_stop_cb(uint16_t msgid, uint16_t lcore __rte_unused,
     tc_info->tci_state.tos_running = false;
     tc_info->tci_state.tos_configured = false;
 
-    if (tc_info->tci_cfg_msg.tcim_sockopt.so_ipv4.ip4so_tx_tstamp) {
+    if (tc_info->tci_cfg_msg.tcim_tx_tstamp) {
         tstamp_stop_tx(sm->tcsm_eth_port,
-                       port_get_tx_queue_id(lcore, sm->tcsm_eth_port));
+                       port_get_rx_queue_id(lcore, sm->tcsm_eth_port));
     }
 
-    if (tc_info->tci_cfg_msg.tcim_sockopt.so_ipv4.ip4so_rx_tstamp) {
+    if (tc_info->tci_cfg_msg.tcim_rx_tstamp) {
         tstamp_stop_rx(sm->tcsm_eth_port,
-                       port_get_tx_queue_id(lcore, sm->tcsm_eth_port));
+                       port_get_rx_queue_id(lcore, sm->tcsm_eth_port));
     }
 
     if (tc_info->tci_cfg_msg.tcim_type == TEST_CASE_TYPE__SERVER) {
@@ -2093,7 +2096,7 @@ static int test_case_stats_req_cb(uint16_t msgid, uint16_t lcore __rte_unused,
     tc_info = TEST_GET_INFO(sm->tcsrm_eth_port, sm->tcsrm_test_case_id);
 
     /* Here we walk through the buffer in order to fill the recent stats */
-    if (tc_info->tci_cfg_msg.tcim_sockopt.so_ipv4.ip4so_rx_tstamp) {
+    if (tc_info->tci_cfg_msg.tcim_rx_tstamp) {
         tpg_test_case_latency_stats_t *tc_latency_stats;
 
         tc_latency_stats = &tc_info->tci_general_stats.tcs_latency_stats;
@@ -2110,7 +2113,7 @@ static int test_case_stats_req_cb(uint16_t msgid, uint16_t lcore __rte_unused,
     /* Clear the runtime stats. They're aggregated by the test manager.
      * Don't clear the start and end time for the gen stats!
      */
-    if (tc_info->tci_cfg_msg.tcim_sockopt.so_ipv4.ip4so_rx_tstamp)
+    if (tc_info->tci_cfg_msg.tcim_rx_tstamp)
         test_case_latency_init(tc_info);
 
     switch (tc_info->tci_cfg_msg.tcim_type) {

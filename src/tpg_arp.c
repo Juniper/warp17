@@ -538,7 +538,7 @@ static bool arp_send_arp_reply(uint32_t port, uint32_t sip, uint32_t dip,
      * Malloc MBUF and construct the ARP packet
      */
 
-    mbuf = rte_pktmbuf_alloc(mem_get_mbuf_local_pool());
+    mbuf = pkt_mbuf_alloc(mem_get_mbuf_local_pool());
     if (unlikely(mbuf == NULL)) {
 
         RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Failed mbuf alloc for ARP reply on port %d\n",
@@ -604,7 +604,7 @@ bool arp_send_arp_request(uint32_t port, uint32_t local_ip, uint32_t remote_ip)
      * Malloc MBUF and construct the ARP packet
      */
 
-    mbuf = rte_pktmbuf_alloc(mem_get_mbuf_local_pool());
+    mbuf = pkt_mbuf_alloc(mem_get_mbuf_local_pool());
     if (unlikely(mbuf == NULL)) {
 
         RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Failed mbuf alloc for ARP request on port %d\n",

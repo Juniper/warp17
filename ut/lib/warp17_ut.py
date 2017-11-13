@@ -289,13 +289,18 @@ class Warp17TrafficTestCase():
                         tc_criteria=criteria,
                         tc_async=False)
 
-    def verify_stats(self, cl_result):
+    def verify_stats(self, cl_result, srv_result, cl_update, srv_update):
         """Override in child class if specific app stats should be verified."""
 
         req_cnt = cl_result.tsr_app_stats.tcas_raw.rsts_req_cnt
         resp_cnt = cl_result.tsr_app_stats.tcas_raw.rsts_resp_cnt
-        self.assertTrue(req_cnt > 0, 'req_cnt: %(req)u' % {'req': req_cnt})
-        self.assertTrue(resp_cnt > 0, 'resp_cnt: %(resp)u' % {'resp': resp_cnt})
+        self.assertTrue(req_cnt > 0, 'cl req_cnt: {}'.format(req_cnt))
+        self.assertTrue(resp_cnt > 0, 'cl resp_cnt: {}'.format(resp_cnt))
+
+        req_cnt = srv_result.tsr_app_stats.tcas_raw.rsts_req_cnt
+        resp_cnt = srv_result.tsr_app_stats.tcas_raw.rsts_resp_cnt
+        self.assertTrue(req_cnt > 0, 'srv req_cnt: {}'.format(req_cnt))
+        self.assertTrue(resp_cnt > 0, 'srv resp_cnt: {}'.format(resp_cnt))
 
     def compare_opts(self, expected, result):
         for field in [f for f in expected.DESCRIPTOR.fields if expected.HasField(f.name)]:
@@ -474,7 +479,8 @@ class Warp17TrafficTestCase():
             self.startPorts()
 
             cl_result = self.check_test_case_status(self._tc_arg_client)
-            self.verify_stats(cl_result)
+            srv_result = self.check_test_case_status(self._tc_arg_server)
+            self.verify_stats(cl_result, srv_result, cl_update, srv_update)
 
             self.stopPorts()
 

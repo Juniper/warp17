@@ -115,7 +115,8 @@ typedef void (*app_conn_down_cb_t)(l4_control_block_t *l4,
 typedef uint32_t (*app_deliver_cb_t)(l4_control_block_t *l4,
                                      app_data_t *app_data,
                                      tpg_test_case_app_stats_t *stats,
-                                     struct rte_mbuf *data);
+                                     struct rte_mbuf *data,
+                                     uint64_t rx_tstamp);
 
 /* WARNING: the application must guarantee that if any of the segments in the
  * returned mbuf are marked as "static" (through the DATA_SET_STATIC call) then

@@ -70,7 +70,7 @@ static uint32_t tcp_data_store_send(tcp_control_block_t *tcb, tsm_data_arg_t *da
     retrans = &tcb->tcb_retrans;
 
     if (data_mbuf->pkt_len > TCB_AVAIL_SEND(tcb)) {
-        rte_pktmbuf_free(data_mbuf);
+        pkt_mbuf_free(data_mbuf);
         return 0;
     }
 
@@ -296,8 +296,7 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
         seg_seq = tcb->tcb_rcv.nxt;
     }
 
-    new_hdr.tbh_mbuf = pcb->pcb_mbuf;
-    new_hdr.tbh_seg_seq = seg_seq;
+    tcb_buf_hdr_init(&new_hdr, pcb->pcb_mbuf, pcb->pcb_tstamp, seg_seq);
 
     /* Walk the list of tcb buffers to see where the start of the seg fits.
      * After this loop seg will point to the segment extended by the new data or
@@ -380,7 +379,7 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
             old_seg = old_seg->tbh_entry.le_next;
 
             LIST_REMOVE(tmp, tbh_entry);
-            rte_pktmbuf_free(tmp->tbh_mbuf);
+            pkt_mbuf_free(tmp->tbh_mbuf);
         }
     }
 
@@ -411,7 +410,8 @@ deliver_data:
         seg = tcb->tcb_rcv_buf.lh_first;
         seg_delivered = app_deliver_cb(&tcb->tcb_l4, &tcb->tcb_l4.l4cb_app_data,
                                        &tc_info->tci_app_stats,
-                                       seg->tbh_mbuf);
+                                       seg->tbh_mbuf,
+                                       seg->tbh_tstamp);
         delivered += seg_delivered;
         tcb->tcb_rcv.nxt += seg_delivered;
         TCP_NOTIF(TCB_NOTIF_SEG_RECEIVED, tcb);
@@ -419,7 +419,7 @@ deliver_data:
         if (seg_delivered == seg->tbh_mbuf->pkt_len) {
             LIST_REMOVE(seg, tbh_entry);
             /* Free the whole chain. */
-            rte_pktmbuf_free(seg->tbh_mbuf);
+            pkt_mbuf_free(seg->tbh_mbuf);
         } else {
             /* Advance in the segment with the data we delivered. */
             seg->tbh_mbuf = data_adj_chain(seg->tbh_mbuf, seg_delivered);

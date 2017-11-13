@@ -730,6 +730,10 @@ static bool tcp_send_pkt(tcp_control_block_t *tcb, uint32_t sseq,
         return false;
     }
 
+    /* Perform TX timestamp propagation if needed. */
+    if (data_pkt_len)
+        tstamp_data_append(hdr, data_mbuf);
+
     /* Append the data part too. */
     hdr->next = data_mbuf;
     hdr->pkt_len += data_pkt_len;
@@ -833,6 +837,7 @@ tcp_control_block_t *tcb_clone(tcp_control_block_t *tcb)
 {
     tcp_control_block_t  *new_tcb;
     uint32_t              new_tcb_id;
+    phys_addr_t           new_phys_addr;
     tpg_tcp_statistics_t *stats;
 
     TCB_CHECK(tcb);
@@ -845,12 +850,16 @@ tcp_control_block_t *tcb_clone(tcp_control_block_t *tcb)
         return NULL;
     }
 
-    /* The cb_id is the only thing that should differ between a clone and the
-     * real thing!
+    /* The cb_id and phys address are the only things that should differ
+     * between a clone and the real thing!
      */
     new_tcb_id = L4_CB_ID(&new_tcb->tcb_l4);
+    new_phys_addr = new_tcb->tcb_l4.l4cb_phys_addr;
+
     rte_memcpy(new_tcb, tcb, sizeof(*new_tcb));
+
     L4_CB_ID_SET(&new_tcb->tcb_l4, new_tcb_id);
+    new_tcb->tcb_l4.l4cb_phys_addr = new_phys_addr;
 
     /* Set the malloced bit. */
     new_tcb->tcb_malloced = true;

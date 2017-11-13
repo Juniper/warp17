@@ -39,10 +39,10 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  * File name:
- *     tpg_udp.c
+ *     tpg_mbuf.h
  *
  * Description:
- *     General UDP processing, hopefully it will work for v4 and v6.
+ *     Mbuf specific definitions (user data and alloc/free wrappers).
  *
  * Author:
  *     Matteo Triggiani
@@ -57,17 +57,18 @@
 /*****************************************************************************
  * Multiple include protection
  ****************************************************************************/
-#ifndef _H_TPG_MBUF_USER_DATA
-#define _H_TPG_MBUF_USER_DATA
+#ifndef _H_TPG_MBUF_
+#define _H_TPG_MBUF_
 
 /*****************************************************************************
  * Flags to be used in the mbuf user data when passing data from an
  * application to the WARP17 TCP/IP stack.
  ****************************************************************************/
 /* At most 16 bits for app dependent flags. */
-#define TPG_APP_UINT64_MBUF_FLAG_STATIC 0x0001000000000000
-#define TPG_APP_UINT64_MBUF_FLAG_TSTAMP 0x0002000000000000
-#define TPG_APP_UINT64_MBUF_FLAG_MAX    0xFFFF000000000000
+#define TPG_APP_UINT64_MBUF_FLAG_STATIC       0x0001000000000000
+#define TPG_APP_UINT64_MBUF_FLAG_TSTAMP       0x0002000000000000
+#define TPG_APP_UINT64_MBUF_FLAG_TSTAMP_MULTI 0x0004000000000000
+#define TPG_APP_UINT64_MBUF_FLAG_MAX          0xFFFF000000000000
 
 /* Reserve 16 bits for timestamp offset. */
 #define TPG_APP_UINT64_MBUF_TSTAMP_OFFSET_MASK_LEN 16
@@ -121,12 +122,43 @@ static_assert(TPG_APP_UINT64_MBUF_FLAG_MAX >
     ((mbuf)->udata64 |= TPG_APP_UINT64_MBUF_FLAG_TSTAMP)
 
 /*****************************************************************************
+ * DATA_CLEAR_TSTAMP()
+ *      Clears the TSTAMP flag in the mbuf user data field.
+ ****************************************************************************/
+#define DATA_CLEAR_TSTAMP(mbuf) \
+    ((mbuf)->udata64 &= ~TPG_APP_UINT64_MBUF_FLAG_TSTAMP)
+
+/*****************************************************************************
  * DATA_IS_TSTAMP()
  *     Checks the userdata field in the mbuf in order to see if warp17 had to
- *     fill the timestamp field
+ *     fill the timestamp field.
  ****************************************************************************/
 #define DATA_IS_TSTAMP(mbuf) \
     ((mbuf)->udata64 & TPG_APP_UINT64_MBUF_FLAG_TSTAMP)
+
+/*****************************************************************************
+ * DATA_SET_TSTAMP_MULTI()
+ *      Uses the userdata field in mbuf to mark the fact that just before
+ *      sending the packet warp17 has to fill the timestamp field on multiple
+ *      segments of the packet mbuf.
+ ****************************************************************************/
+#define DATA_SET_TSTAMP_MULTI(mbuf) \
+    ((mbuf)->udata64 |= TPG_APP_UINT64_MBUF_FLAG_TSTAMP_MULTI)
+
+/*****************************************************************************
+ * DATA_CLEAR_TSTAMP_MULTI()
+ *      Clears the TSTAMP_MULTI flag in the mbuf user data field.
+ ****************************************************************************/
+#define DATA_CLEAR_TSTAMP_MULTI(mbuf) \
+    ((mbuf)->udata64 &= ~TPG_APP_UINT64_MBUF_FLAG_TSTAMP_MULTI)
+
+/*****************************************************************************
+ * DATA_IS_TSTAMP_MULTI()
+ *     Checks the userdata field in the mbuf in order to see if warp17 had to
+ *     fill the timestamp field for multiple segments of the packet mbuf.
+ ****************************************************************************/
+#define DATA_IS_TSTAMP_MULTI(mbuf) \
+    ((mbuf)->udata64 & TPG_APP_UINT64_MBUF_FLAG_TSTAMP_MULTI)
 
 /*****************************************************************************
  * DATA_SET_STATIC()
@@ -137,6 +169,13 @@ static_assert(TPG_APP_UINT64_MBUF_FLAG_MAX >
     ((mbuf)->udata64 |= TPG_APP_UINT64_MBUF_FLAG_STATIC)
 
 /*****************************************************************************
+ * DATA_CLEAR_STATIC()
+ *     Clears the STATIC flag in the mbuf user data field.
+ ****************************************************************************/
+#define DATA_CLEAR_STATIC(mbuf) \
+    ((mbuf)->udata64 &= ~TPG_APP_UINT64_MBUF_FLAG_STATIC)
+
+/*****************************************************************************
  * DATA_IS_STATIC()
  *     Checks the userdata field in the mbuf for the static flag which
  *     indicates the fact that the data it points to is static data.
@@ -144,4 +183,42 @@ static_assert(TPG_APP_UINT64_MBUF_FLAG_MAX >
 #define DATA_IS_STATIC(mbuf) \
     ((mbuf)->udata64 & TPG_APP_UINT64_MBUF_FLAG_STATIC)
 
-#endif /* _H_TPG_MBUF_USER_DATA */
+/*****************************************************************************
+ * Static inlines
+ ****************************************************************************/
+
+/*****************************************************************************
+ * pkt_mbuf_alloc()
+ *      Wrapper on top of rte_pktmbuf_alloc which also resets the udata64
+ *      field.
+ ****************************************************************************/
+static inline struct rte_mbuf *pkt_mbuf_alloc(struct rte_mempool *mp)
+{
+    struct rte_mbuf *mbuf = rte_pktmbuf_alloc(mp);
+
+    if (likely(mbuf != NULL))
+        mbuf->udata64 = 0;
+
+    return mbuf;
+}
+
+/*****************************************************************************
+ * pkt_mbuf_free()
+ *      Wrapper on top of rte_pktmbuf_free.
+ ****************************************************************************/
+static inline void pkt_mbuf_free(struct rte_mbuf *mbuf)
+{
+    rte_pktmbuf_free(mbuf);
+}
+
+/*****************************************************************************
+ * pkt_mbuf_free_seg()
+ *      Wrapper on top of rte_pktmbuf_free_seg.
+ ****************************************************************************/
+static inline void pkt_mbuf_free_seg(struct rte_mbuf *mbuf)
+{
+    rte_pktmbuf_free_seg(mbuf);
+}
+
+#endif /* _H_TPG_MBUF_ */
+

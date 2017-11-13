@@ -582,7 +582,7 @@ struct rte_mbuf *ipv4_build_hdr_mbuf(l4_control_block_t *l4_cb,
 
     *ip_hdr_p = ipv4_build_hdr(l4_cb, mbuf, protocol, l4_len, NULL);
     if (unlikely(!(*ip_hdr_p))) {
-        rte_pktmbuf_free(mbuf);
+        pkt_mbuf_free(mbuf);
         return NULL;
     }
 

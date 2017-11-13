@@ -536,7 +536,6 @@ void test_state_show_stats(const tpg_test_case_t *te,
     tpg_test_case_stats_t      test_stats;
     tpg_test_case_app_stats_t  app_stats;
     tpg_app_proto_t            app_id;
-    tpg_ipv4_sockopt_t         ipv4_sockopt;
 
     if (test_mgmt_get_test_case_rate_stats(te->tc_eth_port, te->tc_id,
                                            &rate_stats,
@@ -548,10 +547,6 @@ void test_state_show_stats(const tpg_test_case_t *te,
                                       printer_arg) != 0)
         return;
 
-    if (test_mgmt_get_ipv4_sockopt(te->tc_eth_port, te->tc_id, &ipv4_sockopt,
-                                   printer_arg) != 0)
-        return;
-
     tpg_printf(printer_arg, "%13s %13s %13s\n",
                "Estab/s", "Closed/s", "Data Send/s");
     tpg_printf(printer_arg, "%13"PRIu32 " %13"PRIu32 " %13"PRIu32 "\n",
@@ -559,7 +554,7 @@ void test_state_show_stats(const tpg_test_case_t *te,
                rate_stats.tcrs_closed_per_s,
                rate_stats.tcrs_data_per_s);
 
-    if (ipv4_sockopt.ip4so_rx_tstamp) {
+    if (test_mgmt_rx_tstamp_enabled(te)) {
         tpg_test_case_latency_stats_t *latency_stats;
 
         latency_stats = &test_stats.tcs_latency_stats;
@@ -625,7 +620,7 @@ static void test_state_show_latency(printer_arg_t *printer_arg,
     float local_average;
 
     if (!test_latency_stats_valid(ts_stats)) {
-        tpg_printf(printer_arg, "[Samples: %13s ]\n", "N/A");
+        tpg_printf(printer_arg, "[Samples: %13s]\n", "N/A");
         tpg_printf(printer_arg, "%13s %13s %13s\n", "Min lat/us", "Max lat/us",
                    "Avg lat/us");
         tpg_printf(printer_arg, "%13s %13s %13s\n", "N/A", "N/A", "N/A");
@@ -636,7 +631,7 @@ static void test_state_show_latency(printer_arg_t *printer_arg,
     local_average = ((ts_stats->ls_samples_count == 0) ? 0 :
                      ts_stats->ls_sum_latency / ts_stats->ls_samples_count);
 
-    tpg_printf(printer_arg, "[Samples: %13"PRIu64" ]\n",
+    tpg_printf(printer_arg, "[Samples: %13"PRIu64"]\n",
         ts_stats->ls_samples_count);
     if (te->has_tc_latency) {
         if (te->tc_latency.has_tcs_max || te->tc_latency.has_tcs_max_avg) {

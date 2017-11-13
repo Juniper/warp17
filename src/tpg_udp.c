@@ -117,7 +117,7 @@ void udp_lcore_init(uint32_t lcore_id)
  * udp_process_incoming()
  ****************************************************************************/
 static int udp_process_incoming(udp_control_block_t *ucb,
-                                struct rte_mbuf *mbuf)
+                                packet_control_block_t *pcb)
 {
     test_case_info_t *tc_info;
     app_deliver_cb_t  app_deliver_cb;
@@ -141,7 +141,8 @@ static int udp_process_incoming(udp_control_block_t *ucb,
 
     return app_deliver_cb(&ucb->ucb_l4, &ucb->ucb_l4.l4cb_app_data,
                           &tc_info->tci_app_stats,
-                          mbuf);
+                          pcb->pcb_mbuf,
+                          pcb->pcb_tstamp);
 }
 
 /*****************************************************************************
@@ -151,6 +152,7 @@ static udp_control_block_t *ucb_clone(udp_control_block_t *ucb)
 {
     udp_control_block_t  *new_ucb;
     uint32_t              new_ucb_id;
+    phys_addr_t           new_phys_addr;
     tpg_udp_statistics_t *stats;
 
     UCB_CHECK(ucb);
@@ -162,12 +164,16 @@ static udp_control_block_t *ucb_clone(udp_control_block_t *ucb)
         return NULL;
     }
 
-    /* The cb_id is the only thing that should differ between a clone and the
-     * real thing!
+    /* The cb_id and phys address are the only things that should differ
+     * between a clone and the real thing!
      */
     new_ucb_id = L4_CB_ID(&new_ucb->ucb_l4);
+    new_phys_addr = new_ucb->ucb_l4.l4cb_phys_addr;
+
     rte_memcpy(new_ucb, ucb, sizeof(*new_ucb));
+
     L4_CB_ID_SET(&new_ucb->ucb_l4, new_ucb_id);
+    new_ucb->ucb_l4.l4cb_phys_addr = new_phys_addr;
 
     /* Set the malloced bit. */
     new_ucb->ucb_malloced = true;
@@ -344,15 +350,16 @@ struct rte_mbuf *udp_receive_pkt(packet_control_block_t *pcb,
         if (ucb != NULL)
             pcb->pcb_sockopt = &ucb->ucb_l4.l4cb_sockopt;
 
-        udp_process_incoming(ucb, mbuf);
+        udp_process_incoming(ucb, pcb);
 
         /* If the stack decided to keep this packet we shouldn' allow the
          * rest of the code to free it.
          */
         if (unlikely(pcb->pcb_mbuf_stored))
             mbuf = NULL;
-    } else
+    } else {
         INC_STATS(stats, us_ucb_not_found);
+    }
 
     return mbuf;
 }
@@ -434,7 +441,7 @@ static struct rte_mbuf *udp_build_hdr_mbuf(udp_control_block_t *ucb,
      */
     *udp_hdr_p = udp_build_hdr(ucb, mbuf, ip_hdr, l4_len);
     if (unlikely(!(*udp_hdr_p))) {
-        rte_pktmbuf_free(mbuf);
+        pkt_mbuf_free(mbuf);
         return NULL;
     }
 
@@ -453,6 +460,9 @@ udp_send_pkt(udp_control_block_t *ucb, struct rte_mbuf *hdr_mbuf,
     tpg_udp_statistics_t *stats;
 
     stats = STATS_LOCAL(tpg_udp_statistics_t, ucb->ucb_l4.l4cb_interface);
+
+    /* Perform TX timestamp propagation if needed. */
+    tstamp_data_append(hdr_mbuf, data_mbuf);
 
     /* Append the data part too. */
     hdr_mbuf->next = data_mbuf;
@@ -667,7 +677,7 @@ int udp_send_v4(udp_control_block_t *ucb, struct rte_mbuf *data_mbuf,
     hdr = udp_build_hdr_mbuf(ucb, data_mbuf->pkt_len, &udp_hdr);
     if (unlikely(!hdr)) {
         INC_STATS(stats, us_failed_pkts);
-        rte_pktmbuf_free(data_mbuf);
+        pkt_mbuf_free(data_mbuf);
         return -ENOMEM;
     }
 

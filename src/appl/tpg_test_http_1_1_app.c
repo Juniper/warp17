@@ -294,7 +294,7 @@ static int http_write_str(struct rte_mbuf *mbuf, const char *fmt, ...)
                 data_p += tailroom;
                 datalen -= tailroom;
 
-                new_mbuf = rte_pktmbuf_alloc(mem_get_mbuf_local_pool());
+                new_mbuf = pkt_mbuf_alloc(mem_get_mbuf_local_pool());
                 if (!new_mbuf)
                     return -ENOMEM;
                 err = rte_pktmbuf_chain(mbuf, new_mbuf);
@@ -334,7 +334,7 @@ static int http_build_req_pkt(struct rte_mbuf **mbuf, const char *method,
         return -EINVAL;
 
     if (*mbuf == NULL) {
-        *mbuf = rte_pktmbuf_alloc(mem_get_mbuf_local_pool());
+        *mbuf = pkt_mbuf_alloc(mem_get_mbuf_local_pool());
         if (*mbuf == NULL)
             return -ENOMEM;
     }
@@ -387,12 +387,11 @@ static int http_build_req_pkt(struct rte_mbuf **mbuf, const char *method,
         mbuf_p->pkt_len += data->pkt_len;
     }
 
-
     return 0;
 
 error:
     /* Frees all the segments! */
-    rte_pktmbuf_free(mbuf_p);
+    pkt_mbuf_free(mbuf_p);
     return err;
 }
 
@@ -418,7 +417,7 @@ static int http_build_resp_pkt(struct rte_mbuf **mbuf, const char *status,
         return -EINVAL;
 
     if (!*mbuf) {
-        *mbuf = rte_pktmbuf_alloc(mem_get_mbuf_local_pool());
+        *mbuf = pkt_mbuf_alloc(mem_get_mbuf_local_pool());
         if (*mbuf == NULL)
             return -ENOMEM;
     }
@@ -469,7 +468,7 @@ static int http_build_resp_pkt(struct rte_mbuf **mbuf, const char *status,
 
 error:
     /* Frees all the segments! */
-    rte_pktmbuf_free(mbuf_p);
+    pkt_mbuf_free(mbuf_p);
     return err;
 }
 
@@ -504,7 +503,7 @@ static int http_init_req_msg(uint32_t eth_port, uint32_t test_case_id,
  ****************************************************************************/
 static void http_free_req_msg(uint32_t eth_port, uint32_t test_case_id)
 {
-    rte_pktmbuf_free(HTTP_REQ_MSG(eth_port, test_case_id));
+    pkt_mbuf_free(HTTP_REQ_MSG(eth_port, test_case_id));
     HTTP_REQ_MSG(eth_port, test_case_id) = NULL;
 }
 
@@ -535,7 +534,7 @@ static int http_init_resp_msg(uint32_t eth_port, uint32_t test_case_id,
  ****************************************************************************/
 static void http_free_resp_msg(uint32_t eth_port, uint32_t test_case_id)
 {
-    rte_pktmbuf_free(HTTP_RESP_MSG(eth_port, test_case_id));
+    pkt_mbuf_free(HTTP_RESP_MSG(eth_port, test_case_id));
     HTTP_RESP_MSG(eth_port, test_case_id) = NULL;
 }
 
@@ -1128,7 +1127,8 @@ void http_client_server_conn_down(l4_control_block_t *l4 __rte_unused,
  ****************************************************************************/
 uint32_t http_client_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
                                   tpg_test_case_app_stats_t *stats,
-                                  struct rte_mbuf *rx_data)
+                                  struct rte_mbuf *rx_data,
+                                  uint64_t rx_tstamp __rte_unused)
 {
     http_app_t       *http_client_data = &app_data->ad_http;
     tpg_http_stats_t *http_stats = &stats->tcas_http;
@@ -1210,7 +1210,8 @@ uint32_t http_client_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
  ****************************************************************************/
 uint32_t http_server_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
                                   tpg_test_case_app_stats_t *stats,
-                                  struct rte_mbuf *rx_data)
+                                  struct rte_mbuf *rx_data,
+                                  uint64_t rx_tstamp __rte_unused)
 {
     http_app_t       *http_server_data = &app_data->ad_http;
     tpg_http_stats_t *http_stats = &stats->tcas_http;

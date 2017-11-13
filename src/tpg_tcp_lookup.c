@@ -136,15 +136,16 @@ void tlkp_tcp_lcore_init(uint32_t lcore_id)
  ****************************************************************************/
 tcp_control_block_t *tlkp_alloc_tcb(void)
 {
-    void *tcb;
+    tcp_control_block_t *tcb;
 
-    if (rte_mempool_generic_get(mem_get_tcb_local_pool(), &tcb, 1, NULL,
+    if (rte_mempool_generic_get(mem_get_tcb_local_pool(), (void *)&tcb, 1, NULL,
                                 MEMPOOL_F_SC_GET))
         return NULL;
 
-    L4_CB_ALLOC_INIT(&((tcp_control_block_t *)tcb)->tcb_l4,
-                     tlkp_tcb_mpool_alloc_in_use,
-                     tcb_l4cb_max_id);
+    tlkp_alloc_cb_init(tcb, &tcb->tcb_l4, offsetof(tcp_control_block_t, tcb_l4),
+                       mem_get_tcb_local_pool(),
+                       tlkp_tcb_mpool_alloc_in_use,
+                       tcb_l4cb_max_id);
 
     return tcb;
 }

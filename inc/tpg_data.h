@@ -98,6 +98,38 @@ static inline void data_seg_attach(struct rte_mbuf *mi, struct rte_mbuf *m)
 }
 
 /*****************************************************************************
+ * data_seg_tstamp_attach()
+ * NOTE:
+ *      Returns true if the cloned mbuf (mi) overlaps with a portion of the
+ *      direct mbuf (m) which requires timestamping. In that case also update
+ *      mi with timestamping information.
+ ****************************************************************************/
+static inline bool
+data_seg_tstamp_attach(struct rte_mbuf *mi, struct rte_mbuf *m,
+                       uint32_t m_data_offset)
+{
+    uint32_t tstamp_offset;
+    uint32_t tstamp_size;
+
+    if (likely(!DATA_IS_TSTAMP(m)))
+        return false;
+
+    tstamp_offset = DATA_GET_TSTAMP_OFFSET(m);
+    tstamp_size = DATA_GET_TSTAMP_SIZE(m);
+
+    /* If the indirect mbuf overlaps with the timestamp location then update
+     * the indirect mbuf.
+     */
+    if (tstamp_offset >= m_data_offset &&
+            tstamp_offset < m_data_offset + mi->data_len) {
+        tstamp_tx_pkt(mi, tstamp_offset - m_data_offset, tstamp_size);
+        return true;
+    }
+
+    return false;
+}
+
+/*****************************************************************************
  * data_alloc_chain
  ****************************************************************************/
 static inline struct rte_mbuf *data_alloc_chain(uint32_t data_len)
@@ -109,7 +141,7 @@ static inline struct rte_mbuf *data_alloc_chain(uint32_t data_len)
     uint32_t             nb_segs = 0;
     uint32_t             pkt_len = data_len;
 
-    data_mbuf = rte_pktmbuf_alloc(mpool);
+    data_mbuf = pkt_mbuf_alloc(mpool);
     if (unlikely(!data_mbuf))
         goto done;
 
@@ -124,7 +156,7 @@ static inline struct rte_mbuf *data_alloc_chain(uint32_t data_len)
         *prev_mbuf = data_mbuf;
         prev_mbuf = &data_mbuf->next;
         data_len -= req_len;
-    } while (data_len && (data_mbuf = rte_pktmbuf_alloc(mpool)));
+    } while (data_len && (data_mbuf = pkt_mbuf_alloc(mpool)));
 
     *prev_mbuf = NULL;
     data_mbufs->nb_segs = nb_segs;
@@ -132,8 +164,8 @@ static inline struct rte_mbuf *data_alloc_chain(uint32_t data_len)
 
 done:
     if (data_mbufs && !data_mbuf) {
-        /* Failed! rte_pktmbuf_free frees the whole chain!!! */
-        rte_pktmbuf_free(data_mbufs);
+        /* Failed! pkt_mbuf_free frees the whole chain!!! */
+        pkt_mbuf_free(data_mbufs);
         return NULL;
     }
 
@@ -152,7 +184,7 @@ static inline struct rte_mbuf *data_copy_chain(struct rte_mbuf *original,
     uint32_t          nb_segs = 0;
     uint32_t          pkt_len = original->pkt_len;
 
-    data_mbuf = rte_pktmbuf_alloc(mpool);
+    data_mbuf = pkt_mbuf_alloc(mpool);
     if (unlikely(!data_mbuf))
         goto done;
 
@@ -174,7 +206,7 @@ static inline struct rte_mbuf *data_copy_chain(struct rte_mbuf *original,
 
         prev_mbuf = &data_mbuf->next;
         original = original->next;
-    } while (original && (data_mbuf = rte_pktmbuf_alloc(mpool)));
+    } while (original && (data_mbuf = pkt_mbuf_alloc(mpool)));
 
     *prev_mbuf = NULL;
     data_mbufs->nb_segs = nb_segs;
@@ -182,8 +214,8 @@ static inline struct rte_mbuf *data_copy_chain(struct rte_mbuf *original,
 
 done:
     if (data_mbufs && !data_mbuf) {
-        /* Failed! rte_pktmbuf_free frees the whole chain!!! */
-        rte_pktmbuf_free(data_mbufs);
+        /* Failed! pkt_mbuf_free frees the whole chain!!! */
+        pkt_mbuf_free(data_mbufs);
         return NULL;
     }
 
@@ -203,7 +235,7 @@ struct rte_mbuf *data_adj_chain(struct rte_mbuf *mbuf, uint32_t len)
         prev = mbuf;
         len -= mbuf->data_len;
         mbuf = mbuf->next;
-        rte_pktmbuf_free_seg(prev);
+        pkt_mbuf_free_seg(prev);
     }
 
     if (len != 0) {
@@ -251,7 +283,7 @@ struct rte_mbuf *data_chain_from_static_template(uint32_t data_len,
     if (data_len == 0)
         return NULL;
 
-    data_mbuf = rte_pktmbuf_alloc(mpool);
+    data_mbuf = pkt_mbuf_alloc(mpool);
     if (unlikely(!data_mbuf))
         goto done;
 
@@ -277,14 +309,14 @@ struct rte_mbuf *data_chain_from_static_template(uint32_t data_len,
         *prev_mbuf = data_mbuf;
         prev_mbuf = &data_mbuf->next;
         data_len -= data_mbuf->data_len;
-    } while (data_len >= template_len && (data_mbuf = rte_pktmbuf_alloc(mpool)));
+    } while (data_len >= template_len && (data_mbuf = pkt_mbuf_alloc(mpool)));
 
     if (!data_mbuf)
         goto done;
 
     /* Allocate the last smaller segment if required. */
     if (data_len && data_mbuf) {
-        data_mbuf = rte_pktmbuf_alloc(mpool);
+        data_mbuf = pkt_mbuf_alloc(mpool);
         if (!data_mbuf)
             goto done;
 
@@ -303,8 +335,8 @@ struct rte_mbuf *data_chain_from_static_template(uint32_t data_len,
 
 done:
     if (data_mbufs && !data_mbuf) {
-        /* Failed! rte_pktmbuf_free frees the whole chain!!! */
-        rte_pktmbuf_free(data_mbufs);
+        /* Failed! pkt_mbuf_free frees the whole chain!!! */
+        pkt_mbuf_free(data_mbufs);
         return NULL;
     }
 
@@ -331,7 +363,7 @@ struct rte_mbuf *data_chain_from_static_chain(struct rte_mbuf *static_chain,
     if (static_chain == NULL)
         return NULL;
 
-    data_mbuf = rte_pktmbuf_alloc(mpool);
+    data_mbuf = pkt_mbuf_alloc(mpool);
     if (unlikely(!data_mbuf))
         goto done;
 
@@ -356,15 +388,15 @@ struct rte_mbuf *data_chain_from_static_chain(struct rte_mbuf *static_chain,
         data_len -= data_mbuf->data_len;
         data_offset = 0;
     } while (data_len && (static_chain = static_chain->next) &&
-                (data_mbuf = rte_pktmbuf_alloc(mpool)));
+                (data_mbuf = pkt_mbuf_alloc(mpool)));
 
     *prev_mbuf = NULL;
     data_mbufs->nb_segs = nb_segs;
 
 done:
     if (data_mbufs && !data_mbuf) {
-        /* Failed! rte_pktmbuf_free frees the whole chain!!! */
-        rte_pktmbuf_free(data_mbufs);
+        /* Failed! pkt_mbuf_free frees the whole chain!!! */
+        pkt_mbuf_free(data_mbufs);
         return NULL;
     }
 
@@ -385,6 +417,8 @@ static inline struct rte_mbuf *data_clone_seg(struct rte_mbuf *seg_data,
     struct rte_mbuf    *prev_clone = NULL;
     struct rte_mbuf    *clone_seg = NULL;
     uint32_t            nb_segs = 0;
+    uint32_t            tstamp_count = 0;
+    uint32_t            current_clone_seg_len = 0;
 
     if (unlikely(!seg_data_len))
         return NULL;
@@ -395,7 +429,7 @@ static inline struct rte_mbuf *data_clone_seg(struct rte_mbuf *seg_data,
     }
 
     do {
-        clone = rte_pktmbuf_alloc(clone_pool);
+        clone = pkt_mbuf_alloc(clone_pool);
         if (unlikely(!clone))
             goto failed;
 
@@ -413,12 +447,35 @@ static inline struct rte_mbuf *data_clone_seg(struct rte_mbuf *seg_data,
 
         if (seg_data_len <= clone->data_len) {
             clone->data_len = seg_data_len;
-            clone->next = 0;
+            clone->next = NULL;
             seg_data_len = 0;
         } else {
             seg_data_len -= clone->data_len;
         }
 
+        /* If the underlying data was marked for timestamping then propagate
+         * that information in the clone chain. However, careful as there
+         * might be multiple segments that need timestamping.
+         */
+        if (unlikely(data_seg_tstamp_attach(clone, seg_data, data_offset))) {
+            /* Timestamping is a one-time thing.
+             * TODO: we assume that the cloned data will actually be sent on
+             * the wire and that the "real" data will be timestamped. Revisit
+             * this code when the behaviour of callers changes.
+             */
+            DATA_CLEAR_TSTAMP(seg_data);
+
+            /* Already store in the first clone segment the tstamp position. */
+            if (likely(tstamp_count == 0)) {
+                tstamp_tx_pkt(clone_seg,
+                              current_clone_seg_len +
+                                    (uint32_t)DATA_GET_TSTAMP_OFFSET(clone),
+                              (uint32_t)DATA_GET_TSTAMP_SIZE(clone));
+            }
+            tstamp_count++;
+        }
+
+        current_clone_seg_len += clone->data_len;
         prev_clone = clone;
         nb_segs++;
         seg_data = seg_data->next;
@@ -426,12 +483,20 @@ static inline struct rte_mbuf *data_clone_seg(struct rte_mbuf *seg_data,
 
     clone_seg->nb_segs = nb_segs;
 
+    if (unlikely(tstamp_count > 1)) {
+        /* Mark that there are multiple timestamps to add in order to let the
+         * caller know that the all segments in the clone chain must be checked
+         * to see if timestamping should be performed.
+         */
+        DATA_SET_TSTAMP_MULTI(clone_seg);
+    }
+
     return clone_seg;
 
 failed:
     if (clone_seg) {
         /* Will free the whole chain!!! */
-        rte_pktmbuf_free(clone_seg);
+        pkt_mbuf_free(clone_seg);
     }
     return NULL;
 }
@@ -474,6 +539,24 @@ static inline char *data_mbuf_adj(struct rte_mbuf *mbuf, uint32_t len)
 
     mbuf->pkt_len -= len;
     return (char *)mbuf->buf_addr + mbuf->data_off;
+}
+
+/*****************************************************************************
+ * data_mbuf_mtod_offset()
+ *      Extend the rte_pktmbuf_mtod_offset functionality for chains of mbufs.
+ ****************************************************************************/
+static inline char *data_mbuf_mtod_offset(struct rte_mbuf *mbuf,
+                                          uint32_t offset)
+{
+    while (mbuf && offset > mbuf->data_len) {
+        offset -= mbuf->data_len;
+        mbuf = mbuf->next;
+    }
+
+    if (unlikely(mbuf == NULL))
+        return NULL;
+
+    return rte_pktmbuf_mtod_offset(mbuf, char *, offset);
 }
 
 #endif /* _H_TPG_DATA_ */

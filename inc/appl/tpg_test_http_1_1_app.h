@@ -145,11 +145,13 @@ extern void http_client_server_conn_down(l4_control_block_t *l4,
 extern uint32_t http_client_deliver_data(l4_control_block_t *l4,
                                          app_data_t *app_data,
                                          tpg_test_case_app_stats_t *stats,
-                                         struct rte_mbuf *rx_data);
+                                         struct rte_mbuf *rx_data,
+                                         uint64_t rx_tstamp);
 extern uint32_t http_server_deliver_data(l4_control_block_t *l4,
                                          app_data_t *app_data,
                                          tpg_test_case_app_stats_t *stats,
-                                         struct rte_mbuf *rx_data);
+                                         struct rte_mbuf *rx_data,
+                                         uint64_t rx_tstamp);
 
 extern struct rte_mbuf *http_client_send_data(l4_control_block_t *l4,
                                               app_data_t *app_data,

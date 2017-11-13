@@ -292,6 +292,10 @@ static void test_init_msg(const tpg_test_case_t *entry,
     /* Copy latency options if any */
     if (entry->has_tc_latency)
         msg->tcim_latency = entry->tc_latency;
+
+    /* Determine if RX/TX timestamping should be enabled. */
+    msg->tcim_rx_tstamp = test_mgmt_rx_tstamp_enabled(entry);
+    msg->tcim_tx_tstamp = test_mgmt_tx_tstamp_enabled(entry);
 }
 
 /*****************************************************************************

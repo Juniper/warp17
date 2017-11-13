@@ -453,5 +453,19 @@ test_mgmt_get_timer_stats(uint32_t eth_port,
 extern __tpg_api_func int
 test_mgmt_clear_statistics(uint32_t eth_port, printer_arg_t *printer_arg);
 
+/*
+ * Returns:
+ *  true if rx timestamping is enabled for this test case + sockopt combination
+ *  false otherwise
+ */
+extern bool test_mgmt_rx_tstamp_enabled(const tpg_test_case_t *entry);
+
+/*
+ * Returns:
+ *  true if tx timestamping is enabled for this test case + sockopt combination
+ *  false otherwise
+ */
+extern bool test_mgmt_tx_tstamp_enabled(const tpg_test_case_t *entry);
+
 #endif /* _H_TPG_TEST_MGMT_API */
 
