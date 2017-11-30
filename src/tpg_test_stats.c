@@ -604,6 +604,8 @@ static bool test_latency_stats_valid(tpg_latency_stats_t *ts_stats)
         ts_stats->ls_max_average_exceeded == 0 &&
         ts_stats->ls_min_latency == UINT32_MAX &&
         ts_stats->ls_max_latency == 0 &&
+        ts_stats->ls_sum_jitter == 0 &&
+        ts_stats->ls_instant_jitter == 0 &&
         ts_stats->ls_sum_latency == 0 &&
         ts_stats->ls_samples_count == 0)
         return false;
@@ -618,6 +620,7 @@ static void test_state_show_latency(printer_arg_t *printer_arg,
                                     const tpg_test_case_t *te)
 {
     float local_average;
+    float local_avg_jitter;
 
     if (!test_latency_stats_valid(ts_stats)) {
         tpg_printf(printer_arg, "[Samples: %13s]\n", "N/A");
@@ -631,21 +634,31 @@ static void test_state_show_latency(printer_arg_t *printer_arg,
     local_average = ((ts_stats->ls_samples_count == 0) ? 0 :
                      ts_stats->ls_sum_latency / ts_stats->ls_samples_count);
 
+    local_avg_jitter = ((ts_stats->ls_samples_count == 0) ? 0 :
+                        ts_stats->ls_sum_jitter / ts_stats->ls_samples_count);
+
     tpg_printf(printer_arg, "[Samples: %13"PRIu64"]\n",
         ts_stats->ls_samples_count);
     if (te->has_tc_latency) {
         if (te->tc_latency.has_tcs_max || te->tc_latency.has_tcs_max_avg) {
-            tpg_printf(printer_arg, "%13s %13s\n", "Max exc", "Max avg exc");
-            tpg_printf(printer_arg, "%13"PRIu32" %13"PRIu32 "\n",
+            tpg_printf(printer_arg, "%15s %15s\n", "Max exc", "Max avg exc");
+            tpg_printf(printer_arg, "%15"PRIu32" %15"PRIu32 "\n",
                        ts_stats->ls_max_exceeded,
                        ts_stats->ls_max_average_exceeded);
+
+            tpg_printf(printer_arg, "\n");
         }
     }
-    tpg_printf(printer_arg, "%13s %13s %13s\n", "Min lat/us", "Max lat/us",
+
+    tpg_printf(printer_arg, "%15s %15s %15s\n", "Min lat/us", "Max lat/us",
                "Avg lat/us");
-    tpg_printf(printer_arg, "%13"PRIu32" %13"PRIu32 " %13.0f\n",
+    tpg_printf(printer_arg, "%15"PRIu32" %15"PRIu32" %15.0f\n",
                ts_stats->ls_min_latency, ts_stats->ls_max_latency,
                local_average);
+
+    tpg_printf(printer_arg, "%15s %15s\n", "Avg Jitter", "Instant Jitter");
+    tpg_printf(printer_arg, "%15.0f %15"PRIu64"\n", local_avg_jitter,
+               ts_stats->ls_instant_jitter);
 
 }
 

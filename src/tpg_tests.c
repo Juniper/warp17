@@ -119,9 +119,9 @@ static uint32_t test_case_execute_udp_close(test_case_info_t *tc_info,
 static uint32_t test_case_execute_udp_send(test_case_info_t *tc_info,
                                            test_case_init_msg_t *cfg,
                                            uint32_t to_send_cnt);
-static void test_case_update_latency_stats(tpg_latency_stats_t *stats,
-                                           test_oper_latency_state_t *buffer,
-                                           tpg_test_case_latency_t *tc_latency);
+static void test_update_recent_latency_stats(tpg_latency_stats_t *stats,
+                                             test_oper_latency_state_t *buffer,
+                                             tpg_test_case_latency_t *tc_latency);
 
 static void test_case_latency_init(test_case_info_t *tc_info);
 
@@ -306,8 +306,12 @@ static void test_update_latency_stats(tpg_latency_stats_t *stats,
 {
     int64_t avg = 0;
 
-    if (stats->ls_samples_count > 0)
+    if (stats->ls_samples_count > 0) {
         avg = stats->ls_sum_latency / stats->ls_samples_count;
+        stats->ls_instant_jitter = (avg >= (int) latency) ?
+                                  (avg - latency) : (latency - avg);
+        stats->ls_sum_jitter += stats->ls_instant_jitter;
+    }
 
     if (tci_latency->has_tcs_max) {
         if (latency > tci_latency->tcs_max)
@@ -2101,9 +2105,9 @@ static int test_case_stats_req_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 
         tc_latency_stats = &tc_info->tci_general_stats.tcs_latency_stats;
 
-        test_case_update_latency_stats(&tc_latency_stats->tcls_sample_stats,
-                                       &tc_info->tci_latency_state,
-                                       &tc_info->tci_latency);
+        test_update_recent_latency_stats(&tc_latency_stats->tcls_sample_stats,
+                                         &tc_info->tci_latency_state,
+                                         &tc_info->tci_latency);
     }
 
     /* Struct copy the stats! */
@@ -2171,44 +2175,24 @@ static int test_case_rates_stats_req_cb(uint16_t msgid,
 }
 
 /*****************************************************************************
- * test_case_update_latency_stats()
+ * test_fix_recent_latency_stats()
+ *      this fun should be call only for recent stats!
  ****************************************************************************/
-static void test_case_update_latency_stats(tpg_latency_stats_t *stats,
-                                           test_oper_latency_state_t *buffer,
-                                           tpg_test_case_latency_t *tc_latency)
+static void
+test_update_recent_latency_stats(tpg_latency_stats_t *stats,
+                                 test_oper_latency_state_t *buffer,
+                                 tpg_test_case_latency_t *tc_latency)
 {
-    uint64_t sum;
-    uint64_t min;
-    uint64_t max;
-    uint64_t i;
+    uint32_t i;
 
-    stats->ls_max_exceeded = 0;
-    stats->ls_max_average_exceeded = 0;
-    max = 0;
-    sum = 0;
-    min = UINT32_MAX;
+    bzero(stats, sizeof(tpg_latency_stats_t));
+    stats->ls_min_latency = UINT32_MAX;
 
+    /* Here I walk trough my whole buffer in order to fix recent stats */
     for (i = 0; i < buffer->tols_actual_length; i++) {
-        sum += buffer->tols_timestamps[i];
-        if (buffer->tols_timestamps[i] < min)
-            min = buffer->tols_timestamps[i];
-        if (buffer->tols_timestamps[i] > max)
-            max = buffer->tols_timestamps[i];
-
-        if (tc_latency->has_tcs_max)
-            if (buffer->tols_timestamps[i] > tc_latency->tcs_max)
-                INC_STATS(stats, ls_max_exceeded);
-
-        if (tc_latency->has_tcs_max_avg)
-            if ((sum / (i+1)) > tc_latency->tcs_max_avg)
-                INC_STATS(stats, ls_max_average_exceeded);
-
+        test_update_latency_stats(stats, buffer->tols_timestamps[i],
+                                  tc_latency);
     }
-
-    stats->ls_sum_latency = sum;
-    stats->ls_max_latency = max;
-    stats->ls_min_latency = min;
-    stats->ls_samples_count = buffer->tols_actual_length;
 
 }
 

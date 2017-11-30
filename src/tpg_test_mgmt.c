@@ -123,6 +123,8 @@ static void test_update_status(tpg_test_case_t *test_case)
           sizeof(pgen_stats->tcs_latency_stats.tcls_sample_stats));
     pgen_stats->tcs_latency_stats.tcls_sample_stats.ls_min_latency = UINT32_MAX;
 
+    pgen_stats->tcs_latency_stats.tcls_stats.ls_instant_jitter = 0;
+
     /* Initialize the start time. */
     pgen_stats->tcs_start_time = UINT64_MAX;
     FOREACH_CORE_IN_PORT_START(core, test_case->tc_eth_port) {
@@ -511,14 +513,23 @@ void test_aggregate_latencies(tpg_latency_stats_t *dest,
     dest->ls_max_average_exceeded += source->ls_max_average_exceeded;
     dest->ls_max_exceeded += source->ls_max_exceeded;
 
-    dest->ls_max_latency = (dest->ls_max_latency >= source->ls_max_latency ?
-                            dest->ls_max_latency : source->ls_max_latency);
+    dest->ls_max_latency =
+        (dest->ls_max_latency >= source->ls_max_latency ?
+         dest->ls_max_latency : source->ls_max_latency);
 
-    dest->ls_min_latency = (dest->ls_min_latency <= source->ls_min_latency ?
-                            dest->ls_min_latency : source->ls_min_latency);
+    dest->ls_min_latency =
+        (dest->ls_min_latency <= source->ls_min_latency ?
+         dest->ls_min_latency : source->ls_min_latency);
 
     dest->ls_samples_count += source->ls_samples_count;
     dest->ls_sum_latency += source->ls_sum_latency;
+    dest->ls_sum_jitter += source->ls_sum_jitter;
+
+    dest->ls_instant_jitter =
+        (dest->ls_instant_jitter >= source->ls_instant_jitter ?
+         dest->ls_instant_jitter : source->ls_instant_jitter);
+
+    dest->ls_samples_count += source->ls_samples_count;
 }
 
 /*****************************************************************************
