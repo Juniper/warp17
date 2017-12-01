@@ -70,7 +70,7 @@ enum TestCritType {
 
 message TestCriteria {
     required TestCritType tc_crit_type    = 1;
-    optional uint32       tc_run_time_s   = 2 [(warp17_union_anon) = true];
+    optional Delay        tc_run_time_s   = 2 [(warp17_union_anon) = true];
     optional uint32       tc_srv_up       = 3 [(warp17_union_anon) = true];
     optional uint32       tc_cl_up        = 4 [(warp17_union_anon) = true];
     optional uint32       tc_cl_estab     = 5 [(warp17_union_anon) = true];

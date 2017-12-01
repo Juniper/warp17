@@ -1317,7 +1317,7 @@ cmdline_parse_inst_t cmd_tests_set_timeouts_infinite = {
 
 /****************************************************************************
  * - "set tests criteria port <eth_port> test-case-id <tcid>
- *      run-time|servers-up|clients-up|clients-estab|data-MB <value>"
+ *      run-time|servers-up|clients-up|clients-estab|data-MB <value> | infinite"
  ****************************************************************************/
  struct cmd_tests_set_criteria_result {
     cmdline_fixed_string_t set;
@@ -1330,6 +1330,7 @@ cmdline_parse_inst_t cmd_tests_set_timeouts_infinite = {
 
     cmdline_fixed_string_t criteria_kw;
     uint32_t               criteria_val;
+    cmdline_fixed_string_t infinite;
 };
 
 static cmdline_parse_token_string_t cmd_tests_set_criteria_T_set =
@@ -1353,6 +1354,8 @@ static cmdline_parse_token_string_t cmd_tests_set_criteria_T_criteria_kw =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_criteria_result, criteria_kw, "run-time#servers-up#clients-up#clients-estab#data-MB");
 static cmdline_parse_token_num_t cmd_tests_set_criteria_T_criteria_val =
     TOKEN_NUM_INITIALIZER(struct cmd_tests_set_criteria_result, criteria_val, UINT32);
+static cmdline_parse_token_string_t cmd_tests_set_criteria_T_criteria_infinite =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_criteria_result, infinite, "infinite");
 
 static void cmd_tests_set_criteria_parsed(void *parsed_result,
                                           struct cmdline *cl,
@@ -1362,26 +1365,34 @@ static void cmd_tests_set_criteria_parsed(void *parsed_result,
     struct cmd_tests_set_criteria_result *pr;
     tpg_update_arg_t                      update_arg;
     tpg_test_criteria_t                   criteria;
+    bool                                  infinite = (((intptr_t) data) == 'i');
 
     tpg_xlate_default_UpdateArg(&update_arg);
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
 
-    if (strncmp(pr->criteria_kw, "run-time", strlen("run-time") + 1) == 0)
-        criteria = CRIT_RUN_TIME(pr->criteria_val);
-    else if (strncmp(pr->criteria_kw, "servers-up",
-                     strlen("servers-up") + 1) == 0)
+    if (infinite && strncmp(pr->criteria_kw, "run-time", strlen("run-time") + 1))
+        cmdline_printf(cl, "ERROR: only run-time can be infinite");
+
+    if (strncmp(pr->criteria_kw, "run-time", strlen("run-time") + 1) == 0) {
+        if (infinite)
+            criteria = CRIT_RUN_TIME_INFINITE();
+        else
+            criteria = CRIT_RUN_TIME(pr->criteria_val);
+    } else if (strncmp(pr->criteria_kw, "servers-up",
+                     strlen("servers-up") + 1) == 0) {
         criteria = CRIT_SRV_UP(pr->criteria_val);
-    else if (strncmp(pr->criteria_kw, "clients-up",
-                     strlen("clients-up") + 1) == 0)
+    } else if (strncmp(pr->criteria_kw, "clients-up",
+                     strlen("clients-up") + 1) == 0) {
         criteria = CRIT_CL_UP(pr->criteria_val);
-    else if (strncmp(pr->criteria_kw, "clients-estab",
-                     strlen("clients-estab") + 1) == 0)
+    } else if (strncmp(pr->criteria_kw, "clients-estab",
+                     strlen("clients-estab") + 1) == 0) {
         criteria = CRIT_CL_ESTAB(pr->criteria_val);
-    else if (strncmp(pr->criteria_kw, "data-MB", strlen("data-MB") + 1) == 0)
+    } else if (strncmp(pr->criteria_kw, "data-MB", strlen("data-MB") + 1) == 0) {
         criteria = CRIT_DATA_MB(pr->criteria_val);
-    else
+    } else {
         assert(false);
+    }
 
     TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg, ua_criteria, criteria);
 
@@ -1412,6 +1423,26 @@ cmdline_parse_inst_t cmd_tests_set_criteria = {
         (void *)&cmd_tests_set_criteria_T_tcid,
         (void *)&cmd_tests_set_criteria_T_criteria_kw,
         (void *)&cmd_tests_set_criteria_T_criteria_val,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_tests_set_criteria_infinite = {
+    .f = cmd_tests_set_criteria_parsed,
+    .data = (void *) (intptr_t) 'i',
+    .help_str = "set tests criteria port <eth_port> test-case-id <tcid> "
+                 "run-time|servers-up|clients-up|clients-estab|data-MB"
+                 " | infinite",
+    .tokens = {
+        (void *)&cmd_tests_set_criteria_T_set,
+        (void *)&cmd_tests_set_criteria_T_tests,
+        (void *)&cmd_tests_set_criteria_T_criteria,
+        (void *)&cmd_tests_set_criteria_T_port_kw,
+        (void *)&cmd_tests_set_criteria_T_port,
+        (void *)&cmd_tests_set_criteria_T_tcid_kw,
+        (void *)&cmd_tests_set_criteria_T_tcid,
+        (void *)&cmd_tests_set_criteria_T_criteria_kw,
+        (void *)&cmd_tests_set_criteria_T_criteria_infinite,
         NULL,
     },
 };
@@ -2701,6 +2732,7 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_set_timeouts,
     &cmd_tests_set_timeouts_infinite,
     &cmd_tests_set_criteria,
+    &cmd_tests_set_criteria_infinite,
     &cmd_tests_set_noasync,
     &cmd_tests_set_async,
     &cmd_tests_set_mtu,

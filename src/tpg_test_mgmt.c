@@ -448,10 +448,13 @@ static bool test_check_run_time_tc_status(tpg_test_case_t *test_case,
                                           test_env_oper_state_t *state,
                                           uint64_t now)
 {
-    state->teos_result.tc_run_time_s = TPG_TIME_DIFF(now, state->teos_start_time) /
-                                       rte_get_timer_hz();
-    if (state->teos_result.tc_run_time_s >=
-                test_case->tc_criteria.tc_run_time_s) {
+    if (!test_case->tc_criteria.tc_run_time_s.has_d_value)
+        return false;
+
+    state->teos_result.tc_run_time_s = TPG_DELAY(
+        TPG_TIME_DIFF(now, state->teos_start_time) / rte_get_timer_hz());
+    if (state->teos_result.tc_run_time_s.d_value >=
+                test_case->tc_criteria.tc_run_time_s.d_value) {
         state->teos_stop_time = now;
         return true;
     }
