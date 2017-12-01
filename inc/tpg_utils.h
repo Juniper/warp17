@@ -125,11 +125,14 @@ static inline void tpg_printf(printer_arg_t *pa, const char *fmt, ...)
 #define TPG_DELAY(value) \
     ((tpg_delay_t) {.d_value = (value), .has_d_value = true})
 
+#define TPG_DELAY_M(value) \
+    ((tpg_delay_t) {.d_millivalue = (value), .has_d_millivalue = true})
+
 #define TPG_DELAY_INF() ((tpg_delay_t) {.has_d_value = false})
 
-#define TPG_DELAY_VAL(x) ((x)->d_value)
+#define TPG_DELAY_VAL(x) ((x)->d_value * 1000 + (x)->d_millivalue)
 
-#define TPG_DELAY_IS_INF(x) (!(x)->has_d_value)
+#define TPG_DELAY_IS_INF(x) (!(x)->has_d_value && !(x)->has_d_millivalue)
 
 /*****************************************************************************
  * TPG rate value definition

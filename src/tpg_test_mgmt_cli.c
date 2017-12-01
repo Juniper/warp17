@@ -1207,6 +1207,7 @@ cmdline_parse_inst_t cmd_tests_set_rate_infinite = {
 
     cmdline_fixed_string_t timeout_kw;
     uint32_t               timeout;
+    uint32_t               timeout_m;
 
     cmdline_fixed_string_t infinite;
 };
@@ -1232,6 +1233,8 @@ static cmdline_parse_token_string_t cmd_tests_set_timeouts_T_timeout_kw =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_timeouts_result, timeout_kw, "init#uptime#downtime");
 static cmdline_parse_token_num_t cmd_tests_set_timeouts_T_timeout =
     TOKEN_NUM_INITIALIZER(struct cmd_tests_set_timeouts_result, timeout, UINT32);
+static cmdline_parse_token_num_t cmd_tests_set_timeouts_T_timeout_m =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_timeouts_result, timeout_m, UINT32);
 
 static cmdline_parse_token_string_t cmd_tests_set_timeouts_T_infinite =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_timeouts_result, infinite, "infinite");
@@ -1251,11 +1254,13 @@ static void cmd_tests_set_timeouts_parsed(void *parsed_result,
     pr = parsed_result;
     infinite = (((intptr_t) data) == 'i');
 
-    if (infinite)
+    if (infinite) {
         timeout = TPG_DELAY_INF();
-    else
+    } else {
         timeout = TPG_DELAY(pr->timeout);
-
+        timeout = TPG_DELAY_M(pr->timeout_m);
+    }
+    
     if (strncmp(pr->timeout_kw, "init", strlen("init") + 1) == 0)
         TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg, ua_init_delay, timeout);
     else if (strncmp(pr->timeout_kw, "uptime", strlen("uptime") + 1) == 0)
@@ -1292,6 +1297,7 @@ cmdline_parse_inst_t cmd_tests_set_timeouts = {
         (void *)&cmd_tests_set_timeouts_T_tcid,
         (void *)&cmd_tests_set_timeouts_T_timeout_kw,
         (void *)&cmd_tests_set_timeouts_T_timeout,
+        (void *)&cmd_tests_set_timeouts_T_timeout_m,
         NULL,
     },
 };
