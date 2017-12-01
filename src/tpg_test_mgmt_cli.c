@@ -1260,7 +1260,7 @@ static void cmd_tests_set_timeouts_parsed(void *parsed_result,
         timeout = TPG_DELAY(pr->timeout);
         timeout = TPG_DELAY_M(pr->timeout_m);
     }
-    
+
     if (strncmp(pr->timeout_kw, "init", strlen("init") + 1) == 0)
         TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg, ua_init_delay, timeout);
     else if (strncmp(pr->timeout_kw, "uptime", strlen("uptime") + 1) == 0)
