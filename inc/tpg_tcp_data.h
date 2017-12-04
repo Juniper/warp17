@@ -89,10 +89,12 @@ static_assert(sizeof(tcb_buf_hdr_t) <= TCB_MIN_HDRS_SZ,
 #define TCB_MAX_TX_BUF_SZ(tcb) \
     (tcp_get_sockopt(&(tcb)->tcb_l4.l4cb_sockopt)->tcpo_win_size)
 
-#define TCB_AVAIL_SEND(tcb) \
-    (TCB_MAX_TX_BUF_SZ(tcb) - (tcb)->tcb_retrans.tr_total_size)
-
 #define TCB_SEGS_PER_SEND GCFG_TCP_SEGS_PER_SEND
+
+#define TCB_AVAIL_SEND(tcb) \
+    (TPG_MIN((TCB_MAX_TX_BUF_SZ(tcb) - (tcb)->tcb_retrans.tr_total_size), \
+             TCB_SEGS_PER_SEND * TCB_MTU(tcb)))
+
 
 /* TODO: we only support PUSH SEND for now but when we support more this should
  * be rethought.

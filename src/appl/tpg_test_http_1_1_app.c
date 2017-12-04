@@ -1349,7 +1349,7 @@ struct rte_mbuf *http_server_send_data(l4_control_block_t *l4 __rte_unused,
 /*****************************************************************************
  * http_client_data_sent()
  ****************************************************************************/
-void http_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
+bool http_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
                            tpg_test_case_app_stats_t *stats,
                            uint32_t bytes_sent)
 {
@@ -1374,6 +1374,7 @@ void http_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
             TEST_NOTIF(TEST_NOTIF_APP_CLIENT_SEND_STOP, l4,
                        l4->l4cb_test_case_id,
                        l4->l4cb_interface);
+            return true;
         }
         break;
     default:
@@ -1381,13 +1382,15 @@ void http_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
         /* Notify the stack that the connection should be closed. */
         TEST_NOTIF(TEST_NOTIF_APP_CLIENT_CLOSE, l4, l4->l4cb_test_case_id,
                    l4->l4cb_interface);
-        break;
+        return true;
     }
+
+    return false;
 }
 /*****************************************************************************
  * http_server_data_sent()
  ****************************************************************************/
-void http_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
+bool http_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
                            tpg_test_case_app_stats_t *stats,
                            uint32_t bytes_sent)
 {
@@ -1411,6 +1414,7 @@ void http_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
             TEST_NOTIF(TEST_NOTIF_APP_SERVER_SEND_STOP, l4,
                        l4->l4cb_test_case_id,
                        l4->l4cb_interface);
+            return true;
         }
         break;
     default:
@@ -1418,8 +1422,10 @@ void http_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
         INC_STATS(http_stats, hsts_invalid_msg_cnt);
         TEST_NOTIF(TEST_NOTIF_APP_SERVER_CLOSE, l4, l4->l4cb_test_case_id,
                    l4->l4cb_interface);
-        break;
+        return true;
     }
+
+    return false;
 }
 
 /*****************************************************************************

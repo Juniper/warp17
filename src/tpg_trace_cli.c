@@ -110,6 +110,9 @@ static void cmd_trace_list_parsed(void *parsed_result __rte_unused,
             tc->tc_comp_id);
     }
 
+    if (!CMD_CHECK_TRACE_SUPPORT(cl))
+        return;
+
     cmdline_printf(cl, "Registered Trace Components:\n");
     trace_comp_iterate(trace_list_comp_cb, NULL);
     cmdline_printf(cl, "\n");
@@ -199,6 +202,9 @@ static void cmd_trace_level_parsed(void *parsed_result,
             }
         }
     }
+
+    if (!CMD_CHECK_TRACE_SUPPORT(cl))
+        return;
 
     if (IS_TRACE_COMPONENT_ALL_STR(pr->component)) {
         trace_comp_iterate(trace_set_level, NULL);
@@ -316,6 +322,9 @@ static void cmd_trace_bufsize_parsed(void *parsed_result,
             }
         }
     }
+
+    if (!CMD_CHECK_TRACE_SUPPORT(cl))
+        return;
 
     if (IS_TRACE_COMPONENT_ALL_STR(pr->component)) {
         trace_comp_iterate(trace_set_bufsize, NULL);
@@ -485,6 +494,9 @@ static void cmd_trace_enadis_parsed(void *parsed_result,
         }
     }
 
+    if (!CMD_CHECK_TRACE_SUPPORT(cl))
+        return;
+
     if (IS_TRACE_ENADIS_ENABLE(pr->enadis)) {
         enadis_handler = trace_enable;
     } else if (IS_TRACE_ENADIS_DISABLE(pr->enadis)) {
@@ -604,6 +616,9 @@ static void cmd_trace_show_parsed(void *parsed_result, struct cmdline *cl,
             }
         }
     }
+
+    if (!CMD_CHECK_TRACE_SUPPORT(cl))
+        return;
 
     if (IS_TRACE_COMPONENT_ALL_STR(pr->component)) {
         trace_comp_iterate(trace_show, NULL);

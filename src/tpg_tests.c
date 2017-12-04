@@ -1164,10 +1164,12 @@ test_case_execute_tcp_send(test_case_info_t *tc_info,
 {
     test_oper_state_t *ts = &tc_info->tci_state;
     uint32_t           sent_cnt;
+    uint32_t           sent_real_cnt;
 
-    for (sent_cnt = 0;
-            !TEST_CBQ_EMPTY(&ts->tos_to_send_cbs) && sent_cnt < to_send_cnt;
-            sent_cnt++) {
+    for (sent_cnt = 0, sent_real_cnt = 0;
+            !TEST_CBQ_EMPTY(&ts->tos_to_send_cbs) &&
+                sent_real_cnt < to_send_cnt;
+            sent_real_cnt++) {
         int                  error;
         struct rte_mbuf     *data_mbuf;
         uint32_t             data_sent = 0;
@@ -1182,6 +1184,10 @@ test_case_execute_tcp_send(test_case_info_t *tc_info,
                                                            TCB_AVAIL_SEND(tcb));
         if (unlikely(data_mbuf == NULL)) {
             TEST_NOTIF_TCB(TEST_NOTIF_DATA_NULL, tcb);
+
+            /* Move at the end to try again later. */
+            TEST_CBQ_REM_TO_SEND(ts, &tcb->tcb_l4);
+            TEST_CBQ_ADD_TO_SEND(ts, &tcb->tcb_l4);
             continue;
         }
 
@@ -1198,14 +1204,23 @@ test_case_execute_tcp_send(test_case_info_t *tc_info,
             TEST_NOTIF_TCB(TEST_NOTIF_DATA_FAILED, tcb);
 
         if (data_sent != 0) {
+            bool msg_done;
+
             /* Here we can actually be in 2 potential states:
              * - SENDING if we still have snd window available
              * - NO_SND_WIN if we barely fit the message we had to send.
              */
-            APP_CALL(data_sent, cfg->tcim_type, app_id)(&tcb->tcb_l4,
+            msg_done = APP_CALL(data_sent,
+                                cfg->tcim_type, app_id)(&tcb->tcb_l4,
                                                         &tcb->tcb_l4.l4cb_app_data,
                                                         &tc_info->tci_app_stats,
                                                         data_sent);
+            /* We increment the sent count only if the application managed to
+             * transmit a whole message.
+             */
+            if (msg_done)
+                sent_cnt++;
+
         } else if (!tcp_snd_win_full(tcb)) {
             /* Move at the end. */
             TEST_CBQ_REM_TO_SEND(ts, &tcb->tcb_l4);
@@ -1333,13 +1348,15 @@ test_case_execute_udp_send(test_case_info_t *tc_info,
 {
     test_oper_state_t *ts = &tc_info->tci_state;
     uint32_t           sent_cnt;
+    uint32_t           sent_real_cnt;
     bool               is_server;
 
     is_server = (cfg->tcim_type == TEST_CASE_TYPE__SERVER);
 
-    for (sent_cnt = 0;
-            !TEST_CBQ_EMPTY(&ts->tos_to_send_cbs) && sent_cnt < to_send_cnt;
-            sent_cnt++) {
+    for (sent_cnt = 0, sent_real_cnt = 0;
+            !TEST_CBQ_EMPTY(&ts->tos_to_send_cbs) &&
+                sent_real_cnt < to_send_cnt;
+            sent_real_cnt++) {
         int                  error;
         struct rte_mbuf     *data_mbuf;
         uint32_t             data_sent = 0;
@@ -1354,6 +1371,10 @@ test_case_execute_udp_send(test_case_info_t *tc_info,
                                                            UCB_MTU(ucb));
         if (unlikely(data_mbuf == NULL)) {
             TEST_NOTIF_UCB(TEST_NOTIF_DATA_NULL, ucb);
+
+            /* Move at the end and try again later. */
+            TEST_CBQ_REM_TO_SEND(ts, &ucb->ucb_l4);
+            TEST_CBQ_ADD_TO_SEND(ts, &ucb->ucb_l4);
             continue;
         }
 
@@ -1366,10 +1387,19 @@ test_case_execute_udp_send(test_case_info_t *tc_info,
             TEST_NOTIF_UCB(TEST_NOTIF_DATA_FAILED, ucb);
 
         if (data_sent != 0) {
-            APP_CALL(data_sent, cfg->tcim_type, app_id)(&ucb->ucb_l4,
+            bool msg_done;
+
+            msg_done = APP_CALL(data_sent,
+                                cfg->tcim_type, app_id)(&ucb->ucb_l4,
                                                         &ucb->ucb_l4.l4cb_app_data,
                                                         &tc_info->tci_app_stats,
                                                         data_sent);
+            /* We increment the sent count only if the application managed to
+             * transmit a whole message.
+             */
+            if (msg_done)
+                sent_cnt++;
+
         } else if ((is_server &&
                         test_server_sm_has_data_pending(&ucb->ucb_l4)) ||
                         (!is_server &&

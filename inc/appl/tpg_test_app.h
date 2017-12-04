@@ -128,7 +128,8 @@ typedef struct rte_mbuf *(*app_send_cb_t)(l4_control_block_t *l4,
                                           tpg_test_case_app_stats_t *stats,
                                           uint32_t max_tx_size);
 
-typedef void (*app_data_sent_cb_t)(l4_control_block_t *l4, app_data_t *app_data,
+/* Returns true if the application sent a complete message, false otherwise. */
+typedef bool (*app_data_sent_cb_t)(l4_control_block_t *l4, app_data_t *app_data,
                                    tpg_test_case_app_stats_t *stats,
                                    uint32_t bytes_sent);
 

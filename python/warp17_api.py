@@ -151,9 +151,10 @@ class Warp17Env():
             return '--qmap-default ' + qmap_default
         ports = self.get_ports()
 
-        return '--qmap '.join([str(idx) + '.' + \
-                               self.get_value(Warp17Env.QMAP, section=port) for
-                               idx, port in enumerate(ports)])
+        return ' '.join(['--qmap ' + \
+                            str(idx) + '.' + \
+                            self.get_value(Warp17Env.QMAP, section=port) for
+                            idx, port in enumerate(ports)])
 
     def get_mbuf_sz(self):
         return self.get_value(Warp17Env.MBUF_SZ)

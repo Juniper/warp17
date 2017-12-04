@@ -117,8 +117,8 @@ enum {
 
 };
 
-#define TPG_ETH_DEV_RX_QUEUE_SIZE      1024
-#define TPG_ETH_DEV_TX_QUEUE_SIZE      1024
+#define TPG_ETH_DEV_RX_QUEUE_SIZE      4096
+#define TPG_ETH_DEV_TX_QUEUE_SIZE      4096
 
 /*
  * The maximum number of ports we can handle.
@@ -232,7 +232,7 @@ enum {
 /*
  * Test defaults.
  */
-#define GCFG_RATE_MIN_INTERVAL_SIZE    100      /* 100us */
+#define GCFG_RATE_MIN_INTERVAL_SIZE    1000     /* 1ms */
 #define GCFG_RATE_NO_LIM_INTERVAL_SIZE 10000    /* 10ms  */
 
 typedef struct global_config_s {

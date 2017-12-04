@@ -180,7 +180,9 @@ extern int  tsm_dispatch_net_event(tcp_control_block_t *tcb, tcpEvent_t event,
                                    packet_control_block_t *pcb);
 extern int  tsm_dispatch_event(tcp_control_block_t *tcb, tcpEvent_t event,
                                void *tsm_arg);
-extern int  tsm_str_to_state(const char *state_str);
+
+extern int         tsm_str_to_state(const char *state_str);
+extern const char *tsm_get_event_str(tcpEvent_t event);
 
 typedef int (*tsm_function)(tcp_control_block_t *tcb, tcpEvent_t event,
                             void *tsm_arg);

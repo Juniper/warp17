@@ -162,10 +162,10 @@ extern struct rte_mbuf *http_server_send_data(l4_control_block_t *l4,
                                               tpg_test_case_app_stats_t *stats,
                                               uint32_t max_tx_size);
 
-extern void http_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
+extern bool http_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
                                   tpg_test_case_app_stats_t *stats,
                                   uint32_t bytes_sent);
-extern void http_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
+extern bool http_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
                                   tpg_test_case_app_stats_t *stats,
                                   uint32_t bytes_sent);
 

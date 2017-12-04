@@ -113,28 +113,61 @@ extern void trace_filter_lcore_init(uint32_t lcore_id);
 
 
 /*****************************************************************************
- * Packet trace MACRO
+ * Packet and TCB trace MACROs
  ****************************************************************************/
-#define PKT_TRACE(pcb, comp, lvl, fmt, ...) do { \
-    if (PKT_TRACE_ENABLED(pcb)) {                \
-        TRACE_FMT(comp, lvl, fmt, __VA_ARGS__);  \
-    }                                            \
-} while (0)
+
+/* Actual tracing is done only if support is compiled in. */
+#if defined(TPG_DBG_TRACE)
 
 #define PKT_TRACE_ENABLED(pcb) \
     (unlikely(RTE_PER_LCORE(trace_filter).tf_enabled) ? (pcb)->pcb_trace : true)
 
-/*****************************************************************************
- * TCB trace MACRO
- ****************************************************************************/
+#define PKT_TRACE(pcb, comp, lvl, fmt, ...)         \
+    do {                                            \
+        if (PKT_TRACE_ENABLED(pcb)) {               \
+            TRACE_FMT(comp, lvl, fmt, __VA_ARGS__); \
+        }                                           \
+    } while (0)
+
 #define TCB_TRACE_ENABLED(tcb) \
     (unlikely(RTE_PER_LCORE(trace_filter).tf_enabled) ? (tcb)->tcb_trace : true)
 
-#define TCB_TRACE(tcb, comp, lvl, fmt, ...) do { \
-    if (TCB_TRACE_ENABLED(tcb)) {                \
-        TRACE_FMT(comp, lvl, fmt, __VA_ARGS__);  \
-    }                                            \
-} while (0)
+#define TCB_TRACE(tcb, comp, lvl, fmt, ...)         \
+    do {                                            \
+        if (TCB_TRACE_ENABLED(tcb)) {               \
+            TRACE_FMT(comp, lvl, fmt, __VA_ARGS__); \
+        }                                           \
+    } while (0)
+
+#else /* defined(TPG_DBG_TRACE) */
+
+#define PKT_TRACE_ENABLED(pcb) \
+    (RTE_SET_USED(pcb), false)
+
+/* Safe to assume we have at least one argument as above we use
+ * __VA_ARGS__ instead of ##__VA_ARGS__ in the real implementation of the macro.
+ */
+#define PKT_TRACE(pcb, comp, lvl, fmt, arg1, ...) \
+    do {                                          \
+        RTE_SET_USED(pcb);                        \
+        RTE_SET_USED(fmt);                        \
+        RTE_SET_USED(arg1);                       \
+    } while (0)
+
+#define TCB_TRACE_ENABLED(tcb) \
+    (RTE_SET_USED(tcb), false)
+
+/* Safe to assume we have at least one argument as above we use
+ * __VA_ARGS__ instead of ##__VA_ARGS__ in the real implementation of the macro.
+ */
+#define TCB_TRACE(tcb, comp, lvl, fmt, arg1, ...) \
+    do {                                          \
+        RTE_SET_USED(tcb);                        \
+        RTE_SET_USED(fmt);                        \
+        RTE_SET_USED(arg1);                       \
+    } while (0)
+
+#endif /* defined(TPG_DBG_TRACE) */
 
 /*****************************************************************************
  * Externs for tpg_trace_filter.c

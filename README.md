@@ -1555,7 +1555,8 @@ In general, an application called `foo` should implement the following:
 
 		- `app_data_sent_cb_t`: will be called to notify the application that
 		  (part of) the data was sent. It might happen that not all the data
-		  could be sent in one shot
+		  could be sent in one shot so the application should return `true`
+		  if what was sent corresponds to a complete message
 
 		- `app_stats_add_cb_t`: should aggregate application specific
 		  statistics

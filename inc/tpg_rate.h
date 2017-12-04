@@ -111,7 +111,7 @@ static inline void rate_limit_advance_interval(rate_limit_t *rl)
  ****************************************************************************/
 static inline uint32_t rate_limit_available(const rate_limit_t *rl)
 {
-    if (likely(rl->rl_max_burst < rl->rl_current_rate))
+    if (likely(rl->rl_max_burst <= rl->rl_current_rate))
         return rl->rl_max_burst;
 
     return rl->rl_current_rate;

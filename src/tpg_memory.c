@@ -438,7 +438,7 @@ bool mem_init(void)
                                   0,
                                   0,
                                   NULL,
-                                  NULL,
+                                  tlkp_preinit_tcb,
                                   MEM_TCB_POOL_FLAGS,
                                   cfg->gcfg_mpool_any_sock);
 

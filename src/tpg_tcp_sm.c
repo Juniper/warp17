@@ -437,7 +437,7 @@ int tsm_str_to_state(const char *state_str)
 /*****************************************************************************
  * tsm_get_event_str()
  ****************************************************************************/
-static const char *tsm_get_event_str(tcpEvent_t event)
+const char *tsm_get_event_str(tcpEvent_t event)
 {
     if (event >= TE_MAX_EVENT)
         return "<unknown>";
@@ -620,7 +620,9 @@ static int tsm_SF_init(tcp_control_block_t *tcb, tcpEvent_t event,
 
     case TE_OPEN:
         if (tcb->tcb_active) {
-            tcb->tcb_snd.iss = rte_rand();
+            /* No need to do this as it was already done at pool creation:
+             * tcb->tcb_snd.iss = rte_rand();
+             */
             tcb->tcb_snd.una = tcb->tcb_snd.iss;
             tcb->tcb_snd.nxt = tcb->tcb_snd.iss + 1;
 
@@ -764,7 +766,9 @@ static int tsm_SF_listen(tcp_control_block_t *tcb, tcpEvent_t event,
 
                 /* TODO: queuue control/text for later */
 
-                new_tcb->tcb_snd.iss = rte_rand();
+                /* No need to do this as it was already done at pool creation:
+                 * new_tcb->tcb_snd.iss = rte_rand();
+                 */
                 new_tcb->tcb_snd.una = new_tcb->tcb_snd.iss;
                 new_tcb->tcb_snd.nxt = new_tcb->tcb_snd.iss + 1;
 
