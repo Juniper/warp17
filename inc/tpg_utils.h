@@ -130,7 +130,8 @@ static inline void tpg_printf(printer_arg_t *pa, const char *fmt, ...)
 
 #define TPG_DELAY_INF() ((tpg_delay_t) {.has_d_value = false})
 
-#define TPG_DELAY_VAL(x) ((x)->d_value * 1000 + (x)->d_millivalue)
+#define TPG_DELAY_VAL(x) (((x)->has_d_value?(x)->d_value : 0) * 1000 \
+    + ((x)->has_d_millivalue ? (x)->d_millivalue : 0))
 
 #define TPG_DELAY_IS_INF(x) (!(x)->has_d_value && !(x)->has_d_millivalue)
 

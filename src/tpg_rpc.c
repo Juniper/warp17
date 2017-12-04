@@ -444,6 +444,7 @@ int tpg_xlate_tpg_union_TestCriteria(const tpg_test_criteria_t *in,
 {
     switch (in->tc_crit_type) {
     case TEST_CRIT_TYPE__RUN_TIME:
+        out->tc_run_time_s = (Delay *) malloc(sizeof(Delay));
         bzero(out->tc_run_time_s, sizeof(Delay));
         tpg_xlate_tpg_Delay(&in->tc_run_time_s, out->tc_run_time_s);
         break;

@@ -69,7 +69,7 @@ from warp17_service_pb2   import *
 class TestHttpCfg(Warp17TrafficTestCase, Warp17UnitTestCase):
 
     # Allow test cases to run for a while so we actually see requests/responses
-    RUN_TIME_S = 3
+    RUN_TIME_S = Delay(d_value=3)
 
     def _http_client_cfg(self, method=GET, req_size=42,
                          fields='Content-Type: plain/text'):

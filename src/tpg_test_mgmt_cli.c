@@ -1437,8 +1437,8 @@ cmdline_parse_inst_t cmd_tests_set_criteria_infinite = {
     .f = cmd_tests_set_criteria_parsed,
     .data = (void *) (intptr_t) 'i',
     .help_str = "set tests criteria port <eth_port> test-case-id <tcid> "
-                 "run-time|servers-up|clients-up|clients-estab|data-MB"
-                 " | infinite",
+                 "run-time|servers-up|clients-up\n"
+                 "|clients-estab|data-MB| infinite",
     .tokens = {
         (void *)&cmd_tests_set_criteria_T_set,
         (void *)&cmd_tests_set_criteria_T_tests,

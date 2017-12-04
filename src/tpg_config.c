@@ -137,7 +137,7 @@ bool cfg_init(void)
     global_config.gcfg_test_tmr_max = GCFG_TEST_TMR_MAX;
     global_config.gcfg_test_tmr_step = GCFG_TEST_TMR_STEP;
 
-    global_config.gcfg_test_max_tc_runtime = GCFG_TEST_MAX_TC_RUNTIME;
+    global_config.gcfg_test_max_tc_runtime = TPG_DELAY_INF();
 
     global_config.gcfg_rate_no_lim_interval_size =
         GCFG_RATE_NO_LIM_INTERVAL_SIZE;

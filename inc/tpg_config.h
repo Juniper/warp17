@@ -240,43 +240,47 @@ enum {
 
 typedef struct global_config_s {
 
-    uint32_t gcfg_mbuf_cfg_poolsize;
+    uint32_t    gcfg_mbuf_cfg_poolsize;
 
-    uint32_t gcfg_mbuf_poolsize;
-    uint32_t gcfg_mbuf_size;
-    uint32_t gcfg_mbuf_cache_size;
+    uint32_t    gcfg_mbuf_poolsize;
+    uint32_t    gcfg_mbuf_size;
+    uint32_t    gcfg_mbuf_cache_size;
+    uint32_t    gcfg_mbuf_poolsize;
+    uint32_t    gcfg_mbuf_size;
+    uint32_t    gcfg_mbuf_cache_size;
 
-    uint32_t gcfg_mbuf_hdr_poolsize;
-    uint32_t gcfg_mbuf_hdr_size;
-    uint32_t gcfg_mbuf_hdr_cache_size;
+    uint32_t    gcfg_mbuf_hdr_poolsize;
+    uint32_t    gcfg_mbuf_hdr_size;
+    uint32_t    gcfg_mbuf_hdr_cache_size;
 
-    uint32_t gcfg_mbuf_clone_size;
+    uint32_t    gcfg_mbuf_clone_size;
 
-    uint32_t gcfg_tcb_pool_size;
-    uint32_t gcfg_tcb_pool_cache_size;
+    uint32_t    gcfg_tcb_pool_size;
+    uint32_t    gcfg_tcb_pool_cache_size;
 
-    uint32_t gcfg_ucb_pool_size;
-    uint32_t gcfg_ucb_pool_cache_size;
+    uint32_t    gcfg_ucb_pool_size;
+    uint32_t    gcfg_ucb_pool_cache_size;
 
-    bool     gcfg_mpool_any_sock;
+    bool        gcfg_mpool_any_sock;
 
-    uint32_t gcfg_msgq_size;
+    uint32_t    gcfg_msgq_size;
 
-    uint32_t gcfg_slow_tmr_max;
-    uint32_t gcfg_slow_tmr_step;
+    uint32_t    gcfg_slow_tmr_max;
+    uint32_t    gcfg_slow_tmr_step;
 
-    uint32_t gcfg_test_tmr_max;
-    uint32_t gcfg_test_tmr_step;
+    uint32_t    gcfg_test_tmr_max;
+    uint32_t    gcfg_test_tmr_step;
 
-    uint32_t gcfg_rto_tmr_max;
-    uint32_t gcfg_rto_tmr_step;
+    uint32_t    gcfg_rto_tmr_max;
+    uint32_t    gcfg_rto_tmr_step;
 
     /* Drop 1 packet every 'gcfg_pkt_send_drop_rate' sends per core. */
-    uint32_t gcfg_pkt_send_drop_rate;
+    uint32_t    gcfg_pkt_send_drop_rate;
 
-    uint32_t gcfg_test_max_tc_runtime;
+    tpg_delay_t gcfg_test_max_tc_runtime;
 
-    uint32_t gcfg_rate_no_lim_interval_size;
+    uint32_t    gcfg_rate_min_interval_size;
+    uint32_t    gcfg_rate_no_lim_interval_size;
 
     const char *gcfg_cmd_file;
 

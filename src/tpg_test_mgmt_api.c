@@ -88,7 +88,7 @@ static void test_init_server_default_criteria(tpg_server_t *cfg,
 static void test_init_client_default_criteria(tpg_client_t *cfg __rte_unused,
                                               tpg_test_criteria_t *crit)
 {
-    *crit = CRIT_RUN_TIME(GCFG_TEST_MAX_TC_RUNTIME);
+    *crit = CRIT_RUN_TIME_INFINITE();
 }
 
 /*****************************************************************************
