@@ -130,8 +130,8 @@ enum AppProto {
 }
 
 message Delay {
-    optional uint32 d_value      = 1;
-    optional uint32 d_millivalue = 2;
+    optional uint32 d_value    = 1;
+    optional uint32 d_value_ms = 2;
 }
 
 message Rate {

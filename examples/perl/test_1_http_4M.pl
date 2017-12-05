@@ -214,7 +214,7 @@ sub configure_client_port {
     # Let the test case run for one hour.
     my $ccrit = $tc->{tc_criteria};
     $ccrit->{tc_crit_type} = warp17_enum_val(TestCritType, RUN_TIME);
-    $ccrit->{tc_run_time_s} = 3600;
+    $ccrit->{tc_run_time} = 3600;
 
     $tc->{tc_async} = 1;
 

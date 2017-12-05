@@ -448,10 +448,12 @@ static bool test_check_run_time_tc_status(tpg_test_case_t *test_case,
                                           test_env_oper_state_t *state,
                                           uint64_t now)
 {
-    state->teos_result.tc_run_time_s = TPG_DELAY(
-        TPG_TIME_DIFF(now, state->teos_start_time) / rte_get_timer_hz());
-    if (TPG_DELAY_VAL(&state->teos_result.tc_run_time_s) >=
-        TPG_DELAY_VAL(&test_case->tc_criteria.tc_run_time_s)) {
+    /* Here we divide frequency by 1000 in order to have ms precision */
+    state->teos_result.tc_run_time =
+        TPG_DELAY_M(TPG_TIME_DIFF(now, state->teos_start_time) /
+                  (rte_get_timer_hz() / 1000));
+    if (TPG_DELAY_VAL(&state->teos_result.tc_run_time) >=
+        TPG_DELAY_VAL(&test_case->tc_criteria.tc_run_time)) {
         state->teos_stop_time = now;
         return true;
     }
@@ -568,7 +570,6 @@ static bool test_check_tc_status(tpg_test_case_t *test_case,
                                  bool *passed)
 {
     uint64_t now;
-    uint64_t time;
 
     now = rte_get_timer_cycles();
     test_update_status(test_case);
@@ -602,8 +603,8 @@ static bool test_check_tc_status(tpg_test_case_t *test_case,
             test_case->tc_criteria.tc_crit_type != TEST_CRIT_TYPE__RUN_TIME) {
         if (TPG_DELAY_IS_INF(&cfg_get_config()->gcfg_test_max_tc_runtime))
             return false;
-        time = (now - state->teos_start_time) / cycles_per_us;
-        if (time > TPG_DELAY_VAL(&cfg_get_config()->gcfg_test_max_tc_runtime)) {
+        if (((now - state->teos_start_time) / cycles_per_us) / 1000 >
+            TPG_DELAY_VAL(&cfg_get_config()->gcfg_test_max_tc_runtime)) {
             state->teos_stop_time = now;
             return true;
         }

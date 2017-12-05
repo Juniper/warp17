@@ -216,11 +216,11 @@ void test_entry_criteria(const tpg_test_case_t *entry, char *buf, uint32_t len)
 {
     switch (entry->tc_criteria.tc_crit_type) {
     case TEST_CRIT_TYPE__RUN_TIME:
-        if (TPG_DELAY_IS_INF(&entry->tc_criteria.tc_run_time_s))
+        if (TPG_DELAY_IS_INF(&entry->tc_criteria.tc_run_time))
             snprintf(buf, len, "%9s: %10s", "Run Time", "INFINITE");
         else
             snprintf(buf, len, "%9s: %10"PRIu32"ms", "Run Time",
-                     TPG_DELAY_VAL(&entry->tc_criteria.tc_run_time_s));
+                     TPG_DELAY_VAL(&entry->tc_criteria.tc_run_time));
         break;
     case TEST_CRIT_TYPE__SRV_UP:
         snprintf(buf, len, "%9s: %11"PRIu32, "Srv Up",

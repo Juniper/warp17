@@ -110,7 +110,7 @@ class TestHttpCfg(Warp17TrafficTestCase, Warp17UnitTestCase):
 
     def get_client_criteria_cfg(self, eth_port, tc_id, l3_intf_count,
                                 l4_port_count):
-        return TestCriteria(tc_crit_type=RUN_TIME, tc_run_time_s=self.RUN_TIME_S)
+        return TestCriteria(tc_crit_type=RUN_TIME, tc_run_time=self.RUN_TIME_S)
 
     def get_server_app_cfg(self, eth_port, tc_id):
         return self._http_server_cfg()
@@ -245,7 +245,7 @@ class TestHttpRaw(Warp17TrafficTestCase, Warp17UnitTestCase):
 
     def get_client_criteria_cfg(self, eth_port, tc_id, l3_intf_count,
                                 l4_port_count):
-        return TestCriteria(tc_crit_type=RUN_TIME, tc_run_time_s=self.RUN_TIME_S)
+        return TestCriteria(tc_crit_type=RUN_TIME, tc_run_time=self.RUN_TIME_S)
 
     def get_server_app_cfg(self, eth_port, tc_id):
         return self._http_server_cfg()

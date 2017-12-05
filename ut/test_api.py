@@ -291,7 +291,7 @@ class TestApi(Warp17UnitTestCase):
                 _run_time = Delay(d_value = 3600)
                 # Positive test cases
                 criteria = TestCriteria(tc_crit_type=RUN_TIME,
-                                        tc_run_time_s=_run_time)
+                                        tc_run_time=_run_time)
                 self._configure_client_test_cases(1, l4_proto, 1, 10, 10,
                                                   criteria,
                                                   async,
@@ -325,14 +325,14 @@ class TestApi(Warp17UnitTestCase):
 
                 # Negative test cases
                 criteria = TestCriteria(tc_crit_type=RUN_TIME,
-                                        tc_run_time_s=_run_time)
+                                        tc_run_time=_run_time)
                 self._configure_client_test_cases(0, l4_proto, 1, 10, 10,
                                                   criteria,
                                                   async,
                                                   -errno.EINVAL)
 
                 criteria = TestCriteria(tc_crit_type=RUN_TIME,
-                                        tc_run_time_s=_run_time)
+                                        tc_run_time=_run_time)
                 self._configure_client_test_cases(1, l4_proto, 0, 10, 10,
                                                   criteria,
                                                   async,
@@ -388,7 +388,7 @@ class TestApi(Warp17UnitTestCase):
                 # Positive test cases
                 _run_time = Delay(d_value = 3600)
                 criteria = TestCriteria(tc_crit_type=RUN_TIME,
-                                        tc_run_time_s=_run_time)
+                                        tc_run_time=_run_time)
                 self._configure_server_test_cases(1, l4_proto, 1, 10, 10,
                                                   criteria,
                                                   async,
@@ -421,14 +421,14 @@ class TestApi(Warp17UnitTestCase):
 
                 # Negative test cases
                 criteria = TestCriteria(tc_crit_type=RUN_TIME,
-                                        tc_run_time_s=_run_time)
+                                        tc_run_time=_run_time)
                 self._configure_server_test_cases(0, l4_proto, 1, 10, 10,
                                                   criteria,
                                                   async,
                                                   -errno.EINVAL)
 
                 criteria = TestCriteria(tc_crit_type=RUN_TIME,
-                                        tc_run_time_s=_run_time)
+                                        tc_run_time=_run_time)
                 self._configure_server_test_cases(1, l4_proto, 0, 10, 10,
                                                   criteria,
                                                   async,
@@ -474,7 +474,7 @@ class TestApi(Warp17UnitTestCase):
                                              cl_rates=rate_ccfg),
                             tc_app=app_ccfg,
                             tc_criteria=TestCriteria(tc_crit_type=RUN_TIME,
-                                                     tc_run_time_s=Delay(
+                                                     tc_run_time=Delay(
                                                          d_value=1)))
             self.assertEqual(self.warp17_call('ConfigureTestCase', ccfg).e_code,
                              0,
@@ -808,7 +808,7 @@ class TestApi(Warp17UnitTestCase):
                                                  cl_rates=rate_ccfg),
                                 tc_app=app_ccfg,
                                 tc_criteria=TestCriteria(tc_crit_type=RUN_TIME,
-                                                         tc_run_time_s=Delay(
+                                                         tc_run_time=Delay(
                                                              d_value=run_t)))
                 self.assertEqual(
                     self.warp17_call('ConfigureTestCase', ccfg).e_code,
@@ -1002,7 +1002,7 @@ class TestApi(Warp17UnitTestCase):
                             tc_app=app_ccfg,
                             tc_latency=latency_cfg,
                             tc_criteria=TestCriteria(tc_crit_type=RUN_TIME,
-                                                     tc_run_time_s=Delay(
+                                                     tc_run_time=Delay(
                                                          d_value=1)))
             self.assertEqual(self.warp17_call('ConfigureTestCase', ccfg).e_code,
                              -errno.EINVAL, 'ConfigureTestCase')
@@ -1146,7 +1146,7 @@ class TestPartialPortApi(Warp17UnitTestCase):
                                          cl_rates=rate_cfg),
                         tc_app=app_cfg,
                         tc_criteria=TestCriteria(tc_crit_type=RUN_TIME,
-                                                 tc_run_time_s=Delay(
+                                                 tc_run_time=Delay(
                                                      d_value=42)))
 
     def setUp(self):
@@ -1293,7 +1293,7 @@ class TestPartialApi(Warp17NoTrafficTestCase, Warp17UnitTestCase):
 
         yield (UpdateArg(ua_tc_arg=tca,
                          ua_criteria=TestCriteria(tc_crit_type=RUN_TIME,
-                                                  tc_run_time_s=Delay(
+                                                  tc_run_time=Delay(
                                                       d_value=84))), None)
 
         # Now server updates:

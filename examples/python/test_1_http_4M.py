@@ -149,7 +149,7 @@ def configure_client_port():
 
     # Prepare the Client test case criteria.
     # Let the test case run for one hour.
-    ccrit = TestCriteria(tc_crit_type=RUN_TIME, tc_run_time_s=Delay(
+    ccrit = TestCriteria(tc_crit_type=RUN_TIME, tc_run_time=Delay(
         d_value=3600))
 
     # Put the whole test case config together.

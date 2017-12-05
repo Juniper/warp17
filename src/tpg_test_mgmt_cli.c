@@ -1258,7 +1258,8 @@ static void cmd_tests_set_timeouts_parsed(void *parsed_result,
         timeout = TPG_DELAY_INF();
     } else {
         timeout = TPG_DELAY(pr->timeout);
-        timeout = TPG_DELAY_M(pr->timeout_m);
+        if (pr->timeout_m)
+            timeout = TPG_DELAY_M(pr->timeout_m);
     }
 
     if (strncmp(pr->timeout_kw, "init", strlen("init") + 1) == 0)
@@ -1286,7 +1287,26 @@ cmdline_parse_inst_t cmd_tests_set_timeouts = {
     .f = cmd_tests_set_timeouts_parsed,
     .data = NULL,
     .help_str = "set tests timeouts port <eth_port> test-case-id <tcid> "
-                "init|uptime|downtime <rate>",
+                "init|uptime|downtime  (<timeout-sec>)",
+    .tokens = {
+        (void *)&cmd_tests_set_timeouts_T_set,
+        (void *)&cmd_tests_set_timeouts_T_tests,
+        (void *)&cmd_tests_set_timeouts_T_timeouts,
+        (void *)&cmd_tests_set_timeouts_T_port_kw,
+        (void *)&cmd_tests_set_timeouts_T_port,
+        (void *)&cmd_tests_set_timeouts_T_tcid_kw,
+        (void *)&cmd_tests_set_timeouts_T_tcid,
+        (void *)&cmd_tests_set_timeouts_T_timeout_kw,
+        (void *)&cmd_tests_set_timeouts_T_timeout,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_tests_set_timeouts_ms = {
+    .f = cmd_tests_set_timeouts_parsed,
+    .data = NULL,
+    .help_str = "set tests timeouts port <eth_port> test-case-id <tcid> "
+                "init|uptime|downtime (<timeout-sec> [ms <timeout-msec>])",
     .tokens = {
         (void *)&cmd_tests_set_timeouts_T_set,
         (void *)&cmd_tests_set_timeouts_T_tests,
@@ -1437,8 +1457,7 @@ cmdline_parse_inst_t cmd_tests_set_criteria_infinite = {
     .f = cmd_tests_set_criteria_parsed,
     .data = (void *) (intptr_t) 'i',
     .help_str = "set tests criteria port <eth_port> test-case-id <tcid> "
-                 "run-time|servers-up|clients-up\n"
-                 "|clients-estab|data-MB| infinite",
+                 "run-time|servers-up|clients-up|clients-estab|data-MB| infinite",
     .tokens = {
         (void *)&cmd_tests_set_criteria_T_set,
         (void *)&cmd_tests_set_criteria_T_tests,
@@ -2736,6 +2755,7 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_set_rate,
     &cmd_tests_set_rate_infinite,
     &cmd_tests_set_timeouts,
+    &cmd_tests_set_timeouts_ms,
     &cmd_tests_set_timeouts_infinite,
     &cmd_tests_set_criteria,
     &cmd_tests_set_criteria_infinite,

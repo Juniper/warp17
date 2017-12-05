@@ -72,7 +72,7 @@
 /* "Sleep" time after port start/stop operations on i40e. See
  * port_dev_hw_sync.
  */
-#define PORT_I40E_SYNC_DELAY_S 0
+#define PORT_I40E_SYNC_DELAY_S 10
 
 /*****************************************************************************
  * Global variables

@@ -718,27 +718,29 @@ __NOTE: Only IPv4 is supported for now!__
   initiated, how long a connection should live and how long a connection should
   stay down (after closing) before the client reconnects.
 
-    - __initial_delay__: amount of time (in seconds) the clients defined in the
-      test should wait before initiating a connection. `infinite` is allowed but
-      doesn't really make sense for the initial delay as it would cause the
-      clients to never initiate a connection.
+    - __initial_delay__: amount of time (in seconds and optionally in ms) the
+      clients defined in the test should wait before initiating a connection.
+       `infinite` is allowed but doesn't really make sense for the initial
+       delay as it would cause the clients to never initiate a connection.
 
 		```
-		set tests timeouts port <eth_port> test-case-id <tcid> init <timeout>|infinite
+		set tests timeouts port <eth_port> test-case-id <tcid> init (<timeout-sec> [ms <timeout-msec>]) | infinite
 		```
-    - __conn_uptime__: amount of time (in seconds) the clients defined in the
-      test should keep the connection up (and send application traffic) before
-      initiating a close. `infinite` allows the clients to stay up forever.
+    - __conn_uptime__: amount of time (in seconds and optionally in ms) the
+      clients defined in the test should keep the connection up (and send
+      application traffic) before initiating a close. `infinite` allows the
+      clients to stay up forever.
 
 		```
-		set tests timeouts port <eth_port> test-case-id <tcid> uptime <timeout>|infinite
+		set tests timeouts port <eth_port> test-case-id <tcid> uptime (<timeout-sec> [ms <timeout-msec>]) | infinite
 		```
-    - __conn_downtime__: amount of time (in seconds) the clients defined in the
-      test should keep the connection down after a closebefore initiating a
-      reconnect. `infinite` allows the clients to stay down forever.
+    - __conn_downtime__: amount of time (in seconds and optionally in ms) the
+      clients defined in the test should keep the connection down after a
+      closebefore initiating a reconnect. `infinite` allows the clients to
+      stay down forever.
 
 		```
-		set tests timeouts port <eth_port> test-case-id <tcid> downtime <timeout>|infinite
+		set tests timeouts port <eth_port> test-case-id <tcid> downtime (<timeout-sec> [ms <timeout-msec>]) | infinite
 		```
 
 * __Configure test profile rates__: each test has a specific rate limiting
