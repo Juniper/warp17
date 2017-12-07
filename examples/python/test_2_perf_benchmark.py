@@ -77,80 +77,99 @@ from warp17_client_pb2    import *
 from warp17_app_raw_pb2   import *
 from warp17_app_http_pb2  import *
 from warp17_test_case_pb2 import *
+from warp17_sockopt_pb2   import *
 from warp17_service_pb2   import *
 
 # 10M sessions
 sip_cnt = 1
 dip_cnt = 1
-sport_cnt = 40000
-dport_cnt = 100
+sport_cnt = 50000
+dport_cnt = 200
 
 sess_cnt = sip_cnt * dip_cnt * sport_cnt * dport_cnt
 serv_cnt = dip_cnt * dport_cnt
 
-expected_rate = 1000000
+expected_rate = 3000000
+
+# Run the test for a bit to get TX/RX rates
+runtime_s = 4
+
+# Scale of the TCP send window
+tcp_win_size = 32000
+
 run_cnt = 3
 
 def die(msg):
     sys.stderr.write(msg + ' Should cleanup but we just exit..\n')
     sys.exit(1)
 
-def get_server_test_case(protocol, app, req_size, resp_size):
-    l4_scfg = L4Server(l4s_proto=protocol,
-                       l4s_tcp_udp=TcpUdpServer(tus_ports=b2b_ports(dport_cnt)))
-    app_scfg = {
-        RAW: AppServer(as_app_proto=RAW,
-                       as_raw=RawServer(rs_req_plen=req_size,
-                                        rs_resp_plen=resp_size)),
-        HTTP: AppServer(as_app_proto=HTTP,
-                        as_http=HttpServer(hs_resp_code=OK_200,
-                                           hs_resp_size=resp_size))
-    }.get(app)
+def server_test_case(protocol, app_cfg):
+    l4_cfg = L4Server(l4s_proto=protocol,
+                      l4s_tcp_udp=TcpUdpServer(tus_ports=b2b_ports(dport_cnt)))
+    return TestCase(
+        tc_type=SERVER, tc_eth_port=1, tc_id=0,
+        tc_server=Server(srv_ips=b2b_sips(1, sip_cnt), srv_l4=l4_cfg,
+                         srv_app=app_cfg),
+        tc_criteria=TestCriteria(tc_crit_type=SRV_UP,
+                                 tc_srv_up=serv_cnt),
+        tc_async=False)
 
-    return TestCase(tc_type=SERVER, tc_eth_port=1, tc_id=0,
-                    tc_server=Server(srv_ips=b2b_sips(1, sip_cnt),
-                                     srv_l4=l4_scfg,
-                                     srv_app=app_scfg),
-                    tc_criteria=TestCriteria(tc_crit_type=SRV_UP,
-                                             tc_srv_up=serv_cnt),
-                    tc_async=False)
+def server_raw_app_cfg(req_size):
+    return AppServer(as_app_proto=RAW,
+                     as_raw=RawServer(rs_req_plen=req_size,
+                                      rs_resp_plen=req_size))
 
-def get_client_test_case(protocol, app, req_size, resp_size):
-    l4_ccfg = L4Client(l4c_proto=protocol,
-                       l4c_tcp_udp=TcpUdpClient(tuc_sports=b2b_ports(sport_cnt),
-                                                tuc_dports=b2b_ports(dport_cnt)))
-    rate_ccfg = RateClient(rc_open_rate=Rate(),
-                           rc_close_rate=Rate(),
-                           rc_send_rate=Rate())
+def server_http_app_cfg(req_size):
+    return AppServer(as_app_proto=HTTP,
+                     as_http=HttpServer(hs_resp_code=OK_200,
+                                        hs_resp_size=req_size))
 
-    delay_ccfg = DelayClient(dc_init_delay=Delay(d_value=0),
-                             dc_uptime=Delay(),
-                             dc_downtime=Delay())
+def server_udp_app_cfg(req_size):
+    return AppServer(as_app_proto=RAW,
+                     as_raw=RawServer(rs_req_plen=req_size,
+                                      rs_resp_plen=0))
 
-    app_ccfg = {
-        RAW: AppClient(ac_app_proto=RAW,
-                       ac_raw=RawClient(rc_req_plen=req_size,
-                                        rc_resp_plen=resp_size)),
-        HTTP: AppClient(ac_app_proto=HTTP,
-                        ac_http=HttpClient(hc_req_method=GET,
-                                           hc_req_object_name='/index.html',
-                                           hc_req_host_name='www.foobar.net',
-                                           hc_req_size=req_size))
-    }.get(app)
+def client_test_case(protocol, app_cfg, criteria):
+    l4_cfg = L4Client(l4c_proto=protocol,
+                      l4c_tcp_udp=TcpUdpClient(tuc_sports=b2b_ports(sport_cnt),
+                                               tuc_dports=b2b_ports(dport_cnt)))
+    rate_cfg = RateClient(rc_open_rate=Rate(),
+                          rc_close_rate=Rate(),
+                          rc_send_rate=Rate())
+
+    delay_cfg = DelayClient(dc_init_delay=Delay(d_value=0),
+                            dc_uptime=Delay(),
+                            dc_downtime=Delay())
 
     return TestCase(tc_type=CLIENT, tc_eth_port=0,
                     tc_id=0,
                     tc_client=Client(cl_src_ips=b2b_sips(0, sip_cnt),
                                      cl_dst_ips=b2b_dips(0, dip_cnt),
-                                     cl_l4=l4_ccfg,
-                                     cl_rates=rate_ccfg,
-                                     cl_delays=delay_ccfg,
-                                     cl_app=app_ccfg),
-                    tc_criteria=TestCriteria(tc_crit_type=CL_ESTAB,
-                                             tc_cl_estab=sess_cnt),
+                                     cl_l4=l4_cfg,
+                                     cl_rates=rate_cfg,
+                                     cl_delays=delay_cfg,
+                                     cl_app=app_cfg),
+                    tc_criteria=criteria,
                     tc_async=False)
 
-def configure_server_port(warp17_call, protocol, app, req_size, resp_size):
+def client_raw_app_cfg(req_size):
+    return AppClient(ac_app_proto=RAW,
+                     ac_raw=RawClient(rc_req_plen=req_size,
+                                      rc_resp_plen=req_size))
+
+def client_http_app_cfg(req_size):
+    return AppClient(ac_app_proto=HTTP,
+                     ac_http=HttpClient(hc_req_method=GET,
+                                        hc_req_object_name='/index.html',
+                                        hc_req_host_name='www.foobar.net',
+                                        hc_req_size=req_size))
+
+def client_udp_app_cfg(req_size):
+    return AppClient(ac_app_proto=RAW,
+                     ac_raw=RawClient(rc_req_plen=req_size,
+                                      rc_resp_plen=0))
+
+def server_port_cfg():
     pcfg = b2b_port_add(eth_port=1, def_gw=Ip(ip_version=IPV4, ip_v4=0))
     b2b_port_add_intfs(pcfg,
                        [
@@ -158,15 +177,9 @@ def configure_server_port(warp17_call, protocol, app, req_size, resp_size):
                          Ip(ip_version=IPV4, ip_v4=b2b_mask(eth_port=1, intf_idx=i)),
                          b2b_count(eth_port=1, intf_idx=i)) for i in range(0, dip_cnt)
                        ])
+    return pcfg
 
-    if warp17_call('ConfigurePort', pcfg).e_code != 0:
-        die('Error configuring port 1!')
-
-    scfg = get_server_test_case(protocol, app, req_size, resp_size)
-    if warp17_call('ConfigureTestCase', scfg).e_code != 0:
-        die('Error configuring server test case')
-
-def configure_client_port(warp17_call, protocol, app, req_size, resp_size):
+def client_port_cfg():
     pcfg = b2b_port_add(eth_port=0, def_gw=Ip(ip_version=IPV4, ip_v4=0))
     b2b_port_add_intfs(pcfg,
                        [
@@ -174,41 +187,29 @@ def configure_client_port(warp17_call, protocol, app, req_size, resp_size):
                          Ip(ip_version=IPV4, ip_v4=b2b_mask(eth_port=0, intf_idx=i)),
                          b2b_count(eth_port=0, intf_idx=i)) for i in range(0, sip_cnt)
                        ])
+    return pcfg
 
-    if warp17_call('ConfigurePort', pcfg).e_code != 0:
-        die('Error configuring port 0!')
+def run_setup_test(w17_call, cl_cfg, srv_cfg):
+    if w17_call('ConfigureTestCase', srv_cfg).e_code != 0:
+        die('Error configuring server test case')
 
-    ccfg = get_client_test_case(protocol, app, req_size, resp_size)
-    if warp17_call('ConfigureTestCase', ccfg).e_code != 0:
+    if w17_call('ConfigureTestCase', cl_cfg).e_code != 0:
         die('Error configuring client test case')
 
-
-def run_test(protocol, app, req_size, resp_size):
-    env = Warp17Env(path='./test_2_perf_benchmark.ini')
-    warp17_pid = warp17_start(env=env, exec_file='../../build/warp17',
-                              output_args=Warp17OutputArgs(out_file='/tmp/test_2_perf.out'))
-    warp17_wait(env=env, logger=LogHelper(name='benchmark',
-                                          filename='/tmp/test_2_perf.log'))
-
-    warp17_call = partial(warp17_method_call, env.get_host_name(),
-                          env.get_rpc_port(), Warp17_Stub)
-
-    configure_server_port(warp17_call, protocol, app, req_size, resp_size)
-    configure_client_port(warp17_call, protocol, app, req_size, resp_size)
-    timeout_s = int(sess_cnt / float(expected_rate)) + 2
-
-    if warp17_call('PortStart', PortArg(pa_eth_port=1)).e_code != 0:
+    if w17_call('PortStart', PortArg(pa_eth_port=1)).e_code != 0:
         die('Error starting server test cases!')
 
-    if warp17_call('PortStart', PortArg(pa_eth_port=0)).e_code != 0:
+    if w17_call('PortStart', PortArg(pa_eth_port=0)).e_code != 0:
         die('Error starting client test cases!')
+
+    timeout_s = int(sess_cnt / float(expected_rate)) + 1
 
     time.sleep(timeout_s)
 
-    result = warp17_call('GetTestStatus', TestCaseArg(tca_eth_port=0,
-                                                      tca_test_case_id=0))
+    result = w17_call('GetTestStatus', TestCaseArg(tca_eth_port=0,
+                                                   tca_test_case_id=0))
 
-    stats_result = warp17_call('GetStatistics', PortArg(pa_eth_port=0))
+    stats_result = w17_call('GetStatistics', PortArg(pa_eth_port=0))
 
     if result.tsr_state != PASSED:
         die('Test case didn\'t pass: ' + str(result))
@@ -218,65 +219,136 @@ def run_test(protocol, app, req_size, resp_size):
 
     # start and stop ts are in usecs
     duration = (end_time - start_time) / float(1000000)
-    rate = sess_cnt / duration
-    txr = stats_result.sr_phy.pys_tx_pkts / duration
-    rxr = stats_result.sr_phy.pys_rx_pkts / duration
-    link_speed_bytes = float(stats_result.sr_phy.pys_link_speed) * 1024 * 1024 / 8
-    tx_usage = min(float(stats_result.sr_phy.pys_tx_bytes) * 100 / duration / link_speed_bytes, 100.0)
-    rx_usage = min(float(stats_result.sr_phy.pys_rx_bytes) * 100 / duration / link_speed_bytes, 100.0)
+    return sess_cnt / duration
 
-    warp17_stop(env, warp17_pid, force=True)
+def run_rate_test(w17_call, cl_cfg, srv_cfg, tcp_opts_cfg):
+    if w17_call('ConfigureTestCase', srv_cfg).e_code != 0:
+        die('Error configuring server test case')
+
+    if w17_call('ConfigureTestCase', cl_cfg).e_code != 0:
+        die('Error configuring client test case')
+
+    if tcp_opts_cfg:
+        if w17_call('SetTcpSockopt',
+                    TcpSockoptArg(toa_tc_arg=TestCaseArg(tca_eth_port=0,
+                                  tca_test_case_id=0),
+                                  toa_opts=tcp_opts_cfg)).e_code != 0:
+            die('Error setting client tcp sockopt!')
+        if w17_call('SetTcpSockopt',
+                    TcpSockoptArg(toa_tc_arg=TestCaseArg(tca_eth_port=1,
+                                  tca_test_case_id=0),
+                                  toa_opts=tcp_opts_cfg)).e_code != 0:
+            die('Error setting server tcp sockopt!')
+
+    if w17_call('PortStart', PortArg(pa_eth_port=1)).e_code != 0:
+        die('Error starting server test cases!')
+
+    if w17_call('PortStart', PortArg(pa_eth_port=0)).e_code != 0:
+        die('Error starting client test cases!')
+
+    timeout_s = runtime_s + 1
+
+    time.sleep(timeout_s)
+
+    result = w17_call('GetTestStatus', TestCaseArg(tca_eth_port=0,
+                                                   tca_test_case_id=0))
+
+    stats_p0 = w17_call('GetStatistics', PortArg(pa_eth_port=0))
+    stats_p1 = w17_call('GetStatistics', PortArg(pa_eth_port=1))
+
+    if result.tsr_state != PASSED:
+        die('Test case didn\'t pass: ' + str(result))
+
+    duration = float(runtime_s)
+
+    txr = stats_p0.sr_phy.pys_tx_pkts / duration
+    rxr = stats_p1.sr_phy.pys_tx_pkts / duration
+    link_speed_bytes = float(stats_p0.sr_phy.pys_link_speed) * 1000 * 1000 / 8
+    tx_usage = min(float(stats_p0.sr_phy.pys_tx_bytes) * 100 / duration / link_speed_bytes, 100.0)
+    rx_usage = min(float(stats_p1.sr_phy.pys_tx_bytes) * 100 / duration / link_speed_bytes, 100.0)
+
+    return (txr, rxr, tx_usage, rx_usage)
+
+def cleanup_test(w17_call):
+    w17_call('PortStop', PortArg(pa_eth_port=1))
+    w17_call('PortStop', PortArg(pa_eth_port=0))
+    w17_call('DelTestCase', TestCaseArg(tca_eth_port=1, tca_test_case_id=0))
+    w17_call('DelTestCase', TestCaseArg(tca_eth_port=0, tca_test_case_id=0))
+    w17_call('ClearStatistics', PortArg(pa_eth_port=1))
+    w17_call('ClearStatistics', PortArg(pa_eth_port=0))
+
+def run_test(w17_call, cl_cfg_fn, srv_cfg_fn, tcp_opts_cfg):
+
+    setup_crit = TestCriteria(tc_crit_type=CL_ESTAB, tc_cl_estab=sess_cnt)
+    rate_crit  = TestCriteria(tc_crit_type=RUN_TIME, tc_run_time_s=runtime_s)
+
+    cleanup_test(w17_call)
+
+    rate = \
+        run_setup_test(w17_call, cl_cfg_fn(setup_crit), srv_cfg_fn())
+
+    cleanup_test(w17_call)
+
+    (txr, rxr, tx_usage, rx_usage) = \
+        run_rate_test(w17_call, cl_cfg_fn(rate_crit), srv_cfg_fn(),
+                      tcp_opts_cfg)
+
+    cleanup_test(w17_call)
+
     return (rate, txr, rxr, tx_usage, rx_usage)
 
-def run_test_averaged(descr, protocol, app, req_size, resp_size, run_cnt):
-    results = [run_test(protocol, app, req_size, resp_size)
-               for i in range(0, run_cnt)]
-    avgs = [sum(result, 0.0) / run_cnt for result in zip(*results)]
+def setup_ports(w17_call):
+    if w17_call('ConfigurePort', client_port_cfg()).e_code != 0:
+        die('Error configuring client port!')
 
-    # Print as csv
-    print '%(descr)s,%(req_size)u,%(resp_size)u,%(rate).0f,%(txr).0f,%(rxr).0f,%(txu).2f,%(rxu).2f' % \
-           {
-            'descr': descr, 'req_size': req_size, 'resp_size': resp_size,
-            'rate': avgs[0], 'txr': avgs[1], 'rxr': avgs[2],
-            'txu': avgs[3], 'rxu': avgs[4]
-           }
+    if w17_call('ConfigurePort', server_port_cfg()).e_code != 0:
+        die('Error configuring server port!')
+
+def run_test_averaged(w17_call, cl_cfg_fn, srv_cfg_fn, tcp_opts_cfg):
+
+    results = [run_test(w17_call, cl_cfg_fn, srv_cfg_fn, tcp_opts_cfg)
+               for i in range(0, run_cnt)]
+    return [sum(result, 0.0) / run_cnt for result in zip(*results)]
 
 def run():
+    configs = [
+        ('TCP',  TCP,  client_raw_app_cfg,  server_raw_app_cfg, TcpSockopt(to_win_size=tcp_win_size)),
+        ('HTTP', TCP,  client_http_app_cfg, server_http_app_cfg, TcpSockopt(to_win_size=tcp_win_size)),
+        ('UDP', UDP,  client_udp_app_cfg,  server_udp_app_cfg, None),
+    ]
+
+    payload_sizes = [0, 32, 64, 128, 256, 512, 1024, 4096, 8192]
+
+    env = Warp17Env(path='./test_2_perf_benchmark.ini')
+    warp17_pid = warp17_start(env=env, exec_file='../../build/warp17',
+                              output_args=Warp17OutputArgs(out_file='/tmp/test_2_perf.out'))
+    warp17_wait(env=env, logger=LogHelper(name='benchmark',
+                                          filename='/tmp/test_2_perf.log'))
+    w17_call = partial(warp17_method_call, env.get_host_name(),
+                       env.get_rpc_port(), Warp17_Stub)
+
+    setup_ports(w17_call)
 
     # Print csv header
     print 'Description, req_size, resp_size, rate, tx pps, rx pps, tx usage, rx usage'
 
-    # TCP RAW
-    tcp_raw_cfg = [(0, 0), (8, 8), (16, 16), (32, 32), (64, 64), (128, 128),
-                   (256, 256), (256, 512), (256, 1024), (256, 2048), (256, 4096),
-                   (256, 8192), (512, 8192), (1024, 8192), (2048, 8192)]
+    for (test_name, proto, cl_cfg_fn, srv_cfg_fn, tcp_opts) in configs:
+        for payload in payload_sizes:
+            descr = '{} request={}b response={}b'.format(test_name, payload, payload)
 
-    for (req_size, resp_size) in tcp_raw_cfg:
-        run_test_averaged('TCP request={req!s}b response={resp!s}b'.format(req=req_size,
-                                                                           resp=resp_size),
-                          TCP, RAW, req_size, resp_size, run_cnt)
+            avgs = run_test_averaged(w17_call,
+                                     partial(client_test_case, proto, cl_cfg_fn(payload)),
+                                     partial(server_test_case, proto, srv_cfg_fn(payload)),
+                                     tcp_opts)
+            # Print as csv
+            print '%(descr)s,%(req_size)u,%(resp_size)u,%(rate).0f,%(txr).0f,%(rxr).0f,%(txu).2f,%(rxu).2f' % \
+            {
+                'descr': descr, 'req_size': payload, 'resp_size': payload,
+                'rate': avgs[0], 'txr': avgs[1], 'rxr': avgs[2],
+                'txu': avgs[3], 'rxu': avgs[4]
+            }
 
-    # HTTP
-    http_cfg = [(0, 0), (8, 8), (16, 16), (32, 32), (64, 64), (128, 128),
-                (256, 256), (256, 512), (256, 1024), (256, 2048), (256, 4096),
-                (256, 8192), (256, 65536), (256, 1048576), (256, 10485760),
-                (512, 10485760), (1024, 10485760), (2048, 10485760),
-                (4096, 10485760), (8192, 10485760)]
-
-    for (req_size, resp_size) in http_cfg:
-        run_test_averaged('HTTP request={req!s}b response={resp!s}b'.format(req=req_size,
-                                                                            resp=resp_size),
-                          TCP, HTTP, req_size, resp_size, run_cnt)
-
-    # UDP RAW
-    udp_raw_cfg = [(0, 0), (8, 8), (16, 16), (32, 32), (64, 64), (128, 128),
-                   (256, 256), (256, 512), (256, 2048), (512, 8192),
-                   (2048, 8192), (4096, 8192), (8192, 8192)]
-
-    for (req_size, resp_size) in udp_raw_cfg:
-        run_test_averaged('UDP request={req!s}b response={resp!s}b'.format(req=req_size,
-                                                                           resp=resp_size),
-                          UDP, RAW, req_size, resp_size, run_cnt)
+    warp17_stop(env, warp17_pid, force=True)
 
 if __name__ == '__main__':
     run()

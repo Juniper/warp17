@@ -36,37 +36,37 @@ The configuration of the server on which the WARP17 benchmarks were run is:
 * 2 40G [Intel&reg; Ethernet Converged Network Adapter XL710-QDA1](http://ark.intel.com/products/83966/Intel-Ethernet-Converged-Network-Adapter-XL710-QDA1)
 
 __NOTE__: In order for the best performance to be achieved when running only
-one instance of WARP17, both NICs have to be installed on the same PCI bus. In
-our case the two XL710 40G adapters were both installed on __socket 1__.
+one instance of WARP17, NICs were installed on different CPU sockets. In
+our case the two XL710 40G adapters were installed on __socket 0__ and
+__socket 1__.
 
 For all tests we used the following WARP17 configuration (detailed descriptions
 of the command line arguments can be found in the [WARP17 command-line arguments](#warp17-command-line-arguments) section):
 
 * The 40G adapters were connected back to back
-* 22 lcores (hardware threads): `-c 0xFFC00FFC03`
-	- 20 lcores (10-19, 30-39) were reserved for generating/receiving
-	  traffic
+* 34 lcores (hardware threads): `-c 0xFF3FCFF3FF`
+	- 16 lcores were reserved for generating/receiving traffic on port 0
+	- 16 lcores were reserved for generating/receiving traffic on port 1
 	- 2 lcores are used for management of the test
 * 32GB RAM memory allocated from hugepages: `-m 32768`
 
 Three types of session setup benchmarks were run, __while emulating both
-the servers and the clients__ when using 10 lcores for each ethernet port:
+the servers and the clients__ when using 16 lcores for each ethernet port:
 
 * TCP sessions with raw (random) application payload
 * TCP sessions with __real__ HTTP payload
 * UDP traffic with raw (random) payload
 
 For each type of traffic 3 charts are presented with results collected
-when running the test with different request (top scale of each chart)
-and response (bottom scale of each chart) message sizes. These charts
-show the client port:
+when running the test with different request/response message sizes. These
+charts show the client port:
 
 * Session setup rate
 * Packets per second transmitted and received
-* Ethernet link utilization (percentage of 40G)
+* Ethernet link utilization (percentage of 40Gbps)
 
 It is interesting to see that when emulating real HTTP traffic on top of
-4 million TCP sessions, WARP17 can easily exhaust the 40Gbps throughput of
+a few million TCP sessions, WARP17 can easily exhaust the 40Gbps throughput of
 the link.
 
 NOTE: the script used to obtain the benchmark results is available in the
@@ -77,65 +77,67 @@ for each of the test configurations we were interested in.
 
 __NOTE__: In the case when we only want to test the TCP control implementation
 (i.e., the TCP 3-way handshake and TCP CLOSE sequence), WARP17 achieved the
-maximum setup rate of 3.4M clients/s and 3.4M servers/s, __so a total of
-6.8M TCP sessions are handled every second__.
+maximum setup rate of 8.5M clients/s and 8.5M servers/s, __so a total of
+17M TCP sessions are handled every second__.
 
-The tests set up 4 million TCP sessions (i.e., 4 million TCP clients and 4
+The tests set up 20 million TCP sessions (i.e., 10 million TCP clients and 10
 million TCP servers) on which clients continuously send fixed size requests
 (with random payload) and wait for fixed size responses from the servers.
-The tests stop after all the clients sent at least one request.
-
-* TCP raw traffic setup rate (clients and servers) varies between
-  __1.8M sess/s__ when sending small requests and responses and
-  __1.4M sess/s__ when using bigger messages:
-
-![TCP RAW setup](benchmarks/tcp_raw_setup.png)
-
-* TCP raw traffic packets per second :
-
-![TCP RAW pps](benchmarks/tcp_raw_pps.png)
 
 * TCP raw traffic link utilization reaches line rate (40Gbps) as we increase
-  the size of the requests and responses:
+  the size of the requests and responses. When line rate is achieved the number
+  of packets that actually make it on the wire decreases (due to the link
+  bandwidth):
 
-![TCP RAW link usage](benchmarks/tcp_raw_link_usage.png)
+<div align="center">
+  <img src="benchmarks/tcp_raw_link_usage.png" width="49%" alt="TCP raw link usage">
+  <img src="benchmarks/tcp_raw_pps.png" width="49%" alt="TCP raw pps">
+</div>
+
+* TCP raw traffic setup rate is stable at approximately
+  __7M sessions per second__ (3.5M TCP clients and 3.5M TCP servers per second)
+
+<div align="center">
+  <img src="benchmarks/tcp_raw_setup.png" width="49%" alt="TCP raw setup rate">
+</div>
 
 ## TCP setup and data rates for HTTP application traffic
 
-The tests set up 4 million TCP sessions (i.e., 4 million TCP clients and 4
+The tests set up 20 million TCP sessions (i.e., 10 million TCP clients and 10
 million TCP servers) on which the clients continuously send _HTTP GET_
 requests and wait for the _HTTP_ responses from the servers.
-The tests stop after all the clients sent at least one request.
-
-* HTTP traffic setup rate (clients and servers) varies between __1.8M sess/s__
-  when sending small requests and responses and __1.3M sess/s__ when using
-  bigger messages.
-
-![TCP HTTP setup](benchmarks/tcp_http_setup.png)
-
-* HTTP traffic packets per second:
-
-![TCP HTTP pps](benchmarks/tcp_http_pps.png)
 
 * HTTP traffic link utilization reaches line rate (40Gbps) as we increase the
-  size of the requests and responses:
+  size of the requests and responses. When line rate is achieved the number
+  of packets that actually make it on the wire decreases (due to the link
+  bandwidth):
 
-![TCP HTTP link usage](benchmarks/tcp_http_link_usage.png)
+<div align="center">
+  <img src="benchmarks/tcp_http_link_usage.png" width="49%" alt="HTTP link usage">
+  <img src="benchmarks/tcp_http_pps.png" width="49%" alt="HTTP pps">
+</div>
+
+* HTTP traffic setup rate is stable at approximately
+  __7M sessions per second__ (3.5M HTTP clients and 3.5M HTTP servers per
+  second)
+
+<div align="center">
+  <img src="benchmarks/tcp_http_setup.png" width="49%" alt="HTTP setup rate">
+</div>
 
 ## UDP setup and data rates for RAW application traffic
 
-The tests continuously send UDP fixed size requests size requests (with random
-payload) from 4 million clients and wait for fixed size responses from the servers.
-The tests stop after 4 million clients sent at least one request.
+The tests continuously send UDP fixed size packets (with random
+payload) from 10 million clients which are processed on the receing side by
+10 million UDP listeners.
 
-* UDP raw traffic packets per second varies between __22.5M pkts/s__ when
-  sending small requests and __9.5M pkts/s__ when sending bigger packets:
+* UDP packets are generated at approximately __22 Mpps__ (for small packets) and
+  as we reach the link bandwidth the rate decreases.
 
-![UDP raw pps](benchmarks/udp_raw_pps.png)
-
-* UDP raw traffic link utilization:
-
-![UDP raw link usage](benchmarks/udp_raw_link_usage.png)
+<div align="center">
+  <img src="benchmarks/udp_raw_link_usage.png" width="49%" alt="UDP raw link usage">
+  <img src="benchmarks/udp_raw_pps.png" width="49%" alt="UDP raw pps">
+</div>
 
 # Installing and configuring
 

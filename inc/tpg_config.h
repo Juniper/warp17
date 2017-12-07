@@ -135,7 +135,7 @@ enum {
  * Number of MBUFS we put on the ring in one go, used by the
  * calls to rte_eth_tx_burst()
  */
-#define TPG_TX_BURST_SIZE              64
+#define TPG_TX_BURST_SIZE              128
 
 /*
  * MBUF relates definitions, for now we put one packet in one MBUF.
