@@ -511,7 +511,7 @@ static struct ipv4_hdr *ipv4_build_hdr(l4_control_block_t *l4_cb,
     ip_hdr->version_ihl = (4 << 4) | (ip_hdr_len >> 2);
     ip_hdr->type_of_service = sockopt->so_ipv4.ip4so_tos;
     ip_hdr->total_length = rte_cpu_to_be_16(ip_hdr_len + l4_len);
-    ip_hdr->packet_id = rte_rand();
+    ip_hdr->packet_id = 0;
     ip_hdr->fragment_offset = rte_cpu_to_be_16(0);
     ip_hdr->time_to_live = 60;
     ip_hdr->next_proto_id = protocol;

@@ -67,94 +67,90 @@ set key right bottom
 
 set format x '%.0fb'
 set xlabel 'Response Size (bytes)'
-set x2label 'Request Size (bytes)'
 set xtics rotate by 45 right
-set x2tics rotate by 45 right
-set x2tics offset 1.5,1
 
 set format y '%.2f'
 
 # Plot TCP RAW
 start = 1
 end = start + tcp
-set yrange [0:4]
-set ylabel 'Session Setup Rate (Million sess/s)'
-set ytics 1
+
+set ytics (1, 2, 3, 4, 5)
+set yrange [0:5]
+set x2label 'Session Setup Rate (Million sess/s)'
 set output out_file('tcp_raw_setup.png')
-plot filename every ::start::end u (log(($3))+log(($2))):($4/1000000):x2tic(2):xtic(3) \
+plot filename every ::start::end u (log(($3))+log(($2))):($4/1000000):xtic(3) \
               w lp title 'TCP + RAW data: Client Setup Rate'
 
-set yrange [4:15]
-set ylabel 'Million Packets/s'
-set ytics 1
+set ytics (4, 8, 12, 16, 17)
+set yrange [4:18]
+set x2label 'Million Packets/s'
 set output out_file('tcp_raw_pps.png')
-plot filename every ::start::end u (log(($3))+log(($2))):($5/1000000):x2tic(2):xtic(3) \
+plot filename every ::start::end u (log(($3))+log(($2))):($5/1000000):xtic(3) \
               w lp title 'TCP + RAW data: Client TX pps', \
-     filename every ::start::end u (log(($3))+log(($2))):($6/1000000):x2tic(2):xtic(3) \
+     filename every ::start::end u (log(($3))+log(($2))):($6/1000000):xtic(3) \
               w lp title 'TCP + RAW data: Client RX pps'
 
-set yrange [0:110]
-set ylabel 'Link Usage (%)'
-set ytics 10
+set ytics (20, 40, 60, 80, 100)
+set yrange [1:110]
+set x2label '40Gbps Link Usage (%)'
 set output out_file('tcp_raw_link_usage.png')
-plot filename every ::start::end u (log(($3))+log(($2))):($7):x2tic(2):xtic(3) \
+plot filename every ::start::end u (log(($3))+log(($2))):($7):xtic(3) \
               w lp title 'TCP + RAW data: Client TX link usage', \
-     filename every ::start::end u (log(($3))+log(($2))):($8):x2tic(2):xtic(3) \
+     filename every ::start::end u (log(($3))+log(($2))):($8):xtic(3) \
               w lp title 'TCP + RAW data: Client RX link usage'
 
 # Plot HTTP
 start = start + tcp
 end = start + http
-set yrange [0:4]
-set ylabel 'Session Setup Rate (Million sess/s)'
-set ytics 1
+
+set ytics (1, 2, 3, 4, 5)
+set yrange [0:5]
+set x2label 'Session Setup Rate (Million sess/s)'
 set output out_file('tcp_http_setup.png')
-plot filename every ::start::end u (log(($3))+log(($2))):($4/1000000):x2tic(2):xtic(3) \
+plot filename every ::start::end u (log(($3))+log(($2))):($4/1000000):xtic(3) \
               w lp title 'HTTP: Client Setup Rate'
 
-set yrange [4:15]
-set ylabel 'Million Packets/s'
-set ytics 1
+set ytics (2, 6, 10, 14, 15)
+set yrange [4:16]
+set x2label 'Million Packets/s'
 set output out_file('tcp_http_pps.png')
-plot filename every ::start::end u (log(($3))+log(($2))):($5/1000000):x2tic(2):xtic(3) \
+plot filename every ::start::end u (log(($3))+log(($2))):($5/1000000):xtic(3) \
               w lp title 'HTTP: Client TX pps', \
-     filename every ::start::end u (log(($3))+log(($2))):($6/1000000):x2tic(2):xtic(3) \
+     filename every ::start::end u (log(($3))+log(($2))):($6/1000000):xtic(3) \
               w lp title 'HTTP: Client RX pps'
 
-set yrange [0:110]
-set ylabel 'Link Usage (%)'
-set ytics 10
+set ytics (20, 40, 60, 80, 100)
+set yrange [20:110]
+set x2label '40Gbps Link Usage (%)'
 set output out_file('tcp_http_link_usage.png')
-plot filename every ::start::end u (log(($3))+log(($2))):($7):x2tic(2):xtic(3) \
+plot filename every ::start::end u (log(($3))+log(($2))):($7):xtic(3) \
               w lp title 'HTTP: Client TX link usage', \
-     filename every ::start::end u (log(($3))+log(($2))):($8):x2tic(2):xtic(3) \
+     filename every ::start::end u (log(($3))+log(($2))):($8):xtic(3) \
               w lp title 'HTTP: Client RX link usage'
 
 # Plot UDP RAW
 start = start + http
 end = start + udp
-set yrange [4:13]
-set ylabel 'Session Setup Rate (Million sess/s)'
-set ytics 1
+
+set ytics (10, 14, 16, 20, 24, 28)
+set yrange [1:28]
+set x2label 'Session Setup Rate (Million sess/s)'
 set output out_file('udp_raw_setup.png')
-plot filename every ::start::end u (log(($3))+log(($2))):($4/1000000):x2tic(2):xtic(3) \
+plot filename every ::start::end u (log(($3))+log(($2))):($4/1000000):xtic(3) \
               w lp title 'UDP + RAW data: Client Setup Rate'
 
-set yrange [4:28]
-set ylabel 'Million Packets/s'
-set ytics 2
+set ytics (2, 6, 10, 14, 18, 22, 24)
+set yrange [0:25]
+set x2label 'Million Packets/s'
 set output out_file('udp_raw_pps.png')
-plot filename every ::start::end u (log(($3))+log(($2))):($5/1000000):x2tic(2):xtic(3) \
-              w lp title 'UDP + RAW data: Client TX pps', \
-     filename every ::start::end u (log(($3))+log(($2))):($6/1000000):x2tic(2):xtic(3) \
-              w lp title 'UDP + RAW data: Client RX pps'
+plot filename every ::start::end u (log(($3))+log(($2))):($5/1000000):xtic(3) \
+              w lp title 'UDP + RAW data: Client TX pps'
 
-set yrange [0:110]
-set ylabel 'Link Usage (%)'
-set ytics 10
+set ytics (20, 40, 60, 80, 100)
+set yrange [1:110]
+set x2label '40Gbps Link Usage (%)'
 set output out_file('udp_raw_link_usage.png')
-plot filename every ::start::end u (log(($3))+log(($2))):($7):x2tic(2):xtic(3) \
-              w lp title 'UDP + RAW data: Client TX link usage', \
-     filename every ::start::end u (log(($3))+log(($2))):($8):x2tic(2):xtic(3) \
-              w lp title 'UDP + RAW data: Client RX link usage'
+plot filename every ::start::end u (log(($3))+log(($2))):($7):xtic(3) \
+              w lp title 'UDP + RAW data: Client TX link usage'
 

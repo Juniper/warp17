@@ -475,6 +475,7 @@ static bool port_setup_port(uint8_t port)
             .hw_vlan_filter = 0, /**< VLAN filtering disabled */
             .jumbo_frame    = 1, /**< Jumbo Frame Support enabled */
             .hw_strip_crc   = 0, /**< CRC stripped by hardware */
+            .enable_scatter = 1,
         },
         .rx_adv_conf = {
             .rss_conf = {

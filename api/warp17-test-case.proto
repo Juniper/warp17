@@ -113,7 +113,9 @@ message LatencyStats {
     required uint32 ls_min_latency          = 3;
     required uint32 ls_max_latency          = 4;
     required uint64 ls_sum_latency          = 5;
-    required uint64 ls_samples_count        = 6;
+    required uint64 ls_sum_jitter           = 6;
+    required uint64 ls_instant_jitter        = 7;
+    required uint64 ls_samples_count        = 8;
 }
 
 message TestCaseLatencyStats {

@@ -574,8 +574,11 @@ class TestPerf(Warp17UnitTestCase):
                                        tstamp=True, recent_stats=True)
 
     def test_14_timestamp_raw_4M_tcp_sess_data_1024b_setup_rate(self):
-        """Tests setting up 4M TCP sessions (no traffic)."""
+        """Tests setting up 4M TCP sessions + 1024 bytes packet data."""
         """Port 0 is the client, Port 1 is the server"""
+
+        if self._get_skip_big_data():
+            self.skipTest('Big packet data tests skipped')
 
         self.lh.info('Test test_14_timestamp_raw_4M_tcp_sess_data_1024b_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
@@ -586,7 +589,7 @@ class TestPerf(Warp17UnitTestCase):
                                        expected_rate=self._get_expected_tcp_data_tstamp())
 
     def test_15_timestamp_raw_4M_udp_sess_data_1024b_setup_rate(self):
-        """Tests setting up 4M UDP sessions + 10 byte packet data."""
+        """Tests setting up 4M UDP sessions + 1024 byte packet data."""
 
         self.lh.info('Test test_15_timestamp_raw_4M_udp_sess_data_1024b_setup_rate')
         # No rate limiting for UDP!
@@ -599,8 +602,11 @@ class TestPerf(Warp17UnitTestCase):
                                        expected_rate=self._get_expected_udp_data_tstamp())
 
     def test_16_recent_timestamp_raw_4M_tcp_sess_data_1024b_setup_rate(self):
-        """Tests setting up 4M TCP sessions (no traffic)."""
+        """Tests setting up 4M TCP sessions + 1024 bytes packet data."""
         """Port 0 is the client, Port 1 is the server"""
+
+        if self._get_skip_big_data():
+            self.skipTest('Big packet data tests skipped')
 
         self.lh.info('Test test_16_recent_timestamp_raw_4M_tcp_sess_data_1024b_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
@@ -612,7 +618,7 @@ class TestPerf(Warp17UnitTestCase):
                                        recent_stats=True)
 
     def test_17_recent_timestamp_raw_4M_udp_sess_data_1024b_setup_rate(self):
-        """Tests setting up 4M UDP sessions + 10 byte packet data."""
+        """Tests setting up 4M UDP sessions + 1024 byte packet data."""
 
         self.lh.info('Test test_17_recent_timestamp_raw_4M_udp_sess_data_1024b_setup_rate')
         # No rate limiting for UDP!

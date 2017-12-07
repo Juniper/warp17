@@ -132,6 +132,21 @@ void tlkp_tcp_lcore_init(uint32_t lcore_id)
 }
 
 /*****************************************************************************
+ * tlkp_preinit_tcb()
+ *      Called only once for each TCB when the mempool is created.
+ ****************************************************************************/
+void tlkp_preinit_tcb(struct rte_mempool *mp __rte_unused,
+                      void *opaque_arg __rte_unused,
+                      void *ptr,
+                      unsigned index __rte_unused)
+{
+    tcp_control_block_t *tcb = ptr;
+
+    /* Preinitialize everything that would be too slow to do in fast path. */
+    tcb->tcb_snd.iss = rte_rand();
+}
+
+/*****************************************************************************
  * tlkp_alloc_tcb()
  ****************************************************************************/
 tcp_control_block_t *tlkp_alloc_tcb(void)

@@ -70,8 +70,14 @@
 #define TPG_HASH_BUCKET_BIT_SIZE 20
 #define TPG_HASH_BUCKET_SIZE     (1 << TPG_HASH_BUCKET_BIT_SIZE)
 #define TPG_HASH_BUCKET_MASK     (TPG_HASH_BUCKET_SIZE - 1)
-#define TPG_HASH_MOD(hash)       ((((uint32_t)hash) >>  TPG_HASH_BUCKET_BIT_SIZE) ^ \
-                                  (((uint32_t)hash) & TPG_HASH_BUCKET_MASK))
+
+/* The proper modulo fun should be `(((uint32_t)hash) & TPG_HASH_BUCKET_MASK)`
+ * but this actually affect a lot performance, so we decided to use a simpler
+ * function.
+ */
+#define TPG_HASH_MOD(hash)                                                     \
+    (((((uint32_t)(hash)) >> TPG_HASH_BUCKET_BIT_SIZE) ^ ((uint32_t)(hash))) & \
+     TPG_HASH_BUCKET_MASK)
 
 /*****************************************************************************
  * Lookup hash definitions

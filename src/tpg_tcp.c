@@ -451,6 +451,9 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
         unsigned int  i;
         uint32_t     *options = (uint32_t *) (tcp_hdr + 1);
 
+        /* To avoid compiler complaints if tracing is not compiled in. */
+        RTE_SET_USED(options);
+
         for (i = 0;
              i < ((tcp_hdr_len - sizeof(struct tcp_hdr)) / sizeof(uint32_t));
              i++) {

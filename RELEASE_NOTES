@@ -1,3 +1,19 @@
+v1.6:
+-----
+FEATURES:
+- Add jitter computation when measuring latency.
+
+FIXED ISSUES:
+- Fix lookup table hash functions.
+- Fix MTU setting for ixgbe.
+- Fix performance bottleneck caused by cache false sharing.
+
+KNOWN ISSUES:
+- See v1.5.
+
+API CHANGES:
+- No changes.
+
 v1.5:
 -----
 FEATURES:

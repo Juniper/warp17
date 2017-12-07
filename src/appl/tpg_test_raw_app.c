@@ -744,7 +744,7 @@ static void raw_data_sent(app_data_t *app_data, uint32_t bytes_sent)
 /*****************************************************************************
  * raw_client_data_sent()
  ****************************************************************************/
-void raw_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
+bool raw_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
                           tpg_test_case_app_stats_t *stats,
                           uint32_t bytes_sent)
 {
@@ -770,13 +770,17 @@ void raw_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
             raw_goto_state(&app_data->ad_raw, RAWS_SENDING,
                            app_data->ad_raw.ra_req_size);
         }
+
+        return true;
     }
+
+    return false;
 }
 
 /*****************************************************************************
  * raw_server_data_sent()
  ****************************************************************************/
-void raw_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
+bool raw_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
                           tpg_test_case_app_stats_t *stats,
                           uint32_t bytes_sent)
 {
@@ -790,7 +794,10 @@ void raw_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
                    l4->l4cb_interface);
         raw_goto_state(&app_data->ad_raw, RAWS_RECEIVING,
                        app_data->ad_raw.ra_resp_size);
+        return true;
     }
+
+    return false;
 }
 
 /*****************************************************************************

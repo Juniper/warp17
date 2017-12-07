@@ -119,9 +119,9 @@ static uint32_t test_case_execute_udp_close(test_case_info_t *tc_info,
 static uint32_t test_case_execute_udp_send(test_case_info_t *tc_info,
                                            test_case_init_msg_t *cfg,
                                            uint32_t to_send_cnt);
-static void test_case_update_latency_stats(tpg_latency_stats_t *stats,
-                                           test_oper_latency_state_t *buffer,
-                                           tpg_test_case_latency_t *tc_latency);
+static void test_update_recent_latency_stats(tpg_latency_stats_t *stats,
+                                             test_oper_latency_state_t *buffer,
+                                             tpg_test_case_latency_t *tc_latency);
 
 static void test_case_latency_init(test_case_info_t *tc_info);
 
@@ -306,8 +306,12 @@ static void test_update_latency_stats(tpg_latency_stats_t *stats,
 {
     int64_t avg = 0;
 
-    if (stats->ls_samples_count > 0)
+    if (stats->ls_samples_count > 0) {
         avg = stats->ls_sum_latency / stats->ls_samples_count;
+        stats->ls_instant_jitter = (avg >= (int) latency) ?
+                                  (avg - latency) : (latency - avg);
+        stats->ls_sum_jitter += stats->ls_instant_jitter;
+    }
 
     if (tci_latency->has_tcs_max) {
         if (latency > tci_latency->tcs_max)
@@ -1160,10 +1164,12 @@ test_case_execute_tcp_send(test_case_info_t *tc_info,
 {
     test_oper_state_t *ts = &tc_info->tci_state;
     uint32_t           sent_cnt;
+    uint32_t           sent_real_cnt;
 
-    for (sent_cnt = 0;
-            !TEST_CBQ_EMPTY(&ts->tos_to_send_cbs) && sent_cnt < to_send_cnt;
-            sent_cnt++) {
+    for (sent_cnt = 0, sent_real_cnt = 0;
+            !TEST_CBQ_EMPTY(&ts->tos_to_send_cbs) &&
+                sent_real_cnt < to_send_cnt;
+            sent_real_cnt++) {
         int                  error;
         struct rte_mbuf     *data_mbuf;
         uint32_t             data_sent = 0;
@@ -1178,6 +1184,10 @@ test_case_execute_tcp_send(test_case_info_t *tc_info,
                                                            TCB_AVAIL_SEND(tcb));
         if (unlikely(data_mbuf == NULL)) {
             TEST_NOTIF_TCB(TEST_NOTIF_DATA_NULL, tcb);
+
+            /* Move at the end to try again later. */
+            TEST_CBQ_REM_TO_SEND(ts, &tcb->tcb_l4);
+            TEST_CBQ_ADD_TO_SEND(ts, &tcb->tcb_l4);
             continue;
         }
 
@@ -1194,14 +1204,23 @@ test_case_execute_tcp_send(test_case_info_t *tc_info,
             TEST_NOTIF_TCB(TEST_NOTIF_DATA_FAILED, tcb);
 
         if (data_sent != 0) {
+            bool msg_done;
+
             /* Here we can actually be in 2 potential states:
              * - SENDING if we still have snd window available
              * - NO_SND_WIN if we barely fit the message we had to send.
              */
-            APP_CALL(data_sent, cfg->tcim_type, app_id)(&tcb->tcb_l4,
+            msg_done = APP_CALL(data_sent,
+                                cfg->tcim_type, app_id)(&tcb->tcb_l4,
                                                         &tcb->tcb_l4.l4cb_app_data,
                                                         &tc_info->tci_app_stats,
                                                         data_sent);
+            /* We increment the sent count only if the application managed to
+             * transmit a whole message.
+             */
+            if (msg_done)
+                sent_cnt++;
+
         } else if (!tcp_snd_win_full(tcb)) {
             /* Move at the end. */
             TEST_CBQ_REM_TO_SEND(ts, &tcb->tcb_l4);
@@ -1329,13 +1348,15 @@ test_case_execute_udp_send(test_case_info_t *tc_info,
 {
     test_oper_state_t *ts = &tc_info->tci_state;
     uint32_t           sent_cnt;
+    uint32_t           sent_real_cnt;
     bool               is_server;
 
     is_server = (cfg->tcim_type == TEST_CASE_TYPE__SERVER);
 
-    for (sent_cnt = 0;
-            !TEST_CBQ_EMPTY(&ts->tos_to_send_cbs) && sent_cnt < to_send_cnt;
-            sent_cnt++) {
+    for (sent_cnt = 0, sent_real_cnt = 0;
+            !TEST_CBQ_EMPTY(&ts->tos_to_send_cbs) &&
+                sent_real_cnt < to_send_cnt;
+            sent_real_cnt++) {
         int                  error;
         struct rte_mbuf     *data_mbuf;
         uint32_t             data_sent = 0;
@@ -1350,6 +1371,10 @@ test_case_execute_udp_send(test_case_info_t *tc_info,
                                                            UCB_MTU(ucb));
         if (unlikely(data_mbuf == NULL)) {
             TEST_NOTIF_UCB(TEST_NOTIF_DATA_NULL, ucb);
+
+            /* Move at the end and try again later. */
+            TEST_CBQ_REM_TO_SEND(ts, &ucb->ucb_l4);
+            TEST_CBQ_ADD_TO_SEND(ts, &ucb->ucb_l4);
             continue;
         }
 
@@ -1362,10 +1387,19 @@ test_case_execute_udp_send(test_case_info_t *tc_info,
             TEST_NOTIF_UCB(TEST_NOTIF_DATA_FAILED, ucb);
 
         if (data_sent != 0) {
-            APP_CALL(data_sent, cfg->tcim_type, app_id)(&ucb->ucb_l4,
+            bool msg_done;
+
+            msg_done = APP_CALL(data_sent,
+                                cfg->tcim_type, app_id)(&ucb->ucb_l4,
                                                         &ucb->ucb_l4.l4cb_app_data,
                                                         &tc_info->tci_app_stats,
                                                         data_sent);
+            /* We increment the sent count only if the application managed to
+             * transmit a whole message.
+             */
+            if (msg_done)
+                sent_cnt++;
+
         } else if ((is_server &&
                         test_server_sm_has_data_pending(&ucb->ucb_l4)) ||
                         (!is_server &&
@@ -2101,9 +2135,9 @@ static int test_case_stats_req_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 
         tc_latency_stats = &tc_info->tci_general_stats.tcs_latency_stats;
 
-        test_case_update_latency_stats(&tc_latency_stats->tcls_sample_stats,
-                                       &tc_info->tci_latency_state,
-                                       &tc_info->tci_latency);
+        test_update_recent_latency_stats(&tc_latency_stats->tcls_sample_stats,
+                                         &tc_info->tci_latency_state,
+                                         &tc_info->tci_latency);
     }
 
     /* Struct copy the stats! */
@@ -2171,44 +2205,24 @@ static int test_case_rates_stats_req_cb(uint16_t msgid,
 }
 
 /*****************************************************************************
- * test_case_update_latency_stats()
+ * test_fix_recent_latency_stats()
+ *      this fun should be call only for recent stats!
  ****************************************************************************/
-static void test_case_update_latency_stats(tpg_latency_stats_t *stats,
-                                           test_oper_latency_state_t *buffer,
-                                           tpg_test_case_latency_t *tc_latency)
+static void
+test_update_recent_latency_stats(tpg_latency_stats_t *stats,
+                                 test_oper_latency_state_t *buffer,
+                                 tpg_test_case_latency_t *tc_latency)
 {
-    uint64_t sum;
-    uint64_t min;
-    uint64_t max;
-    uint64_t i;
+    uint32_t i;
 
-    stats->ls_max_exceeded = 0;
-    stats->ls_max_average_exceeded = 0;
-    max = 0;
-    sum = 0;
-    min = UINT32_MAX;
+    bzero(stats, sizeof(tpg_latency_stats_t));
+    stats->ls_min_latency = UINT32_MAX;
 
+    /* Here I walk trough my whole buffer in order to fix recent stats */
     for (i = 0; i < buffer->tols_actual_length; i++) {
-        sum += buffer->tols_timestamps[i];
-        if (buffer->tols_timestamps[i] < min)
-            min = buffer->tols_timestamps[i];
-        if (buffer->tols_timestamps[i] > max)
-            max = buffer->tols_timestamps[i];
-
-        if (tc_latency->has_tcs_max)
-            if (buffer->tols_timestamps[i] > tc_latency->tcs_max)
-                INC_STATS(stats, ls_max_exceeded);
-
-        if (tc_latency->has_tcs_max_avg)
-            if ((sum / (i+1)) > tc_latency->tcs_max_avg)
-                INC_STATS(stats, ls_max_average_exceeded);
-
+        test_update_latency_stats(stats, buffer->tols_timestamps[i],
+                                  tc_latency);
     }
-
-    stats->ls_sum_latency = sum;
-    stats->ls_max_latency = max;
-    stats->ls_min_latency = min;
-    stats->ls_samples_count = buffer->tols_actual_length;
 
 }
 

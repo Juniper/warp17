@@ -117,8 +117,8 @@ enum {
 
 };
 
-#define TPG_ETH_DEV_RX_QUEUE_SIZE      1024
-#define TPG_ETH_DEV_TX_QUEUE_SIZE      1024
+#define TPG_ETH_DEV_RX_QUEUE_SIZE      4096
+#define TPG_ETH_DEV_TX_QUEUE_SIZE      4096
 
 /*
  * The maximum number of ports we can handle.
@@ -135,7 +135,7 @@ enum {
  * Number of MBUFS we put on the ring in one go, used by the
  * calls to rte_eth_tx_burst()
  */
-#define TPG_TX_BURST_SIZE              64
+#define TPG_TX_BURST_SIZE              128
 
 /*
  * MBUF relates definitions, for now we put one packet in one MBUF.
@@ -232,7 +232,7 @@ enum {
 /*
  * Test defaults.
  */
-#define GCFG_RATE_MIN_INTERVAL_SIZE    100      /* 100us */
+#define GCFG_RATE_MIN_INTERVAL_SIZE    1000     /* 1ms */
 #define GCFG_RATE_NO_LIM_INTERVAL_SIZE 10000    /* 10ms  */
 
 typedef struct global_config_s {

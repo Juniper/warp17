@@ -79,6 +79,10 @@ extern void                 tlkp_walk_tcb(uint32_t phys_port,
 
 extern bool                 tlkp_tcp_init(void);
 extern void                 tlkp_tcp_lcore_init(uint32_t lcore_id);
+extern void                 tlkp_preinit_tcb(struct rte_mempool *mp,
+                                             void *opaque_arg,
+                                             void *ptr,
+                                             unsigned index);
 extern tcp_control_block_t *tlkp_alloc_tcb(void);
 extern void                 tlkp_init_tcb(tcp_control_block_t *tcb,
                                           uint32_t local_addr, uint32_t remote_addr,

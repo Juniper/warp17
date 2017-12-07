@@ -68,6 +68,7 @@
 #define TPG_APP_UINT64_MBUF_FLAG_STATIC       0x0001000000000000
 #define TPG_APP_UINT64_MBUF_FLAG_TSTAMP       0x0002000000000000
 #define TPG_APP_UINT64_MBUF_FLAG_TSTAMP_MULTI 0x0004000000000000
+#define TPG_APP_UINT64_MBUF_FLAG_TX_TRACE     0x0008000000000000
 #define TPG_APP_UINT64_MBUF_FLAG_MAX          0xFFFF000000000000
 
 /* Reserve 16 bits for timestamp offset. */
@@ -182,6 +183,29 @@ static_assert(TPG_APP_UINT64_MBUF_FLAG_MAX >
  ****************************************************************************/
 #define DATA_IS_STATIC(mbuf) \
     ((mbuf)->udata64 & TPG_APP_UINT64_MBUF_FLAG_STATIC)
+
+/*****************************************************************************
+ * DATA_SET_TX_TRACE()
+ *     Uses the userdata field in the mbuf to mark the fact that the data it
+ *     points to needs to be traced on TX.
+ ****************************************************************************/
+#define DATA_SET_TX_TRACE(mbuf) \
+    ((mbuf)->udata64 |= TPG_APP_UINT64_MBUF_FLAG_TX_TRACE)
+
+/*****************************************************************************
+ * DATA_CLEAR_TX_TRACE()
+ *     Clears the TX_TRACE flag in the mbuf user data field.
+ ****************************************************************************/
+#define DATA_CLEAR_TX_TRACE(mbuf) \
+    ((mbuf)->udata64 &= ~TPG_APP_UINT64_MBUF_FLAG_TX_TRACE)
+
+/*****************************************************************************
+ * DATA_IS_TX_TRACE()
+ *     Checks the userdata field in the mbuf for the TX_TRACE flag which
+ *     indicates the fact that the data it points to needs to be traced on TX.
+ ****************************************************************************/
+#define DATA_IS_TX_TRACE(mbuf) \
+    ((mbuf)->udata64 & TPG_APP_UINT64_MBUF_FLAG_TX_TRACE)
 
 /*****************************************************************************
  * Static inlines

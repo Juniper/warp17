@@ -230,20 +230,6 @@ extern int           trace_add_formatted(int lcore_idx, uint32_t trace_buf_id,
                                          ...)
                      __attribute__ ((format (printf, 4, 5)));
 
-#define TRACE(comp, lvl, data, datalen)                          \
-    (unlikely(trace_allowed(rte_lcore_index(-1), TRACE_ ## comp, \
-                            TRACE_LVL_ ## lvl)) ?                \
-        trace_add_raw(rte_lcore_index(-1), TRACE_ ## comp,       \
-                      TRACE_LVL_ ## lvl, (data), (datalen)) :    \
-        0)
-
-#define TRACE_FMT(comp, lvl, fmt, ...)                               \
-    (unlikely(trace_allowed(rte_lcore_index(-1), TRACE_ ## comp,     \
-                            TRACE_LVL_ ## lvl)) ?                    \
-        trace_add_formatted(rte_lcore_index(-1), TRACE_ ## comp,     \
-                            TRACE_LVL_ ## lvl, (fmt), __VA_ARGS__) : \
-        0)
-
 typedef void (*trace_printer_cb_t)(void *arg, trace_level_t lvl,
                                    const char *comp_name,
                                    const char *data, uint32_t len);
@@ -267,6 +253,36 @@ typedef void (*trace_comp_it_cb_t)(const trace_comp_t *tc, void *data);
  * path!
  */
 extern void trace_comp_iterate(trace_comp_it_cb_t cb, void *data);
+
+/* Actual tracing is done only if support is compiled in. */
+#if defined(TPG_DBG_TRACE)
+
+#define TRACE(comp, lvl, data, datalen)                          \
+    (unlikely(trace_allowed(rte_lcore_index(-1), TRACE_ ## comp, \
+                            TRACE_LVL_ ## lvl)) ?                \
+        trace_add_raw(rte_lcore_index(-1), TRACE_ ## comp,       \
+                      TRACE_LVL_ ## lvl, (data), (datalen)) :    \
+        0)
+
+#define TRACE_FMT(comp, lvl, fmt, ...)                               \
+    (unlikely(trace_allowed(rte_lcore_index(-1), TRACE_ ## comp,     \
+                            TRACE_LVL_ ## lvl)) ?                    \
+        trace_add_formatted(rte_lcore_index(-1), TRACE_ ## comp,     \
+                            TRACE_LVL_ ## lvl, (fmt), __VA_ARGS__) : \
+        0)
+
+#else /* defined(TPG_DBG_TRACE) */
+
+#define TRACE(comp, lvl, data, datalen) \
+    do {                                \
+        RTE_SET_USED(data);             \
+        RTE_SET_USED(datalen);          \
+    } while (0)
+
+#define TRACE_FMT(comp, lvl, fmt, ...) \
+    RTE_SET_USED(fmt)
+
+#endif /* defined(TPG_DBG_TRACE) */
 
 #endif /* _H_TPG_TRACE_ */
 

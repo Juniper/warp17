@@ -62,5 +62,19 @@
 
 bool trace_cli_init(void);
 
+#if !defined(WARP17_TRACE)
+
+#define CMD_CHECK_TRACE_SUPPORT(cl)                                       \
+    (cmdline_printf((cl), "ERROR: %s!\n",                                 \
+                    "Recompile with TPG_DBG_TRACE for trace support!\n"), \
+     false)
+
+#else /* !defined(WARP17_TRACE) */
+
+#define CMD_CHECK_TRACE_SUPPORT(cl) \
+    (RTE_SET_USED(cl), true)
+
+#endif /* !defined(WARP17_TRACE) */
+
 #endif /* _H_TPG_TRACE_CLI_ */
 

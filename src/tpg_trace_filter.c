@@ -270,6 +270,9 @@ static void cmd_trace_filter_parsed(void *parsed, struct cmdline *cl, void *data
     int enable = (intptr_t)data;
     int lcore_index = rte_lcore_index(pr->core);
 
+    if (!CMD_CHECK_TRACE_SUPPORT(cl))
+        return;
+
     if (pr->core == rte_lcore_id()) {
         cmdline_printf(cl, "WARNING: Ignoring console core!\n");
         return;
