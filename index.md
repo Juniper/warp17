@@ -14,9 +14,12 @@ that would run on commodity hardware.
 A peek at _WARP17_'s performances shows that it easily reaches line rate of
 40Gbps with:
 
-* TCP setup rates of __6.8M sessions/sec__
-* HTTP setup rates of __3.6M sessions/sec__ with continuous bidirectional traffic
-* UDP rates between __20M pkts/sec__ and __45M pkts/sec__
+* TCP setup rates of __17M sessions/sec__
+* HTTP setup rates of __7M sessions/sec__ with continuous bidirectional traffic
+* UDP rates between __22M pkts/sec__
+* 40Gbps line rate traffic with RAW TCP requests of size 1K
+* 40Gbps line rate traffic with HTTP requests of size 1K
+* 40Gbps line rate traffic with UDP packets of size 256 bytes UDP
 
 For details see the [Benchmarks Section](https://github.com/Juniper/warp17/blob/master/README.md#performance-benchmarks) in
 the documentation.
