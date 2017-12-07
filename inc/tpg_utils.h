@@ -125,8 +125,9 @@ static inline void tpg_printf(printer_arg_t *pa, const char *fmt, ...)
 #define TPG_DELAY(value) \
     ((tpg_delay_t) {.d_value = (value), .has_d_value = true})
 
-#define TPG_DELAY_M(value) \
-    ((tpg_delay_t) {.d_value_ms = (value), .has_d_value_ms = true})
+#define TPG_DELAY_M(value, value_ms)                                \
+    ((tpg_delay_t) {.d_value_ms = (value_ms), .has_d_value_ms = true, \
+    .d_value = (value), .has_d_value = true})
 
 #define TPG_DELAY_INF() ((tpg_delay_t) {.has_d_value = false})
 

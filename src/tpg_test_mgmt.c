@@ -450,8 +450,8 @@ static bool test_check_run_time_tc_status(tpg_test_case_t *test_case,
 {
     /* Here we divide frequency by 1000 in order to have ms precision */
     state->teos_result.tc_run_time =
-        TPG_DELAY_M(TPG_TIME_DIFF(now, state->teos_start_time) /
-                  (rte_get_timer_hz() / 1000));
+        TPG_DELAY_M(0, TPG_TIME_DIFF(now, state->teos_start_time) /
+                   (rte_get_timer_hz() / 1000));
     if (TPG_DELAY_VAL(&state->teos_result.tc_run_time) >=
         TPG_DELAY_VAL(&test_case->tc_criteria.tc_run_time)) {
         state->teos_stop_time = now;

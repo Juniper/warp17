@@ -1207,6 +1207,7 @@ cmdline_parse_inst_t cmd_tests_set_rate_infinite = {
 
     cmdline_fixed_string_t timeout_kw;
     uint32_t               timeout;
+    cmdline_fixed_string_t timeout_ms_kw;
     uint32_t               timeout_m;
 
     cmdline_fixed_string_t infinite;
@@ -1233,6 +1234,8 @@ static cmdline_parse_token_string_t cmd_tests_set_timeouts_T_timeout_kw =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_timeouts_result, timeout_kw, "init#uptime#downtime");
 static cmdline_parse_token_num_t cmd_tests_set_timeouts_T_timeout =
     TOKEN_NUM_INITIALIZER(struct cmd_tests_set_timeouts_result, timeout, UINT32);
+static cmdline_parse_token_string_t cmd_tests_set_timeouts_T_timeout_ms_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_timeouts_result, timeout_ms_kw, "ms");
 static cmdline_parse_token_num_t cmd_tests_set_timeouts_T_timeout_m =
     TOKEN_NUM_INITIALIZER(struct cmd_tests_set_timeouts_result, timeout_m, UINT32);
 
@@ -1246,6 +1249,7 @@ static void cmd_tests_set_timeouts_parsed(void *parsed_result,
     printer_arg_t                         parg;
     struct cmd_tests_set_timeouts_result *pr;
     bool                                  infinite;
+    bool                                  ms;
     tpg_update_arg_t                      update_arg;
     tpg_delay_t                           timeout;
 
@@ -1253,13 +1257,14 @@ static void cmd_tests_set_timeouts_parsed(void *parsed_result,
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
     infinite = (((intptr_t) data) == 'i');
+    ms = (((intptr_t) data) == 'i');
 
     if (infinite) {
         timeout = TPG_DELAY_INF();
     } else {
         timeout = TPG_DELAY(pr->timeout);
-        if (pr->timeout_m)
-            timeout = TPG_DELAY_M(pr->timeout_m);
+        if (ms)
+            timeout = TPG_DELAY_M(pr->timeout, pr->timeout_m);
     }
 
     if (strncmp(pr->timeout_kw, "init", strlen("init") + 1) == 0)
@@ -1304,7 +1309,7 @@ cmdline_parse_inst_t cmd_tests_set_timeouts = {
 
 cmdline_parse_inst_t cmd_tests_set_timeouts_ms = {
     .f = cmd_tests_set_timeouts_parsed,
-    .data = NULL,
+    .data = (void *) (intptr_t) 'm',
     .help_str = "set tests timeouts port <eth_port> test-case-id <tcid> "
                 "init|uptime|downtime (<timeout-sec> [ms <timeout-msec>])",
     .tokens = {
@@ -1317,6 +1322,7 @@ cmdline_parse_inst_t cmd_tests_set_timeouts_ms = {
         (void *)&cmd_tests_set_timeouts_T_tcid,
         (void *)&cmd_tests_set_timeouts_T_timeout_kw,
         (void *)&cmd_tests_set_timeouts_T_timeout,
+        (void *)&cmd_tests_set_timeouts_T_timeout_ms_kw,
         (void *)&cmd_tests_set_timeouts_T_timeout_m,
         NULL,
     },
@@ -1356,6 +1362,8 @@ cmdline_parse_inst_t cmd_tests_set_timeouts_infinite = {
 
     cmdline_fixed_string_t criteria_kw;
     uint32_t               criteria_val;
+    cmdline_fixed_string_t criteria_ms_kw;
+    uint32_t               criteria_val_ms;
     cmdline_fixed_string_t infinite;
 };
 
@@ -1380,18 +1388,22 @@ static cmdline_parse_token_string_t cmd_tests_set_criteria_T_criteria_kw =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_criteria_result, criteria_kw, "run-time#servers-up#clients-up#clients-estab#data-MB");
 static cmdline_parse_token_num_t cmd_tests_set_criteria_T_criteria_val =
     TOKEN_NUM_INITIALIZER(struct cmd_tests_set_criteria_result, criteria_val, UINT32);
+static cmdline_parse_token_string_t cmd_tests_set_criteria_T_criteria_ms_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_criteria_result, criteria_ms_kw, "ms");
+static cmdline_parse_token_num_t cmd_tests_set_criteria_T_criteria_val_ms =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_criteria_result, criteria_val_ms, UINT32);
 static cmdline_parse_token_string_t cmd_tests_set_criteria_T_criteria_infinite =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_criteria_result, infinite, "infinite");
 
 static void cmd_tests_set_criteria_parsed(void *parsed_result,
-                                          struct cmdline *cl,
-                                          void *data __rte_unused)
+                                          struct cmdline *cl, void *data)
 {
     printer_arg_t                         parg;
     struct cmd_tests_set_criteria_result *pr;
     tpg_update_arg_t                      update_arg;
     tpg_test_criteria_t                   criteria;
     bool                                  infinite = (((intptr_t) data) == 'i');
+    bool                                  ms = (((intptr_t) data) == 'm');
 
     tpg_xlate_default_UpdateArg(&update_arg);
     parg = TPG_PRINTER_ARG(cli_printer, cl);
@@ -1401,10 +1413,15 @@ static void cmd_tests_set_criteria_parsed(void *parsed_result,
         cmdline_printf(cl, "ERROR: only run-time can be infinite");
 
     if (strncmp(pr->criteria_kw, "run-time", strlen("run-time") + 1) == 0) {
-        if (infinite)
+        if (infinite) {
             criteria = CRIT_RUN_TIME_INFINITE();
-        else
-            criteria = CRIT_RUN_TIME(pr->criteria_val);
+        } else {
+            tpg_delay_t runtime;
+            runtime = TPG_DELAY(pr->criteria_val);
+            if (ms)
+                runtime = TPG_DELAY_M(pr->criteria_val, pr->criteria_val_ms);
+            criteria = CRIT_RUN_TIME(runtime);
+        }
     } else if (strncmp(pr->criteria_kw, "servers-up",
                      strlen("servers-up") + 1) == 0) {
         criteria = CRIT_SRV_UP(pr->criteria_val);
@@ -1449,6 +1466,27 @@ cmdline_parse_inst_t cmd_tests_set_criteria = {
         (void *)&cmd_tests_set_criteria_T_tcid,
         (void *)&cmd_tests_set_criteria_T_criteria_kw,
         (void *)&cmd_tests_set_criteria_T_criteria_val,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_tests_set_criteria_ms = {
+    .f = cmd_tests_set_criteria_parsed,
+    .data = (void *) (intptr_t) 'm',
+    .help_str = "set tests criteria port <eth_port> test-case-id <tcid> "
+                 "run-time|servers-up|clients-up|clients-estab|data-MB (<value> [ms <value>])",
+    .tokens = {
+        (void *)&cmd_tests_set_criteria_T_set,
+        (void *)&cmd_tests_set_criteria_T_tests,
+        (void *)&cmd_tests_set_criteria_T_criteria,
+        (void *)&cmd_tests_set_criteria_T_port_kw,
+        (void *)&cmd_tests_set_criteria_T_port,
+        (void *)&cmd_tests_set_criteria_T_tcid_kw,
+        (void *)&cmd_tests_set_criteria_T_tcid,
+        (void *)&cmd_tests_set_criteria_T_criteria_kw,
+        (void *)&cmd_tests_set_criteria_T_criteria_val,
+        (void *)&cmd_tests_set_criteria_T_criteria_ms_kw,
+        (void *)&cmd_tests_set_criteria_T_criteria_val_ms,
         NULL,
     },
 };
@@ -2758,6 +2796,7 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_set_timeouts_ms,
     &cmd_tests_set_timeouts_infinite,
     &cmd_tests_set_criteria,
+    &cmd_tests_set_criteria_ms,
     &cmd_tests_set_criteria_infinite,
     &cmd_tests_set_noasync,
     &cmd_tests_set_async,

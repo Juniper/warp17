@@ -77,8 +77,8 @@ MSG_TYPE_MAX_CHECK(TEST_MGMT);
 /*****************************************************************************
  * Test suites/entries/criteria definitions and initializers
  ****************************************************************************/
-#define CRIT_RUN_TIME(time) ((tpg_test_criteria_t) \
-    {.tc_crit_type = TEST_CRIT_TYPE__RUN_TIME, .tc_run_time = TPG_DELAY(time)})
+#define CRIT_RUN_TIME(delay) ((tpg_test_criteria_t) \
+    {.tc_crit_type = TEST_CRIT_TYPE__RUN_TIME, .tc_run_time = delay})
 
 #define CRIT_RUN_TIME_INFINITE() ((tpg_test_criteria_t) \
     {.tc_crit_type = TEST_CRIT_TYPE__RUN_TIME, .tc_run_time = TPG_DELAY_INF()})
