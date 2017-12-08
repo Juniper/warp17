@@ -1,4 +1,5 @@
 ovf:
+    - { name: 'WARP17_v1.6.ovf.zip', link: 'https://drive.google.com/open?id=1E56nkYuQxyjYHFUlgzbEuj09DAWNEKqw' }
     - { name: 'WARP17_v1.5.ovf.zip', link: 'https://drive.google.com/open?id=13YuakG4Lf29sFRfCiWapuPjRU2JfN-fE' }
     - { name: 'WARP17_v1.4.ovf.zip', link: 'https://drive.google.com/open?id=0B52dydbheuKyRU5tVDlFWXRVdFU' }
     - { name: 'WARP17_v1.3.ovf.zip', link: 'https://drive.google.com/open?id=0B52dydbheuKyZTVBUGNYMmlXcVk' }
