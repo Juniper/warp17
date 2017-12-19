@@ -203,7 +203,7 @@ typedef struct tcp_control_block_s {
 #define TCP_MAX_WINDOW_SIZE  65535
 #define TCP_MAX_RETRY_CNT      128
 
-#define TCP_MAX_RTO_MS        1000
+#define TCP_MAX_RTO_MS       10000
 #define TCP_MAX_FIN_TO_MS     1000
 #define TCP_MAX_TWAIT_TO_MS  10000
 #define TCP_MAX_ORPHAN_TO_MS  2000

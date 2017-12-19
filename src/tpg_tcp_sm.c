@@ -931,6 +931,8 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
                      * below where the URG bit is checked, otherwise return.
                      */
                     if (SEG_GT(tcb->tcb_snd.una, tcb->tcb_snd.iss)) {
+                        int ret;
+
                         tcb->tcb_snd.wnd = seg_wnd;
                         tcb->tcb_snd.wl1 = seg_seq;
                         tcb->tcb_snd.wl2 = seg_ack;
@@ -942,12 +944,23 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
                         if (seg_len)
                             tsm_handle_incoming(tcb, pcb, seg_seq, seg_len);
 
-                        /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                        tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
-
                         /* No need to retransmit the syn. */
                         tcp_timer_rto_cancel(&tcb->tcb_l4);
-                        return tsm_enter_state(tcb, TS_ESTABLISHED, NULL);
+
+                        /* WARNING: Normally we shouldn't call anything after
+                         * enter_state but in this case we know for sure the
+                         * tcb is still valid (nothing happens in
+                         * tsm_SF_estab(enter_state))!
+                         * We might be able to delay this ACK so do that if
+                         * the application is about to send more data.
+                         */
+                        ret = tsm_enter_state(tcb, TS_ESTABLISHED, NULL);
+
+                        /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
+                        if (tsm_need_ack(tcb))
+                            tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
+
+                        return ret;
                     }
                 }
 
@@ -1145,15 +1158,19 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
              * seventh, process the segment text,
              */
             if (seg_len && tsm_handle_incoming(tcb, pcb, seg_seq, seg_len)) {
+                /* Delay the single TCP ack if possible (if the APP is about
+                 * to send out more data).
+                 */
+
                 /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
+                if (tsm_need_ack(tcb))
+                    tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
             }
 
             /*
              * eighth, check the FIN bit,
              */
             if (TCP_IS_FLAG_SET(tcp, TCP_FIN_FLAG)) {
-
                 /*
                  * We do not ack the fin yet, this happens when we move to LAST_ACK,
                  * but we do update the RCV.NXT here.
@@ -1321,7 +1338,9 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
              * seventh, process the segment text,
              */
             if (seg_len && tsm_handle_incoming(tcb, pcb, seg_seq, seg_len)) {
-                /* If there both client and server won't send other data
+                /* If the application isn't going to send data in the near
+                 * future then send out the ACK now.
+                 *
                  * send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK>
                  */
 

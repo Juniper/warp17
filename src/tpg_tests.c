@@ -500,7 +500,7 @@ static void test_tcp_notif_state_chg_handler(notif_arg_t *arg)
 
     if (tcb->tcb_active)
         test_client_sm_tcp_state_change(tcb, tc_info);
-    else if (tcb->tcb_state > TS_SYN_RECV) {
+    else if (tcb->tcb_state >= TS_SYN_RECV) {
         /* Server TCBs are not part of the TEST state machine until they reach
          * SYN-RCVD.
          */

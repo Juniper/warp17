@@ -91,6 +91,8 @@ typedef struct http_app_s {
     };
 
     uint32_t           ha_content_length;
+    uint16_t           ha_req_cnt;
+    uint16_t           ha_resp_cnt;
     http_state_t       ha_state;
 
 } http_app_t;

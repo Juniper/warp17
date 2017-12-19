@@ -1120,6 +1120,13 @@ void http_client_server_conn_down(l4_control_block_t *l4 __rte_unused,
      * was initialized or went to established but we don't have anything in this
      * case.
      */
+
+    if (unlikely(app_data->ad_http.ha_req_cnt == 0))
+        INC_STATS(&stats->tcas_http, hsts_no_req);
+
+    if (unlikely(app_data->ad_http.ha_resp_cnt == 0))
+        INC_STATS(&stats->tcas_http, hsts_no_resp);
+
 }
 
 /*****************************************************************************
@@ -1192,7 +1199,10 @@ uint32_t http_client_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
                               &delivered)) {
             /* If we're done with the body then we need to send a new request. */
             INC_STATS(http_stats, hsts_resp_cnt);
+            http_client_data->ha_resp_cnt++;
+
             TRACE_FMT(HTTP, DEBUG, "CL Body: %s", "Recvd");
+
             http_client_goto_send_req(l4, http_client_data);
         }
         return delivered;
@@ -1276,6 +1286,8 @@ uint32_t http_server_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
                               &delivered)) {
             /* If we're done with the body then we need to send a response. */
             INC_STATS(http_stats, hsts_req_cnt);
+            http_server_data->ha_req_cnt++;
+
             TRACE_FMT(HTTP, DEBUG, "SRV Body: %s", "Recvd");
 
             http_server_goto_send_resp(l4, http_server_data);
@@ -1365,6 +1377,8 @@ bool http_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
         /* If done sending the request we can wait for a the response. */
         if (http_client_data->ha_content_length == 0) {
             INC_STATS(http_stats, hsts_req_cnt);
+            http_client_data->ha_req_cnt++;
+
             TRACE_FMT(HTTP, DEBUG, "Client Request: %s", "Sent");
 
             http_goto_recv_headers(l4, http_client_data,
@@ -1406,6 +1420,8 @@ bool http_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
         /* If done sending the response we can wait for a new request. */
         if (http_server_data->ha_content_length == 0) {
             INC_STATS(http_stats, hsts_resp_cnt);
+            http_server_data->ha_resp_cnt++;
+
             TRACE_FMT(HTTP, DEBUG, "Server Response: %s", "Sent");
 
             http_goto_recv_headers(l4, http_server_data,
@@ -1439,6 +1455,8 @@ void http_stats_add(tpg_test_case_app_stats_t *total,
     total->tcas_http.hsts_invalid_msg_cnt += elem->tcas_http.hsts_invalid_msg_cnt;
     total->tcas_http.hsts_no_content_len_cnt += elem->tcas_http.hsts_no_content_len_cnt;
     total->tcas_http.hsts_transfer_enc_cnt += elem->tcas_http.hsts_transfer_enc_cnt;
+    total->tcas_http.hsts_no_req += elem->tcas_http.hsts_no_req;
+    total->tcas_http.hsts_no_resp += elem->tcas_http.hsts_no_resp;
 }
 
 /*****************************************************************************
@@ -1459,6 +1477,14 @@ void http_stats_print(const tpg_test_case_app_stats_t *stats,
                stats->tcas_http.hsts_invalid_msg_cnt,
                stats->tcas_http.hsts_no_content_len_cnt,
                stats->tcas_http.hsts_transfer_enc_cnt);
+
+    tpg_printf(printer_arg, "%27s %27s\n",
+               "Closed (No Request)",
+               "Closed (No Response)");
+
+    tpg_printf(printer_arg, "%27"PRIu32" %27"PRIu32"\n",
+           stats->tcas_http.hsts_no_req,
+           stats->tcas_http.hsts_no_resp);
 }
 
 /*****************************************************************************

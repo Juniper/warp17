@@ -94,5 +94,7 @@ message HttpStats {
     required uint32 hsts_invalid_msg_cnt    = 3;
     required uint32 hsts_no_content_len_cnt = 4;
     required uint32 hsts_transfer_enc_cnt   = 5;
+    required uint32 hsts_no_req             = 6;
+    required uint32 hsts_no_resp            = 7;
 }
 

@@ -611,8 +611,8 @@ static void test_server_sm_SF_init(l4_control_block_t *l4_cb,
     case TST_SRVE_TCP_STATE_CHG:
         tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
 
-        if (tcb->tcb_state == TS_ESTABLISHED) {
-            /* If moving to established then change state to open. */
+        if (tcb->tcb_state == TS_SYN_RECV) {
+            /* If moving to SYN_RECV then change state to open. */
             test_server_sm_enter_state(l4_cb, TST_SRVS_OPEN, ctx);
             return;
         }
@@ -640,8 +640,16 @@ static void test_server_sm_SF_open(l4_control_block_t *l4_cb,
                                    test_sm_event_t event,
                                    test_case_info_t *ctx)
 {
+    tcp_control_block_t *tcb;
+
     switch (event.tte_server) {
     case TST_SRVE_TCP_STATE_CHG:
+        tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
+
+        /* If we moved to established we stay in the same test state. */
+        if (tcb->tcb_state == TS_ESTABLISHED)
+            return;
+
         /* Fallthrough */
     case TST_SRVE_UDP_STATE_CHG:
         /* Notify the application that the connection went down. */
@@ -668,8 +676,16 @@ static void test_server_sm_SF_sending(l4_control_block_t *l4_cb,
                                       test_sm_event_t event,
                                       test_case_info_t *ctx)
 {
+    tcp_control_block_t *tcb;
+
     switch (event.tte_server) {
     case TST_SRVE_TCP_STATE_CHG:
+        /* If we moved to established we stay in the same test state. */
+        tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
+
+        if (tcb->tcb_state == TS_ESTABLISHED)
+            return;
+
         /* Fallthrough */
     case TST_SRVE_UDP_STATE_CHG:
         /* Remove from the to send list. */
