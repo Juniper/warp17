@@ -121,6 +121,7 @@ RTE_DECLARE_PER_LCORE(struct rte_mempool *, ucb_pool);
 
 extern bool                       mem_init(void);
 extern void                       mem_lcore_init(uint32_t lcore_id);
+extern struct rte_mempool        *mem_get_mbuf_cfg_pool(void);
 extern struct rte_mempool        *mem_get_mbuf_pool(uint32_t port,
                                                   uint32_t queue_id);
 extern struct rte_mempool       **mem_get_tcb_pools(void);

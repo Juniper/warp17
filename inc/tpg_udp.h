@@ -121,10 +121,16 @@ extern notif_cb_t udp_notif_cb;
     (sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr) + \
      sizeof(struct udp_hdr) + ETHER_CRC_LEN)
 
-#define UCB_MTU(ucb)                                                           \
-    (RTE_PER_LCORE(local_port_dev_info)[(ucb)->ucb_l4.l4cb_interface].pi_mtu - \
-     ipv4_get_sockopt(&(ucb)->ucb_l4.l4cb_sockopt)->ip4so_hdr_opt_len -        \
+#define UDP_MTU(port_info, sockopt)                                         \
+    ((port_info)->pi_mtu - ipv4_get_sockopt((sockopt))->ip4so_hdr_opt_len - \
      UCB_MIN_HDRS_SZ)
+
+#define UDP_GLOBAL_MTU(port, sockopt) \
+    UDP_MTU(&port_dev_info[(port)], (sockopt))
+
+#define UCB_MTU(ucb)                                                           \
+    UDP_MTU(&RTE_PER_LCORE(local_port_dev_info)[(ucb)->ucb_l4.l4cb_interface], \
+            &(ucb)->ucb_l4.l4cb_sockopt)
 
 /*****************************************************************************
  * Globals for tpg_udp.c

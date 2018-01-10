@@ -143,8 +143,10 @@ static inline void tpg_printf(printer_arg_t *pa, const char *fmt, ...)
 
 #define TPG_RATE_IS_INF(x) (!(x)->has_r_value)
 
+#define TPG_RATE_LIM_INFINITE_VAL UINT32_MAX
+
 #define TPG_RATE_VAL_DEFAULT(x) \
-    (TPG_RATE_IS_INF(x) ? UINT32_MAX : TPG_RATE_VAL(x))
+    (TPG_RATE_IS_INF(x) ? RATE_LIM_INFINITE_VAL : TPG_RATE_VAL(x))
 
 /*****************************************************************************
  * TPG ip print utils

@@ -145,9 +145,13 @@ static void test_client_sm_SF_to_init(l4_control_block_t *l4_cb,
 
     switch (event.tte_client) {
     case TST_CLE_ENTER_STATE:
-        init_delay = &ctx->tci_cfg_msg.tcim_client.cl_delays.dc_init_delay;
+        init_delay = &ctx->tci_cfg->tcim_client.cl_delays.dc_init_delay;
         if (TPG_DELAY_VAL(init_delay) == 0) {
-            TEST_CBQ_ADD_TO_OPEN(&ctx->tci_state, l4_cb);
+            /* This is a special case. At init time no timers are yet running
+             * and we want to refrain from scheduling a send before the
+             * test case is already running.
+             */
+            TEST_CBQ_ADD_TO_OPEN_NO_RESCHED(&ctx->tci_state, l4_cb);
             test_client_sm_enter_state(l4_cb, TST_CLS_TO_OPEN, ctx);
             return;
         } else {
@@ -183,7 +187,7 @@ static void test_client_sm_SF_to_open(l4_control_block_t *l4_cb,
     case TST_CLE_UDP_STATE_CHG:
         TEST_CBQ_REM_TO_OPEN(&ctx->tci_state, l4_cb);
 
-        uptime = &ctx->tci_cfg_msg.tcim_client.cl_delays.dc_uptime;
+        uptime = &ctx->tci_cfg->tcim_client.cl_delays.dc_uptime;
 
         /* Set conn_uptime timer if any. */
         if (!TPG_DELAY_IS_INF(uptime)) {
@@ -196,9 +200,10 @@ static void test_client_sm_SF_to_open(l4_control_block_t *l4_cb,
          * Enter state OPEN.
          */
         test_client_sm_enter_state(l4_cb, TST_CLS_OPEN, ctx);
-        APP_CL_CALL(conn_up, l4_cb->l4cb_app_data.ad_type)(l4_cb,
-                                                           &l4_cb->l4cb_app_data,
-                                                           &ctx->tci_app_stats);
+        APP_CL_CALL(conn_up,
+                    l4_cb->l4cb_app_data.ad_type)(l4_cb,
+                                                  &l4_cb->l4cb_app_data,
+                                                  ctx->tci_app_stats);
         return;
     default:
         break;
@@ -218,7 +223,7 @@ static void test_client_sm_SF_opening(l4_control_block_t *l4_cb,
     switch (event.tte_client) {
     case TST_CLE_TCP_STATE_CHG:
         tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
-        uptime = &ctx->tci_cfg_msg.tcim_client.cl_delays.dc_uptime;
+        uptime = &ctx->tci_cfg->tcim_client.cl_delays.dc_uptime;
 
         if (tcb->tcb_state == TS_ESTABLISHED) {
             /* Set conn_uptime timer if any. */
@@ -232,9 +237,10 @@ static void test_client_sm_SF_opening(l4_control_block_t *l4_cb,
              * Enter state OPEN.
              */
             test_client_sm_enter_state(l4_cb, TST_CLS_OPEN, ctx);
-            APP_CL_CALL(conn_up, l4_cb->l4cb_app_data.ad_type)(l4_cb,
-                                                               &l4_cb->l4cb_app_data,
-                                                               &ctx->tci_app_stats);
+            APP_CL_CALL(conn_up,
+                        l4_cb->l4cb_app_data.ad_type)(l4_cb,
+                                                      &l4_cb->l4cb_app_data,
+                                                      ctx->tci_app_stats);
             return;
         } else if (tcb->tcb_state == TS_CLOSED) {
             /* Setting the downtime timer will be done on state-enter in state
@@ -287,9 +293,10 @@ static void test_client_sm_SF_open(l4_control_block_t *l4_cb,
             L4CB_TEST_TMR_CANCEL(l4_cb);
 
         /* Notify the application that the connection is down. */
-        APP_CL_CALL(conn_down, l4_cb->l4cb_app_data.ad_type)(l4_cb,
-                                                             &l4_cb->l4cb_app_data,
-                                                             &ctx->tci_app_stats);
+        APP_CL_CALL(conn_down,
+                    l4_cb->l4cb_app_data.ad_type)(l4_cb,
+                                                  &l4_cb->l4cb_app_data,
+                                                  ctx->tci_app_stats);
 
         if (goto_closed) {
             test_client_sm_enter_state(l4_cb, TST_CLS_CLOSED, ctx);
@@ -342,9 +349,10 @@ static void test_client_sm_SF_sending(l4_control_block_t *l4_cb,
         TEST_CBQ_REM_TO_SEND(&ctx->tci_state, l4_cb);
 
         /* Notify the application that the connection is down. */
-        APP_CL_CALL(conn_down, l4_cb->l4cb_app_data.ad_type)(l4_cb,
-                                                             &l4_cb->l4cb_app_data,
-                                                             &ctx->tci_app_stats);
+        APP_CL_CALL(conn_down,
+                    l4_cb->l4cb_app_data.ad_type)(l4_cb,
+                                                  &l4_cb->l4cb_app_data,
+                                                  ctx->tci_app_stats);
         if (goto_closed) {
             test_client_sm_enter_state(l4_cb, TST_CLS_CLOSED, ctx);
             return;
@@ -392,9 +400,10 @@ static void test_client_sm_SF_no_snd_win(l4_control_block_t *l4_cb,
             L4CB_TEST_TMR_CANCEL(l4_cb);
 
         /* Notify the application that the connection is down. */
-        APP_CL_CALL(conn_down, l4_cb->l4cb_app_data.ad_type)(l4_cb,
-                                                             &l4_cb->l4cb_app_data,
-                                                             &ctx->tci_app_stats);
+        APP_CL_CALL(conn_down,
+                    l4_cb->l4cb_app_data.ad_type)(l4_cb,
+                                                  &l4_cb->l4cb_app_data,
+                                                  ctx->tci_app_stats);
         if (tcb->tcb_state == TS_CLOSED) {
             test_client_sm_enter_state(l4_cb, TST_CLS_CLOSED, ctx);
             return;
@@ -441,9 +450,10 @@ static void test_client_sm_SF_to_close(l4_control_block_t *l4_cb,
         goto_closed = true;
     case TST_CLE_TCP_STATE_CHG:
         /* Notify the application that the connection will be going down! */
-        APP_CL_CALL(conn_down, l4_cb->l4cb_app_data.ad_type)(l4_cb,
-                                                             &l4_cb->l4cb_app_data,
-                                                             &ctx->tci_app_stats);
+        APP_CL_CALL(conn_down,
+                    l4_cb->l4cb_app_data.ad_type)(l4_cb,
+                                                  &l4_cb->l4cb_app_data,
+                                                  ctx->tci_app_stats);
         /* Remove from the to-close list and go to the next state. */
         TEST_CBQ_REM_TO_CLOSE(&ctx->tci_state, l4_cb);
 
@@ -498,7 +508,7 @@ static void test_client_sm_SF_closed(l4_control_block_t *l4_cb,
 
     switch (event.tte_client) {
     case TST_CLE_ENTER_STATE:
-        downtime = &ctx->tci_cfg_msg.tcim_client.cl_delays.dc_downtime;
+        downtime = &ctx->tci_cfg->tcim_client.cl_delays.dc_downtime;
         /* Set the downtime timer if we had one configured. */
         if (!TPG_DELAY_IS_INF(downtime)) {
             L4CB_TEST_TMR_SET(l4_cb,
@@ -604,9 +614,10 @@ static void test_server_sm_SF_init(l4_control_block_t *l4_cb,
         /* The server might receive valid data already from state
          * SYN-RECVD (for TCP) or US_SERVER (for UDP).
          */
-        APP_SRV_CALL(conn_up, l4_cb->l4cb_app_data.ad_type)(l4_cb,
-                                                            &l4_cb->l4cb_app_data,
-                                                            &ctx->tci_app_stats);
+        APP_SRV_CALL(conn_up,
+                     l4_cb->l4cb_app_data.ad_type)(l4_cb,
+                                                   &l4_cb->l4cb_app_data,
+                                                   ctx->tci_app_stats);
         break;
     case TST_SRVE_TCP_STATE_CHG:
         tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
@@ -653,9 +664,10 @@ static void test_server_sm_SF_open(l4_control_block_t *l4_cb,
         /* Fallthrough */
     case TST_SRVE_UDP_STATE_CHG:
         /* Notify the application that the connection went down. */
-        APP_SRV_CALL(conn_down, l4_cb->l4cb_app_data.ad_type)(l4_cb,
-                                                              &l4_cb->l4cb_app_data,
-                                                              &ctx->tci_app_stats);
+        APP_SRV_CALL(conn_down,
+                     l4_cb->l4cb_app_data.ad_type)(l4_cb,
+                                                   &l4_cb->l4cb_app_data,
+                                                   ctx->tci_app_stats);
         test_server_sm_enter_state(l4_cb, TST_SRVS_CLOSING, ctx);
         return;
 
@@ -691,9 +703,10 @@ static void test_server_sm_SF_sending(l4_control_block_t *l4_cb,
         /* Remove from the to send list. */
         TEST_CBQ_REM_TO_SEND(&ctx->tci_state, l4_cb);
         /* Notify the application that the connection went down. */
-        APP_SRV_CALL(conn_down, l4_cb->l4cb_app_data.ad_type)(l4_cb,
-                                                              &l4_cb->l4cb_app_data,
-                                                              &ctx->tci_app_stats);
+        APP_SRV_CALL(conn_down,
+                     l4_cb->l4cb_app_data.ad_type)(l4_cb,
+                                                   &l4_cb->l4cb_app_data,
+                                                   ctx->tci_app_stats);
         test_server_sm_enter_state(l4_cb, TST_SRVS_CLOSING, ctx);
         return;
 
@@ -723,9 +736,10 @@ static void test_server_sm_SF_no_snd_win(l4_control_block_t *l4_cb,
     switch (event.tte_server) {
     case TST_SRVE_TCP_STATE_CHG:
         /* Notify the application that the connection went down. */
-        APP_SRV_CALL(conn_down, l4_cb->l4cb_app_data.ad_type)(l4_cb,
-                                                              &l4_cb->l4cb_app_data,
-                                                              &ctx->tci_app_stats);
+        APP_SRV_CALL(conn_down,
+                     l4_cb->l4cb_app_data.ad_type)(l4_cb,
+                                                   &l4_cb->l4cb_app_data,
+                                                   ctx->tci_app_stats);
         test_server_sm_enter_state(l4_cb, TST_SRVS_CLOSING, ctx);
         return;
 

@@ -110,6 +110,8 @@ bool cfg_init(void)
 {
     bzero(&global_config, sizeof(global_config));
 
+    global_config.gcfg_mbuf_cfg_poolsize = GCFG_MBUF_CFG_POOLSIZE_DEFAULT;
+
     global_config.gcfg_mbuf_poolsize = GCFG_MBUF_POOLSIZE_DEFAULT;
     global_config.gcfg_mbuf_size = GCFG_MBUF_SIZE;
     global_config.gcfg_mbuf_cache_size = GCFG_MBUF_CACHE_SIZE;
@@ -137,8 +139,6 @@ bool cfg_init(void)
 
     global_config.gcfg_test_max_tc_runtime = GCFG_TEST_MAX_TC_RUNTIME;
 
-    global_config.gcfg_rate_min_interval_size =
-        GCFG_RATE_MIN_INTERVAL_SIZE;
     global_config.gcfg_rate_no_lim_interval_size =
         GCFG_RATE_NO_LIM_INTERVAL_SIZE;
 

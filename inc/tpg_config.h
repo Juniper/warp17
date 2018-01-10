@@ -147,6 +147,8 @@ enum {
  *       Need to make sure that the max number of segments is <= than
  *       tx_rs_thresh.
  */
+#define GCFG_MBUF_CFG_POOL_NAME        "global_cfg_mbuf"
+#define GCFG_MBUF_CFG_POOLSIZE_DEFAULT (TPG_ETH_DEV_MAX * TPG_TEST_MAX_ENTRIES)
 #define GCFG_MBUF_POOL_NAME            "global_pkt_mbuf"
 #define GCFG_MBUF_POOLSIZE_DEFAULT     (768 * 1024)
 #define GCFG_MBUF_CACHE_SIZE           (512)
@@ -217,7 +219,7 @@ enum {
 /*
  * The default values for TCP Data processing.
  */
-#define GCFG_TCP_SEGS_PER_SEND         4
+#define GCFG_TCP_SEGS_PER_SEND         1
 
 /*
  * Test management defaults.
@@ -232,10 +234,13 @@ enum {
 /*
  * Test defaults.
  */
-#define GCFG_RATE_MIN_INTERVAL_SIZE    1000     /* 1ms */
-#define GCFG_RATE_NO_LIM_INTERVAL_SIZE 10000    /* 10ms  */
+#define GCFG_RATE_MAX_SLOT_COUNT       10000 /* Max slots/sec for rate limit */
+#define GCFG_RATE_NO_LIM_INTERVAL_SIZE 10000 /* 10ms */
+#define GCFG_RATE_MIN_RATE_PRECISION   50    /* Minimum rate precision. */
 
 typedef struct global_config_s {
+
+    uint32_t gcfg_mbuf_cfg_poolsize;
 
     uint32_t gcfg_mbuf_poolsize;
     uint32_t gcfg_mbuf_size;
@@ -271,7 +276,6 @@ typedef struct global_config_s {
 
     uint32_t gcfg_test_max_tc_runtime;
 
-    uint32_t gcfg_rate_min_interval_size;
     uint32_t gcfg_rate_no_lim_interval_size;
 
     const char *gcfg_cmd_file;

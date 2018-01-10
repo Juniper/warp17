@@ -146,24 +146,32 @@ typedef TAILQ_HEAD(tcp_test_cb_list_s, l4_control_block_s) tlkp_test_cb_list_t;
 #define TEST_CBQ_FIRST(list, type, member) \
     (container_of(TAILQ_FIRST((list)), type, member))
 
-#define TEST_CBQ_ADD_TO_OPEN(ts, cb)                                            \
-    do {                                                                        \
-        TEST_CBQ_ADD(&(ts)->tos_to_open_cbs, (cb));                             \
-        test_resched_open((ts), (cb)->l4cb_interface, (cb)->l4cb_test_case_id); \
+#define TEST_CBQ_ADD_TO_OPEN(ts, cb)                              \
+    do {                                                          \
+        TEST_CBQ_ADD(&(ts)->tos_to_open_cbs, (cb));               \
+        test_resched_open(&(ts)->tos_rates, (cb)->l4cb_interface, \
+                          (cb)->l4cb_test_case_id);               \
     } while (0)
 
-#define TEST_CBQ_ADD_TO_CLOSE(ts, cb)                  \
-    do {                                               \
-        TEST_CBQ_ADD(&(ts)->tos_to_close_cbs, (cb));   \
-        test_resched_close((ts), (cb)->l4cb_interface, \
-                           (cb)->l4cb_test_case_id);   \
+#define TEST_CBQ_ADD_TO_CLOSE(ts, cb)                              \
+    do {                                                           \
+        TEST_CBQ_ADD(&(ts)->tos_to_close_cbs, (cb));               \
+        test_resched_close(&(ts)->tos_rates, (cb)->l4cb_interface, \
+                           (cb)->l4cb_test_case_id);               \
     } while (0)
 
-#define TEST_CBQ_ADD_TO_SEND(ts, cb)                                            \
-    do {                                                                        \
-        TEST_CBQ_ADD(&(ts)->tos_to_send_cbs, (cb));                             \
-        test_resched_send((ts), (cb)->l4cb_interface, (cb)->l4cb_test_case_id); \
+#define TEST_CBQ_ADD_TO_SEND(ts, cb)                              \
+    do {                                                          \
+        TEST_CBQ_ADD(&(ts)->tos_to_send_cbs, (cb));               \
+        test_resched_send(&(ts)->tos_rates, (cb)->l4cb_interface, \
+                          (cb)->l4cb_test_case_id);               \
     } while (0)
+
+/*
+ * WARNING: Only to be used at INIT time!
+ */
+#define TEST_CBQ_ADD_TO_OPEN_NO_RESCHED(ts, cb) \
+    TEST_CBQ_ADD(&(ts)->tos_to_open_cbs, (cb))
 
 #define TEST_CBQ_ADD_TO_INIT(ts, cb) \
     TEST_CBQ_ADD(&(ts)->tos_to_init_cbs, (cb))
@@ -186,20 +194,31 @@ typedef TAILQ_HEAD(tcp_test_cb_list_s, l4_control_block_s) tlkp_test_cb_list_t;
  ****************************************************************************/
 typedef struct test_case_init_msg_s {
 
-    uint32_t                tcim_eth_port;
-    uint32_t                tcim_test_case_id;
+    uint32_t tcim_eth_port;
+    uint32_t tcim_test_case_id;
 
-    tpg_test_case_type_t    tcim_type;
+    tpg_test_case_type_t tcim_type;
+    tpg_l4_proto_t       tcim_l4_type;
+    tpg_app_proto_t      tcim_app_id;
+
     union {
-        tpg_client_t        tcim_client;
-        tpg_server_t        tcim_server;
+        tpg_client_t tcim_client;
+        tpg_server_t tcim_server;
     };
 
     sockopt_t               tcim_sockopt;
     tpg_test_case_latency_t tcim_latency;
 
-    uint32_t                tcim_rx_tstamp : 1;
-    uint32_t                tcim_tx_tstamp : 1;
+    uint32_t tcim_rx_tstamp : 1;
+    uint32_t tcim_tx_tstamp : 1;
+
+    struct {
+        rate_limit_cfg_t *open_rate;
+        rate_limit_cfg_t *close_rate;
+        rate_limit_cfg_t *send_rate;
+    } tcim_transient; /* Not safe to use these fields *AFTER* the init message
+                       * was processed.
+                       */
 
 } __tpg_msg test_case_init_msg_t;
 
@@ -247,33 +266,57 @@ typedef struct test_case_rates_req_msg_s {
 /*****************************************************************************
  * Test case operational state definitions
  ****************************************************************************/
-typedef struct test_oper_state_s {
+typedef struct test_rate_state_s {
 
-    tlkp_test_cb_list_t tos_to_init_cbs;    /* In Init, will move to to_open. */
-    tlkp_test_cb_list_t tos_to_open_cbs;    /* In Closed, should open. */
-    tlkp_test_cb_list_t tos_to_close_cbs;   /* In Estab, should close. */
-    tlkp_test_cb_list_t tos_to_send_cbs;    /* In Established, need to send. */
-    tlkp_test_cb_list_t tos_closed_cbs;     /* In Closed, willmove to to_open.*/
+    rate_limit_t trs_open;
+    rate_limit_t trs_close __rte_cache_min_aligned;
+    rate_limit_t trs_send  __rte_cache_min_aligned;
 
     /* Bit Flags */
-    uint32_t            tos_configured          : 1;
-    uint32_t            tos_running             : 1;
-    uint32_t            tos_stopping            : 1;
-    uint32_t            tos_open_in_progress    : 1; /* OPEN msg in progress */
-    uint32_t            tos_open_rate_achieved  : 1; /* OPEN rate achieved */
-    uint32_t            tos_close_in_progress   : 1; /* CLOSE msg in progress */
-    uint32_t            tos_close_rate_achieved : 1; /* OPEN rate achieved */
-    uint32_t            tos_send_in_progress    : 1; /* SEND msg in progress */
-    uint32_t            tos_send_rate_achieved  : 1; /* SEND rate achieved */
-    /* uint32_t         tos_unused              : 23; */
+    uint32_t trs_open_in_progress   : 1;
+    uint32_t trs_open_rate_reached  : 1;
+    uint32_t trs_close_in_progress  : 1;
+    uint32_t trs_close_rate_reached : 1;
+    uint32_t trs_send_in_progress   : 1;
+    uint32_t trs_send_rate_reached  : 1;
+    /* uint32_t trs_unused          : 26; */
 
-} test_oper_state_t;
+} __rte_cache_aligned test_rate_state_t;
+
+/* Timers that will be used for updating the rates of the test and
+ * triggering the run.
+ */
+typedef struct test_rate_timers_s {
+
+    struct rte_timer trt_open_timer;
+    struct rte_timer trt_close_timer __rte_cache_min_aligned;
+    struct rte_timer trt_send_timer  __rte_cache_min_aligned;
+
+} __rte_cache_aligned test_rate_timers_t;
+
+typedef struct test_oper_state_s {
+
+    /* Rate limiting state. */
+    test_rate_state_t tos_rates;
+
+    tlkp_test_cb_list_t tos_to_init_cbs;  /* In Init, will move to to_open. */
+    tlkp_test_cb_list_t tos_to_open_cbs;  /* In Closed, should open. */
+    tlkp_test_cb_list_t tos_to_close_cbs; /* In Estab, should close. */
+    tlkp_test_cb_list_t tos_to_send_cbs;  /* In Established, need to send. */
+    tlkp_test_cb_list_t tos_closed_cbs;   /* In Closed, willmove to to_open.*/
+
+    /* Cache (copied from the init msg) of tc_type and app id which are needed
+     * when sending data.
+     */
+    tpg_test_case_type_t tos_tc_type;
+    tpg_app_proto_t      tos_app_id;
+
+} __rte_cache_aligned test_oper_state_t;
 
 /*****************************************************************************
  * Test run open/send/close callbacks
  ****************************************************************************/
 typedef uint32_t (*test_case_runner_cb_t)(test_case_info_t *tc_info,
-                                          test_case_init_msg_t *cfg,
                                           uint32_t to_execute_cnt);
 
 typedef void (*test_case_close_cb_t)(l4_control_block_t *l4_cb);
@@ -293,41 +336,35 @@ typedef struct test_oper_latency_state_s {
  ****************************************************************************/
 typedef struct test_case_info_s {
 
-    /* A copy of the message that configured this test. */
-    test_case_init_msg_t tci_cfg_msg;
+    /* Callbacks for run_open/run_close/run_send/close-sess */
+    test_case_runner_cb_t tci_run_open_cb;
+    test_case_runner_cb_t tci_run_close_cb;
+    test_case_runner_cb_t tci_run_send_cb;
+    test_case_close_cb_t  tci_close_cb;
 
-    /* Rate limiting. */
-    rate_limit_t tci_open_rate;
-    rate_limit_t tci_close_rate;
-    rate_limit_t tci_send_rate;
+    /* A pointer to a copy of the message that configured this test. */
+    test_case_init_msg_t *tci_cfg;
+
+    /* Stats */
+    tpg_test_case_stats_t      *tci_general_stats;
+    tpg_test_case_rate_stats_t *tci_rate_stats;
+    tpg_test_case_app_stats_t  *tci_app_stats;
 
     /* Operational state */
     test_oper_state_t tci_state;
 
-    /* Callbacks for run_open/run_close/run_send/close */
-    test_case_runner_cb_t tci_run_open_cb;
-    test_case_runner_cb_t tci_run_close_cb;
-    test_case_runner_cb_t tci_run_send_cb;
-
-    /* Callback for closing sessions to avoid checking the L4 connection
-     * type.
+    /* Keep rate rte_timers lower in tc info structure as they are quite big
+     * and we access them rarely.
      */
-    test_case_close_cb_t tci_close_cb;
+    test_rate_timers_t tci_rate_timers;
 
-    /* Stats */
-    tpg_test_case_stats_t      tci_general_stats;
-    tpg_test_case_rate_stats_t tci_rate_stats;
-    tpg_test_case_app_stats_t  tci_app_stats;
+    test_oper_latency_state_t *tci_latency_state;
 
-    /* Timers that will be used for updating the rates of the test and
-     * triggering the run.
-     */
-    struct rte_timer tci_open_timer;  /* For TCP only. */
-    struct rte_timer tci_close_timer; /* For TCP only. */
-    struct rte_timer tci_send_timer;  /* Both TCP & UDP. */
-
-    test_oper_latency_state_t tci_latency_state;
-    tpg_test_case_latency_t   tci_latency;
+    /* Bit Flags */
+    uint32_t    tci_configured : 1;
+    uint32_t    tci_running    : 1;
+    uint32_t    tci_stopping   : 1;
+    /* uint32_t tci_unused     : 29; */
 
 } test_case_info_t;
 
@@ -336,10 +373,10 @@ typedef struct test_case_info_s {
  ****************************************************************************/
 typedef struct test_tmr_arg_s {
 
-    uint32_t          tta_lcore_id;
-    uint32_t          tta_eth_port;
-    uint32_t          tta_test_case_id;
-    test_case_info_t *tta_test_case_info;
+    uint32_t           tta_lcore_id;
+    uint32_t           tta_eth_port;
+    uint32_t           tta_test_case_id;
+    test_rate_state_t *tta_rate_state;
 
 } test_tmr_arg_t;
 
@@ -347,7 +384,7 @@ typedef struct test_tmr_arg_s {
  * Externals globals for tpg_test.c
  ****************************************************************************/
 /*
- * Array[port][tcid] holding the test case config and operational state for
+ * Array[port][tcid] holding the test case operational state for
  * testcases on a port.
  */
 RTE_DECLARE_PER_LCORE(test_case_info_t *, test_case_info);
@@ -355,17 +392,26 @@ RTE_DECLARE_PER_LCORE(test_case_info_t *, test_case_info);
 #define TEST_GET_INFO(port, tcid) \
     (RTE_PER_LCORE(test_case_info) + (port) * TPG_TEST_MAX_ENTRIES + (tcid))
 
+/*
+ * Array[port][tcid] holding the test case config for
+ * testcases on a port.
+ */
+RTE_DECLARE_PER_LCORE(test_case_init_msg_t *, test_case_cfg);
+
+#define TEST_GET_CFG(port, tcid) \
+    (RTE_PER_LCORE(test_case_cfg) + (port) * TPG_TEST_MAX_ENTRIES + (tcid))
+
 /*****************************************************************************
  * Externals for tpg_test.c
  ****************************************************************************/
 extern bool test_init(void);
 extern void test_lcore_init(uint32_t lcore_id);
 
-extern void test_resched_open(test_oper_state_t *ts, uint32_t eth_port,
+extern void test_resched_open(test_rate_state_t *rs, uint32_t eth_port,
                               uint32_t test_case_id);
-extern void test_resched_close(test_oper_state_t *ts, uint32_t eth_port,
+extern void test_resched_close(test_rate_state_t *rs, uint32_t eth_port,
                                uint32_t test_case_id);
-extern void test_resched_send(test_oper_state_t *ts, uint32_t eth_port,
+extern void test_resched_send(test_rate_state_t *rs, uint32_t eth_port,
                               uint32_t test_case_id);
 
 extern void test_update_latency(l4_control_block_t *l4cb,

@@ -174,7 +174,7 @@ static const char *eventNames[TE_MAX_EVENT] = {
  ****************************************************************************/
 static void tsm_schedule_retransmission(tcp_control_block_t *tcb)
 {
-    tcp_sockopt_t *tcp_opts;
+    const tcp_sockopt_t *tcp_opts;
 
     TCB_CHECK(tcb);
 
@@ -402,7 +402,7 @@ static bool tsm_do_receive_acceptance_test(tcp_control_block_t *tcb,
  ****************************************************************************/
 static bool tsm_need_ack(tcp_control_block_t *tcb)
 {
-    tcp_sockopt_t *tcp_opts;
+    const tcp_sockopt_t *tcp_opts;
 
     tcp_opts = tcp_get_sockopt(&tcb->tcb_l4.l4cb_sockopt);
 
@@ -561,7 +561,7 @@ inline void tsm_initialize_minimal_statemachine(tcp_control_block_t *tcb,
  ****************************************************************************/
 void tsm_initialize_statemachine(tcp_control_block_t *tcb, bool active)
 {
-    tcp_sockopt_t *tcp_opts;
+    const tcp_sockopt_t *tcp_opts;
 
     if (unlikely(tcb == NULL))
         return;
@@ -807,7 +807,7 @@ static int tsm_SF_listen(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
                            void *tsm_arg)
 {
-    tcp_sockopt_t *tcp_opts;
+    const tcp_sockopt_t *tcp_opts;
 
     switch (event) {
     case TE_ENTER_STATE:
@@ -1013,7 +1013,7 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
                            void *tsm_arg)
 {
-    tcp_sockopt_t *tcp_opts;
+    const tcp_sockopt_t *tcp_opts;
 
     switch (event) {
     case TE_ENTER_STATE:
@@ -1221,7 +1221,7 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
                         void *tsm_arg)
 {
-    tcp_sockopt_t *tcp_opts;
+    const tcp_sockopt_t *tcp_opts;
 
     switch (event) {
     case TE_ENTER_STATE:
@@ -1422,7 +1422,7 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
                              void *tsm_arg)
 {
-    tcp_sockopt_t *tcp_opts;
+    const tcp_sockopt_t *tcp_opts;
 
     switch (event) {
     case TE_ENTER_STATE:
@@ -1688,7 +1688,7 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
                               void *tsm_arg)
 {
-    tcp_sockopt_t *tcp_opts;
+    const tcp_sockopt_t *tcp_opts;
 
     switch (event) {
     case TE_ENTER_STATE:
@@ -1877,7 +1877,7 @@ static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_last_ack(tcp_control_block_t *tcb, tcpEvent_t event,
                            void *tsm_arg)
 {
-    tcp_sockopt_t *tcp_opts;
+    const tcp_sockopt_t *tcp_opts;
 
     switch (event) {
     case TE_ENTER_STATE:
@@ -1999,7 +1999,7 @@ static int tsm_SF_last_ack(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_closing(tcp_control_block_t *tcb, tcpEvent_t event,
                           void *tsm_arg)
 {
-    tcp_sockopt_t *tcp_opts;
+    const tcp_sockopt_t *tcp_opts;
 
     switch (event) {
     case TE_ENTER_STATE:
@@ -2164,7 +2164,7 @@ static int tsm_SF_closing(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_time_wait(tcp_control_block_t *tcb, tcpEvent_t event,
                             void *tsm_arg)
 {
-    tcp_sockopt_t *tcp_opts;
+    const tcp_sockopt_t *tcp_opts;
 
     switch (event) {
     case TE_ENTER_STATE:
@@ -2273,7 +2273,7 @@ static int tsm_SF_time_wait(tcp_control_block_t *tcb, tcpEvent_t event,
 static int tsm_SF_close_wait(tcp_control_block_t *tcb, tcpEvent_t event,
                              void *tsm_arg)
 {
-    tcp_sockopt_t *tcp_opts;
+    const tcp_sockopt_t *tcp_opts;
 
     switch (event) {
     case TE_ENTER_STATE:

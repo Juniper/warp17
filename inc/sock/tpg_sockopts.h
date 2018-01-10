@@ -144,7 +144,7 @@ typedef struct sockopt_s {
 /*****************************************************************************
  * ipv4_get_sockopt()
  ****************************************************************************/
-static inline ipv4_sockopt_t *ipv4_get_sockopt(sockopt_t *opts)
+static inline const ipv4_sockopt_t *ipv4_get_sockopt(const sockopt_t *opts)
 {
     return &opts->so_ipv4;
 }
@@ -152,7 +152,7 @@ static inline ipv4_sockopt_t *ipv4_get_sockopt(sockopt_t *opts)
 /*****************************************************************************
  * ipv6_get_sockopt()
  ****************************************************************************/
-static inline ipv6_sockopt_t *ipv6_get_sockopt(sockopt_t *opts)
+static inline const ipv6_sockopt_t *ipv6_get_sockopt(const sockopt_t *opts)
 {
     return &opts->so_ipv6;
 }
@@ -160,7 +160,7 @@ static inline ipv6_sockopt_t *ipv6_get_sockopt(sockopt_t *opts)
 /*****************************************************************************
  * tcp_get_sockopt()
  ****************************************************************************/
-static inline tcp_sockopt_t *tcp_get_sockopt(sockopt_t *opts)
+static inline const tcp_sockopt_t *tcp_get_sockopt(const sockopt_t *opts)
 {
     return &opts->so_tcp;
 }
@@ -168,7 +168,7 @@ static inline tcp_sockopt_t *tcp_get_sockopt(sockopt_t *opts)
 /*****************************************************************************
  * udp_get_sockopt()
  ****************************************************************************/
-static inline udp_sockopt_t *udp_get_sockopt(sockopt_t *opts)
+static inline const udp_sockopt_t *udp_get_sockopt(const sockopt_t *opts)
 {
     return &opts->so_udp;
 }

@@ -126,6 +126,11 @@ extern void http_server_print_cfg(const tpg_test_case_t *cfg,
 extern void http_client_delete_cfg(const tpg_test_case_t *cfg);
 extern void http_server_delete_cfg(const tpg_test_case_t *cfg);
 
+extern uint32_t http_client_pkts_per_send(const tpg_test_case_t *cfg,
+                                          uint32_t max_pkt_size);
+extern uint32_t http_server_pkts_per_send(const tpg_test_case_t *cfg,
+                                          uint32_t max_pkt_size);
+
 extern void http_client_server_init(app_data_t *app_data,
                                     test_case_init_msg_t *init_msg);
 

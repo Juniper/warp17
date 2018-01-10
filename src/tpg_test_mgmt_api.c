@@ -1030,8 +1030,8 @@ int test_mgmt_update_test_case(uint32_t eth_port, uint32_t test_case_id,
     if (!arg)
         return -EINVAL;
 
-    if (arg->has_ua_rate_open || arg->has_ua_rate_send ||
-            arg->has_ua_rate_close || arg->has_ua_init_delay ||
+    if (arg->has_ua_rate_open || arg->has_ua_rate_close ||
+            arg->has_ua_rate_send || arg->has_ua_init_delay ||
             arg->has_ua_uptime || arg->has_ua_downtime)
         tc_type = TEST_CASE_TYPE__CLIENT;
 
@@ -1046,11 +1046,11 @@ int test_mgmt_update_test_case(uint32_t eth_port, uint32_t test_case_id,
     if (arg->has_ua_rate_open)
         test_case->tc_client.cl_rates.rc_open_rate = arg->ua_rate_open;
 
-    if (arg->has_ua_rate_send)
-        test_case->tc_client.cl_rates.rc_send_rate = arg->ua_rate_send;
-
     if (arg->has_ua_rate_close)
         test_case->tc_client.cl_rates.rc_close_rate = arg->ua_rate_close;
+
+    if (arg->has_ua_rate_send)
+        test_case->tc_client.cl_rates.rc_send_rate = arg->ua_rate_send;
 
     if (arg->has_ua_init_delay)
         test_case->tc_client.cl_delays.dc_init_delay = arg->ua_init_delay;

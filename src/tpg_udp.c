@@ -140,7 +140,7 @@ static int udp_process_incoming(udp_control_block_t *ucb,
                             ucb->ucb_l4.l4cb_test_case_id);
 
     return app_deliver_cb(&ucb->ucb_l4, &ucb->ucb_l4.l4cb_app_data,
-                          &tc_info->tci_app_stats,
+                          tc_info->tci_app_stats,
                           pcb->pcb_mbuf,
                           pcb->pcb_tstamp);
 }
