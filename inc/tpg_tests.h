@@ -305,12 +305,6 @@ typedef struct test_oper_state_s {
     tlkp_test_cb_list_t tos_to_send_cbs;  /* In Established, need to send. */
     tlkp_test_cb_list_t tos_closed_cbs;   /* In Closed, willmove to to_open.*/
 
-    /* Cache (copied from the init msg) of tc_type and app id which are needed
-     * when sending data.
-     */
-    tpg_test_case_type_t tos_tc_type;
-    tpg_app_proto_t      tos_app_id;
-
 } __rte_cache_aligned test_oper_state_t;
 
 /*****************************************************************************

@@ -718,7 +718,7 @@ static void test_udp_notif_state_chg_handler(notif_arg_t *arg)
         if (ucb->ucb_active) {
             test_udp_notif_client_connected(ucb, tc_info);
         } else {
-            tpg_app_proto_t app_id = tc_info->tci_state.tos_app_id;
+            tpg_app_proto_t app_id = ucb->ucb_l4.l4cb_app_data.ad_type;
 
             test_udp_notif_server_connected(ucb, tc_info);
 
@@ -1122,12 +1122,6 @@ static void test_case_init_state(uint32_t lcore, test_case_init_msg_t *im,
         break;
     }
 
-    /* Copy test case type and app-id from init message as we use them
-     * frequently.
-     */
-    ts->tos_tc_type = im->tcim_type;
-    ts->tos_app_id = im->tcim_app_id;
-
     /* Initialize the rates. */
     test_case_rate_state_init(lcore, im->tcim_eth_port, im->tcim_test_case_id,
                               ts, rate_timers, im,
@@ -1162,12 +1156,10 @@ test_case_start_tcp_server(uint32_t lcore __rte_unused,
 {
     tcp_control_block_t *server_tcb;
     test_case_info_t    *tc_info;
-    tpg_app_proto_t      app_id;
     sockopt_t           *sockopt;
     int                  error;
 
     tc_info = arg;
-    app_id = tc_info->tci_state.tos_app_id;
     sockopt = &tc_info->tci_cfg->tcim_sockopt;
 
     /* We need to pass NULL in order for tcp_listen_v4 to allocate one
@@ -1178,7 +1170,8 @@ test_case_start_tcp_server(uint32_t lcore __rte_unused,
     /* Listen on the specified address + port. */
     error = tcp_listen_v4(&server_tcb, eth_port, src_ip, src_port,
                           test_case_id,
-                          app_id, sockopt,
+                          tc_info->tci_cfg->tcim_app_id,
+                          sockopt,
                           TCG_CB_CONSUME_ALL_DATA);
     if (unlikely(error)) {
         TEST_NOTIF(TEST_NOTIF_SERVER_FAILED, NULL, test_case_id, eth_port);
@@ -1203,12 +1196,10 @@ test_case_start_udp_server(uint32_t lcore __rte_unused,
 {
     udp_control_block_t *server_ucb;
     test_case_info_t    *tc_info;
-    tpg_app_proto_t      app_id;
     sockopt_t           *sockopt;
     int                  error;
 
     tc_info = arg;
-    app_id = tc_info->tci_state.tos_app_id;
     sockopt = &tc_info->tci_cfg->tcim_sockopt;
 
     /* We need to pass NULL in order for udp_listen_v4 to allocate one
@@ -1219,7 +1210,8 @@ test_case_start_udp_server(uint32_t lcore __rte_unused,
     /* Listen on the first specified address + port. */
     error = udp_listen_v4(&server_ucb, eth_port, src_ip, src_port,
                           test_case_id,
-                          app_id, sockopt,
+                          tc_info->tci_cfg->tcim_app_id,
+                          sockopt,
                           0);
     if (unlikely(error)) {
         TEST_NOTIF(TEST_NOTIF_SERVER_FAILED, NULL, test_case_id, eth_port);
@@ -1248,7 +1240,7 @@ test_case_start_tcp_client(uint32_t lcore,
     sockopt_t           *sockopt;
 
     tc_info = arg;
-    app_id = tc_info->tci_state.tos_app_id;
+    app_id = tc_info->tci_cfg->tcim_app_id;
     sockopt = &tc_info->tci_cfg->tcim_sockopt;
 
     tcb = tlkp_alloc_tcb();
@@ -1287,7 +1279,7 @@ test_case_start_udp_client(uint32_t lcore,
     sockopt_t           *sockopt;
 
     tc_info = arg;
-    app_id = tc_info->tci_state.tos_app_id;
+    app_id = tc_info->tci_cfg->tcim_app_id;
     sockopt = &tc_info->tci_cfg->tcim_sockopt;
 
     ucb = tlkp_alloc_ucb();
@@ -1322,8 +1314,7 @@ test_case_execute_tcp_send(test_case_info_t *tc_info, uint32_t to_send_cnt)
     test_oper_state_t    *ts = &tc_info->tci_state;
     uint32_t              sent_cnt;
     uint32_t              sent_real_cnt;
-    tpg_test_case_type_t  tc_type = ts->tos_tc_type;
-    tpg_app_proto_t       app_id = ts->tos_app_id;
+    tpg_test_case_type_t  tc_type = tc_info->tci_cfg->tcim_type;
 
     for (sent_cnt = 0, sent_real_cnt = 0;
             !TEST_CBQ_EMPTY(&ts->tos_to_send_cbs) &&
@@ -1332,9 +1323,11 @@ test_case_execute_tcp_send(test_case_info_t *tc_info, uint32_t to_send_cnt)
         int                  error;
         struct rte_mbuf     *data_mbuf;
         uint32_t             data_sent = 0;
-        tcp_control_block_t *tcb = TEST_CBQ_FIRST(&ts->tos_to_send_cbs,
-                                                  tcp_control_block_t,
-                                                  tcb_l4);
+        tcp_control_block_t *tcb;
+        tpg_app_proto_t      app_id;
+
+        tcb = TEST_CBQ_FIRST(&ts->tos_to_send_cbs, tcp_control_block_t, tcb_l4);
+        app_id = tcb->tcb_l4.l4cb_app_data.ad_type;
 
         data_mbuf = APP_CALL(send, tc_type, app_id)(&tcb->tcb_l4,
                                                     &tcb->tcb_l4.l4cb_app_data,
@@ -1350,24 +1343,28 @@ test_case_execute_tcp_send(test_case_info_t *tc_info, uint32_t to_send_cnt)
         }
 
         /* Try to send.
-         * if sent something then let the APP know
-         * else if win_available move at end of list
+         * if we sent something then let the APP know
+         * else if app still needs to send move at end of list
          * else do-nothing as the TEST state machine moved us already to
          * TSTS_NO_SND_WIN.
          */
         error = tcp_send_v4(tcb, data_mbuf, TCG_SEND_PSH,
                             0, /* Timeout */
                             &data_sent);
-        if (unlikely(error))
+        if (unlikely(error)) {
             TEST_NOTIF_TCB(TEST_NOTIF_DATA_FAILED, tcb);
 
-        if (data_sent != 0) {
+            if (test_sm_has_data_pending(&tcb->tcb_l4, tc_info)) {
+                /* Move at the end to try again later. */
+                TEST_CBQ_REM_TO_SEND(ts, &tcb->tcb_l4);
+                TEST_CBQ_ADD_TO_SEND(ts, &tcb->tcb_l4);
+                continue;
+            }
+        }
+
+        if (likely(data_sent != 0)) {
             bool msg_done;
 
-            /* Here we can actually be in 2 potential states:
-             * - SENDING if we still have snd window available
-             * - NO_SND_WIN if we barely fit the message we had to send.
-             */
             msg_done = APP_CALL(data_sent,
                                 tc_type, app_id)(&tcb->tcb_l4,
                                                  &tcb->tcb_l4.l4cb_app_data,
@@ -1379,10 +1376,6 @@ test_case_execute_tcp_send(test_case_info_t *tc_info, uint32_t to_send_cnt)
             if (msg_done)
                 sent_cnt++;
 
-        } else if (!tcp_snd_win_full(tcb)) {
-            /* Move at the end. */
-            TEST_CBQ_REM_TO_SEND(ts, &tcb->tcb_l4);
-            TEST_CBQ_ADD_TO_SEND(ts, &tcb->tcb_l4);
         }
     }
 
@@ -1505,11 +1498,7 @@ test_case_execute_udp_send(test_case_info_t *tc_info, uint32_t to_send_cnt)
     test_oper_state_t    *ts = &tc_info->tci_state;
     uint32_t              sent_cnt;
     uint32_t              sent_real_cnt;
-    bool                  is_server;
-    tpg_test_case_type_t  tc_type = ts->tos_tc_type;
-    tpg_app_proto_t       app_id = ts->tos_app_id;
-
-    is_server = (tc_type == TEST_CASE_TYPE__SERVER);
+    tpg_test_case_type_t  tc_type = tc_info->tci_cfg->tcim_type;
 
     for (sent_cnt = 0, sent_real_cnt = 0;
             !TEST_CBQ_EMPTY(&ts->tos_to_send_cbs) &&
@@ -1518,10 +1507,11 @@ test_case_execute_udp_send(test_case_info_t *tc_info, uint32_t to_send_cnt)
         int                  error;
         struct rte_mbuf     *data_mbuf;
         uint32_t             data_sent = 0;
-        udp_control_block_t *ucb = TEST_CBQ_FIRST(&ts->tos_to_send_cbs,
-                                                  udp_control_block_t,
-                                                  ucb_l4);
+        udp_control_block_t *ucb;
+        tpg_app_proto_t      app_id;
 
+        ucb = TEST_CBQ_FIRST(&ts->tos_to_send_cbs, udp_control_block_t, ucb_l4);
+        app_id = ucb->ucb_l4.l4cb_app_data.ad_type;
 
         data_mbuf = APP_CALL(send, tc_type, app_id)(&ucb->ucb_l4,
                                                     &ucb->ucb_l4.l4cb_app_data,
@@ -1536,15 +1526,26 @@ test_case_execute_udp_send(test_case_info_t *tc_info, uint32_t to_send_cnt)
             continue;
         }
 
+
         /* Try to send.
-         * if sent something then let the APP know
-         * then move at the end of the queue
+         * if we sent something then let the APP know
+         * else if app still needs to send move at end of list
+         * else do-nothing as the TEST state machine moved us already to
+         * TSTS_NO_SND_WIN.
          */
         error = udp_send_v4(ucb, data_mbuf, &data_sent);
-        if (unlikely(error))
+        if (unlikely(error)) {
             TEST_NOTIF_UCB(TEST_NOTIF_DATA_FAILED, ucb);
 
-        if (data_sent != 0) {
+            if (test_sm_has_data_pending(&ucb->ucb_l4, tc_info)) {
+                /* Move at the end to try again later. */
+                TEST_CBQ_REM_TO_SEND(ts, &ucb->ucb_l4);
+                TEST_CBQ_ADD_TO_SEND(ts, &ucb->ucb_l4);
+                continue;
+            }
+        }
+
+        if (likely(data_sent != 0)) {
             bool msg_done;
 
             msg_done = APP_CALL(data_sent,
@@ -1558,13 +1559,6 @@ test_case_execute_udp_send(test_case_info_t *tc_info, uint32_t to_send_cnt)
             if (msg_done)
                 sent_cnt++;
 
-        } else if ((is_server &&
-                        test_server_sm_has_data_pending(&ucb->ucb_l4)) ||
-                        (!is_server &&
-                         test_client_sm_has_data_pending(&ucb->ucb_l4))) {
-            /* Move at the end. */
-            TEST_CBQ_REM_TO_SEND(ts, &ucb->ucb_l4);
-            TEST_CBQ_ADD_TO_SEND(ts, &ucb->ucb_l4);
         }
     }
     TRACE_FMT(TST, DEBUG, "UDP_SEND data cnt %"PRIu32, sent_cnt);
@@ -2222,6 +2216,8 @@ static int test_case_stop_cb(uint16_t msgid, uint16_t lcore,
     test_oper_state_t    *tc_state;
     test_rate_timers_t   *tc_rate_timers;
     bool                  all_purged;
+    tpg_test_case_type_t  tc_type;
+    tpg_app_proto_t       app_id;
 
     if (MSG_INVALID(msgid, msg, MSG_TEST_CASE_STOP))
         return -EINVAL;
@@ -2279,10 +2275,9 @@ static int test_case_stop_cb(uint16_t msgid, uint16_t lcore,
                        port_get_rx_queue_id(lcore, sm->tcsm_eth_port));
     }
 
-    if (tc_state->tos_tc_type == TEST_CASE_TYPE__SERVER)
-        APP_SRV_CALL(tc_stop, tc_state->tos_app_id)(tc_info->tci_cfg);
-    else if (tc_state->tos_tc_type == TEST_CASE_TYPE__CLIENT)
-        APP_CL_CALL(tc_stop, tc_state->tos_app_id)(tc_info->tci_cfg);
+    tc_type = tc_info->tci_cfg->tcim_type;
+    app_id = tc_info->tci_cfg->tcim_app_id;
+    APP_CALL(tc_stop, tc_type, app_id)(tc_info->tci_cfg);
 
 done:
     /* Notify the sender that we're done. */
@@ -2328,7 +2323,7 @@ static int test_case_stats_req_cb(uint16_t msgid, uint16_t lcore __rte_unused,
     if (tc_info->tci_cfg->tcim_rx_tstamp)
         test_case_latency_init(tc_info);
 
-    switch (tc_info->tci_state.tos_tc_type) {
+    switch (tc_info->tci_cfg->tcim_type) {
     case TEST_CASE_TYPE__SERVER:
         /* Clear the gen stats. */
         bzero(&tc_info->tci_general_stats->tcs_server,

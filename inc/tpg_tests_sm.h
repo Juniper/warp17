@@ -223,5 +223,8 @@ extern bool test_server_sm_has_data_pending(l4_control_block_t *l4_cb);
 
 extern bool test_client_sm_has_data_pending(l4_control_block_t *l4_cb);
 
+extern bool test_sm_has_data_pending(l4_control_block_t *l4_cb,
+                                     test_case_info_t *ctx);
+
 #endif /* _H_TPG_TESTS_SM_ */
 

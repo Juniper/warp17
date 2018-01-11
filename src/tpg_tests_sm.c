@@ -901,12 +901,34 @@ void test_server_sm_udp_state_change(udp_control_block_t *ucb,
     test_server_sm_dispatch_event(&ucb->ucb_l4, TST_SRVE_UDP_STATE_CHG, ctx);
 }
 
+/*****************************************************************************
+ * test_server_sm_has_data_pending()
+ ****************************************************************************/
 bool test_server_sm_has_data_pending(l4_control_block_t *l4_cb)
 {
     return TEST_SRV_STATE(l4_cb) == TST_SRVS_SENDING;
 }
 
+/*****************************************************************************
+ * test_client_sm_has_data_pending()
+ ****************************************************************************/
 bool test_client_sm_has_data_pending(l4_control_block_t *l4_cb)
 {
     return TEST_CL_STATE(l4_cb) == TST_CLS_SENDING;
 }
+
+/*****************************************************************************
+ * test_sm_has_data_pending()
+ ****************************************************************************/
+bool test_sm_has_data_pending(l4_control_block_t *l4_cb, test_case_info_t *ctx)
+{
+    switch (ctx->tci_cfg->tcim_type) {
+    case TEST_CASE_TYPE__CLIENT:
+        return test_client_sm_has_data_pending(l4_cb);
+    case TEST_CASE_TYPE__SERVER:
+        return test_server_sm_has_data_pending(l4_cb);
+    default:
+        return false;
+    }
+}
+
