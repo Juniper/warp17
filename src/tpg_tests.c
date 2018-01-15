@@ -111,16 +111,12 @@ RTE_DEFINE_PER_LCORE(test_oper_latency_state_t *, test_case_latency_state);
  * Array[testcase][port].
  */
 
-static RTE_DEFINE_PER_LCORE(MSG_TYPEDEF(test_case_run_msg_t) *,
-                            test_open_msgpool);
-static RTE_DEFINE_PER_LCORE(MSG_TYPEDEF(test_case_run_msg_t) *,
-                            test_close_msgpool);
-static RTE_DEFINE_PER_LCORE(MSG_TYPEDEF(test_case_run_msg_t) *,
-                            test_send_msgpool);
+RTE_DEFINE_PER_LCORE(test_run_msgpool_t *, test_open_msgpool);
+RTE_DEFINE_PER_LCORE(test_run_msgpool_t *, test_close_msgpool);
+RTE_DEFINE_PER_LCORE(test_run_msgpool_t *, test_send_msgpool);
 
-#define TEST_GET_MSG_PTR(type, port, tcid)   \
-    (RTE_PER_LCORE(test_##type##_msgpool) +  \
-     (port) * TPG_TEST_MAX_ENTRIES + (tcid))
+#define TEST_GET_MSG_PTR(msgpool, port, tcid) \
+    ((msgpool) +  (port) * TPG_TEST_MAX_ENTRIES + (tcid))
 
 static RTE_DEFINE_PER_LCORE(test_tmr_arg_t *, test_tmr_open_args);
 static RTE_DEFINE_PER_LCORE(test_tmr_arg_t *, test_tmr_close_args);
@@ -133,21 +129,70 @@ static RTE_DEFINE_PER_LCORE(test_tmr_arg_t *, test_tmr_send_args);
 /* Callback to be executed whenever an interesting event happens. */
 notif_cb_t test_notif_cb;
 
+/*
+ * Per test-type and protocol callbacks.
+ * TODO: ideally this should be dynamic and allow registration of other
+ * protocols.
+ */
+static int      test_case_tcp_client_open(l4_control_block_t *l4_cb);
+static uint32_t test_case_tcp_mtu(l4_control_block_t *l4_cb);
+static int      test_case_tcp_send(l4_control_block_t *l4_cb,
+                                   struct rte_mbuf *data_mbuf,
+                                   uint32_t *data_sent);
+static void     test_case_tcp_close(l4_control_block_t *l4_cb);
+
+static int      test_case_udp_client_open(l4_control_block_t *l4_cb);
+static uint32_t test_case_udp_mtu(l4_control_block_t *l4_cb);
+static int      test_case_udp_send(l4_control_block_t *l4_cb,
+                                   struct rte_mbuf *data_mbuf,
+                                   uint32_t *data_sent);
+static void     test_case_udp_close(l4_control_block_t *l4_cb);
+
+
+static struct {
+
+    test_case_client_open_cb_t   open;
+    test_case_client_close_cb_t  close;
+    test_case_session_mtu_cb_t   mtu;
+    test_case_session_send_cb_t  send;
+    test_case_session_close_cb_t sess_close;
+
+} test_callbacks[TEST_CASE_TYPE__MAX][L4_PROTO__L4_PROTO_MAX] = {
+
+    [TEST_CASE_TYPE__SERVER][L4_PROTO__TCP] = {
+        .open = NULL,
+        .close = NULL,
+        .mtu = test_case_tcp_mtu,
+        .send = test_case_tcp_send,
+        .sess_close = test_case_tcp_close,
+    },
+    [TEST_CASE_TYPE__SERVER][L4_PROTO__UDP] = {
+        .open = NULL,
+        .close = NULL,
+        .mtu = test_case_udp_mtu,
+        .send = test_case_udp_send,
+        .sess_close = test_case_udp_close,
+    },
+    [TEST_CASE_TYPE__CLIENT][L4_PROTO__TCP] = {
+        .open = test_case_tcp_client_open,
+        .close = test_case_tcp_close,
+        .mtu = test_case_tcp_mtu,
+        .send = test_case_tcp_send,
+        .sess_close = test_case_tcp_close,
+    },
+    [TEST_CASE_TYPE__CLIENT][L4_PROTO__UDP] = {
+        .open = test_case_udp_client_open,
+        .close = test_case_udp_close,
+        .mtu = test_case_udp_mtu,
+        .send = test_case_udp_send,
+        .sess_close = test_case_udp_close,
+    },
+
+};
+
 /*****************************************************************************
  * Forward declarations
  ****************************************************************************/
-static uint32_t test_case_execute_tcp_open(test_case_info_t *tc_info,
-                                           uint32_t to_open_cnt);
-static uint32_t test_case_execute_tcp_close(test_case_info_t *tc_info,
-                                            uint32_t to_close_cnt);
-static uint32_t test_case_execute_tcp_send(test_case_info_t *tc_info,
-                                           uint32_t to_send_cnt);
-static uint32_t test_case_execute_udp_open(test_case_info_t *tc_info,
-                                           uint32_t to_send_cnt);
-static uint32_t test_case_execute_udp_close(test_case_info_t *tc_info,
-                                            uint32_t to_send_cnt);
-static uint32_t test_case_execute_udp_send(test_case_info_t *tc_info,
-                                           uint32_t to_send_cnt);
 static void test_update_recent_latency_stats(tpg_latency_stats_t *stats,
                                              test_oper_latency_state_t *buffer,
                                              tpg_test_case_latency_t *tc_latency);
@@ -245,141 +290,6 @@ static uint32_t test_case_server_cfg_count(const tpg_server_t *server_cfg)
 {
     return TPG_IPV4_RANGE_SIZE(&server_cfg->srv_ips) *
                 TPG_PORT_RANGE_SIZE(&server_cfg->srv_l4.l4s_tcp_udp.tus_ports);
-}
-
-/*****************************************************************************
- * TCP/UDP close functions
- ****************************************************************************/
-/*****************************************************************************
- * test_case_tcp_close()
- ****************************************************************************/
-static void test_case_tcp_close(l4_control_block_t *l4_cb)
-{
-    tcp_close_connection(container_of(l4_cb, tcp_control_block_t, tcb_l4), 0);
-}
-
-/*****************************************************************************
- * test_case_udp_close()
- ****************************************************************************/
-static void test_case_udp_close(l4_control_block_t *l4_cb)
-{
-    udp_close_v4((udp_control_block_t *)l4_cb);
-}
-
-/*****************************************************************************
- * Test stats timer & run triggering static functions.
- ****************************************************************************/
-/*****************************************************************************
- * test_get_run_cl_arg_ptr()
- ****************************************************************************/
-static test_tmr_arg_t *
-test_init_run_arg_ptr(test_tmr_arg_t *tmr_arg, uint32_t lcore_id,
-                      uint32_t eth_port,
-                      uint32_t test_case_id,
-                      test_rate_state_t *rate_state)
-{
-    tmr_arg->tta_lcore_id = lcore_id;
-    tmr_arg->tta_eth_port = eth_port;
-    tmr_arg->tta_test_case_id = test_case_id;
-    tmr_arg->tta_rate_state = rate_state;
-
-    return tmr_arg;
-}
-
-/*****************************************************************************
- * test_case_do_run_msg()
- ****************************************************************************/
-static int test_case_do_run_msg(msg_t *msgp, uint32_t msg_type,
-                                uint32_t lcore_id,
-                                uint32_t eth_port,
-                                uint32_t test_case_id)
-{
-    int error;
-
-    msg_init(msgp, msg_type, lcore_id, MSG_FLAG_LOCAL);
-
-    MSG_INNER(test_case_run_msg_t, msgp)->tcrm_eth_port = eth_port;
-    MSG_INNER(test_case_run_msg_t, msgp)->tcrm_test_case_id = test_case_id;
-
-    /* Send the message and forget about it. */
-    error = msg_send_local(msgp, MSG_SND_FLAG_NOWAIT);
-
-    if (unlikely(error != 0)) {
-        RTE_LOG(ERR, USER1,
-                "[%d:%s()] Failed to send RUN message: tcid=%"PRIu32" %s(%d)\n",
-                rte_lcore_index(lcore_id),
-                __func__,
-                test_case_id,
-                rte_strerror(-error), -error);
-    }
-
-    return 0;
-}
-
-/*****************************************************************************
- * test_resched_open()
- ****************************************************************************/
-void test_resched_open(test_rate_state_t *rate_state, uint32_t eth_port,
-                       uint32_t test_case_id)
-{
-    msg_t *msgp;
-
-    if (rate_state->trs_open_in_progress)
-        return;
-    if (rate_state->trs_open_rate_reached)
-        return;
-
-    msgp = &TEST_GET_MSG_PTR(open, eth_port, test_case_id)->msg;
-
-    if (test_case_do_run_msg(msgp, MSG_TEST_CASE_RUN_OPEN, rte_lcore_id(),
-                             eth_port,
-                             test_case_id) == 0) {
-        rate_state->trs_open_in_progress = true;
-    }
-}
-
-/*****************************************************************************
- * test_resched_close()
- ****************************************************************************/
-void test_resched_close(test_rate_state_t *rate_state, uint32_t eth_port,
-                        uint32_t test_case_id)
-{
-    msg_t *msgp;
-
-    if (rate_state->trs_close_in_progress)
-        return;
-    if (rate_state->trs_close_rate_reached)
-        return;
-
-    msgp = &TEST_GET_MSG_PTR(close, eth_port, test_case_id)->msg;
-
-    if (test_case_do_run_msg(msgp, MSG_TEST_CASE_RUN_CLOSE, rte_lcore_id(),
-                             eth_port,
-                             test_case_id) == 0) {
-        rate_state->trs_close_in_progress = true;
-    }
-}
-
-/*****************************************************************************
- * test_resched_send()
- ****************************************************************************/
-void test_resched_send(test_rate_state_t *rate_state, uint32_t eth_port,
-                       uint32_t test_case_id)
-{
-    msg_t *msgp;
-
-    if (rate_state->trs_send_in_progress)
-        return;
-    if (rate_state->trs_send_rate_reached)
-        return;
-
-    msgp = &TEST_GET_MSG_PTR(send, eth_port, test_case_id)->msg;
-
-    if (test_case_do_run_msg(msgp, MSG_TEST_CASE_RUN_SEND, rte_lcore_id(),
-                             eth_port,
-                             test_case_id) == 0) {
-        rate_state->trs_send_in_progress = true;
-    }
 }
 
 /*****************************************************************************
@@ -485,58 +395,61 @@ void test_update_latency(l4_control_block_t *l4cb, uint64_t sent_tstamp,
     }
 }
 
+
 /*****************************************************************************
- * test_case_tmr_open_cb()
+ * test_case_run_msg()
  ****************************************************************************/
-static void test_case_tmr_open_cb(struct rte_timer *tmr __rte_unused, void *arg)
+int test_case_run_msg(uint32_t lcore_id,
+                      uint32_t eth_port, uint32_t test_case_id,
+                      test_run_msgpool_t *msgpool,
+                      test_run_msg_type_t msg_type)
 {
-    test_tmr_arg_t    *tmr_arg = arg;
-    test_rate_state_t *rate_state = tmr_arg->tta_rate_state;
+    int    error;
+    msg_t *msgp;
 
-    /* We step into a new time interval... "Advance" the rates. */
-    rate_limit_advance_interval(&rate_state->trs_open);
+    msgp = &TEST_GET_MSG_PTR(msgpool, eth_port, test_case_id)->msg;
+    msg_init(msgp, msg_type, lcore_id, MSG_FLAG_LOCAL);
 
-    /* Start from scratch.. */
-    rate_state->trs_open_rate_reached = false;
+    MSG_INNER(test_case_run_msg_t, msgp)->tcrm_eth_port = eth_port;
+    MSG_INNER(test_case_run_msg_t, msgp)->tcrm_test_case_id = test_case_id;
 
-    test_resched_open(rate_state, tmr_arg->tta_eth_port,
-                      tmr_arg->tta_test_case_id);
+    /* Send the message and forget about it. */
+    error = msg_send_local(msgp, MSG_SND_FLAG_NOWAIT);
+
+    if (unlikely(error != 0)) {
+        RTE_LOG(ERR, USER1,
+                "[%d:%s()] Failed to send RUN message: tcid=%"PRIu32" %s(%d)\n",
+                rte_lcore_index(lcore_id),
+                __func__,
+                test_case_id,
+                rte_strerror(-error), -error);
+    }
+
+    return 0;
 }
 
 /*****************************************************************************
- * test_case_tmr_close_cb()
+ * test_case_tmr_cb()
  ****************************************************************************/
-static void test_case_tmr_close_cb(struct rte_timer *tmr __rte_unused, void *arg)
+static void test_case_tmr_cb(struct rte_timer *tmr __rte_unused, void *arg)
 {
-    test_tmr_arg_t    *tmr_arg = arg;
-    test_rate_state_t *rate_state = tmr_arg->tta_rate_state;
+    test_tmr_arg_t     *tmr_arg = arg;
+    test_rate_state_t  *rate_state = tmr_arg->tta_rate_state;
+    rate_limit_t       *rate_limit = tmr_arg->tta_rate_limit;
+    uint32_t            in_progress_flag = tmr_arg->tta_rate_in_progress_flag;
+    uint32_t            reached_flag = tmr_arg->tta_rate_reached_flag;
+    test_run_msgpool_t *msg_pool = tmr_arg->tta_run_msg_pool;
 
     /* We step into a new time interval... "Advance" the rates. */
-    rate_limit_advance_interval(&rate_state->trs_close);
+    rate_limit_advance_interval(rate_limit);
 
-    /* Start from scratch.. */
-    rate_state->trs_close_rate_reached = false;
+    /* Start from scratch (reset the "reached" flag).. */
+    rate_state->trs_flags &= ~reached_flag;
 
-    test_resched_close(rate_state, tmr_arg->tta_eth_port,
-                      tmr_arg->tta_test_case_id);
-}
-
-/*****************************************************************************
- * test_case_tmr_send_cb()
- ****************************************************************************/
-static void test_case_tmr_send_cb(struct rte_timer *tmr __rte_unused, void *arg)
-{
-    test_tmr_arg_t    *tmr_arg = arg;
-    test_rate_state_t *rate_state = tmr_arg->tta_rate_state;
-
-    /* We step into a new time interval... "Advance" the rates. */
-    rate_limit_advance_interval(&rate_state->trs_send);
-
-    /* Start from scratch.. */
-    rate_state->trs_send_rate_reached = false;
-
-    test_resched_send(rate_state, tmr_arg->tta_eth_port,
-                      tmr_arg->tta_test_case_id);
+    test_resched_runner(rate_state, tmr_arg->tta_eth_port,
+                        tmr_arg->tta_test_case_id,
+                        in_progress_flag, reached_flag,
+                        msg_pool, tmr_arg->tta_run_msg_type);
 }
 
 /*****************************************************************************
@@ -813,7 +726,7 @@ static void test_notif_handler(uint32_t notification, notif_arg_t *arg)
         test_app_client_send_stop(arg->narg_test.tnarg_l4_cb, tc_info);
         break;
     case TEST_NOTIF_APP_CLIENT_CLOSE:
-        tc_info->tci_close_cb(arg->narg_test.tnarg_l4_cb);
+        tc_info->tci_state.tos_session_close_cb(arg->narg_test.tnarg_l4_cb);
         break;
     case TEST_NOTIF_APP_SERVER_SEND_START:
         test_app_server_send_start(arg->narg_test.tnarg_l4_cb, tc_info);
@@ -822,7 +735,7 @@ static void test_notif_handler(uint32_t notification, notif_arg_t *arg)
         test_app_server_send_stop(arg->narg_test.tnarg_l4_cb, tc_info);
         break;
     case TEST_NOTIF_APP_SERVER_CLOSE:
-        tc_info->tci_close_cb(arg->narg_test.tnarg_l4_cb);
+        tc_info->tci_state.tos_session_close_cb(arg->narg_test.tnarg_l4_cb);
         break;
 
     case TEST_NOTIF_DATA_FAILED:
@@ -901,23 +814,17 @@ static void test_case_rate_zero(const char *rl_name, rate_limit_t *rl,
  ****************************************************************************/
 static void test_case_rate_start_timer(struct rte_timer *tmr,
                                        test_tmr_arg_t *tmr_arg,
-                                       test_rate_state_t *rate_state,
                                        rate_limit_t *rl,
-                                       rte_timer_cb_t tmr_cb,
-                                       uint32_t lcore_id,
-                                       uint32_t eth_port,
-                                       uint32_t test_case_id)
+                                       uint32_t lcore_id)
 {
 
     /* No need to start a periodic timer if rate-limiting is set to 0. */
     if (!rate_limit_interval_us(rl))
         return;
 
-    test_init_run_arg_ptr(tmr_arg, lcore_id, eth_port, test_case_id,
-                          rate_state);
     rte_timer_reset(tmr, rate_limit_interval_us(rl) * cycles_per_us, PERIODICAL,
                     lcore_id,
-                    tmr_cb,
+                    test_case_tmr_cb,
                     tmr_arg);
 }
 
@@ -953,12 +860,7 @@ static void test_case_rate_state_init(uint32_t lcore, uint32_t eth_port,
     rte_timer_init(&rate_timers->trt_send_timer);
 
     /* Initialize open/close/send rate limiter states. */
-    rate_state->trs_open_in_progress = false;
-    rate_state->trs_open_rate_reached = false;
-    rate_state->trs_close_in_progress = false;
-    rate_state->trs_close_rate_reached = false;
-    rate_state->trs_send_in_progress = false;
-    rate_state->trs_send_rate_reached = false;
+    rate_state->trs_flags = 0;
 
     /* WARNING: It's safe to use the values from im->tcim_transient here as
      * long as this function is called only from the MSG_TEST_CASE_INIT
@@ -990,33 +892,61 @@ test_case_rate_state_start(uint32_t lcore, uint32_t eth_port,
                            test_rate_timers_t *rate_timers)
 {
     test_rate_state_t *rate_state = &test_state->tos_rates;
+    test_tmr_arg_t    *tmr_open_arg;
+    test_tmr_arg_t    *tmr_close_arg;
+    test_tmr_arg_t    *tmr_send_arg;
 
-    test_case_rate_start_timer(&rate_timers->trt_open_timer,
-                               TEST_GET_TMR_ARG(open, eth_port, test_case_id),
-                               rate_state,
+    tmr_open_arg =  TEST_GET_TMR_ARG(open, eth_port, test_case_id);
+    tmr_close_arg = TEST_GET_TMR_ARG(close, eth_port, test_case_id);
+    tmr_send_arg =  TEST_GET_TMR_ARG(send, eth_port, test_case_id);
+
+    *tmr_open_arg = (test_tmr_arg_t) {
+        .tta_lcore_id = lcore,
+        .tta_eth_port = eth_port,
+        .tta_test_case_id = test_case_id,
+        .tta_rate_state = rate_state,
+        .tta_rate_limit = &rate_state->trs_open,
+        .tta_rate_in_progress_flag = TRS_FLAGS_OPEN_IN_PROGRESS,
+        .tta_rate_reached_flag = TRS_FLAGS_OPEN_RATE_REACHED,
+        .tta_run_msg_pool = RTE_PER_LCORE(test_open_msgpool),
+        .tta_run_msg_type = TRMT_OPEN,
+    };
+
+    *tmr_close_arg = (test_tmr_arg_t) {
+        .tta_lcore_id = lcore,
+        .tta_eth_port = eth_port,
+        .tta_test_case_id = test_case_id,
+        .tta_rate_state = rate_state,
+        .tta_rate_limit = &rate_state->trs_close,
+        .tta_rate_in_progress_flag = TRS_FLAGS_CLOSE_IN_PROGRESS,
+        .tta_rate_reached_flag = TRS_FLAGS_CLOSE_RATE_REACHED,
+        .tta_run_msg_pool = RTE_PER_LCORE(test_close_msgpool),
+        .tta_run_msg_type = TRMT_CLOSE,
+    };
+
+    *tmr_send_arg = (test_tmr_arg_t) {
+        .tta_lcore_id = lcore,
+        .tta_eth_port = eth_port,
+        .tta_test_case_id = test_case_id,
+        .tta_rate_state = rate_state,
+        .tta_rate_limit = &rate_state->trs_send,
+        .tta_rate_in_progress_flag = TRS_FLAGS_SEND_IN_PROGRESS,
+        .tta_rate_reached_flag = TRS_FLAGS_SEND_RATE_REACHED,
+        .tta_run_msg_pool = RTE_PER_LCORE(test_send_msgpool),
+        .tta_run_msg_type = TRMT_SEND,
+    };
+
+    test_case_rate_start_timer(&rate_timers->trt_open_timer, tmr_open_arg,
                                &rate_state->trs_open,
-                               test_case_tmr_open_cb,
-                               lcore,
-                               eth_port,
-                               test_case_id);
+                               lcore);
 
-    test_case_rate_start_timer(&rate_timers->trt_close_timer,
-                               TEST_GET_TMR_ARG(close, eth_port, test_case_id),
-                               rate_state,
+    test_case_rate_start_timer(&rate_timers->trt_close_timer, tmr_close_arg,
                                &rate_state->trs_close,
-                               test_case_tmr_close_cb,
-                               lcore,
-                               eth_port,
-                               test_case_id);
+                               lcore);
 
-    test_case_rate_start_timer(&rate_timers->trt_send_timer,
-                               TEST_GET_TMR_ARG(send, eth_port, test_case_id),
-                               rate_state,
+    test_case_rate_start_timer(&rate_timers->trt_send_timer, tmr_send_arg,
                                &rate_state->trs_send,
-                               test_case_tmr_send_cb,
-                               lcore,
-                               eth_port,
-                               test_case_id);
+                               lcore);
 }
 
 /*****************************************************************************
@@ -1051,9 +981,10 @@ test_case_rate_state_running(test_oper_state_t *test_state)
 {
     test_rate_state_t *rate_state = &test_state->tos_rates;
 
-    return rate_state->trs_open_in_progress ||
-                rate_state->trs_close_in_progress ||
-                rate_state->trs_send_in_progress;
+    return rate_state->trs_flags &
+            (TRS_FLAGS_OPEN_IN_PROGRESS |
+             TRS_FLAGS_CLOSE_IN_PROGRESS |
+             TRS_FLAGS_SEND_IN_PROGRESS);
 }
 
 /*****************************************************************************
@@ -1084,6 +1015,11 @@ test_case_init_state_client_counters_cb(uint32_t lcore __rte_unused,
  ****************************************************************************/
 static void test_case_init_state(uint32_t lcore, test_case_init_msg_t *im,
                                  test_oper_state_t *ts,
+                                 test_case_client_open_cb_t client_open_cb,
+                                 test_case_client_close_cb_t client_close_cb,
+                                 test_case_session_mtu_cb_t mtu_cb,
+                                 test_case_session_send_cb_t send_cb,
+                                 test_case_session_close_cb_t close_cb,
                                  test_rate_timers_t *rate_timers)
 {
     uint32_t total_sessions = 0;
@@ -1126,21 +1062,13 @@ static void test_case_init_state(uint32_t lcore, test_case_init_msg_t *im,
     test_case_rate_state_init(lcore, im->tcim_eth_port, im->tcim_test_case_id,
                               ts, rate_timers, im,
                               total_sessions, local_sessions);
-}
 
-/*****************************************************************************
- * test_case_init_callbacks()
- ****************************************************************************/
-static void test_case_init_callbacks(test_case_info_t *tc_info,
-                                     test_case_runner_cb_t run_open_cb,
-                                     test_case_runner_cb_t run_close_cb,
-                                     test_case_runner_cb_t run_send_cb,
-                                     test_case_close_cb_t close_cb)
-{
-    tc_info->tci_run_open_cb = run_open_cb;
-    tc_info->tci_run_close_cb = run_close_cb;
-    tc_info->tci_run_send_cb = run_send_cb;
-    tc_info->tci_close_cb = close_cb;
+    /* Initialize the session callbacks. */
+    ts->tos_client_open_cb = client_open_cb;
+    ts->tos_client_close_cb = client_close_cb;
+    ts->tos_session_mtu_cb = mtu_cb;
+    ts->tos_session_send_cb = send_cb;
+    ts->tos_session_close_cb = close_cb;
 }
 
 /*****************************************************************************
@@ -1305,466 +1233,98 @@ test_case_start_udp_client(uint32_t lcore,
 /*****************************************************************************
  * Static functions for Running test cases.
  ****************************************************************************/
+
 /*****************************************************************************
- * test_case_execute_tcp_send()
+ * test_case_tcp_client_open()
  ****************************************************************************/
-static uint32_t
-test_case_execute_tcp_send(test_case_info_t *tc_info, uint32_t to_send_cnt)
+static int test_case_tcp_client_open(l4_control_block_t *l4_cb)
 {
-    test_oper_state_t    *ts = &tc_info->tci_state;
-    uint32_t              sent_cnt;
-    uint32_t              sent_real_cnt;
-    tpg_test_case_type_t  tc_type = tc_info->tci_cfg->tcim_type;
+    tcp_control_block_t *tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
 
-    for (sent_cnt = 0, sent_real_cnt = 0;
-            !TEST_CBQ_EMPTY(&ts->tos_to_send_cbs) &&
-                sent_real_cnt < to_send_cnt;
-            sent_real_cnt++) {
-        int                  error;
-        struct rte_mbuf     *data_mbuf;
-        uint32_t             data_sent = 0;
-        tcp_control_block_t *tcb;
-        tpg_app_proto_t      app_id;
-
-        tcb = TEST_CBQ_FIRST(&ts->tos_to_send_cbs, tcp_control_block_t, tcb_l4);
-        app_id = tcb->tcb_l4.l4cb_app_data.ad_type;
-
-        data_mbuf = APP_CALL(send, tc_type, app_id)(&tcb->tcb_l4,
-                                                    &tcb->tcb_l4.l4cb_app_data,
-                                                    tc_info->tci_app_stats,
-                                                    TCB_AVAIL_SEND(tcb));
-        if (unlikely(data_mbuf == NULL)) {
-            TEST_NOTIF_TCB(TEST_NOTIF_DATA_NULL, tcb);
-
-            /* Move at the end to try again later. */
-            TEST_CBQ_REM_TO_SEND(ts, &tcb->tcb_l4);
-            TEST_CBQ_ADD_TO_SEND(ts, &tcb->tcb_l4);
-            continue;
-        }
-
-        /* Try to send.
-         * if we sent something then let the APP know
-         * else if app still needs to send move at end of list
-         * else do-nothing as the TEST state machine moved us already to
-         * TSTS_NO_SND_WIN.
-         */
-        error = tcp_send_v4(tcb, data_mbuf, TCG_SEND_PSH,
-                            0, /* Timeout */
-                            &data_sent);
-        if (unlikely(error)) {
-            TEST_NOTIF_TCB(TEST_NOTIF_DATA_FAILED, tcb);
-
-            if (test_sm_has_data_pending(&tcb->tcb_l4, tc_info)) {
-                /* Move at the end to try again later. */
-                TEST_CBQ_REM_TO_SEND(ts, &tcb->tcb_l4);
-                TEST_CBQ_ADD_TO_SEND(ts, &tcb->tcb_l4);
-                continue;
-            }
-        }
-
-        if (likely(data_sent != 0)) {
-            bool msg_done;
-
-            msg_done = APP_CALL(data_sent,
-                                tc_type, app_id)(&tcb->tcb_l4,
-                                                 &tcb->tcb_l4.l4cb_app_data,
-                                                 tc_info->tci_app_stats,
-                                                 data_sent);
-            /* We increment the sent count only if the application managed to
-             * transmit a whole message.
-             */
-            if (msg_done)
-                sent_cnt++;
-
-        }
-    }
-
-    TRACE_FMT(TST, DEBUG, "TCP_SEND_WAIT data cnt %"PRIu32, sent_cnt);
-
-    /* TODO: Duplicated in test_case_execute_udp_send. */
-
-    /* Update the transaction send rate. */
-    tc_info->tci_rate_stats->tcrs_data_per_s += sent_cnt;
-
-    /* Return the number of individual sent packets (not transactions!). */
-    return sent_real_cnt;
+    return tcp_open_v4_connection(&tcb, tcb->tcb_l4.l4cb_interface,
+                                  tcb->tcb_l4.l4cb_src_addr.ip_v4,
+                                  tcb->tcb_l4.l4cb_src_port,
+                                  tcb->tcb_l4.l4cb_dst_addr.ip_v4,
+                                  tcb->tcb_l4.l4cb_dst_port,
+                                  tcb->tcb_l4.l4cb_test_case_id,
+                                  tcb->tcb_l4.l4cb_app_data.ad_type,
+                                  NULL,
+                                  TCG_CB_REUSE_CB);
 }
 
 /*****************************************************************************
- * test_case_execute_tcp_close()
+ * test_case_tcp_mtu()
  ****************************************************************************/
-static uint32_t
-test_case_execute_tcp_close(test_case_info_t *tc_info, uint32_t to_close_cnt)
+static uint32_t test_case_tcp_mtu(l4_control_block_t *l4_cb)
 {
-    test_oper_state_t   *ts = &tc_info->tci_state;
-    tcp_control_block_t *tcb;
-    uint32_t             closed_cnt = 0;
-
-    /* Stop a batch of clients from the to_close list. */
-    while (!TEST_CBQ_EMPTY(&ts->tos_to_close_cbs) && closed_cnt < to_close_cnt) {
-
-        tcb = TEST_CBQ_FIRST(&ts->tos_to_close_cbs, tcp_control_block_t,
-                             tcb_l4);
-
-        /* Warning! CLOSE will change the TCB state which will cause it to be
-         * removed from the to_close list. No need to do it ourselves.
-         * The state change will also notify the application that the connection
-         * is going down.
-         */
-        tcp_close_connection(tcb, 0);
-        closed_cnt++;
-
-        TRACE_FMT(TST, DEBUG, "Stop client: "
-                  "tcb=%p, eth_port=%"PRIu32", ip src/dst=%8.8X/%8.8X, "
-                  "port src/dst=%"PRIu16"/%"PRIu16,
-                  tcb,
-                  tcb->tcb_l4.l4cb_interface,
-                  tcb->tcb_l4.l4cb_src_addr.ip_v4,
-                  tcb->tcb_l4.l4cb_dst_addr.ip_v4,
-                  tcb->tcb_l4.l4cb_src_port,
-                  tcb->tcb_l4.l4cb_dst_port);
-    }
-
-    TRACE_FMT(TST, DEBUG, "TCP_CLOSE closed cnt %"PRIu32, closed_cnt);
-
-    return closed_cnt;
+    return TCB_AVAIL_SEND(container_of(l4_cb, tcp_control_block_t, tcb_l4));
 }
 
 /*****************************************************************************
- * test_case_execute_tcp_open()
+ * test_case_tcp_send()
  ****************************************************************************/
-static uint32_t
-test_case_execute_tcp_open(test_case_info_t *tc_info, uint32_t to_open_cnt)
+static int
+test_case_tcp_send(l4_control_block_t *l4_cb, struct rte_mbuf *data_mbuf,
+                   uint32_t *data_sent)
 {
-    test_oper_state_t   *ts = &tc_info->tci_state;
-    tcp_control_block_t *tcb;
-    uint32_t             opened_cnt = 0;
-    int                  error;
+    tcp_control_block_t *tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
 
-    /* Start a batch of clients from the to_open list. */
-    while (!TEST_CBQ_EMPTY(&ts->tos_to_open_cbs) && opened_cnt < to_open_cnt) {
-
-        tcb = TEST_CBQ_FIRST(&ts->tos_to_open_cbs, tcp_control_block_t,
-                             tcb_l4);
-
-        /* OPEN will change the TCB state and cause it to be removed from the
-         * to_send list. Careful here!!
-         * Once the connection reaches Established the application layer will
-         * be notified.
-         */
-        error = tcp_open_v4_connection(&tcb, tcb->tcb_l4.l4cb_interface,
-                                       tcb->tcb_l4.l4cb_src_addr.ip_v4,
-                                       tcb->tcb_l4.l4cb_src_port,
-                                       tcb->tcb_l4.l4cb_dst_addr.ip_v4,
-                                       tcb->tcb_l4.l4cb_dst_port,
-                                       tcb->tcb_l4.l4cb_test_case_id,
-                                       tcb->tcb_l4.l4cb_app_data.ad_type,
-                                       NULL,
-                                       TCG_CB_REUSE_CB);
-
-        if (unlikely(error)) {
-            TEST_NOTIF_TCB(TEST_NOTIF_CLIENT_FAILED, tcb);
-            /* Readd to the open list and try again later. */
-            TEST_CBQ_ADD_TO_OPEN(ts, &tcb->tcb_l4);
-        } else {
-            TEST_NOTIF_TCB(TEST_NOTIF_CLIENT_UP, tcb);
-        }
-
-        opened_cnt++;
-
-        TRACE_FMT(TST, DEBUG, "Start client: "
-                  "tcb=%p, eth_port=%"PRIu32", ip src/dst=%8.8X/%8.8X, "
-                  "port src/dst=%"PRIu16"/%"PRIu16", result=%s(%d)",
-                  tcb,
-                  tcb->tcb_l4.l4cb_interface,
-                  tcb->tcb_l4.l4cb_src_addr.ip_v4,
-                  tcb->tcb_l4.l4cb_dst_addr.ip_v4,
-                  tcb->tcb_l4.l4cb_src_port,
-                  tcb->tcb_l4.l4cb_dst_port,
-                  rte_strerror(-error),
-                  -error);
-    }
-    TRACE_FMT(TST, DEBUG, "TCP_OPEN start cnt %"PRIu32, opened_cnt);
-
-    return opened_cnt;
+    return tcp_send_v4(tcb, data_mbuf, TCG_SEND_PSH, 0 /* Timeout */,
+                       data_sent);
 }
 
 /*****************************************************************************
- * test_case_execute_udp_send()
+ * test_case_tcp_close()
  ****************************************************************************/
-static uint32_t
-test_case_execute_udp_send(test_case_info_t *tc_info, uint32_t to_send_cnt)
+static void test_case_tcp_close(l4_control_block_t *l4_cb)
 {
-    test_oper_state_t    *ts = &tc_info->tci_state;
-    uint32_t              sent_cnt;
-    uint32_t              sent_real_cnt;
-    tpg_test_case_type_t  tc_type = tc_info->tci_cfg->tcim_type;
-
-    for (sent_cnt = 0, sent_real_cnt = 0;
-            !TEST_CBQ_EMPTY(&ts->tos_to_send_cbs) &&
-                sent_real_cnt < to_send_cnt;
-            sent_real_cnt++) {
-        int                  error;
-        struct rte_mbuf     *data_mbuf;
-        uint32_t             data_sent = 0;
-        udp_control_block_t *ucb;
-        tpg_app_proto_t      app_id;
-
-        ucb = TEST_CBQ_FIRST(&ts->tos_to_send_cbs, udp_control_block_t, ucb_l4);
-        app_id = ucb->ucb_l4.l4cb_app_data.ad_type;
-
-        data_mbuf = APP_CALL(send, tc_type, app_id)(&ucb->ucb_l4,
-                                                    &ucb->ucb_l4.l4cb_app_data,
-                                                    tc_info->tci_app_stats,
-                                                    UCB_MTU(ucb));
-        if (unlikely(data_mbuf == NULL)) {
-            TEST_NOTIF_UCB(TEST_NOTIF_DATA_NULL, ucb);
-
-            /* Move at the end and try again later. */
-            TEST_CBQ_REM_TO_SEND(ts, &ucb->ucb_l4);
-            TEST_CBQ_ADD_TO_SEND(ts, &ucb->ucb_l4);
-            continue;
-        }
-
-
-        /* Try to send.
-         * if we sent something then let the APP know
-         * else if app still needs to send move at end of list
-         * else do-nothing as the TEST state machine moved us already to
-         * TSTS_NO_SND_WIN.
-         */
-        error = udp_send_v4(ucb, data_mbuf, &data_sent);
-        if (unlikely(error)) {
-            TEST_NOTIF_UCB(TEST_NOTIF_DATA_FAILED, ucb);
-
-            if (test_sm_has_data_pending(&ucb->ucb_l4, tc_info)) {
-                /* Move at the end to try again later. */
-                TEST_CBQ_REM_TO_SEND(ts, &ucb->ucb_l4);
-                TEST_CBQ_ADD_TO_SEND(ts, &ucb->ucb_l4);
-                continue;
-            }
-        }
-
-        if (likely(data_sent != 0)) {
-            bool msg_done;
-
-            msg_done = APP_CALL(data_sent,
-                                tc_type, app_id)(&ucb->ucb_l4,
-                                                 &ucb->ucb_l4.l4cb_app_data,
-                                                 tc_info->tci_app_stats,
-                                                 data_sent);
-            /* We increment the sent count only if the application managed to
-             * transmit a whole message.
-             */
-            if (msg_done)
-                sent_cnt++;
-
-        }
-    }
-    TRACE_FMT(TST, DEBUG, "UDP_SEND data cnt %"PRIu32, sent_cnt);
-
-    /* TODO: Duplicated in test_case_execute_tcp_send. */
-
-    /* Update the transaction send rate. */
-    tc_info->tci_rate_stats->tcrs_data_per_s += sent_cnt;
-
-    /* Return the number of individual sent packets (not transactions!). */
-    return sent_real_cnt;
+    tcp_close_connection(container_of(l4_cb, tcp_control_block_t, tcb_l4), 0);
 }
 
 /*****************************************************************************
- * test_case_execute_udp_close()
+ * test_case_udp_client_open()
  ****************************************************************************/
-static uint32_t
-test_case_execute_udp_close(test_case_info_t *tc_info, uint32_t to_close_cnt)
+static int test_case_udp_client_open(l4_control_block_t *l4_cb)
 {
-    test_oper_state_t   *ts = &tc_info->tci_state;
-    udp_control_block_t *ucb;
-    uint32_t             closed_cnt = 0;
+    udp_control_block_t *ucb = container_of(l4_cb, udp_control_block_t, ucb_l4);
 
-    /* Stop a batch of clients from the to_close list. */
-    while (!TEST_CBQ_EMPTY(&ts->tos_to_close_cbs) && closed_cnt < to_close_cnt) {
-
-        ucb = TEST_CBQ_FIRST(&ts->tos_to_close_cbs, udp_control_block_t,
-                             ucb_l4);
-
-        /* Warning! CLOSE will change the TCB state which will cause it to be
-         * removed from the to_close list. No need to do it ourselves.
-         * The state change will also notify the application that the connection
-         * is going down.
-         */
-        udp_close_v4(ucb);
-        closed_cnt++;
-
-        TRACE_FMT(TST, DEBUG, "Stop client: "
-                  "ucb=%p, eth_port=%"PRIu32", ip src/dst=%8.8X/%8.8X, "
-                  "port src/dst=%"PRIu16"/%"PRIu16,
-                  ucb,
-                  ucb->ucb_l4.l4cb_interface,
-                  ucb->ucb_l4.l4cb_src_addr.ip_v4,
-                  ucb->ucb_l4.l4cb_dst_addr.ip_v4,
-                  ucb->ucb_l4.l4cb_src_port,
-                  ucb->ucb_l4.l4cb_dst_port);
-    }
-
-    TRACE_FMT(TST, DEBUG, "UDP_CLOSE closed cnt %"PRIu32, closed_cnt);
-
-    return closed_cnt;
+    return udp_open_v4_connection(&ucb, ucb->ucb_l4.l4cb_interface,
+                                  ucb->ucb_l4.l4cb_src_addr.ip_v4,
+                                  ucb->ucb_l4.l4cb_src_port,
+                                  ucb->ucb_l4.l4cb_dst_addr.ip_v4,
+                                  ucb->ucb_l4.l4cb_dst_port,
+                                  ucb->ucb_l4.l4cb_test_case_id,
+                                  ucb->ucb_l4.l4cb_app_data.ad_type,
+                                  NULL,
+                                  TCG_CB_REUSE_CB);
 }
 
 /*****************************************************************************
- * test_case_execute_udp_open()
+ * test_case_udp_mtu()
  ****************************************************************************/
-static uint32_t
-test_case_execute_udp_open(test_case_info_t *tc_info, uint32_t to_open_cnt)
+static uint32_t test_case_udp_mtu(l4_control_block_t *l4_cb)
 {
-    test_oper_state_t   *ts = &tc_info->tci_state;
-    udp_control_block_t *ucb;
-    uint32_t             opened_cnt = 0;
-    int                  error;
-
-    /* Start a batch of clients from the to_open list. */
-    while (!TEST_CBQ_EMPTY(&ts->tos_to_open_cbs) && opened_cnt < to_open_cnt) {
-
-        ucb = TEST_CBQ_FIRST(&ts->tos_to_open_cbs, udp_control_block_t, ucb_l4);
-
-        /* OPEN will change the TCB state and cause it to be removed from the
-         * to_send list. Careful here!!
-         * Once the connection reaches Established the application layer will
-         * be notified.
-         */
-        error = udp_open_v4_connection(&ucb, ucb->ucb_l4.l4cb_interface,
-                                       ucb->ucb_l4.l4cb_src_addr.ip_v4,
-                                       ucb->ucb_l4.l4cb_src_port,
-                                       ucb->ucb_l4.l4cb_dst_addr.ip_v4,
-                                       ucb->ucb_l4.l4cb_dst_port,
-                                       ucb->ucb_l4.l4cb_test_case_id,
-                                       ucb->ucb_l4.l4cb_app_data.ad_type,
-                                       NULL,
-                                       TCG_CB_REUSE_CB);
-
-        if (unlikely(error)) {
-            TEST_NOTIF_UCB(TEST_NOTIF_CLIENT_FAILED, ucb);
-            /* Readd to the open list and try again later. */
-            TEST_CBQ_ADD_TO_OPEN(ts, &ucb->ucb_l4);
-        } else {
-            TEST_NOTIF_UCB(TEST_NOTIF_CLIENT_UP, ucb);
-        }
-
-        opened_cnt++;
-
-        TRACE_FMT(TST, DEBUG, "Start client: "
-                  "ucb=%p, eth_port=%"PRIu32", ip src/dst=%8.8X/%8.8X, "
-                  "port src/dst=%"PRIu16"/%"PRIu16", result=%s(%d)",
-                  ucb,
-                  ucb->ucb_l4.l4cb_interface,
-                  ucb->ucb_l4.l4cb_src_addr.ip_v4,
-                  ucb->ucb_l4.l4cb_dst_addr.ip_v4,
-                  ucb->ucb_l4.l4cb_src_port,
-                  ucb->ucb_l4.l4cb_dst_port,
-                  rte_strerror(-error),
-                  -error);
-    }
-    TRACE_FMT(TST, DEBUG, "TCP_OPEN start cnt %"PRIu32, opened_cnt);
-
-    return opened_cnt;
-}
-
-
-/*****************************************************************************
- * test_case_run_open_clients()
- ****************************************************************************/
-static int test_case_run_open_clients(test_case_info_t *tc_info,
-                                      test_case_runner_cb_t runner)
-{
-    test_oper_state_t *ts = &tc_info->tci_state;
-    test_rate_state_t *rate_state = &ts->tos_rates;
-
-    rate_limit_consume(&rate_state->trs_open,
-                       runner(tc_info,
-                              rate_limit_available(&rate_state->trs_open)));
-
-    /* If we still didn't reach the expected rate for this
-     * interval then we should repost if we still have cbs in the list.
-     */
-    if (likely(!rate_limit_reached(&rate_state->trs_open))) {
-
-        if (TEST_CBQ_EMPTY(&ts->tos_to_open_cbs)) {
-            rate_state->trs_open_in_progress = false;
-            return 0;
-        }
-        return -EAGAIN;
-    }
-
-    rate_state->trs_open_rate_reached = true;
-
-    /* Otherwise stop. */
-    rate_state->trs_open_in_progress = false;
-    return 0;
+    return UCB_MTU(container_of(l4_cb, udp_control_block_t, ucb_l4));
 }
 
 /*****************************************************************************
- * test_case_run_close_clients()
+ * test_case_udp_send()
  ****************************************************************************/
-static int test_case_run_close_clients(test_case_info_t *tc_info,
-                                       test_case_runner_cb_t runner)
+static int test_case_udp_send(l4_control_block_t *l4_cb,
+                              struct rte_mbuf *data_mbuf,
+                              uint32_t *data_sent)
 {
-    test_oper_state_t *ts = &tc_info->tci_state;
-    test_rate_state_t *rate_state = &ts->tos_rates;
+    udp_control_block_t *ucb = container_of(l4_cb, udp_control_block_t, ucb_l4);
 
-    rate_limit_consume(&rate_state->trs_close,
-                       runner(tc_info,
-                              rate_limit_available(&rate_state->trs_close)));
-
-    /* If we still didn't reach the expected rate for this
-     * interval then we should repost if we still have cbs in the list.
-     */
-    if (likely(!rate_limit_reached(&rate_state->trs_close))) {
-
-        if (TEST_CBQ_EMPTY(&ts->tos_to_close_cbs)) {
-            rate_state->trs_close_in_progress = false;
-            return 0;
-        }
-        return -EAGAIN;
-    }
-
-    rate_state->trs_close_rate_reached = true;
-
-    /* Otherwise stop. */
-    rate_state->trs_close_in_progress = false;
-    return 0;
+    return udp_send_v4(ucb, data_mbuf, data_sent);
 }
 
 /*****************************************************************************
- * test_case_run_send_clients()
+ * test_case_udp_close()
  ****************************************************************************/
-static int test_case_run_send_clients(test_case_info_t *tc_info,
-                                      test_case_runner_cb_t runner)
+static void test_case_udp_close(l4_control_block_t *l4_cb)
 {
-    test_oper_state_t *ts = &tc_info->tci_state;
-    test_rate_state_t *rate_state = &ts->tos_rates;
-
-    rate_limit_consume(&rate_state->trs_send,
-                       runner(tc_info,
-                              rate_limit_available(&rate_state->trs_send)));
-
-    /* If we still didn't reach the expected rate for this
-     * interval then we should repost if we still have cbs in the list.
-     */
-    if (likely(!rate_limit_reached(&rate_state->trs_send))) {
-
-        if (TEST_CBQ_EMPTY(&ts->tos_to_send_cbs)) {
-            rate_state->trs_send_in_progress = false;
-            return 0;
-        }
-        return -EAGAIN;
-    }
-
-    rate_state->trs_send_rate_reached = true;
-
-    /* Otherwise stop. */
-    rate_state->trs_send_in_progress = false;
-    return 0;
+    udp_close_v4(container_of(l4_cb, udp_control_block_t, ucb_l4));
 }
 
 /*****************************************************************************
@@ -1940,39 +1500,6 @@ static int test_case_init_cb(uint16_t msgid, uint16_t lcore, void *msg)
     tpg_l4_proto_t        l4_proto;
     tpg_app_proto_t       app_id;
 
-
-    static struct {
-        test_case_runner_cb_t open;
-        test_case_runner_cb_t close;
-        test_case_runner_cb_t send;
-        test_case_close_cb_t  sess_close;
-    } start_callbacks[TEST_CASE_TYPE__MAX][L4_PROTO__L4_PROTO_MAX] = {
-        [TEST_CASE_TYPE__SERVER][L4_PROTO__TCP] = {
-            .open = NULL,
-            .close = NULL,
-            .send = test_case_execute_tcp_send,
-            .sess_close = test_case_tcp_close,
-        },
-        [TEST_CASE_TYPE__SERVER][L4_PROTO__UDP] = {
-            .open = NULL,
-            .close = NULL,
-            .send = test_case_execute_udp_send,
-            .sess_close = test_case_udp_close,
-        },
-        [TEST_CASE_TYPE__CLIENT][L4_PROTO__TCP] = {
-            .open = test_case_execute_tcp_open,
-            .close = test_case_execute_tcp_close,
-            .send = test_case_execute_tcp_send,
-            .sess_close = test_case_tcp_close,
-        },
-        [TEST_CASE_TYPE__CLIENT][L4_PROTO__UDP] = {
-            .open = test_case_execute_udp_open,
-            .close = test_case_execute_udp_close,
-            .send = test_case_execute_udp_send,
-            .sess_close = test_case_udp_close,
-        },
-    };
-
     if (MSG_INVALID(msgid, msg, MSG_TEST_CASE_INIT))
         return -EINVAL;
 
@@ -2017,8 +1544,13 @@ static int test_case_init_cb(uint16_t msgid, uint16_t lcore, void *msg)
                                 tc_info->tci_cfg->tcim_latency.tcs_samples : 0);
     }
 
-    /* Initialize operational part */
+    /* Initialize operational part and callbacks. */
     test_case_init_state(lcore, tc_info->tci_cfg, &tc_info->tci_state,
+                         test_callbacks[tc_type][l4_proto].open,
+                         test_callbacks[tc_type][l4_proto].close,
+                         test_callbacks[tc_type][l4_proto].mtu,
+                         test_callbacks[tc_type][l4_proto].send,
+                         test_callbacks[tc_type][l4_proto].sess_close,
                          &tc_info->tci_rate_timers);
 
     /* Initialize stats. */
@@ -2031,17 +1563,10 @@ static int test_case_init_cb(uint16_t msgid, uint16_t lcore, void *msg)
      */
     APP_CALL(tc_start, tc_type, app_id)(tc_info->tci_cfg);
 
-    /* Initialize the run callbacks. */
-    test_case_init_callbacks(tc_info,
-                             start_callbacks[tc_type][l4_proto].open,
-                             start_callbacks[tc_type][l4_proto].close,
-                             start_callbacks[tc_type][l4_proto].send,
-                             start_callbacks[tc_type][l4_proto].sess_close);
-
     /* Initialize clients and servers. */
 
     /* WARNING: we could include test_case_start_tcp/udp_server/client in
-     * the start_callbacks array but then the compiler would most likely
+     * the test_callbacks array but then the compiler would most likely
      * refuse to inline them inside the test_case_for_each_client/server
      * functions. To avoid that we do the (ugly) switch on l4 proto..
      */
@@ -2154,6 +1679,45 @@ static int test_case_start_cb(uint16_t msgid, uint16_t lcore, void *msg)
 }
 
 /*****************************************************************************
+ * test_case_rate_limit_update()
+ *      Notes: Update a specific test case rate limit. If the desired rate
+ *             was reached we stop resending the message. Otherwise, if there
+ *             are still sessions on the control_block list waiting to
+ *             execute an operation, resend the message (EAGAIN).
+ ****************************************************************************/
+static int test_case_rate_limit_update(test_rate_state_t *rate_state,
+                                       rate_limit_t *rate_limit,
+                                       tlkp_test_cb_list_t *cb_list,
+                                       uint32_t rate_in_progress_flag,
+                                       uint32_t rate_reached_flag,
+                                       uint32_t consumed)
+{
+    rate_limit_consume(rate_limit, consumed);
+
+    /* If we still didn't reach the expected rate for this
+     * interval then we should repost if we still have cbs in the list.
+     */
+    if (likely(!rate_limit_reached(rate_limit))) {
+
+        /* Rate not reached but no more sessions in queue:
+         * Stop and mark the message as not in progress anymore.
+         */
+        if (TEST_CBQ_EMPTY(cb_list)) {
+            rate_state->trs_flags &= ~rate_in_progress_flag;
+            return 0;
+        }
+        return -EAGAIN;
+    }
+
+    /* Set the "reached" flag. */
+    rate_state->trs_flags |= rate_reached_flag;
+
+    /* Rate reached: Stop and mark the message as not in progress anymore. */
+    rate_state->trs_flags &= ~rate_in_progress_flag;
+    return 0;
+}
+
+/*****************************************************************************
  * test_case_run_open_cb()
  ****************************************************************************/
 static int test_case_run_open_cb(uint16_t msgid, uint16_t lcore __rte_unused,
@@ -2161,13 +1725,47 @@ static int test_case_run_open_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 {
     test_case_run_msg_t *rm;
     test_case_info_t    *tc_info;
+    test_oper_state_t   *ts;
+    uint32_t             max_open;
+    uint32_t             open_cnt;
+    int                  error;
 
     if (MSG_INVALID(msgid, msg, MSG_TEST_CASE_RUN_OPEN))
         return -EINVAL;
 
     rm = msg;
     tc_info = TEST_GET_INFO(rm->tcrm_eth_port, rm->tcrm_test_case_id);
-    return test_case_run_open_clients(tc_info, tc_info->tci_run_open_cb);
+    ts = &tc_info->tci_state;
+
+    /* Check how many sessions we are allowed to open. */
+    max_open = rate_limit_available(&ts->tos_rates.trs_open);
+
+    /* Start a batch of clients from the to_open list. */
+    for (open_cnt = 0;
+            !TEST_CBQ_EMPTY(&ts->tos_to_open_cbs) && open_cnt < max_open;
+            open_cnt++) {
+        l4_control_block_t *l4_cb;
+
+        l4_cb = TAILQ_FIRST(&ts->tos_to_open_cbs);
+
+        error = ts->tos_client_open_cb(l4_cb);
+        if (unlikely(error)) {
+            TEST_NOTIF_CB(TEST_NOTIF_CLIENT_FAILED, l4_cb);
+            /* Readd to the open list and try again later. */
+            TEST_CBQ_ADD_TO_OPEN(ts, l4_cb);
+        } else {
+            TEST_NOTIF_CB(TEST_NOTIF_CLIENT_UP, l4_cb);
+        }
+    }
+
+    TRACE_FMT(TST, DEBUG, "OPEN start cnt %"PRIu32, open_cnt);
+
+    /* Update the rate limit and check if we have to open more (later). */
+    return test_case_rate_limit_update(&ts->tos_rates, &ts->tos_rates.trs_open,
+                                       &ts->tos_to_open_cbs,
+                                       TRS_FLAGS_OPEN_IN_PROGRESS,
+                                       TRS_FLAGS_OPEN_RATE_REACHED,
+                                       open_cnt);
 }
 
 /*****************************************************************************
@@ -2178,13 +1776,38 @@ static int test_case_run_close_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 {
     test_case_run_msg_t *rm;
     test_case_info_t    *tc_info;
+    test_oper_state_t   *ts;
+    uint32_t             max_close;
+    uint32_t             close_cnt;
 
     if (MSG_INVALID(msgid, msg, MSG_TEST_CASE_RUN_CLOSE))
         return -EINVAL;
 
     rm = msg;
     tc_info = TEST_GET_INFO(rm->tcrm_eth_port, rm->tcrm_test_case_id);
-    return test_case_run_close_clients(tc_info, tc_info->tci_run_close_cb);
+    ts = &tc_info->tci_state;
+
+    /* Check how many sessions we are allowed to close. */
+    max_close = rate_limit_available(&ts->tos_rates.trs_close);
+
+    /* Stop a batch of clients from the to_close list. */
+    for (close_cnt = 0;
+            !TEST_CBQ_EMPTY(&ts->tos_to_close_cbs) && close_cnt < max_close;
+            close_cnt++) {
+        l4_control_block_t *l4_cb;
+
+        l4_cb = TAILQ_FIRST(&ts->tos_to_close_cbs);
+        ts->tos_client_close_cb(l4_cb);
+    }
+
+    TRACE_FMT(TST, DEBUG, "CLOSE start cnt %"PRIu32, close_cnt);
+
+    /* Update the rate limit and check if we have to send more (later). */
+    return test_case_rate_limit_update(&ts->tos_rates, &ts->tos_rates.trs_close,
+                                       &ts->tos_to_close_cbs,
+                                       TRS_FLAGS_CLOSE_IN_PROGRESS,
+                                       TRS_FLAGS_CLOSE_RATE_REACHED,
+                                       close_cnt);
 }
 
 /*****************************************************************************
@@ -2193,8 +1816,14 @@ static int test_case_run_close_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 static int test_case_run_send_cb(uint16_t msgid, uint16_t lcore __rte_unused,
                                  void *msg)
 {
-    test_case_run_msg_t *rm;
-    test_case_info_t    *tc_info;
+    test_case_run_msg_t  *rm;
+    test_case_info_t     *tc_info;
+    test_oper_state_t    *ts;
+    test_rate_state_t    *rate_state;
+    uint32_t              max_send;
+    uint32_t              send_cnt;
+    uint32_t              send_pkt_cnt;
+    tpg_test_case_type_t  tc_type;
 
     if (MSG_INVALID(msgid, msg, MSG_TEST_CASE_RUN_SEND))
         return -EINVAL;
@@ -2202,7 +1831,84 @@ static int test_case_run_send_cb(uint16_t msgid, uint16_t lcore __rte_unused,
     rm = msg;
 
     tc_info = TEST_GET_INFO(rm->tcrm_eth_port, rm->tcrm_test_case_id);
-    return test_case_run_send_clients(tc_info, tc_info->tci_run_send_cb);
+    ts = &tc_info->tci_state;
+    rate_state = &ts->tos_rates;
+    tc_type = tc_info->tci_cfg->tcim_type;
+
+    /* Check how many sessions are allowed to send traffic. */
+    max_send = rate_limit_available(&rate_state->trs_send);
+
+    for (send_cnt = 0, send_pkt_cnt = 0;
+            !TEST_CBQ_EMPTY(&ts->tos_to_send_cbs) && send_pkt_cnt < max_send;
+            send_pkt_cnt++) {
+        int                 error;
+        uint32_t            mtu;
+        struct rte_mbuf    *data_mbuf;
+        uint32_t            data_sent = 0;
+        l4_control_block_t *l4_cb;
+        tpg_app_proto_t     app_id;
+
+        l4_cb = TAILQ_FIRST(&ts->tos_to_send_cbs);
+        app_id = l4_cb->l4cb_app_data.ad_type;
+        mtu = ts->tos_session_mtu_cb(l4_cb);
+
+        data_mbuf = APP_CALL(send, tc_type, app_id)(l4_cb,
+                                                    &l4_cb->l4cb_app_data,
+                                                    tc_info->tci_app_stats,
+                                                    mtu);
+        if (unlikely(data_mbuf == NULL)) {
+            TEST_NOTIF_CB(TEST_NOTIF_DATA_NULL, l4_cb);
+
+            /* Move at the end to try again later. */
+            TEST_CBQ_REM_TO_SEND(ts, l4_cb);
+            TEST_CBQ_ADD_TO_SEND(ts, l4_cb);
+            continue;
+        }
+
+        /* Try to send.
+         * if we sent something then let the APP know
+         * else if app still needs to send move at end of list
+         * else do-nothing as the TEST state machine moved us already to
+         * TSTS_NO_SND_WIN.
+         */
+        error = ts->tos_session_send_cb(l4_cb, data_mbuf, &data_sent);
+        if (unlikely(error)) {
+            TEST_NOTIF_CB(TEST_NOTIF_DATA_FAILED, l4_cb);
+
+            if (test_sm_has_data_pending(l4_cb, tc_info)) {
+                /* Move at the end to try again later. */
+                TEST_CBQ_REM_TO_SEND(ts, l4_cb);
+                TEST_CBQ_ADD_TO_SEND(ts, l4_cb);
+                continue;
+            }
+        }
+
+        if (likely(data_sent != 0)) {
+            if (APP_CALL(data_sent,
+                         tc_type, app_id)(l4_cb, &l4_cb->l4cb_app_data,
+                                          tc_info->tci_app_stats,
+                                          data_sent)) {
+                /* We increment the sent count only if the application managed
+                 * to transmit a complete message.
+                 */
+                send_cnt++;
+            }
+
+        }
+    }
+    TRACE_FMT(TST, DEBUG, "SEND data cnt %"PRIu32, send_cnt);
+
+    /* Update the transaction send rate. */
+    tc_info->tci_rate_stats->tcrs_data_per_s += send_cnt;
+
+    /* Update the rate limiter with the number of individual sent packets
+     * (not transactions!) and check if we have to send more (later).
+     */
+    return test_case_rate_limit_update(rate_state, &rate_state->trs_send,
+                                       &ts->tos_to_send_cbs,
+                                       TRS_FLAGS_SEND_IN_PROGRESS,
+                                       TRS_FLAGS_SEND_RATE_REACHED,
+                                       send_pkt_cnt);
 }
 
 /*****************************************************************************
