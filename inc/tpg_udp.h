@@ -123,6 +123,7 @@ extern notif_cb_t udp_notif_cb;
 
 #define UDP_MTU(port_info, sockopt)                                         \
     ((port_info)->pi_mtu - ipv4_get_sockopt((sockopt))->ip4so_hdr_opt_len - \
+     vlan_get_sockopt((sockopt))->vlanso_hdr_opt_len -                      \
      UCB_MIN_HDRS_SZ)
 
 #define UDP_GLOBAL_MTU(port, sockopt) \

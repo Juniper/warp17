@@ -163,6 +163,7 @@ enum {
  * Only IPv4 Tstamp Option supported.
  */
 #define GCFG_MBUF_HDR_FRAG_SIZE        (sizeof(struct ether_hdr) +     \
+                                        sizeof(struct vlan_hdr) +      \
                                         sizeof(struct ipv4_hdr) +      \
                                         sizeof(ipv4_tstamp_option_t) + \
                                         sizeof(struct tcp_hdr))

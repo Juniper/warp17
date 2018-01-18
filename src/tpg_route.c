@@ -69,11 +69,28 @@ STATS_DEFINE(tpg_route_statistics_t);
 
 static route_entry_t *route_per_port_table; /* local_intf[port][entries] */
 static route_entry_t *default_gw_per_port;  /* default_gw[port] */
+static gw_per_vlan_t *gw_per_port_per_vlan; /* gw[port][vlan] */
 
 /*****************************************************************************
  * Forward declarations
  ****************************************************************************/
 static cmdline_parse_ctx_t cli_ctx[];
+
+/*****************************************************************************
+ * Find out the index of the corresponding GW in the gw_per_port_per_vlan
+ ****************************************************************************/
+int route_v4_find_gw_port_vlan(uint32_t port, uint32_t vlan_id)
+{
+    int            i = 0;
+    gw_per_vlan_t *port_entries;
+
+    port_entries = gw_per_port_per_vlan + (TPG_GW_PORT_VLAN_SIZE * port);
+
+    while ((i < TPG_GW_PORT_VLAN_SIZE) && (port_entries[i].vlan_id != vlan_id))
+        i++;
+
+    return (i < TPG_GW_PORT_VLAN_SIZE) ? (i) : (-1);
+}
 
 /*****************************************************************************
  * route_update_entry()
@@ -181,8 +198,17 @@ static int route_intf_add_cb(uint16_t msgid, uint16_t lcore, void *msg)
     INC_STATS(STATS_LOCAL(tpg_route_statistics_t, add_msg->rim_eth_port),
               rs_intf_add);
 
-    arp_send_grat_arp_request(add_msg->rim_eth_port, add_msg->rim_ip.ip_v4);
-    arp_send_grat_arp_reply(add_msg->rim_eth_port, add_msg->rim_ip.ip_v4);
+    arp_send_grat_arp_request(add_msg->rim_eth_port, add_msg->rim_ip.ip_v4,
+                              add_msg->rim_vlan_id);
+    arp_send_grat_arp_reply(add_msg->rim_eth_port, add_msg->rim_ip.ip_v4,
+                              add_msg->rim_vlan_id);
+
+    /* No need to send ARP for interfaces without VLAN/gw config.
+     *  Default GW will be used in such cases.
+     */
+    if (add_msg->rim_gw.ip_v4 != nh_zero.ip_v4)
+        arp_send_arp_request(add_msg->rim_eth_port, add_msg->rim_ip.ip_v4,
+                             add_msg->rim_gw.ip_v4, add_msg->rim_vlan_id);
 
     /*
      * If this is to be a full stack we shouldn't flush after
@@ -265,8 +291,9 @@ static int route_gw_add_cb(uint16_t msgid, uint16_t lcore, void *msg)
         return -EINVAL;
     }
 
+    /* Default GW ARP Req without any vlan id - id 0 to notify*/
     arp_send_arp_request(port, local_intf->re_net.ip_v4,
-                         default_gw_per_port[port].re_nh.ip_v4);
+                         default_gw_per_port[port].re_nh.ip_v4, 0);
 
     /*
      * If this is to be a full stack we shouldn't flush after
@@ -332,6 +359,17 @@ bool route_init(void)
         return false;
     }
 
+    gw_per_port_per_vlan = rte_zmalloc("gw_per_port_per_vlan",
+                                       rte_eth_dev_count() *
+                                       TPG_GW_PORT_VLAN_SIZE *
+                                       sizeof(*gw_per_port_per_vlan),
+                                       0);
+    if (gw_per_port_per_vlan == NULL) {
+        RTE_LOG(ERR, USER1,
+            "ERROR: Failed allocating gw per port vlan memory!\n");
+        return false;
+    }
+
     default_gw_per_port = rte_zmalloc("default_gw_per_port",
                                       rte_eth_dev_count() *
                                       sizeof(*default_gw_per_port),
@@ -394,12 +432,15 @@ void route_lcore_init(uint32_t lcore_id)
 /*****************************************************************************
  * route_v4_intf_add()
  ****************************************************************************/
-int route_v4_intf_add(uint32_t port, tpg_ip_t ip, tpg_ip_t mask)
+int route_v4_intf_add(uint32_t port, tpg_ip_t ip, tpg_ip_t mask,
+                      uint16_t vlan_id, tpg_ip_t gw, uint32_t index)
 {
     MSG_LOCAL_DEFINE(route_intf_add_msg_t, msg);
     route_intf_add_msg_t *add_msg;
     msg_t                *msgp;
     int                   error;
+    gw_per_vlan_t        *port_entries = gw_per_port_per_vlan +
+                                  (TPG_GW_PORT_VLAN_SIZE * port);
 
     msgp = MSG_LOCAL(msg);
 
@@ -409,6 +450,12 @@ int route_v4_intf_add(uint32_t port, tpg_ip_t ip, tpg_ip_t mask)
     add_msg->rim_eth_port = port;
     add_msg->rim_ip = ip;
     add_msg->rim_mask = mask;
+    add_msg->rim_vlan_id = vlan_id;
+    add_msg->rim_gw = gw;
+
+    /* store the per port per vlan gw info */
+    port_entries[index].vlan_id = vlan_id;
+    port_entries[index].gw      = gw;
 
     /* BLOCK waiting for msg to be processed */
     error = msg_send(msgp, 0);
@@ -505,9 +552,13 @@ int route_v4_gw_del(uint32_t port, tpg_ip_t gw)
  * route_v4_nh_lookup()
  *  NOTES: the function directly returns the MAC address of the nexthop.
  ****************************************************************************/
-uint64_t route_v4_nh_lookup(uint32_t port, uint32_t dest)
+uint64_t route_v4_nh_lookup(uint32_t port, uint32_t dest, uint16_t vlan_id)
 {
-    uint64_t nh_mac;
+    uint64_t       nh_mac;
+    int            index;
+    gw_per_vlan_t *port_entries;
+
+    port_entries = gw_per_port_per_vlan + (TPG_GW_PORT_VLAN_SIZE * port);
 
     /* TODO: lookup directly connected networks.
      * For now we use a hack and look for the ARP in case the destination
@@ -517,10 +568,22 @@ uint64_t route_v4_nh_lookup(uint32_t port, uint32_t dest)
     if (nh_mac != TPG_ARP_MAC_NOT_FOUND)
         return nh_mac;
 
-    nh_mac = arp_lookup_mac(port, default_gw_per_port[port].re_nh.ip_v4);
-    if (nh_mac == TPG_ARP_MAC_NOT_FOUND) {
-        INC_STATS(STATS_LOCAL(tpg_route_statistics_t, port), rs_nh_not_found);
+    /* Lookup the gw per port per vlan table for the GW entry.
+     * If there is a VLAN id is set for the testcase stream
+     */
+    if (vlan_id != 0) {
+        index = route_v4_find_gw_port_vlan(port, vlan_id);
+        if (index != -1) {
+            nh_mac = arp_lookup_mac(port, port_entries[index].gw.ip_v4);
+            if (nh_mac != TPG_ARP_MAC_NOT_FOUND)
+                return nh_mac;
+        }
     }
+
+    /* If no match then use the default gw configured */
+    nh_mac = arp_lookup_mac(port, default_gw_per_port[port].re_nh.ip_v4);
+    if (unlikely(nh_mac == TPG_ARP_MAC_NOT_FOUND))
+        INC_STATS(STATS_LOCAL(tpg_route_statistics_t, port), rs_nh_not_found);
 
     return nh_mac;
 }

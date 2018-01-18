@@ -112,11 +112,25 @@ typedef struct eth_sockopt_s {
 
 } eth_sockopt_t;
 
+typedef struct vlan_sockopt_s {
+
+    uint16_t vlanso_id;
+    uint8_t  vlanso_pri;
+    uint8_t  vlanso_hdr_opt_len; /* Len of vlan header; needed in order
+                                  * to provide VLAN info in the packet or NOT.
+                                  */
+} vlan_sockopt_t;
+
 typedef struct sockopt_s {
 
     /* L1 options. */
     union {
         eth_sockopt_t so_eth;
+    };
+
+    /* L2 options. */
+    union {
+        vlan_sockopt_t so_vlan;
     };
 
     /* L3 options. */
@@ -155,6 +169,14 @@ static inline const ipv4_sockopt_t *ipv4_get_sockopt(const sockopt_t *opts)
 static inline const ipv6_sockopt_t *ipv6_get_sockopt(const sockopt_t *opts)
 {
     return &opts->so_ipv6;
+}
+
+/*****************************************************************************
+ * vlan_get_sockopt()
+ ****************************************************************************/
+static inline const vlan_sockopt_t *vlan_get_sockopt(const sockopt_t *opts)
+{
+    return &opts->so_vlan;
 }
 
 /*****************************************************************************

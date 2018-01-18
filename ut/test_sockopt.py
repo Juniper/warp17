@@ -286,3 +286,58 @@ class TestIPv4SockOpt(Warp17TrafficTestCase, Warp17UnitTestCase):
     def update_server(self, tc_arg, srv_ipv4_opts, expected_err=0):
         self.update(tc_arg, srv_ipv4_opts, expected_err)
 
+class TestVlanSockOpt(Warp17TrafficTestCase, Warp17UnitTestCase):
+
+    MIN_VLAN = 1
+    MAX_VLAN = 4094
+    MIN_PRI = 0
+    MAX_PRI = 7
+
+    ###################################################################
+    # Overrides of Warp17TrafficTestCase specific to IPv4 stack options
+    ###################################################################
+    def get_updates(self):
+        self.lh.info('Vlan vlan-id')
+        for opt in [TestVlanSockOpt.MIN_VLAN, TestVlanSockOpt.MAX_VLAN]:
+            yield (VlanSockopt(vlanso_id=opt),
+                   VlanSockopt(vlanso_id=opt))
+
+        self.lh.info('Vlan vlan-pri')
+        for opt in [TestVlanSockOpt.MIN_PRI, TestVlanSockOpt.MAX_PRI]:
+            yield (VlanSockopt(vlanso_pri=opt),
+                   VlanSockopt(vlanso_pri=opt))
+
+    def get_invalid_updates(self):
+        self.lh.info('VLAN id Min value')
+        yield(VlanSockopt(vlanso_id=TestVlanSockOpt.MIN_VLAN-1),
+              VlanSockopt(vlanso_id=TestVlanSockOpt.MIN_VLAN-1))
+
+        self.lh.info('VLAN id Max value')
+        yield(VlanSockopt(vlanso_id=TestVlanSockOpt.MAX_VLAN+1),
+              VlanSockopt(vlanso_id=TestVlanSockOpt.MAX_VLAN+1))
+
+        #self.lh.info('VLAN pri Min value')
+        #yield(VlanSockopt(vlanso_pri=TestVlanSockOpt.MIN_PRI-1),
+        #      VlanSockopt(vlanso_pri=TestVlanSockOpt.MIN_PRI-1))
+
+        self.lh.info('VLAN pri Max value')
+        yield(VlanSockopt(vlanso_pri=TestVlanSockOpt.MAX_PRI+1),
+              VlanSockopt(vlanso_pri=TestVlanSockOpt.MAX_PRI+1))
+
+    def update(self, tc_arg, vlan_opts, expected_err):
+        err = self.warp17_call('SetVlanSockopt',
+                               VlanSockoptArg(vosa_tc_arg=tc_arg,
+                                              vosa_opts=vlan_opts))
+        self.assertEqual(err.e_code, expected_err)
+
+        if expected_err == 0:
+            vlan_opts_res = self.warp17_call('GetVlanSockopt', tc_arg)
+            self.assertEqual(vlan_opts_res.vosr_error.e_code, 0)
+            self.assertTrue(self.compare_opts(vlan_opts, vlan_opts_res.vosr_opts))
+
+    def update_client(self, tc_arg, cl_vlan_opts, expected_err=0):
+        self.update(tc_arg, cl_vlan_opts, expected_err)
+
+    def update_server(self, tc_arg, srv_vlan_opts, expected_err=0):
+        self.update(tc_arg, srv_vlan_opts, expected_err)
+

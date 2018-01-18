@@ -176,6 +176,7 @@ static void test_init_sockopt_defaults(sockopt_t *sockopt,
                                        const tpg_test_case_t *te)
 {
     tpg_ipv4_sockopt_t default_ipv4_sockopt;
+    tpg_vlan_sockopt_t default_vlan_sockopt;
 
     bzero(sockopt, sizeof(*sockopt));
 
@@ -199,6 +200,12 @@ static void test_init_sockopt_defaults(sockopt_t *sockopt,
         sockopt->so_eth.ethso_tx_offload_udp_cksum = true;
     else
         sockopt->so_eth.ethso_tx_offload_udp_cksum = false;
+
+    /*
+    * Setup L2 socket options.
+    */
+    tpg_xlate_default_VlanSockopt(&default_vlan_sockopt);
+    vlan_store_sockopt(&sockopt->so_vlan, &default_vlan_sockopt);
 
     /*
      * Setup L3 socket options.
@@ -622,6 +629,30 @@ test_mgmt_validate_ipv4_sockopt(const tpg_ipv4_sockopt_t *options,
         tpg_printf(printer_arg,
                    "ERROR: Invalid IPv4 ToS. Max allowed: %u\n",
                    UINT8_MAX);
+        return false;
+    }
+
+    return true;
+}
+
+/*****************************************************************************
+ * test_mgmt_validate_vlan_sockopt()
+ ****************************************************************************/
+static bool
+test_mgmt_validate_vlan_sockopt(const tpg_vlan_sockopt_t *options,
+                                printer_arg_t *printer_arg)
+{
+     /* Basic validation for user provided vlan options */
+    if (options->vlanso_id < VLAN_MIN || options->vlanso_id > VLAN_MAX) {
+        tpg_printf(printer_arg,
+             "ERROR: Invalid value for vlan-id: Valid range are %u-%u\n",
+              VLAN_MIN, VLAN_MAX);
+        return false;
+    }
+    if (options->vlanso_pri > 7) {
+        tpg_printf(printer_arg,
+             "ERROR: Invalid value for vlan-pri: Valid range are %u-%u\n",
+              0, 7);
         return false;
     }
 
@@ -1496,7 +1527,65 @@ int test_mgmt_get_ipv4_sockopt(uint32_t eth_port, uint32_t test_case_id,
     ipv4_load_sockopt(out, &sockopt->so_ipv4);
     return 0;
 }
+/*****************************************************************************
+ * test_mgmt_set_vlan_sockopt()
+ ****************************************************************************/
+int
+test_mgmt_set_vlan_sockopt(uint32_t eth_port, uint32_t test_case_id,
+                           const tpg_vlan_sockopt_t *opts,
+                           printer_arg_t *printer_arg)
+{
 
+    tpg_vlan_sockopt_t  old_opts;
+    test_env_t         *tenv;
+    int                 err;
+
+    if (!opts)
+        return -EINVAL;
+
+    err = test_mgmt_update_test_case_check(eth_port, test_case_id,
+                                           TEST_CASE_TYPE__MAX,
+                                           &tenv,
+                                           printer_arg);
+    if (err != 0)
+        return err;
+
+    vlan_load_sockopt(&old_opts,
+                      &tenv->te_test_cases[test_case_id].sockopt.so_vlan);
+
+    if (opts->has_vlanso_id)
+        old_opts.vlanso_id = opts->vlanso_id;
+        old_opts.vlanso_pri = opts->vlanso_pri;
+
+    if (!test_mgmt_validate_vlan_sockopt(&old_opts, printer_arg))
+        return -EINVAL;
+
+    vlan_store_sockopt(&tenv->te_test_cases[test_case_id].sockopt.so_vlan,
+                       &old_opts);
+    return 0;
+}
+/*****************************************************************************
+ * test_mgmt_get_vlan_sockopt()
+ ****************************************************************************/
+int test_mgmt_get_vlan_sockopt(uint32_t eth_port, uint32_t test_case_id,
+                               tpg_vlan_sockopt_t *out,
+                               printer_arg_t *printer_arg)
+{
+    test_env_t *tenv;
+    sockopt_t  *sockopt;
+    int         err;
+
+    if (!out)
+        return -EINVAL;
+
+    err = test_mgmt_get_sockopt(eth_port, test_case_id, &sockopt, &tenv,
+                                printer_arg);
+    if (err != 0)
+        return err;
+
+    vlan_load_sockopt(out, &sockopt->so_vlan);
+    return 0;
+}
 /*****************************************************************************
  * test_mgmt_start_port()
  ****************************************************************************/

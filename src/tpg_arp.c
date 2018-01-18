@@ -528,11 +528,13 @@ static inline void arp_ipv4_to_uint8(uint32_t ip, uint8_t *mem)
  * arp_send_arp_reply()
  ****************************************************************************/
 static bool arp_send_arp_reply(uint32_t port, uint32_t sip, uint32_t dip,
-                               uint8_t *mac)
+                               uint8_t *mac, uint16_t vlan_tci)
 {
     struct rte_mbuf  *mbuf;
     struct arp_hdr   *arp;
     struct ether_hdr *eth;
+    struct vlan_hdr  *tag_hdr;
+    uint16_t          offset = 0;
 
     /*
      * Malloc MBUF and construct the ARP packet
@@ -547,18 +549,35 @@ static bool arp_send_arp_reply(uint32_t port, uint32_t sip, uint32_t dip,
         return false;
     }
 
+    eth = rte_pktmbuf_mtod(mbuf, struct ether_hdr *);
+    offset += sizeof(struct ether_hdr);
+
     /*
-     * Here we assume mbuf segment is big enough to hold ethetnet and arp header
+     * Here we assume mbuf segment is big enough to hold ethetnet, Vlan
+     * and arp header
      */
-    mbuf->data_len = sizeof(struct ether_hdr) + sizeof(struct arp_hdr);
+    if (VLAN_TAG_ID(vlan_tci) == 0) {
+        mbuf->data_len = sizeof(struct ether_hdr) + sizeof(struct arp_hdr);
+        eth->ether_type = rte_cpu_to_be_16(ETHER_TYPE_ARP);
+    } else {
+        tag_hdr =
+            (struct vlan_hdr *)rte_pktmbuf_mtod_offset(mbuf, struct vlan_hdr *,
+                                                       offset);
+        tag_hdr->vlan_tci = rte_cpu_to_be_16(vlan_tci);
+        tag_hdr->eth_proto = rte_cpu_to_be_16(ETHER_TYPE_ARP);
+        mbuf->data_len = sizeof(struct ether_hdr) + sizeof(struct vlan_hdr)
+                                                  + sizeof(struct arp_hdr);
+        mbuf->l2_len = sizeof(struct ether_hdr) + sizeof(struct vlan_hdr);
+        offset += sizeof(struct vlan_hdr);
+        eth->ether_type = rte_cpu_to_be_16(ETHER_TYPE_VLAN);
+    }
     mbuf->pkt_len = mbuf->data_len;
 
-    eth = rte_pktmbuf_mtod(mbuf, struct ether_hdr *);
-    arp = (struct arp_hdr *) (eth + 1);
+    arp = (struct arp_hdr *)rte_pktmbuf_mtod_offset(mbuf, struct arp_hdr *,
+                                                    offset);
 
     rte_memcpy(&eth->d_addr, mac, ETHER_ADDR_LEN);
     rte_eth_macaddr_get(port, &eth->s_addr);
-    eth->ether_type = rte_cpu_to_be_16(ETHER_TYPE_ARP);
 
     arp->arp_hrd = rte_cpu_to_be_16(ARP_HRD_ETHER);
     arp->arp_pro = rte_cpu_to_be_16(ETHER_TYPE_IPv4);
@@ -594,11 +613,14 @@ static bool arp_send_arp_reply(uint32_t port, uint32_t sip, uint32_t dip,
 /*****************************************************************************
  * arp_send_arp_request()
  ****************************************************************************/
-bool arp_send_arp_request(uint32_t port, uint32_t local_ip, uint32_t remote_ip)
+bool arp_send_arp_request(uint32_t port, uint32_t local_ip, uint32_t remote_ip,
+                          uint16_t vlan_tci)
 {
     struct rte_mbuf  *mbuf;
     struct arp_hdr   *arp;
     struct ether_hdr *eth;
+    struct vlan_hdr  *tag_hdr;
+    uint16_t          offset = 0;
 
     /*
      * Malloc MBUF and construct the ARP packet
@@ -613,19 +635,37 @@ bool arp_send_arp_request(uint32_t port, uint32_t local_ip, uint32_t remote_ip)
         return false;
     }
 
+    eth = rte_pktmbuf_mtod(mbuf, struct ether_hdr *);
+    offset += sizeof(struct ether_hdr);
+
     /*
      * Here we assume mbuf segment is big enough to hold ethetnet and arp header
      */
-    mbuf->data_len = sizeof(struct ether_hdr) + sizeof(struct arp_hdr);
+    if (VLAN_TAG_ID(vlan_tci) == 0) {
+        mbuf->data_len = sizeof(struct ether_hdr) + sizeof(struct arp_hdr);
+        eth->ether_type = rte_cpu_to_be_16(ETHER_TYPE_ARP);
+    } else{
+        tag_hdr =
+            (struct vlan_hdr *)rte_pktmbuf_mtod_offset(mbuf, struct vlan_hdr *,
+                                                       offset);
+        tag_hdr->vlan_tci = rte_cpu_to_be_16(vlan_tci);
+        tag_hdr->eth_proto = rte_cpu_to_be_16(ETHER_TYPE_ARP);
+        mbuf->data_len = sizeof(struct ether_hdr) + sizeof(struct vlan_hdr)
+                                                  + sizeof(struct arp_hdr);
+        mbuf->l2_len = sizeof(struct ether_hdr) + sizeof(struct vlan_hdr);
+        offset += sizeof(struct vlan_hdr);
+        eth->ether_type = rte_cpu_to_be_16(ETHER_TYPE_VLAN);
+    }
+
     mbuf->pkt_len = mbuf->data_len;
-
-    eth = rte_pktmbuf_mtod(mbuf, struct ether_hdr *);
-    arp = (struct arp_hdr *) (eth + 1);
-
     memset(&eth->d_addr, 0xff, ETHER_ADDR_LEN);
     rte_eth_macaddr_get(port, &eth->s_addr);
-    eth->ether_type = rte_cpu_to_be_16(ETHER_TYPE_ARP);
 
+    arp = rte_pktmbuf_mtod_offset(mbuf, struct arp_hdr *, offset);
+    if (unlikely(!arp)) {
+        pkt_mbuf_free(mbuf);
+        return false;
+    }
     arp->arp_hrd = rte_cpu_to_be_16(ARP_HRD_ETHER);
     arp->arp_pro = rte_cpu_to_be_16(ETHER_TYPE_IPv4);
     arp->arp_hln = ETHER_ADDR_LEN;
@@ -638,16 +678,16 @@ bool arp_send_arp_request(uint32_t port, uint32_t local_ip, uint32_t remote_ip)
     arp->arp_data.arp_tip = rte_cpu_to_be_32(remote_ip);
 
     /*
-     * Send the ARP reply
+     * Send the ARP req
      */
-
     if (unlikely(!pkt_send_with_hash(port, mbuf, 0, true))) {
 
-        RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Failed tx ARP reply for IP %u.%u.%u.%u on port %d\n",
-                rte_lcore_index(rte_lcore_id()),  __func__,
-                (remote_ip >> 24) & 0xff, (remote_ip >> 16) & 0xff,
-                (remote_ip >>  8) & 0xff, (remote_ip >>  0) & 0xff,
-                port);
+        RTE_LOG(DEBUG, USER2,
+            "[%d:%s()] ERR: Failed tx ARP request for IP %u.%u.%u.%u on port %d\n",
+            rte_lcore_index(rte_lcore_id()),  __func__,
+            (remote_ip >> 24) & 0xff, (remote_ip >> 16) & 0xff,
+            (remote_ip >>  8) & 0xff, (remote_ip >>  0) & 0xff,
+            port);
 
         INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, port), as_sent_req_failed);
         return false;
@@ -660,17 +700,17 @@ bool arp_send_arp_request(uint32_t port, uint32_t local_ip, uint32_t remote_ip)
 /*****************************************************************************
  * arp_send_grat_arp_request()
  ****************************************************************************/
-bool arp_send_grat_arp_request(uint32_t port, uint32_t ip)
+bool arp_send_grat_arp_request(uint32_t port, uint32_t ip, uint16_t vlan_tci)
 {
-    return arp_send_arp_request(port, ip, ip);
+    return arp_send_arp_request(port, ip, ip, vlan_tci);
 }
 
 /*****************************************************************************
  * arp_send_grat_arp_reply()
  ****************************************************************************/
-bool arp_send_grat_arp_reply(uint32_t port, uint32_t ip)
+bool arp_send_grat_arp_reply(uint32_t port, uint32_t ip, uint16_t vlan_tci)
 {
-    return arp_send_arp_reply(port, ip, ip, arp_bcast_addr);
+    return arp_send_arp_reply(port, ip, ip, arp_bcast_addr, vlan_tci);
 }
 
 /*****************************************************************************
@@ -741,7 +781,7 @@ bool arp_delete_local(uint32_t port, uint32_t ip)
 /*****************************************************************************
  * arp_process_request()
  ****************************************************************************/
-static void arp_process_request(packet_control_block_t *pcb)
+static void arp_process_request(packet_control_block_t *pcb, uint16_t vlan_tci)
 {
     struct arp_hdr *arp_hdr = pcb->pcb_arp;
     uint32_t        arp_req_ip;
@@ -769,7 +809,7 @@ static void arp_process_request(packet_control_block_t *pcb)
     arp_req_sip = rte_be_to_cpu_32(arp_hdr->arp_data.arp_sip);
 
     arp_send_arp_reply(pcb->pcb_port, arp_req_ip, arp_req_sip,
-                       arp_hdr->arp_data.arp_sha.addr_bytes);
+                       arp_hdr->arp_data.arp_sha.addr_bytes, vlan_tci);
 
     /*
      * TODO: a real stack would probably check for duplicate IP,
@@ -816,7 +856,8 @@ static void arp_process_reply(packet_control_block_t *pcb)
  * consumed, or needed later (ip refrag), return NULL.
  ****************************************************************************/
 struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
-                                 struct rte_mbuf *mbuf)
+                                 struct rte_mbuf *mbuf,
+                                 uint16_t vlan_tci)
 {
     uint16_t        op;
     struct arp_hdr *arp_hdr;
@@ -929,7 +970,7 @@ struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
         pcb->pcb_arp = arp_hdr;
 
         if (op == ARP_OP_REQUEST)
-            arp_process_request(pcb);
+            arp_process_request(pcb, vlan_tci);
         else if (op == ARP_OP_REPLY)
             arp_process_reply(pcb);
 

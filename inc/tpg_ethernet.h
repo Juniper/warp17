@@ -60,6 +60,15 @@
 #ifndef _H_TPG_ETHERNET_
 #define _H_TPG_ETHERNET_
 
+/* Allowed vlan range are from 1-4094 (0 and 4095 are reserved values) */
+#define VLAN_MIN        1
+#define VLAN_MAX        4094
+#define VLAN_VID_MASK   0x0fff /* VLAN Identifier */
+#define VLAN_PRIO_SHIFT 13
+
+#define VLAN_TAG_ID(vlan_tci) ((vlan_tci) & VLAN_VID_MASK)
+
+
 STATS_GLOBAL_DECLARE(tpg_eth_statistics_t);
 
 /*****************************************************************************
@@ -96,9 +105,14 @@ extern bool             eth_init(void);
 extern void             eth_lcore_init(uint32_t lcore_id);
 extern struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
                                         struct rte_mbuf *mbuf);
-extern struct rte_mbuf *eth_build_hdr_mbuf(uint32_t port, uint64_t dst_mac,
+extern struct rte_mbuf *eth_build_hdr_mbuf(l4_control_block_t *l4_cb,
+                                           uint64_t dst_mac,
                                            uint64_t src_mac,
                                            uint16_t ether_type);
-
+extern void             vlan_store_sockopt(vlan_sockopt_t *dest,
+                                          const tpg_vlan_sockopt_t *options);
+extern void             vlan_load_sockopt(tpg_vlan_sockopt_t *dest,
+                                          const vlan_sockopt_t *options);
+extern const char *vlan_option_name(const tpg_vlan_sockopt_t *options);
 #endif /* _H_TPG_ETHERNET_ */
 

@@ -641,11 +641,29 @@ __NOTE: Only IPv4 is supported for now!__
 	```
 
 * __Add L3 default gateway__: configure 'gw' as the default gateway for
-  `eth_port`.
+  `eth_port`. There is only one default GW per port.
 
 	```
 	add tests l3_gw port <eth_port> gw <gw_ip>
 	```
+
+* __Add L3 interfaces with specific VLAN and GW__: Configure interfaces (Upto 10)
+  with a specified `ip` address/mask, `vlan-id` and `gw`. Each interface can be
+  in a different subnet and an unique vlan-id and gateway can be configured for
+  each.
+
+	```
+	add tests l3_intf port <eth_port> ip <ip> mask <mask> vlan-id <vlan-id> gw <gw>
+	```
+
+  - The Grat Arp Req/Reply for the interfaces will be sent using the vlan-id configured.
+  - ARP request will be sent to the GW using the configured vlan-id.
+  - ARP reply packets will use the vlan-id from the ARP req packet.
+  - A per port per vlan-id GW table is maintained. The traffic streams will use this table
+    for next-hop GW lookup based on its vlan-id configurations (vlan-options per test-case-id).
+    A quick lookup is done on the per port per vlan id GW table; if no match is found then
+    the default GW configured for the port will be used.
+  - Currently only 10 IP interfaces are supported per port.
 
 * __Configure server test cases__: configure a server test case with ID
   `test-case-id` on `eth_port`. The underlying L4 traffic can be TCP or UDP.
@@ -933,6 +951,72 @@ __NOTE: Only IPv4 is supported for now!__
 
 	__NOTE: Latency configs make sense only if RX timestamping is enabled for the
   same test case.__
+
+* __Customize Vlan Settings__: By default VLAN fields will not be set. VLANs can be enabled on
+    top of all the application types using _vlan-options_ configuration cli. Please also
+    take a look at __Add L3 (sub)interfaces with specific VLAN and GW__ section as well.
+    The vlan-id of the testcases should match with any of the interface level l3_intf
+    vlan-id configurations.
+
+    The vlan-options config consists of the following fields.
+    - `vlan-id`   : VLAN id to be used; Value from 1-4094 can be provided.
+
+    - `vlan-pri`  : VLAN priority field to be set; Value from 0-7 can be provided.
+
+        ```
+            set tests vlan-options port <eth_port> test-case-id <tcid> vlan-id <1-4094> vlan-pri <0-7>"
+        ```
+        __NOTE-1: ```show tests vlan-options port <eth_port> test-case-id <tcid>``` can be used to
+        check the current vlan configuration.__
+
+        __NOTE-1: ```show tests config port <eth_port>``` can be used to
+        check the current vlan configuration on the l3_intf as well as testcases.__
+
+     __Example-1: To give vlan id of 100 to all the configured sessions on port 0 test-case 0
+                  please use the configuration as shown below.__
+     ```
+         add tests l3_intf port 0 ip 19.1.1.2 mask 255.255.255.0 vlan-id 100 gw 19.1.1.1
+         add tests client udp port 0 test-case-id 0 src 2.1.1.1 2.1.1.1 sport 1026 1026 dest 3.1.1.1 3.1.1.1 dport 1026 1026
+         set tests client raw port 0 test-case-id 0 data-req-plen 64 data-resp-plen 0
+         set tests vlan-options port 0 test-case-id 0 vlan-id 100 vlan-pri 7
+     ```
+
+     __Example-2: To send all the configured sessions on port 0 test-case 0
+                  without any VLANs using default-gw, please use the configuration as shown below.__
+
+     ```
+         add tests l3_intf port 0 ip 12.1.1.2 mask 255.255.255.0
+         add tests l3_gw port 0 gw 12.1.1.1
+         add tests client udp port 0 test-case-id 0 src 2.1.1.1 2.1.1.1 sport 1026 1026 dest 3.1.1.1 3.1.1.1 dport 1026 1026
+         set tests client raw port 0 test-case-id 0 data-req-plen 64 data-resp-plen 0
+     ```
+
+     __Example-3: Alternate way of doing Example-2.__
+
+     ```
+         add tests l3_intf port 0 ip 12.1.1.2 mask 255.255.255.0 vlan-id 0 gw 12.1.1.1
+         add tests client udp port 0 test-case-id 0 src 2.1.1.1 2.1.1.1 sport 1026 1026 dest 3.1.1.1 3.1.1.1 dport 1026 1026
+         set tests client raw port 0 test-case-id 0 data-req-plen 64 data-resp-plen 0
+     ```
+
+     __Example-4: To make each test-case-id 0 to use GW without a VLAN (12.1.1.1), test-case-id 1 to
+                  use GW with vlan-id 1000 (13.1.1.1), and test-case-id 1 to use GW with
+                  vlan-id 1001 (14.1.1.1)__
+
+     ```
+         add tests l3_intf port 0 ip 12.1.1.2 mask 255.255.255.0
+         add tests l3_gw port 0 gw 12.1.1.1
+         add tests l3_intf port 0 ip 13.1.1.2 mask 255.255.255.0 vlan-id 1000 gw 13.1.1.1
+         add tests l3_intf port 0 ip 14.1.1.2 mask 255.255.255.0 vlan-id 1001 gw 14.1.1.1
+         add tests client udp port 0 test-case-id 0 src 2.1.1.1 2.1.1.1 sport 1026 1026 dest 3.1.1.1 3.1.1.1 dport 1026 1026
+         set tests client raw port 0 test-case-id 0 data-req-plen 64 data-resp-plen 0
+         add tests client udp port 0 test-case-id 1 src 4.1.1.1 4.1.1.1 sport 1026 1026 dest 5.1.1.1 5.1.1.1 dport 1026 1026
+         set tests client raw port 0 test-case-id 1 data-req-plen 64 data-resp-plen 0
+         set tests vlan-options port 0 test-case-id 1 vlan-id 1000 vlan-pri 7
+         add tests client udp port 0 test-case-id 2 src 7.1.1.1 7.1.1.1 sport 1026 1026 dest 8.1.1.1 8.1.1.1 dport 1026 1026
+         set tests client raw port 0 test-case-id 2 data-req-plen 64 data-resp-plen 0
+         set tests vlan-options port 0 test-case-id 2 vlan-id 1001 vlan-pri 7
+     ```
 
 ## Application configuration and statistics commands
 
@@ -1288,6 +1372,9 @@ WARP17 or executed directly in the CLI.
   latency measurement using application layer timestamping on TCP and UDP
   test cases.
 
+* __examples/test\_13\_vlan\_udp.cfg__: example showing how to configure
+  vlan information and per vlan gateways.
+
 # Python scripting API
 WARP17 offers an RPC-based API which allows users to write scripts and automate
 the tests that WARP17 would run. WARP17 listens to incoming RPC connections on TCP
@@ -1628,7 +1715,6 @@ RELEASE_NOTES file.
 # Roadmap for future releases
 
 * Additional L7 application implementations (e.g., _FTP_, _TFTP_, _SIP_).
-* _VLAN_ Support.
 * Socket API.
 * Fault injection at various levels in the L2-L7 stack.
 

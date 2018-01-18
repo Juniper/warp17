@@ -911,7 +911,10 @@ static int test_start_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
     for (i = 0; i < pcfg->pc_l3_intfs_count; i++) {
         route_v4_intf_add(start_msg->tssm_eth_port,
                           pcfg->pc_l3_intfs[i].l3i_ip,
-                          pcfg->pc_l3_intfs[i].l3i_mask);
+                          pcfg->pc_l3_intfs[i].l3i_mask,
+                          pcfg->pc_l3_intfs[i].l3i_vlan_id,
+                          pcfg->pc_l3_intfs[i].l3i_gw,
+                          i);
     }
 
     if (pcfg->pc_def_gw.ip_v4 != 0)

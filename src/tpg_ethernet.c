@@ -224,12 +224,15 @@ void eth_lcore_init(uint32_t lcore_id)
 /*****************************************************************************
  * eth_build_hdr_mbuf()
  ****************************************************************************/
-struct rte_mbuf *eth_build_hdr_mbuf(uint32_t port, uint64_t dst_mac,
+struct rte_mbuf *eth_build_hdr_mbuf(l4_control_block_t *l4_cb,
+                                    uint64_t dst_mac,
                                     uint64_t src_mac,
                                     uint16_t ether_type)
 {
     struct ether_hdr *eth;
     struct rte_mbuf  *mbuf;
+    struct vlan_hdr *tag_hdr;
+    uint32_t port = l4_cb->l4cb_interface;
 
     mbuf = pkt_mbuf_alloc(mem_get_mbuf_local_pool_tx_hdr());
     if (unlikely(!mbuf)) {
@@ -260,14 +263,37 @@ struct rte_mbuf *eth_build_hdr_mbuf(uint32_t port, uint64_t dst_mac,
     eth_uint64_to_mac(dst_mac, eth->d_addr.addr_bytes);
     eth_uint64_to_mac(src_mac, eth->s_addr.addr_bytes);
 
-    eth->ether_type = rte_cpu_to_be_16(ether_type);
+    /*
+     * Build the Vlan header if vlan is configured by user
+     */
+    if (l4_cb->l4cb_sockopt.so_vlan.vlanso_hdr_opt_len > 0) {
+        eth->ether_type = rte_cpu_to_be_16(ETHER_TYPE_VLAN);
+
+        tag_hdr =
+            (struct vlan_hdr *)rte_pktmbuf_append(mbuf,
+                                                  sizeof(struct vlan_hdr));
+
+        if (unlikely(!tag_hdr)) {
+            pkt_mbuf_free(mbuf);
+            return NULL;
+        }
+
+        tag_hdr->vlan_tci =
+            rte_cpu_to_be_16((l4_cb->l4cb_sockopt.so_vlan.vlanso_id |
+                                (l4_cb->l4cb_sockopt.so_vlan.vlanso_pri <<
+                                 VLAN_PRIO_SHIFT)));
+        tag_hdr->eth_proto = rte_cpu_to_be_16(ether_type);
+    } else {
+        eth->ether_type = rte_cpu_to_be_16(ether_type);
+    }
 
     if (true) {
         /*
          * We assume hardware checksum calculation for ip/tcp, to
          * support this we need to set the correct l2 header size.
          */
-        mbuf->l2_len = sizeof(struct ether_hdr);
+        mbuf->l2_len = sizeof(struct ether_hdr) +
+                           l4_cb->l4cb_sockopt.so_vlan.vlanso_hdr_opt_len;
     }
 
     return mbuf;
@@ -284,6 +310,7 @@ struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
 {
     uint16_t          etype;
     struct ether_hdr *eth_hdr;
+    uint16_t          vlan_tci = 0;
 
     if (unlikely(rte_pktmbuf_data_len(mbuf) < sizeof(struct ether_hdr))) {
         RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: mbuf fragment to small for ether_hdr!\n",
@@ -313,7 +340,8 @@ struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
               etype);
 
     /*
-     * Pop all vlan tags to determine protocol type
+     * Pop all vlan tags to determine protocol type.
+     * TODO: we only pass on the inner-most vlan tag right now.
      */
     if (unlikely(etype == ETHER_TYPE_VLAN)) {
 
@@ -337,9 +365,10 @@ struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
             }
 
             etype = rte_be_to_cpu_16(tag_hdr->eth_proto);
+            vlan_tci = rte_be_to_cpu_16(tag_hdr->vlan_tci);
 
             PKT_TRACE(pcb, ETH, DEBUG, "VLAN pop: vlan_tci=%4.4X, etype=%4.4X",
-                      rte_be_to_cpu_16(tag_hdr->vlan_tci), etype);
+                      vlan_tci, etype);
 
             rte_pktmbuf_adj(mbuf, sizeof(struct vlan_hdr));
 
@@ -365,7 +394,7 @@ struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
     case ETHER_TYPE_ARP:
         INC_STATS(STATS_LOCAL(tpg_eth_statistics_t, pcb->pcb_port),
                   es_etype_arp);
-        mbuf = arp_receive_pkt(pcb, mbuf);
+        mbuf = arp_receive_pkt(pcb, mbuf, vlan_tci);
         break;
 
     case ETHER_TYPE_IPv6:
@@ -381,5 +410,30 @@ struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
     }
 
     return mbuf;
+}
+
+/*****************************************************************************
+ * vlan_store_sockopt()
+ ****************************************************************************/
+void vlan_store_sockopt(vlan_sockopt_t *dest, const tpg_vlan_sockopt_t *options)
+{
+    dest->vlanso_id = options->vlanso_id;
+    dest->vlanso_pri = options->vlanso_pri;
+
+    /* Set the header length based on vlan option provided or not*/
+    if (dest->vlanso_id)
+        dest->vlanso_hdr_opt_len = sizeof(struct vlan_hdr);
+    else
+        dest->vlanso_hdr_opt_len = 0;
+}
+/*****************************************************************************
+ * vlan_load_sockopt()
+ ****************************************************************************/
+void vlan_load_sockopt(tpg_vlan_sockopt_t *dest, const vlan_sockopt_t *options)
+{
+    TPG_XLATE_OPTIONAL_SET_FIELD(dest, vlanso_id,
+                                 options->vlanso_id);
+    TPG_XLATE_OPTIONAL_SET_FIELD(dest, vlanso_pri,
+                                 options->vlanso_pri);
 }
 

@@ -189,6 +189,16 @@ static void tpg_rpc__get_ipv4_sockopt(Warp17_Service *service,
                                       Ipv4SockoptResult_Closure closure,
                                       void *closure_data);
 
+static void tpg_rpc__set_vlan_sockopt(Warp17_Service *service,
+                                      const VlanSockoptArg *input,
+                                      Error_Closure closure,
+                                      void *closure_data);
+
+static void tpg_rpc__get_vlan_sockopt(Warp17_Service *service,
+                                      const TestCaseArg *input,
+                                      VlanSockoptResult_Closure closure,
+                                      void *closure_data);
+
 static void tpg_rpc__port_start(Warp17_Service *service,
                                 const PortArg *input,
                                 Error_Closure closure,
@@ -1081,6 +1091,60 @@ static void tpg_rpc__get_ipv4_sockopt(Warp17_Service *service __rte_unused,
     RPC_CLEANUP(TestCaseArg, tc_arg, Ipv4SockoptResult, protoc_result);
 }
 
+/*****************************************************************************
+ * tpg_rpc__set_vlan_sockopt()
+ ****************************************************************************/
+static void tpg_rpc__set_vlan_sockopt(Warp17_Service *service __rte_unused,
+                                      const VlanSockoptArg *input,
+                                      Error_Closure closure,
+                                      void *closure_data)
+{
+    tpg_vlan_sockopt_arg_t msg;
+    tpg_error_t            tpg_result;
+    Error                  protoc_result;
+    int                    err;
+
+    RPC_INIT_DEFAULT(Error, &tpg_result);
+    if (RPC_REQUEST_INIT(VlanSockoptArg, input, &msg))
+        return;
+
+    err = test_mgmt_set_vlan_sockopt(msg.vosa_tc_arg.tca_eth_port,
+                                     msg.vosa_tc_arg.tca_test_case_id,
+                                     &msg.vosa_opts,
+                                     NULL);
+    RPC_STORE_RETCODE(tpg_result, err);
+
+    RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
+    RPC_CLEANUP(VlanSockoptArg, msg, Error, protoc_result);
+}
+
+/*****************************************************************************
+ * tpg_rpc__get_vlan_sockopt()
+ ****************************************************************************/
+static void tpg_rpc__get_vlan_sockopt(Warp17_Service *service __rte_unused,
+                                      const TestCaseArg *input,
+                                      VlanSockoptResult_Closure closure,
+                                      void *closure_data)
+{
+    tpg_test_case_arg_t       tc_arg;
+    tpg_vlan_sockopt_result_t tpg_result;
+    VlanSockoptResult         protoc_result;
+    int                       err = 0;
+
+    RPC_INIT_DEFAULT(VlanSockoptResult, &tpg_result);
+    if (RPC_REQUEST_INIT(TestCaseArg, input, &tc_arg))
+        return;
+
+    err = test_mgmt_get_vlan_sockopt(tc_arg.tca_eth_port,
+                                     tc_arg.tca_test_case_id,
+                                     &tpg_result.vosr_opts,
+                                     NULL);
+    RPC_STORE_RETCODE(tpg_result.vosr_error, err);
+
+    RPC_REPLY(VlanSockoptResult, protoc_result, VLAN_SOCKOPT_RESULT__INIT,
+              tpg_result);
+    RPC_CLEANUP(TestCaseArg, tc_arg, VlanSockoptResult, protoc_result);
+}
 /*****************************************************************************
  * tpg_rpc__port_start()
  ****************************************************************************/

@@ -146,14 +146,17 @@ static inline uint64_t arp_get_entry_flags(arp_entry_t *arp)
 extern bool             arp_init(void);
 extern void             arp_lcore_init(uint32_t lcore_id);
 extern struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
-                                        struct rte_mbuf *mbuf);
+                                        struct rte_mbuf *mbuf,
+                                        uint16_t vlan_tci);
 extern uint64_t         arp_lookup_mac(uint32_t port, uint32_t ip);
 extern bool             arp_add_local(uint32_t port, uint32_t ip);
 extern bool             arp_delete_local(uint32_t port, uint32_t ip);
 extern bool             arp_send_arp_request(uint32_t port, uint32_t local_ip,
-                                             uint32_t remote_ip);
-extern bool             arp_send_grat_arp_request(uint32_t port, uint32_t ip);
-extern bool             arp_send_grat_arp_reply(uint32_t port, uint32_t ip);
+                                       uint32_t remote_ip, uint16_t vlan_tci);
+extern bool             arp_send_grat_arp_request(uint32_t port, uint32_t ip,
+                                                  uint16_t vlan_tci);
+extern bool             arp_send_grat_arp_reply(uint32_t port, uint32_t ip,
+                                                uint16_t vlan_tci);
 
 #endif /* _H_TPG_ARP_ */
 

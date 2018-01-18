@@ -78,6 +78,7 @@ static_assert(sizeof(tcb_buf_hdr_t) <= TCB_MIN_HDRS_SZ,
 
 #define TCP_MTU(port_info, sockopt)                                         \
     ((port_info)->pi_mtu - ipv4_get_sockopt((sockopt))->ip4so_hdr_opt_len - \
+     vlan_get_sockopt((sockopt))->vlanso_hdr_opt_len -                      \
      TCB_MIN_HDRS_SZ)
 
 #define TCP_GLOBAL_MTU(port, sockopt) \

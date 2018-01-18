@@ -86,6 +86,8 @@ typedef struct route_intf_msg_s {
     uint32_t rim_eth_port;
     tpg_ip_t rim_ip;
     tpg_ip_t rim_mask;
+    uint16_t rim_vlan_id;
+    tpg_ip_t rim_gw;
 
 } __tpg_msg route_intf_msg_t;
 
@@ -114,6 +116,11 @@ typedef struct route_entry_s {
     uint32_t re_flags;
 } route_entry_t;
 
+typedef struct gw_per_vlan_s {
+    uint16_t vlan_id;
+    tpg_ip_t gw;
+} gw_per_vlan_t;
+
 #define ROUTE_FLAG_IN_USE 0x00000001
 #define ROUTE_FLAG_LOCAL  0x00000002
 
@@ -129,6 +136,7 @@ typedef struct route_entry_s {
 
 /* TODO */
 #define TPG_ROUTE_PORT_TABLE_SIZE (TPG_ARP_PORT_TABLE_SIZE / 2)
+#define TPG_GW_PORT_VLAN_SIZE     TPG_TEST_MAX_L3_INTF
 
 /*****************************************************************************
  * External's for tpg_route.c
@@ -137,13 +145,16 @@ extern bool           route_init(void);
 extern void           route_lcore_init(uint32_t lcore_id);
 
 extern int            route_v4_intf_add(uint32_t port, tpg_ip_t ip,
-                                        tpg_ip_t mask);
+                                        tpg_ip_t mask, uint16_t vlan_id,
+                                        tpg_ip_t gw, uint32_t index);
 extern int            route_v4_intf_del(uint32_t port, tpg_ip_t ip,
                                         tpg_ip_t mask);
 extern int            route_v4_gw_add(uint32_t port, tpg_ip_t gw);
 extern int            route_v4_gw_del(uint32_t port, tpg_ip_t gw);
-extern uint64_t       route_v4_nh_lookup(uint32_t port, uint32_t dest);
+extern uint64_t       route_v4_nh_lookup(uint32_t port, uint32_t dest,
+                                         uint16_t vlan_id);
 extern route_entry_t *route_v4_find_local(uint32_t port, uint32_t dest);
-
+extern int            route_v4_find_gw_port_vlan(uint32_t port,
+                                                 uint32_t vlan_id);
 #endif /* _H_TPG_ROUTE_ */
 
