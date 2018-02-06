@@ -76,25 +76,40 @@
 static_assert(sizeof(tcb_buf_hdr_t) <= TCB_MIN_HDRS_SZ,
               "Not enough headroom in the mbuf!");
 
-#define TCB_MTU(tcb)                                                           \
-    (RTE_PER_LCORE(local_port_dev_info)[(tcb)->tcb_l4.l4cb_interface].pi_mtu - \
-     ipv4_get_sockopt(&(tcb)->tcb_l4.l4cb_sockopt)->ip4so_hdr_opt_len -        \
+#define TCP_MTU(port_info, sockopt)                                         \
+    ((port_info)->pi_mtu - ipv4_get_sockopt((sockopt))->ip4so_hdr_opt_len - \
+     vlan_get_sockopt((sockopt))->vlanso_hdr_opt_len -                      \
      TCB_MIN_HDRS_SZ)
+
+#define TCP_GLOBAL_MTU(port, sockopt) \
+    TCP_MTU(&port_dev_info[(port)], (sockopt))
+
+#define TCB_MTU(tcb)                                                           \
+    TCP_MTU(&RTE_PER_LCORE(local_port_dev_info)[(tcb)->tcb_l4.l4cb_interface], \
+    &(tcb)->tcb_l4.l4cb_sockopt)
+
 /*****************************************************************************
  * TCP Send related macros
  ****************************************************************************/
 /* In theory we could store more than the window size but that would
  * just waste memory. Keep it like this for now.
  */
-#define TCB_MAX_TX_BUF_SZ(tcb) \
-    (tcp_get_sockopt(&(tcb)->tcb_l4.l4cb_sockopt)->tcpo_win_size)
+#define TCB_MAX_TX_BUF_SZ(sockopt) \
+    (tcp_get_sockopt((sockopt))->tcpo_win_size)
 
 #define TCB_SEGS_PER_SEND GCFG_TCP_SEGS_PER_SEND
 
-#define TCB_AVAIL_SEND(tcb) \
-    (TPG_MIN((TCB_MAX_TX_BUF_SZ(tcb) - (tcb)->tcb_retrans.tr_total_size), \
-             TCB_SEGS_PER_SEND * TCB_MTU(tcb)))
+#define TCP_AVAIL_SEND(port_info, sockopt, retrans_size)         \
+    TPG_MIN(TCB_MAX_TX_BUF_SZ(sockopt) - (retrans_size),         \
+            TCB_SEGS_PER_SEND * TCP_MTU((port_info), (sockopt)))
 
+#define TCP_GLOBAL_AVAIL_SEND(port, sockopt) \
+    TCP_AVAIL_SEND(&port_dev_info[(port)], (sockopt), 0)
+
+#define TCB_AVAIL_SEND(tcb)                                                           \
+    TCP_AVAIL_SEND(&RTE_PER_LCORE(local_port_dev_info)[(tcb)->tcb_l4.l4cb_interface], \
+                   &(tcb)->tcb_l4.l4cb_sockopt,                                       \
+                   (tcb)->tcb_retrans.tr_total_size)
 
 /* TODO: we only support PUSH SEND for now but when we support more this should
  * be rethought.

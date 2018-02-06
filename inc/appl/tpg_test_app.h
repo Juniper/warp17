@@ -82,6 +82,7 @@ typedef struct app_data_s {
  * - test-case config printing
  * - test-case deletion
  * - test-case start/stop
+ * - retrieving expected number of pkts sent per transaction
  * - application data initialization
  * - connection UP/DOWN notifications
  * - RX data available notification
@@ -94,10 +95,13 @@ typedef void (*app_default_cfg_cb_t)(tpg_test_case_t *cfg);
 typedef bool (*app_validate_cfg_cb_t)(const tpg_test_case_t *cfg,
                                       printer_arg_t *printer_arg);
 
-typedef void (*app_print_cfg_cb_t)(const tpg_test_case_t *te,
+typedef void (*app_print_cfg_cb_t)(const tpg_test_case_t *cfg,
                                    printer_arg_t *printer_arg);
 
 typedef void (*app_delete_cfg_cb_t)(const tpg_test_case_t *cfg);
+
+typedef uint32_t (*app_pkts_per_send_cb_t)(const tpg_test_case_t *cfg,
+                                           uint32_t max_pkt_size);
 
 typedef void (*app_init_cb_t)(app_data_t *app_data,
                               test_case_init_msg_t *init_msg);
@@ -149,6 +153,7 @@ extern DECLARE_APP_CB_ARRAY(app_default_cfg_cb_t, app_default_cfg_handlers);
 extern DECLARE_APP_CB_ARRAY(app_validate_cfg_cb_t, app_validate_cfg_handlers);
 extern DECLARE_APP_CB_ARRAY(app_print_cfg_cb_t, app_print_cfg_handlers);
 extern DECLARE_APP_CB_ARRAY(app_delete_cfg_cb_t, app_delete_cfg_handlers);
+extern DECLARE_APP_CB_ARRAY(app_pkts_per_send_cb_t, app_pkts_per_send_handlers);
 extern DECLARE_APP_CB_ARRAY(app_tc_start_stop_cb_t, app_tc_start_handlers);
 extern DECLARE_APP_CB_ARRAY(app_tc_start_stop_cb_t, app_tc_stop_handlers);
 extern DECLARE_APP_CB_ARRAY(app_init_cb_t, app_init_handlers);

@@ -57,8 +57,10 @@
 import "warp17-common.proto";
 
 message L3Intf {
-    required Ip     l3i_ip    = 1;
-    required Ip     l3i_mask  = 2;
+    required Ip     l3i_ip      = 1;
+    required Ip     l3i_mask    = 2;
     //TODO count not implemented yet!
-    required uint32 l3i_count = 3;
+    required uint32 l3i_count   = 3;
+    optional uint32 l3i_vlan_id = 4 [default = 0];
+    optional Ip     l3i_gw      = 5;
 }

@@ -82,8 +82,8 @@ set output out_file('tcp_raw_setup.png')
 plot filename every ::start::end u (log(($3))+log(($2))):($4/1000000):xtic(3) \
               w lp title 'TCP + RAW data: Client Setup Rate'
 
-set ytics (4, 8, 12, 16, 17)
-set yrange [4:18]
+set ytics (4, 8, 12, 16, 18, 20)
+set yrange [4:21]
 set x2label 'Million Packets/s'
 set output out_file('tcp_raw_pps.png')
 plot filename every ::start::end u (log(($3))+log(($2))):($5/1000000):xtic(3) \
@@ -111,8 +111,8 @@ set output out_file('tcp_http_setup.png')
 plot filename every ::start::end u (log(($3))+log(($2))):($4/1000000):xtic(3) \
               w lp title 'HTTP: Client Setup Rate'
 
-set ytics (2, 6, 10, 14, 15)
-set yrange [4:16]
+set ytics (2, 6, 10, 14, 16)
+set yrange [4:17]
 set x2label 'Million Packets/s'
 set output out_file('tcp_http_pps.png')
 plot filename every ::start::end u (log(($3))+log(($2))):($5/1000000):xtic(3) \
@@ -140,8 +140,8 @@ set output out_file('udp_raw_setup.png')
 plot filename every ::start::end u (log(($3))+log(($2))):($4/1000000):xtic(3) \
               w lp title 'UDP + RAW data: Client Setup Rate'
 
-set ytics (2, 6, 10, 14, 18, 22, 24)
-set yrange [0:25]
+set ytics (2, 6, 10, 14, 18, 22, 24, 26)
+set yrange [0:27]
 set x2label 'Million Packets/s'
 set output out_file('udp_raw_pps.png')
 plot filename every ::start::end u (log(($3))+log(($2))):($5/1000000):xtic(3) \

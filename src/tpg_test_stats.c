@@ -290,10 +290,14 @@ void test_config_show_port(uint32_t eth_port, printer_arg_t *printer_arg)
 
     for (i = 0; i < pcfg->pc_l3_intfs_count; i++) {
         tpg_printf(printer_arg,
-                   "L3 Interface: " TPG_IPV4_PRINT_FMT "/" TPG_IPV4_PRINT_FMT
+                   "L3 Interface: "
+                    TPG_IPV4_PRINT_FMT "/" TPG_IPV4_PRINT_FMT
+                   " - VLAN-ID: %4d - GW: " TPG_IPV4_PRINT_FMT
                    "\n",
                    TPG_IPV4_PRINT_ARGS(pcfg->pc_l3_intfs[i].l3i_ip.ip_v4),
-                   TPG_IPV4_PRINT_ARGS(pcfg->pc_l3_intfs[i].l3i_mask.ip_v4));
+                   TPG_IPV4_PRINT_ARGS(pcfg->pc_l3_intfs[i].l3i_mask.ip_v4),
+                   pcfg->pc_l3_intfs[i].l3i_vlan_id,
+                   TPG_IPV4_PRINT_ARGS(pcfg->pc_l3_intfs[i].l3i_gw.ip_v4));
     }
     tpg_printf(printer_arg, "GW: " TPG_IPV4_PRINT_FMT "\n",
                TPG_IPV4_PRINT_ARGS(pcfg->pc_def_gw.ip_v4));
@@ -377,6 +381,22 @@ static void test_config_show_tc_app(const tpg_test_case_t *te,
 }
 
 /*****************************************************************************
+ * test_config_show_vlan_sockopt()
+ ****************************************************************************/
+static void test_config_show_vlan_sockopt(printer_arg_t *printer_arg,
+                                          tpg_vlan_sockopt_t vlan_sockopt)
+{
+    tpg_printf(printer_arg, "\n");
+
+    if (vlan_sockopt.vlanso_id) {
+        tpg_printf(printer_arg, "%-16s : %-4d\n",
+                   "VLAN-ID", vlan_sockopt.vlanso_id);
+        tpg_printf(printer_arg, "%-16s : %-4d\n",
+                   "VLAN-PRI", vlan_sockopt.vlanso_pri);
+
+    }
+}
+/*****************************************************************************
  * test_config_show_ipv4_sockopt()
  ****************************************************************************/
 static void test_config_show_ipv4_sockopt(printer_arg_t *printer_arg,
@@ -422,6 +442,7 @@ void test_config_show_latency(const tpg_test_case_t *te,
 void test_config_show_tc(const tpg_test_case_t *te, printer_arg_t *printer_arg)
 {
     tpg_ipv4_sockopt_t ipv4_sockopt;
+    tpg_vlan_sockopt_t vlan_sockopt;
 
     tpg_printf(printer_arg, "%-16s : %s\n", "Test type", test_entry_type(te));
     tpg_printf(printer_arg, "%-16s : %s\n", "Async",
@@ -478,6 +499,11 @@ void test_config_show_tc(const tpg_test_case_t *te, printer_arg_t *printer_arg)
 
     tpg_printf(printer_arg, "\n");
     test_config_show_tc_app(te, printer_arg);
+
+    if (!test_mgmt_get_vlan_sockopt(te->tc_eth_port, te->tc_id, &vlan_sockopt,
+                                    printer_arg))
+        test_config_show_vlan_sockopt(printer_arg, vlan_sockopt);
+
 }
 
 

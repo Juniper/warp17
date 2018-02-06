@@ -1,3 +1,22 @@
+v1.7:
+-----
+FEATURES:
+- Add ACK delay support for TCP 3 way handshake
+- Increase max TCP RTO to 10 seconds
+- Add HTTP stats for sessions without traffic
+- Add fine grain rate limiting
+- Add VLAN support + per-VLAN gateway
+
+FIXED ISSUES:
+
+KNOWN ISSUES:
+- See v1.6.
+
+API CHANGES:
+- Add optional VLAN/GW fields to L3Intf
+- Add VlanSockopt message type
+- Add SetVlanSockopt/GetVlanSockopt RPC calls
+
 v1.6:
 -----
 FEATURES:

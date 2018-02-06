@@ -68,11 +68,17 @@ static struct rte_mempool *mbuf_pool_clone[RTE_MAX_LCORE]; /* Indexed by lcore i
 static struct rte_mempool *tcb_pool[RTE_MAX_LCORE]; /* Indexed by lcore id */
 static struct rte_mempool *ucb_pool[RTE_MAX_LCORE]; /* Indexed by lcore id */
 
+/* Global mempool used ONLY at config time.
+ * WARNING: Should be used ONLY on the MGMT lcore!
+ */
+static struct rte_mempool *mbuf_cfg_pool;
+
 RTE_DEFINE_PER_LCORE(struct rte_mempool *, mbuf_pool);
 RTE_DEFINE_PER_LCORE(struct rte_mempool *, mbuf_pool_tx_hdr);
 RTE_DEFINE_PER_LCORE(struct rte_mempool *, mbuf_pool_clone);
 RTE_DEFINE_PER_LCORE(struct rte_mempool *, tcb_pool);
 RTE_DEFINE_PER_LCORE(struct rte_mempool *, ucb_pool);
+
 
 static struct {
 
@@ -120,6 +126,15 @@ static void mem_init_sockets(void)
         }
     }
 }
+
+/*****************************************************************************
+ * mem_get_mbuf_cfg_pool()
+ ****************************************************************************/
+struct rte_mempool *mem_get_mbuf_cfg_pool(void)
+{
+    return mbuf_cfg_pool;
+}
+
 
 /*****************************************************************************
  * mem_get_mbuf_pool()
@@ -382,6 +397,17 @@ bool mem_init(void)
         return false;
 
     mem_init_sockets();
+
+    mbuf_cfg_pool =
+        mem_create_local_pool(GCFG_MBUF_CFG_POOL_NAME, rte_get_master_lcore(),
+                              cfg->gcfg_mbuf_cfg_poolsize,
+                              cfg->gcfg_mbuf_size + sizeof(struct rte_mbuf),
+                              cfg->gcfg_mbuf_cache_size,
+                              sizeof(struct rte_pktmbuf_pool_private),
+                              rte_pktmbuf_pool_init,
+                              rte_pktmbuf_init,
+                              MEM_MBUF_POOL_FLAGS,
+                              cfg->gcfg_mpool_any_sock);
 
     core_divider = (rte_lcore_count() - TPG_NR_OF_NON_PACKET_PROCESSING_CORES);
 

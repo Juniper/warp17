@@ -409,7 +409,7 @@ deliver_data:
 
         seg = tcb->tcb_rcv_buf.lh_first;
         seg_delivered = app_deliver_cb(&tcb->tcb_l4, &tcb->tcb_l4.l4cb_app_data,
-                                       &tc_info->tci_app_stats,
+                                       tc_info->tci_app_stats,
                                        seg->tbh_mbuf,
                                        seg->tbh_tstamp);
         delivered += seg_delivered;

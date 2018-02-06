@@ -90,6 +90,13 @@ DECLARE_APP_CB_ARRAY(app_delete_cfg_cb_t, app_delete_cfg_handlers) = {
                   http_server_delete_cfg),
 };
 
+DECLARE_APP_CB_ARRAY(app_pkts_per_send_cb_t, app_pkts_per_send_handlers) = {
+    DEFINE_APP_CB(APP_PROTO__RAW, raw_client_pkts_per_send,
+                  raw_server_pkts_per_send),
+    DEFINE_APP_CB(APP_PROTO__HTTP, http_client_pkts_per_send,
+                  http_server_pkts_per_send),
+};
+
 DECLARE_APP_CB_ARRAY(app_init_cb_t, app_init_handlers) = {
     DEFINE_APP_CB(APP_PROTO__RAW, raw_client_init, raw_server_init),
     DEFINE_APP_CB(APP_PROTO__HTTP, http_client_server_init,

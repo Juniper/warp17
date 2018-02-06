@@ -59,6 +59,11 @@ message PortOptions {
     optional uint32 po_mtu = 1 [default = 1500];
 }
 
+message VlanSockopt {
+    optional uint32 vlanso_id  = 1 [default = 0];
+    optional uint32 vlanso_pri = 2 [default = 0];
+}
+
 message TcpSockopt {
     optional uint32 to_win_size          =  1 [default = 1024];
     optional uint32 to_syn_retry_cnt     =  2 [default = 24];   // actually 8bit

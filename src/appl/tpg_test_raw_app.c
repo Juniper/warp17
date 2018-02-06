@@ -366,6 +366,26 @@ void raw_delete_cfg(const tpg_test_case_t *cfg __rte_unused)
 }
 
 /*****************************************************************************
+ * raw_client_pkts_per_send()
+ ****************************************************************************/
+uint32_t raw_client_pkts_per_send(const tpg_test_case_t *cfg,
+                                  uint32_t max_pkt_size)
+{
+    return (cfg->tc_client.cl_app.ac_raw.rc_req_plen + max_pkt_size - 1) /
+                max_pkt_size;
+}
+
+/*****************************************************************************
+ * raw_server_pkts_per_send()
+ ****************************************************************************/
+uint32_t raw_server_pkts_per_send(const tpg_test_case_t *cfg,
+                                  uint32_t max_pkt_size)
+{
+    return (cfg->tc_server.srv_app.as_raw.rs_resp_plen + max_pkt_size - 1) /
+                max_pkt_size;
+}
+
+/*****************************************************************************
  * raw_client_init()
  ****************************************************************************/
 void raw_client_init(app_data_t *app_data, test_case_init_msg_t *init_msg)

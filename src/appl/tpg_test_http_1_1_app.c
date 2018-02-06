@@ -319,22 +319,19 @@ static int http_write_str(struct rte_mbuf *mbuf, const char *fmt, ...)
  *      - WARNING: this function is slow and shouldn't be called in fast-path!
  *      - Other required request fields should be added to this function.
  ****************************************************************************/
-static int http_build_req_pkt(struct rte_mbuf **mbuf, const char *method,
-                              const char *obj_name,
-                              const char *user_agent,
-                              const char *host,
-                              const char *user_fields,
-                              uint32_t content_length)
+static int http_build_req_pkt(struct rte_mbuf **mbuf, struct rte_mempool *pool,
+                              const tpg_http_client_t *client_cfg,
+                              bool header_only)
 {
     struct rte_mbuf *mbuf_p;
     struct rte_mbuf *data;
     int              err;
 
-    if (!mbuf || !method || !obj_name || !user_agent || !host || !user_fields)
+    if (!mbuf || !pool || !client_cfg)
         return -EINVAL;
 
     if (*mbuf == NULL) {
-        *mbuf = pkt_mbuf_alloc(mem_get_mbuf_local_pool());
+        *mbuf = pkt_mbuf_alloc(pool);
         if (*mbuf == NULL)
             return -ENOMEM;
     }
@@ -342,24 +339,28 @@ static int http_build_req_pkt(struct rte_mbuf **mbuf, const char *method,
     mbuf_p = *mbuf;
 
     /* Write the obj-name: "METHOD OBJ-NAME HTTP/1.1" */
-    err = http_write_str(mbuf_p, "%s %s HTTP/1.1\r\n", method, obj_name);
+    err = http_write_str(mbuf_p, "%s %s HTTP/1.1\r\n",
+                         http_method_names[client_cfg->hc_req_method],
+                         HTTP_OBJECT_NAME(client_cfg->hc_req_object_name));
     if (err)
         goto error;
 
     /* Write the user-agent: "User-Agent: USER-AGENT" */
     err = http_write_str(mbuf_p, "%s %s\r\n", HTTP_USER_AGENT_STR,
-                         user_agent);
+                         HTTP_TPG_USER_AGENT);
     if (err)
         goto error;
 
     /* Write the host: "Host: HOST" */
-    err = http_write_str(mbuf_p, "%s %s\r\n", HTTP_HOST_STR, host);
+    err = http_write_str(mbuf_p, "%s %s\r\n", HTTP_HOST_STR,
+                         HTTP_HOST_NAME(client_cfg->hc_req_host_name));
     if (err)
         goto error;
 
     /* Write the additional custom headers supplied by the user. */
-    if (user_fields) {
-        err = http_write_str(mbuf_p, "%s\r\n", user_fields);
+    if (HTTP_FIELDS(client_cfg->hc_req_fields)) {
+        err = http_write_str(mbuf_p, "%s\r\n",
+                             HTTP_FIELDS(client_cfg->hc_req_fields));
         if (err)
             goto error;
     }
@@ -367,7 +368,7 @@ static int http_build_req_pkt(struct rte_mbuf **mbuf, const char *method,
     /* Write the content length: "Content-Length: CONTENT-LENGTH" */
     err = http_write_str(mbuf_p, "%s %"PRIu32"\r\n",
                          HTTP_CONTENT_LEN_STR,
-                         content_length);
+                         client_cfg->hc_req_size);
     if (err)
         goto error;
 
@@ -377,14 +378,18 @@ static int http_build_req_pkt(struct rte_mbuf **mbuf, const char *method,
         goto error;
 
     /* Simulate the body with random data. */
-    if (content_length) {
-        data = data_alloc_chain(content_length);
-        if (!data)
-            goto error;
+    if (client_cfg->hc_req_size) {
+        if (!header_only) {
+            data = data_alloc_chain(pool, client_cfg->hc_req_size);
+            if (!data)
+                goto error;
 
-        rte_pktmbuf_lastseg(mbuf_p)->next = data;
-        mbuf_p->nb_segs += data->nb_segs;
-        mbuf_p->pkt_len += data->pkt_len;
+            rte_pktmbuf_lastseg(mbuf_p)->next = data;
+            mbuf_p->nb_segs += data->nb_segs;
+            mbuf_p->pkt_len += data->pkt_len;
+        } else {
+            mbuf_p->pkt_len += client_cfg->hc_req_size;
+        }
     }
 
     return 0;
@@ -404,20 +409,19 @@ error:
  *      - WARNING: this function is slow and shouldn't be called in fast-path!
  * TODO: check what other fields we need!
  ****************************************************************************/
-static int http_build_resp_pkt(struct rte_mbuf **mbuf, const char *status,
-                               const char *server,
-                               const char *user_fields,
-                               uint32_t content_length)
+static int http_build_resp_pkt(struct rte_mbuf **mbuf, struct rte_mempool *pool,
+                               const tpg_http_server_t *server_cfg,
+                               bool header_only)
 {
     struct rte_mbuf *mbuf_p;
     struct rte_mbuf *data;
     int              err;
 
-    if (!mbuf || !status || !server || !user_fields)
+    if (!mbuf || !pool || !server_cfg)
         return -EINVAL;
 
     if (!*mbuf) {
-        *mbuf = pkt_mbuf_alloc(mem_get_mbuf_local_pool());
+        *mbuf = pkt_mbuf_alloc(pool);
         if (*mbuf == NULL)
             return -ENOMEM;
     }
@@ -425,18 +429,21 @@ static int http_build_resp_pkt(struct rte_mbuf **mbuf, const char *status,
     mbuf_p = *mbuf;
 
     /* Write the status: "HTTP/1.1 STATUS" */
-    err = http_write_str(mbuf_p, "HTTP/1.1 %s\r\n", status);
+    err = http_write_str(mbuf_p, "HTTP/1.1 %s\r\n",
+                         http_status_names[server_cfg->hs_resp_code]);
     if (err)
         goto error;
 
     /* Write the server: "Server: SERVER" */
-    err = http_write_str(mbuf_p, "%s %s\r\n", HTTP_SERVER_STR, server);
+    err = http_write_str(mbuf_p, "%s %s\r\n", HTTP_SERVER_STR,
+                         HTTP_TPG_USER_AGENT);
     if (err)
         goto error;
 
     /* Write the additional custom headers supplied by the user. */
-    if (user_fields) {
-        err = http_write_str(mbuf_p, "%s\r\n", user_fields);
+    if (HTTP_FIELDS(server_cfg->hs_resp_fields)) {
+        err = http_write_str(mbuf_p, "%s\r\n",
+                             HTTP_FIELDS(server_cfg->hs_resp_fields));
         if (err)
             goto error;
     }
@@ -444,7 +451,7 @@ static int http_build_resp_pkt(struct rte_mbuf **mbuf, const char *status,
     /* Write the content length: "Content-Length: CONTENT-LENGTH" */
     err = http_write_str(mbuf_p, "%s %"PRIu32"\r\n",
                          HTTP_CONTENT_LEN_STR,
-                         content_length);
+                         server_cfg->hs_resp_size);
     if (err)
         goto error;
 
@@ -454,14 +461,18 @@ static int http_build_resp_pkt(struct rte_mbuf **mbuf, const char *status,
         goto error;
 
     /* Simulate the body with random data. */
-    if (content_length) {
-        data = data_alloc_chain(content_length);
-        if (!data)
-            goto error;
+    if (server_cfg->hs_resp_size) {
+        if (!header_only) {
+            data = data_alloc_chain(pool, server_cfg->hs_resp_size);
+            if (!data)
+                goto error;
 
-        rte_pktmbuf_lastseg(mbuf_p)->next = data;
-        mbuf_p->nb_segs += data->nb_segs;
-        mbuf_p->pkt_len += data->pkt_len;
+            rte_pktmbuf_lastseg(mbuf_p)->next = data;
+            mbuf_p->nb_segs += data->nb_segs;
+            mbuf_p->pkt_len += data->pkt_len;
+        } else {
+            mbuf_p->pkt_len += server_cfg->hs_resp_size;
+        }
     }
 
     return 0;
@@ -476,21 +487,14 @@ error:
  * http_init_req_msg()
  ****************************************************************************/
 static int http_init_req_msg(uint32_t eth_port, uint32_t test_case_id,
-                             tpg_http_method_t req_method,
-                             const char *obj_name,
-                             const char *host,
-                             const char *user_fields,
-                             uint32_t req_size)
+                             const tpg_http_client_t *client_cfg)
 {
     int err;
 
     err = http_build_req_pkt(&HTTP_REQ_MSG(eth_port, test_case_id),
-                             http_method_names[req_method],
-                             obj_name,
-                             HTTP_TPG_USER_AGENT,
-                             host,
-                             user_fields,
-                             req_size);
+                             mem_get_mbuf_local_pool(),
+                             client_cfg,
+                             FALSE);
 
     if (err != 0)
         INC_STATS(STATS_LOCAL(http_statistics_t, eth_port), hts_req_err);
@@ -511,17 +515,14 @@ static void http_free_req_msg(uint32_t eth_port, uint32_t test_case_id)
  * http_init_resp_msg()
  ****************************************************************************/
 static int http_init_resp_msg(uint32_t eth_port, uint32_t test_case_id,
-                              tpg_http_status_code_t resp_status,
-                              const char *user_fields,
-                              uint32_t resp_size)
+                              const tpg_http_server_t *server_cfg)
 {
     int err;
 
     err = http_build_resp_pkt(&HTTP_RESP_MSG(eth_port, test_case_id),
-                              http_status_names[resp_status],
-                              HTTP_TPG_USER_AGENT,
-                              user_fields,
-                              resp_size);
+                              mem_get_mbuf_local_pool(),
+                              server_cfg,
+                              FALSE);
 
     if (err != 0)
         INC_STATS(STATS_LOCAL(http_statistics_t, eth_port), hts_resp_err);
@@ -1008,6 +1009,52 @@ void http_server_delete_cfg(const tpg_test_case_t *cfg __rte_unused)
 }
 
 /*****************************************************************************
+ * http_client_pkts_per_send()
+ ****************************************************************************/
+uint32_t http_client_pkts_per_send(const tpg_test_case_t *cfg,
+                                   uint32_t max_pkt_size)
+{
+    struct rte_mbuf *cfg_mbuf = NULL;
+    uint32_t         pkt_count;
+    int              err;
+
+    err = http_build_req_pkt(&cfg_mbuf, mem_get_mbuf_cfg_pool(),
+                             &cfg->tc_client.cl_app.ac_http,
+                             TRUE);
+
+    if (err != 0 || !cfg_mbuf)
+        TPG_ERROR_ABORT("[%s()]: Failed to allocate config mbuf!\n", __func__);
+
+    pkt_count = (cfg_mbuf->pkt_len + max_pkt_size - 1) / max_pkt_size;
+
+    pkt_mbuf_free(cfg_mbuf);
+    return pkt_count;
+}
+
+/*****************************************************************************
+ * http_server_pkts_per_send()
+ ****************************************************************************/
+uint32_t http_server_pkts_per_send(const tpg_test_case_t *cfg,
+                                   uint32_t max_pkt_size)
+{
+    struct rte_mbuf *cfg_mbuf = NULL;
+    uint32_t         pkt_count;
+    int              err;
+
+    err = http_build_resp_pkt(&cfg_mbuf, mem_get_mbuf_cfg_pool(),
+                              &cfg->tc_server.srv_app.as_http,
+                              TRUE);
+
+    if (err != 0 || !cfg_mbuf)
+        TPG_ERROR_ABORT("[%s()]: Failed to allocate config mbuf!\n", __func__);
+
+    pkt_count = (cfg_mbuf->pkt_len + max_pkt_size - 1) / max_pkt_size;
+
+    pkt_mbuf_free(cfg_mbuf);
+    return pkt_count;
+}
+
+/*****************************************************************************
  * http_client_server_init()
  ****************************************************************************/
 void http_client_server_init(app_data_t *app_data __rte_unused,
@@ -1029,11 +1076,7 @@ void http_client_tc_start(test_case_init_msg_t *init_msg)
 
     err = http_init_req_msg(init_msg->tcim_eth_port,
                             init_msg->tcim_test_case_id,
-                            client_cfg->hc_req_method,
-                            HTTP_OBJECT_NAME(client_cfg->hc_req_object_name),
-                            HTTP_HOST_NAME(client_cfg->hc_req_host_name),
-                            HTTP_FIELDS(client_cfg->hc_req_fields),
-                            client_cfg->hc_req_size);
+                            client_cfg);
 
     if (err) {
         TPG_ERROR_ABORT("[%d:%s()] Failed to initialize HTTP request. "
@@ -1057,9 +1100,7 @@ void http_server_tc_start(test_case_init_msg_t *init_msg)
 
     err = http_init_resp_msg(init_msg->tcim_eth_port,
                              init_msg->tcim_test_case_id,
-                             server_cfg->hs_resp_code,
-                             HTTP_FIELDS(server_cfg->hs_resp_fields),
-                             server_cfg->hs_resp_size);
+                             server_cfg);
 
     if (err) {
         TPG_ERROR_ABORT("[%d:%s()] Failed to initialize HTTP responses. "
@@ -1120,6 +1161,13 @@ void http_client_server_conn_down(l4_control_block_t *l4 __rte_unused,
      * was initialized or went to established but we don't have anything in this
      * case.
      */
+
+    if (unlikely(app_data->ad_http.ha_req_cnt == 0))
+        INC_STATS(&stats->tcas_http, hsts_no_req);
+
+    if (unlikely(app_data->ad_http.ha_resp_cnt == 0))
+        INC_STATS(&stats->tcas_http, hsts_no_resp);
+
 }
 
 /*****************************************************************************
@@ -1192,7 +1240,10 @@ uint32_t http_client_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
                               &delivered)) {
             /* If we're done with the body then we need to send a new request. */
             INC_STATS(http_stats, hsts_resp_cnt);
+            http_client_data->ha_resp_cnt++;
+
             TRACE_FMT(HTTP, DEBUG, "CL Body: %s", "Recvd");
+
             http_client_goto_send_req(l4, http_client_data);
         }
         return delivered;
@@ -1276,6 +1327,8 @@ uint32_t http_server_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
                               &delivered)) {
             /* If we're done with the body then we need to send a response. */
             INC_STATS(http_stats, hsts_req_cnt);
+            http_server_data->ha_req_cnt++;
+
             TRACE_FMT(HTTP, DEBUG, "SRV Body: %s", "Recvd");
 
             http_server_goto_send_resp(l4, http_server_data);
@@ -1365,6 +1418,8 @@ bool http_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
         /* If done sending the request we can wait for a the response. */
         if (http_client_data->ha_content_length == 0) {
             INC_STATS(http_stats, hsts_req_cnt);
+            http_client_data->ha_req_cnt++;
+
             TRACE_FMT(HTTP, DEBUG, "Client Request: %s", "Sent");
 
             http_goto_recv_headers(l4, http_client_data,
@@ -1406,6 +1461,8 @@ bool http_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
         /* If done sending the response we can wait for a new request. */
         if (http_server_data->ha_content_length == 0) {
             INC_STATS(http_stats, hsts_resp_cnt);
+            http_server_data->ha_resp_cnt++;
+
             TRACE_FMT(HTTP, DEBUG, "Server Response: %s", "Sent");
 
             http_goto_recv_headers(l4, http_server_data,
@@ -1439,6 +1496,8 @@ void http_stats_add(tpg_test_case_app_stats_t *total,
     total->tcas_http.hsts_invalid_msg_cnt += elem->tcas_http.hsts_invalid_msg_cnt;
     total->tcas_http.hsts_no_content_len_cnt += elem->tcas_http.hsts_no_content_len_cnt;
     total->tcas_http.hsts_transfer_enc_cnt += elem->tcas_http.hsts_transfer_enc_cnt;
+    total->tcas_http.hsts_no_req += elem->tcas_http.hsts_no_req;
+    total->tcas_http.hsts_no_resp += elem->tcas_http.hsts_no_resp;
 }
 
 /*****************************************************************************
@@ -1459,6 +1518,14 @@ void http_stats_print(const tpg_test_case_app_stats_t *stats,
                stats->tcas_http.hsts_invalid_msg_cnt,
                stats->tcas_http.hsts_no_content_len_cnt,
                stats->tcas_http.hsts_transfer_enc_cnt);
+
+    tpg_printf(printer_arg, "%27s %27s\n",
+               "Closed (No Request)",
+               "Closed (No Response)");
+
+    tpg_printf(printer_arg, "%27"PRIu32" %27"PRIu32"\n",
+           stats->tcas_http.hsts_no_req,
+           stats->tcas_http.hsts_no_resp);
 }
 
 /*****************************************************************************

@@ -65,9 +65,14 @@ from warp17_service_pb2 import *
 def b2b_port_add(eth_port, def_gw):
     return PortCfg(pc_eth_port = eth_port, pc_def_gw = def_gw)
 
-def b2b_port_add_intfs(pcfg, intf_cfg_list):
-    for (ip, mask, count) in intf_cfg_list:
-        pcfg.pc_l3_intfs.add(l3i_ip=ip, l3i_mask=mask, l3i_count=count)
+def b2b_port_add_intfs(pcfg, intf_cfg_list, vlan_enable=False):
+    if not vlan_enable:
+        for (ip, mask, count) in intf_cfg_list:
+            pcfg.pc_l3_intfs.add(l3i_ip=ip, l3i_mask=mask, l3i_count=count)
+    else:
+        for (ip, mask, count, vlan_id, gw) in intf_cfg_list:
+            pcfg.pc_l3_intfs.add(l3i_ip=ip, l3i_mask=mask, l3i_count=count,
+                                 l3i_vlan_id=vlan_id, l3i_gw=gw)
 
 def b2b_ipv4(eth_port, intf_idx):
     '''10.eth_port.0.x'''
@@ -98,11 +103,20 @@ def b2b_dips(eth_port, ip_count):
 def b2b_ports(l4_port_count):
     return L4PortRange(l4pr_start=1, l4pr_end=l4_port_count)
 
-def b2b_configure_port(eth_port, def_gw, l3_intf_count = 0):
+def b2b_configure_port(eth_port, def_gw, l3_intf_count = 0, vlan_enable=False):
     pcfg = b2b_port_add(eth_port, def_gw = def_gw)
-    intf_cfg_list = [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(eth_port, i)),
+
+    if not vlan_enable:
+        intf_cfg_list = [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(eth_port, i)),
                       Ip(ip_version=IPV4, ip_v4=b2b_mask(eth_port, i)),
                       b2b_count(eth_port, i)) for i in range(0, l3_intf_count)]
-    b2b_port_add_intfs(pcfg, intf_cfg_list)
-    return pcfg
+    else:
+        vlan_id = 1000
+        intf_cfg_list = [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(eth_port, i)),
+                          Ip(ip_version=IPV4, ip_v4=b2b_mask(eth_port, i)),
+                          b2b_count(eth_port, i),
+                          vlan_id+i,
+                          Ip(ip_version=IPV4, ip_v4=b2b_def_gw(eth_port))) for i in range(0, l3_intf_count)]
 
+    b2b_port_add_intfs(pcfg, intf_cfg_list, vlan_enable)
+    return pcfg

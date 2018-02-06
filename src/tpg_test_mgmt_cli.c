@@ -517,6 +517,10 @@ cmdline_parse_inst_t cmd_show_tests_stats = {
     cmdline_ipaddr_t       ip;
     cmdline_fixed_string_t mask_kw;
     cmdline_ipaddr_t       mask;
+    cmdline_fixed_string_t vlan_id_kw;
+    uint16_t               vlan_id;
+    cmdline_fixed_string_t gw_kw;
+    cmdline_ipaddr_t       gw;
 };
 
 static cmdline_parse_token_string_t cmd_tests_add_l3_intf_T_add =
@@ -537,6 +541,16 @@ static cmdline_parse_token_string_t cmd_tests_add_l3_intf_T_mask_kw =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_add_l3_intf_result, mask_kw, "mask");
 static cmdline_parse_token_ipaddr_t cmd_tests_add_l3_intf_T_mask =
     TOKEN_IPADDR_INITIALIZER(struct cmd_tests_add_l3_intf_result, mask);
+static cmdline_parse_token_string_t cmd_tests_add_l3_intf_T_vlan_id_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_add_l3_intf_result,
+                                 vlan_id_kw, "vlan-id");
+static cmdline_parse_token_num_t cmd_tests_add_l3_intf_T_vlan_id =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_add_l3_intf_result,
+                              vlan_id, UINT16);
+static cmdline_parse_token_string_t cmd_tests_add_l3_intf_T_gw_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_add_l3_intf_result, gw_kw, "gw");
+static cmdline_parse_token_ipaddr_t cmd_tests_add_l3_intf_T_gw =
+    TOKEN_IPADDR_INITIALIZER(struct cmd_tests_add_l3_intf_result, gw);
 
 static void cmd_tests_add_l3_intf_parsed(void *parsed_result, struct cmdline *cl,
                                          void *data __rte_unused)
@@ -544,9 +558,13 @@ static void cmd_tests_add_l3_intf_parsed(void *parsed_result, struct cmdline *cl
     printer_arg_t                        parg;
     struct cmd_tests_add_l3_intf_result *pr;
     tpg_l3_intf_t                        l3_intf;
+    tpg_ip_t                             gw;
+    int                                  vlan_enable;
 
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
+    vlan_enable = (intptr_t)data;
+    gw = TPG_IPV4(IPv4(0, 0, 0, 0));
 
     if (pr->ip.family != AF_INET) {
         cmdline_printf(cl, "ERROR: IPv6 not supported yet!\n");
@@ -558,9 +576,24 @@ static void cmd_tests_add_l3_intf_parsed(void *parsed_result, struct cmdline *cl
         return;
     }
 
+    if (vlan_enable) {
+        if (pr->gw.family != AF_INET) {
+            cmdline_printf(cl, "ERROR: IPv6 not supported yet!\n");
+            return;
+        }
+
+        if (pr->gw.family != pr->ip.family) {
+            cmdline_printf(cl, "ERROR: Mixing IPv4 and IPv6!\n");
+            return;
+        }
+        gw = TPG_IPV4(rte_be_to_cpu_32(pr->gw.addr.ipv4.s_addr));
+    }
+
     l3_intf = (tpg_l3_intf_t){
         .l3i_ip = TPG_IPV4(rte_be_to_cpu_32(pr->ip.addr.ipv4.s_addr)),
         .l3i_mask = TPG_IPV4(rte_be_to_cpu_32(pr->mask.addr.ipv4.s_addr)),
+        .l3i_vlan_id = (vlan_enable) ? pr->vlan_id : 0,
+        .l3i_gw = gw,
         .l3i_count = 1 /* TODO: count not implemented yet! */
     };
 
@@ -572,7 +605,7 @@ static void cmd_tests_add_l3_intf_parsed(void *parsed_result, struct cmdline *cl
 
 cmdline_parse_inst_t cmd_tests_add_l3_intf = {
     .f = cmd_tests_add_l3_intf_parsed,
-    .data = NULL,
+    .data = (void *) (intptr_t)false,
     .help_str = "add tests l3_intf port <eth_port> ip <ip> mask <mask>",
     .tokens = {
         (void *)&cmd_tests_add_l3_intf_T_add,
@@ -584,6 +617,27 @@ cmdline_parse_inst_t cmd_tests_add_l3_intf = {
         (void *)&cmd_tests_add_l3_intf_T_ip,
         (void *)&cmd_tests_add_l3_intf_T_mask_kw,
         (void *)&cmd_tests_add_l3_intf_T_mask,
+        NULL,
+    },
+};
+cmdline_parse_inst_t cmd_tests_add_l3_intf_vlan_id_gw = {
+    .f = cmd_tests_add_l3_intf_parsed,
+    .data = (void *) (intptr_t)true,
+    .help_str = "add tests l3_intf port <eth_port> ip <ip> mask <mask> vlan-id <vlan-id> gw <ip>",
+    .tokens = {
+        (void *)&cmd_tests_add_l3_intf_T_add,
+        (void *)&cmd_tests_add_l3_intf_T_tests,
+        (void *)&cmd_tests_add_l3_intf_T_l3_intf,
+        (void *)&cmd_tests_add_l3_intf_T_port_kw,
+        (void *)&cmd_tests_add_l3_intf_T_port,
+        (void *)&cmd_tests_add_l3_intf_T_ip_kw,
+        (void *)&cmd_tests_add_l3_intf_T_ip,
+        (void *)&cmd_tests_add_l3_intf_T_mask_kw,
+        (void *)&cmd_tests_add_l3_intf_T_mask,
+        (void *)&cmd_tests_add_l3_intf_T_vlan_id_kw,
+        (void *)&cmd_tests_add_l3_intf_T_vlan_id,
+        (void *)&cmd_tests_add_l3_intf_T_gw_kw,
+        (void *)&cmd_tests_add_l3_intf_T_gw,
         NULL,
     },
 };
@@ -2245,6 +2299,79 @@ cmdline_parse_inst_t cmd_tests_show_ipv4_opts = {
 };
 
 /****************************************************************************
+ * - "show tests vlan-options port <eth_port> test-case-id <tcid>"
+ ****************************************************************************/
+struct cmd_tests_show_vlan_opts_result {
+    cmdline_fixed_string_t show;
+    cmdline_fixed_string_t tests;
+    cmdline_fixed_string_t vlan_options;
+    cmdline_fixed_string_t port_kw;
+    uint32_t               port;
+    cmdline_fixed_string_t tcid_kw;
+    uint32_t               tcid;
+};
+
+static cmdline_parse_token_string_t cmd_tests_show_vlan_opts_T_set =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_show_vlan_opts_result,
+                                 show, "show");
+static cmdline_parse_token_string_t cmd_tests_show_vlan_opts_T_tests =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_show_vlan_opts_result,
+                                 tests, "tests");
+static cmdline_parse_token_string_t cmd_tests_show_vlan_opts_T_vlan_options =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_show_vlan_opts_result,
+                                 vlan_options, "vlan-options");
+
+static cmdline_parse_token_string_t cmd_tests_show_vlan_opts_T_port_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_show_vlan_opts_result,
+                                 port_kw, "port");
+static cmdline_parse_token_num_t cmd_tests_show_vlan_opts_T_port =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_show_vlan_opts_result, port, UINT32);
+
+static cmdline_parse_token_string_t cmd_tests_show_vlan_opts_T_tcid_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_show_vlan_opts_result,
+                                 tcid_kw, "test-case-id");
+static cmdline_parse_token_num_t cmd_tests_show_vlan_opts_T_tcid =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_show_vlan_opts_result, tcid, UINT32);
+
+static void cmd_tests_show_vlan_opts_parsed(void *parsed_result,
+                                            struct cmdline *cl,
+                                            void *data __rte_unused)
+{
+    printer_arg_t                           parg;
+    struct cmd_tests_show_vlan_opts_result *pr;
+    tpg_vlan_sockopt_t                      vlan_sockopt;
+
+    parg = TPG_PRINTER_ARG(cli_printer, cl);
+    pr = parsed_result;
+
+    if (test_mgmt_get_vlan_sockopt(pr->port, pr->tcid,
+                                   &vlan_sockopt, &parg) != 0)
+        return;
+
+    cmdline_printf(cl, "VLAN-ID    VLAN-PRI\n");
+    cmdline_printf(cl, "---------- --------\n");
+    cmdline_printf(cl, "%7d %7d\n",
+                   vlan_sockopt.vlanso_id,
+                   vlan_sockopt.vlanso_pri);
+    cmdline_printf(cl, "\n\n");
+}
+
+cmdline_parse_inst_t cmd_tests_show_vlan_opts = {
+    .f = cmd_tests_show_vlan_opts_parsed,
+    .data = NULL,
+    .help_str = "show tests vlan-options port <eth_port> test-case-id <tcid>",
+    .tokens = {
+        (void *)&cmd_tests_show_vlan_opts_T_set,
+        (void *)&cmd_tests_show_vlan_opts_T_tests,
+        (void *)&cmd_tests_show_vlan_opts_T_vlan_options,
+        (void *)&cmd_tests_show_vlan_opts_T_port_kw,
+        (void *)&cmd_tests_show_vlan_opts_T_port,
+        (void *)&cmd_tests_show_vlan_opts_T_tcid_kw,
+        (void *)&cmd_tests_show_vlan_opts_T_tcid,
+        NULL,
+    },
+};
+/****************************************************************************
  * - "exit"
  ****************************************************************************/
 struct cmd_exit_result {
@@ -2455,6 +2582,102 @@ cmdline_parse_inst_t cmd_latency = {
     },
 };
 
+/****************************************************************************
+ * - "set tests vlan-options port <eth_port> test-case-id <tcid>
+ *                  vlan-id <1-4094>
+ ****************************************************************************/
+struct cmd_tests_set_vlan_opts_result {
+    cmdline_fixed_string_t set;
+    cmdline_fixed_string_t tests;
+    cmdline_fixed_string_t vlan_options;
+    cmdline_fixed_string_t port_kw;
+    uint32_t               port;
+    cmdline_fixed_string_t tcid_kw;
+    uint32_t               tcid;
+    cmdline_fixed_string_t vlan_id_kw;
+    uint16_t               vlan_id;
+    cmdline_fixed_string_t vlan_pri_kw;
+    uint16_t               vlan_pri;
+};
+
+static cmdline_parse_token_string_t cmd_tests_set_vlan_opts_T_set =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_vlan_opts_result, set, "set");
+static cmdline_parse_token_string_t cmd_tests_set_vlan_opts_T_tests =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_vlan_opts_result,
+                                 tests, "tests");
+static cmdline_parse_token_string_t cmd_tests_set_vlan_opts_T_vlan_options =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_vlan_opts_result,
+                                 vlan_options, "vlan-options");
+
+static cmdline_parse_token_string_t cmd_tests_set_vlan_opts_T_port_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_vlan_opts_result,
+                                 port_kw, "port");
+static cmdline_parse_token_num_t cmd_tests_set_vlan_opts_T_port =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_vlan_opts_result, port, UINT32);
+
+static cmdline_parse_token_string_t cmd_tests_set_vlan_opts_T_tcid_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_vlan_opts_result,
+                                 tcid_kw, "test-case-id");
+static cmdline_parse_token_num_t cmd_tests_set_vlan_opts_T_tcid =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_vlan_opts_result, tcid, UINT32);
+
+static cmdline_parse_token_string_t cmd_tests_set_vlan_opts_T_vlan_id_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_vlan_opts_result,
+                                 vlan_id_kw, "vlan-id");
+static cmdline_parse_token_num_t cmd_tests_set_vlan_opts_T_vlan_id =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_vlan_opts_result,
+                              vlan_id, UINT16);
+static cmdline_parse_token_string_t cmd_tests_set_vlan_opts_T_vlan_pri_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_vlan_opts_result,
+                                 vlan_pri_kw, "vlan-pri");
+static cmdline_parse_token_num_t cmd_tests_set_vlan_opts_T_vlan_pri =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_vlan_opts_result,
+                              vlan_pri, UINT16);
+
+static void cmd_tests_set_vlan_opts_parsed(void *parsed_result,
+                                           struct cmdline *cl,
+                                           void *data __rte_unused)
+{
+    printer_arg_t                          parg;
+    struct cmd_tests_set_vlan_opts_result *pr;
+    tpg_vlan_sockopt_t                     vlan_sockopt;
+
+    parg = TPG_PRINTER_ARG(cli_printer, cl);
+    pr = parsed_result;
+
+    /* Update the User provided vlan-id and vlan-pri */
+    TPG_XLATE_OPTIONAL_SET_FIELD(&vlan_sockopt, vlanso_id, pr->vlan_id);
+    TPG_XLATE_OPTIONAL_SET_FIELD(&vlan_sockopt, vlanso_pri, pr->vlan_pri);
+
+    if (test_mgmt_set_vlan_sockopt(pr->port, pr->tcid,
+            &vlan_sockopt, &parg) == 0)
+        cmdline_printf(cl, "Port %"PRIu32" VLAN updated!\n",
+                       pr->port);
+    else
+        cmdline_printf(cl,
+                       "ERROR: Failed updating VLAN config on port %"PRIu32"\n",
+                       pr->port);
+}
+
+cmdline_parse_inst_t cmd_tests_set_vlan_opts = {
+    .f = cmd_tests_set_vlan_opts_parsed,
+    .data = NULL,
+    .help_str = "set tests vlan-options port <eth_port> test-case-id <tcid> vlan-id <1-4094> vlan-pri <0-7>",
+    .tokens = {
+        (void *)&cmd_tests_set_vlan_opts_T_set,
+        (void *)&cmd_tests_set_vlan_opts_T_tests,
+        (void *)&cmd_tests_set_vlan_opts_T_vlan_options,
+        (void *)&cmd_tests_set_vlan_opts_T_port_kw,
+        (void *)&cmd_tests_set_vlan_opts_T_port,
+        (void *)&cmd_tests_set_vlan_opts_T_tcid_kw,
+        (void *)&cmd_tests_set_vlan_opts_T_tcid,
+        (void *)&cmd_tests_set_vlan_opts_T_vlan_id_kw,
+        (void *)&cmd_tests_set_vlan_opts_T_vlan_id,
+        (void *)&cmd_tests_set_vlan_opts_T_vlan_pri_kw,
+        (void *)&cmd_tests_set_vlan_opts_T_vlan_pri,
+        NULL,
+    },
+};
 /*****************************************************************************
  * Main menu context
  ****************************************************************************/
@@ -2468,6 +2691,7 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_show_tests_state,
     &cmd_show_tests_stats,
     &cmd_tests_add_l3_intf,
+    &cmd_tests_add_l3_intf_vlan_id_gw,
     &cmd_tests_add_l3_gw,
     &cmd_tests_add_tcp_udp_server,
     &cmd_tests_add_client,
@@ -2500,6 +2724,8 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_exit,
     &cmd_syslog,
     &cmd_latency,
+    &cmd_tests_set_vlan_opts,
+    &cmd_tests_show_vlan_opts,
     NULL,
 };
 

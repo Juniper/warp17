@@ -132,6 +132,41 @@ class TestApi(Warp17UnitTestCase):
                                        l3i_count=b2b_count(eth_port, i)),
                                 'L3Intf')
 
+    def test_configure_port_valid_intf_vlan_gw(self):
+        """Tests the ConfigurePort API with max interfaces and vlan and gw with def gw too"""
+
+        for eth_port in range(0, self.PORT_CNT):
+            pcfg = b2b_configure_port(eth_port,
+                                      def_gw=Ip(ip_version=IPV4,
+                                                ip_v4=b2b_def_gw(eth_port)),
+                                      l3_intf_count=TPG_TEST_MAX_L3_INTF,
+                                      vlan_enable=True)
+            error = self.warp17_call('ConfigurePort', pcfg)
+            self.assertEqual(error.e_code, 0, 'ConfigurePort')
+
+        for eth_port in range(0, self.PORT_CNT):
+            result = self.warp17_call('GetPortCfg',
+                                      PortArg(pa_eth_port=eth_port))
+            self.assertEqual(result.pcr_error.e_code, 0, 'GetPortCfg')
+            self.assertEqual(len(result.pcr_cfg.pc_l3_intfs),
+                             TPG_TEST_MAX_L3_INTF,
+                             'L3IntfCnt')
+            self.assertTrue(result.pcr_cfg.pc_def_gw == Ip(ip_version=IPV4,
+                                                           ip_v4=b2b_def_gw(eth_port)),
+                            'DefGw')
+            for i in range(0, TPG_TEST_MAX_L3_INTF):
+                ### b2b_configure_port uses vlan_id 1000 as start value
+                vlan_id = 1000
+                self.assertTrue(result.pcr_cfg.pc_l3_intfs[i] ==
+                                L3Intf(l3i_ip=Ip(ip_version=IPV4,
+                                                 ip_v4=b2b_ipv4(eth_port, i)),
+                                       l3i_mask=Ip(ip_version=IPV4,
+                                                   ip_v4=b2b_mask(eth_port, i)),
+                                       l3i_count=b2b_count(eth_port, i),
+                                       l3i_vlan_id=vlan_id+i,
+                                       l3i_gw=Ip(ip_version=IPV4, ip_v4=b2b_def_gw(eth_port))),
+                                'L3Intf')
+
     @unittest.expectedFailure
     def test_configure_port_invalid_gt_max_intf(self):
         """Tests the ConfigurePort API with more than max interfaces"""

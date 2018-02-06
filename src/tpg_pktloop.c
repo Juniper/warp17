@@ -91,6 +91,8 @@ static void pkt_trace_tx(packet_control_block_t *pcb, int32_t tx_queue_id,
                          struct rte_mbuf *mbuf, bool failed)
 {
     struct ether_hdr *eth_hdr;
+    uint16_t          etype;
+    uint16_t          offset = 0;
 
     /* To avoid compiler complaints if tracing is not compiled in. */
     RTE_SET_USED(tx_queue_id);
@@ -114,6 +116,8 @@ static void pkt_trace_tx(packet_control_block_t *pcb, int32_t tx_queue_id,
     }
 
     eth_hdr = rte_pktmbuf_mtod(mbuf, struct ether_hdr *);
+    etype = rte_be_to_cpu_16(eth_hdr->ether_type);
+    offset += sizeof(struct ether_hdr);
 
     PKT_TRACE(pcb, ETH, DEBUG, "dst=%02X:%02X:%02X:%02X:%02X:%02X, src=%02X:%02X:%02X:%02X:%02X:%02X, etype=0x%4.4X",
               eth_hdr->d_addr.addr_bytes[0],
@@ -128,12 +132,26 @@ static void pkt_trace_tx(packet_control_block_t *pcb, int32_t tx_queue_id,
               eth_hdr->s_addr.addr_bytes[3],
               eth_hdr->s_addr.addr_bytes[4],
               eth_hdr->s_addr.addr_bytes[5],
-              rte_be_to_cpu_16(eth_hdr->ether_type));
+              etype);
 
-    switch (rte_be_to_cpu_16(eth_hdr->ether_type)) {
+    /* If vlan is enabled in the Packet */
+    if (unlikely(etype == ETHER_TYPE_VLAN)) {
+        struct vlan_hdr *tag_hdr = rte_pktmbuf_mtod_offset(mbuf,
+                                                           struct vlan_hdr *,
+                                                           offset);
+
+        offset += sizeof(struct vlan_hdr);
+        etype = rte_be_to_cpu_16(tag_hdr->eth_proto);
+        PKT_TRACE(pcb, ETH, DEBUG, "vlan_tci=%4.4X, etype=%4.4X\n",
+                      rte_be_to_cpu_16(tag_hdr->vlan_tci), etype);
+    }
+
+    switch (etype) {
     case ETHER_TYPE_IPv4:
         if (true) {
-            struct ipv4_hdr *ip_hdr = (struct ipv4_hdr *) (eth_hdr + 1);
+            struct ipv4_hdr *ip_hdr = rte_pktmbuf_mtod_offset(mbuf,
+                                                              struct ipv4_hdr *,
+                                                              offset);
 
             PKT_TRACE(pcb, IPV4, DEBUG, "src/dst=%8.8X/%8.8X, prot=%u, ver_len=0x%2.2X, len=%u",
                       rte_be_to_cpu_32(ip_hdr->src_addr),
@@ -204,7 +222,9 @@ static void pkt_trace_tx(packet_control_block_t *pcb, int32_t tx_queue_id,
     case ETHER_TYPE_ARP:
         if (true) {
 
-            struct arp_hdr *arp_hdr = (struct arp_hdr *) (eth_hdr + 1);
+            struct arp_hdr *arp_hdr = rte_pktmbuf_mtod_offset(mbuf,
+                                                              struct arp_hdr *,
+                                                              offset);
 
             PKT_TRACE(pcb, ARP, DEBUG, "hrd=%u, pro=0x%4.4X, hln=%u, pln=%u, op=%u",
                       rte_be_to_cpu_16(arp_hdr->arp_hrd),

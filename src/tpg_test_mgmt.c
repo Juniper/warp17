@@ -264,7 +264,106 @@ static void test_update_rates(tpg_test_case_t *test_case)
 }
 
 /*****************************************************************************
- * test_init_test_case()
+ * test_max_pkt_size()
+ *      Notes: returns the maximum allowed packet size for a given test case
+ *             in a single send operation (useful for example when estimating
+ *             send rates for various application types).
+ ****************************************************************************/
+static uint32_t test_max_pkt_size(const tpg_test_case_t *entry,
+                                  const sockopt_t *sockopt)
+{
+    switch (entry->tc_type) {
+    case TEST_CASE_TYPE__CLIENT:
+
+        switch (entry->tc_client.cl_l4.l4c_proto) {
+        case L4_PROTO__TCP:
+            return TCP_GLOBAL_AVAIL_SEND(entry->tc_eth_port, sockopt);
+        case L4_PROTO__UDP:
+            return UDP_GLOBAL_MTU(entry->tc_eth_port, sockopt);
+        default:
+            return 0;
+        }
+        break;
+
+    case TEST_CASE_TYPE__SERVER:
+
+        switch (entry->tc_server.srv_l4.l4s_proto) {
+        case L4_PROTO__TCP:
+            return TCP_GLOBAL_AVAIL_SEND(entry->tc_eth_port, sockopt);
+        case L4_PROTO__UDP:
+            return UDP_GLOBAL_MTU(entry->tc_eth_port, sockopt);
+        default:
+            return 0;
+        }
+        break;
+
+    default:
+        return 0;
+    }
+}
+
+/*****************************************************************************
+ * test_init_msg_client_rates()
+ ****************************************************************************/
+static void test_init_msg_client_rates(const tpg_test_case_t *entry,
+                                       const sockopt_t *sockopt,
+                                       test_case_init_msg_t *msg)
+{
+    tpg_rate_t          send_rate = TPG_RATE_INF();
+    const tpg_client_t *client_cfg = &entry->tc_client;
+
+    rate_limit_cfg_init(&client_cfg->cl_rates.rc_open_rate,
+                        msg->tcim_transient.open_rate);
+    rate_limit_cfg_init(&client_cfg->cl_rates.rc_close_rate,
+                        msg->tcim_transient.close_rate);
+
+    /* If rate limiting is enabled (non-infinite) we translate the user config
+     * (rate limiting for application sends) to rate limiting based on number
+     * of packets sent.
+     */
+    if (!TPG_RATE_IS_INF(&client_cfg->cl_rates.rc_send_rate)) {
+        uint32_t        target_send_rate;
+        uint32_t        pkts_per_send;
+        uint32_t        mtu = test_max_pkt_size(entry, sockopt);
+        tpg_app_proto_t app_id = client_cfg->cl_app.ac_app_proto;
+        uint32_t        min_rate_precision = GCFG_RATE_MIN_RATE_PRECISION;
+
+        pkts_per_send = APP_CL_CALL(pkts_per_send, app_id)(entry, mtu);
+        target_send_rate =
+            pkts_per_send * TPG_RATE_VAL(&client_cfg->cl_rates.rc_send_rate);
+
+        if (target_send_rate > min_rate_precision) {
+            target_send_rate =
+                target_send_rate / min_rate_precision * min_rate_precision;
+        }
+
+        send_rate = TPG_RATE(target_send_rate);
+    }
+
+    rate_limit_cfg_init(&send_rate, msg->tcim_transient.send_rate);
+}
+
+/*****************************************************************************
+ * test_init_msg_server_rates()
+ ****************************************************************************/
+static void
+test_init_msg_server_rates(const tpg_test_case_t *entry __rte_unused,
+                           const sockopt_t *sockopt __rte_unused,
+                           test_case_init_msg_t *msg)
+{
+    tpg_rate_t          open_rate = TPG_RATE(0);
+    tpg_rate_t          close_rate = TPG_RATE(0);
+    tpg_rate_t          send_rate = TPG_RATE_INF();
+
+    /* No rate limiting on the server side for now. */
+
+    rate_limit_cfg_init(&open_rate, msg->tcim_transient.open_rate);
+    rate_limit_cfg_init(&close_rate, msg->tcim_transient.close_rate);
+    rate_limit_cfg_init(&send_rate, msg->tcim_transient.send_rate);
+}
+
+/*****************************************************************************
+ * test_init_msg()
  ****************************************************************************/
 static void test_init_msg(const tpg_test_case_t *entry,
                           const sockopt_t *sockopt,
@@ -278,10 +377,19 @@ static void test_init_msg(const tpg_test_case_t *entry,
     case TEST_CASE_TYPE__CLIENT:
         /* Struct copy. */
         msg->tcim_client = entry->tc_client;
+        msg->tcim_l4_type = entry->tc_client.cl_l4.l4c_proto;
+        msg->tcim_app_id = entry->tc_client.cl_app.ac_app_proto;
+
+        test_init_msg_client_rates(entry, sockopt, msg);
         break;
     case TEST_CASE_TYPE__SERVER:
         /* Struct copy. */
         msg->tcim_server = entry->tc_server;
+        msg->tcim_l4_type = entry->tc_server.srv_l4.l4s_proto;
+        msg->tcim_app_id = entry->tc_server.srv_app.as_app_proto;
+
+        test_init_msg_server_rates(entry, sockopt, msg);
+
         break;
     default:
         assert(false);
@@ -306,32 +414,43 @@ static void test_init_msg(const tpg_test_case_t *entry,
 static void test_init_test_case(tpg_test_case_t *entry,
                                 sockopt_t *sockopt)
 {
-    uint32_t core;
-    int      error;
+    uint32_t              core;
+    int                   error;
+    msg_t                *msgp;
+    test_case_init_msg_t *init_msg;
+
+    /*
+     * Allocate the configs in .bss because they can get quite big.
+     * This works fine as long as the MSG_TEST_CASE_INIT is sent in a blocking
+     * way and the sender waits for the destination to process it.
+     */
+    static rate_limit_cfg_t open_rate_cfg;
+    static rate_limit_cfg_t close_rate_cfg;
+    static rate_limit_cfg_t send_rate_cfg;
+    static MSG_LOCAL_DEFINE(test_case_init_msg_t, imsg);
+
+    msgp = MSG_LOCAL(imsg);
+
+    init_msg = MSG_INNER(test_case_init_msg_t, msgp);
+    init_msg->tcim_transient.open_rate = &open_rate_cfg;
+    init_msg->tcim_transient.close_rate = &close_rate_cfg;
+    init_msg->tcim_transient.send_rate = &send_rate_cfg;
+
+    test_init_msg(entry, sockopt, init_msg);
 
     FOREACH_CORE_IN_PORT_START(core, entry->tc_eth_port) {
-        msg_t *msgp;
-
         /* Skip non-packet cores */
         if (!cfg_is_pkt_core(core))
             continue;
 
-        msgp = msg_alloc(MSG_TEST_CASE_INIT, sizeof(test_case_init_msg_t),
-                         core);
-        if (msgp == NULL) {
-            TPG_ERROR_ABORT("ERROR: %s!\n", "Failed to alloc INIT message!");
-            return;
-        }
+        msg_init(msgp, MSG_TEST_CASE_INIT, core, 0);
 
-        test_init_msg(entry, sockopt, MSG_INNER(test_case_init_msg_t, msgp));
-
-        /* Send the message and forget about it! */
-        error = msg_send(msgp, MSG_SND_FLAG_NOWAIT);
+        /* Send the message and wait for the destination to process it! */
+        error = msg_send(msgp, 0);
         if (error) {
             /* Should uninitialize what we did in the beginning. */
             TPG_ERROR_ABORT("ERROR: Failed to send INIT msg: %s(%d)!\n",
                             rte_strerror(-error), -error);
-            msg_free(msgp);
         }
     } FOREACH_CORE_IN_PORT_END()
 }
@@ -792,7 +911,10 @@ static int test_start_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
     for (i = 0; i < pcfg->pc_l3_intfs_count; i++) {
         route_v4_intf_add(start_msg->tssm_eth_port,
                           pcfg->pc_l3_intfs[i].l3i_ip,
-                          pcfg->pc_l3_intfs[i].l3i_mask);
+                          pcfg->pc_l3_intfs[i].l3i_mask,
+                          pcfg->pc_l3_intfs[i].l3i_vlan_id,
+                          pcfg->pc_l3_intfs[i].l3i_gw,
+                          i);
     }
 
     if (pcfg->pc_def_gw.ip_v4 != 0)

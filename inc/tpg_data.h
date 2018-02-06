@@ -132,14 +132,14 @@ data_seg_tstamp_attach(struct rte_mbuf *mi, struct rte_mbuf *m,
 /*****************************************************************************
  * data_alloc_chain
  ****************************************************************************/
-static inline struct rte_mbuf *data_alloc_chain(uint32_t data_len)
+static inline struct rte_mbuf *data_alloc_chain(struct rte_mempool *mpool,
+                                                uint32_t data_len)
 {
-    struct rte_mempool  *mpool = mem_get_mbuf_local_pool();
-    struct rte_mbuf     *data_mbufs = NULL;
-    struct rte_mbuf     *data_mbuf = NULL;
-    struct rte_mbuf    **prev_mbuf = NULL;
-    uint32_t             nb_segs = 0;
-    uint32_t             pkt_len = data_len;
+    struct rte_mbuf  *data_mbufs = NULL;
+    struct rte_mbuf  *data_mbuf = NULL;
+    struct rte_mbuf **prev_mbuf = NULL;
+    uint32_t          nb_segs = 0;
+    uint32_t          pkt_len = data_len;
 
     data_mbuf = pkt_mbuf_alloc(mpool);
     if (unlikely(!data_mbuf))

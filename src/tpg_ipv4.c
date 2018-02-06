@@ -559,7 +559,8 @@ struct rte_mbuf *ipv4_build_hdr_mbuf(l4_control_block_t *l4_cb,
 
     if (!TPG_IP_MCAST(&l4_cb->l4cb_dst_addr)) {
         dst_mac = route_v4_nh_lookup(l4_cb->l4cb_interface,
-                                     l4_cb->l4cb_dst_addr.ip_v4);
+                                     l4_cb->l4cb_dst_addr.ip_v4,
+                                     l4_cb->l4cb_sockopt.so_vlan.vlanso_id);
     } else {
         dst_mac = ipv4_mcast_addr_to_eth(l4_cb->l4cb_dst_addr.ip_v4);
     }
@@ -575,8 +576,7 @@ struct rte_mbuf *ipv4_build_hdr_mbuf(l4_control_block_t *l4_cb,
         return NULL;
     }
 
-    mbuf = eth_build_hdr_mbuf(l4_cb->l4cb_interface, dst_mac, src_mac,
-                              ETHER_TYPE_IPv4);
+    mbuf = eth_build_hdr_mbuf(l4_cb, dst_mac, src_mac, ETHER_TYPE_IPv4);
     if (unlikely(!mbuf))
         return NULL;
 

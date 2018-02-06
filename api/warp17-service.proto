@@ -176,6 +176,16 @@ message Ipv4SockoptResult {
     required Ipv4Sockopt i4sr_opts  = 2;
 }
 
+message VlanSockoptArg {
+    required TestCaseArg vosa_tc_arg = 1;
+    required VlanSockopt vosa_opts   = 2;
+}
+
+message VlanSockoptResult {
+    required Error       vosr_error = 1;
+    required VlanSockopt vosr_opts  = 2;
+}
+
 message StatsResult {
     required Error           sr_error = 1;
     required PortStatistics  sr_port  = 2;
@@ -225,6 +235,8 @@ service Warp17 {
     rpc GetTcpSockopt(TestCaseArg)            returns (TcpSockoptResult);
     rpc SetIpv4Sockopt(Ipv4SockoptArg)        returns (Error);
     rpc GetIpv4Sockopt(TestCaseArg)           returns (Ipv4SockoptResult);
+    rpc SetVlanSockopt(VlanSockoptArg)        returns (Error);
+    rpc GetVlanSockopt(TestCaseArg)           returns (VlanSockoptResult);
 
     /* Operational calls. */
     rpc PortStart(PortArg)                    returns (Error);
