@@ -1417,21 +1417,23 @@ static void cmd_tests_set_criteria_parsed(void *parsed_result,
             criteria = CRIT_RUN_TIME_INFINITE();
         } else {
             tpg_delay_t runtime;
+
             runtime = TPG_DELAY(pr->criteria_val);
             if (ms)
                 runtime = TPG_DELAY_M(pr->criteria_val, pr->criteria_val_ms);
             criteria = CRIT_RUN_TIME(runtime);
         }
     } else if (strncmp(pr->criteria_kw, "servers-up",
-                     strlen("servers-up") + 1) == 0) {
+                       strlen("servers-up") + 1) == 0) {
         criteria = CRIT_SRV_UP(pr->criteria_val);
     } else if (strncmp(pr->criteria_kw, "clients-up",
-                     strlen("clients-up") + 1) == 0) {
+                       strlen("clients-up") + 1) == 0) {
         criteria = CRIT_CL_UP(pr->criteria_val);
     } else if (strncmp(pr->criteria_kw, "clients-estab",
-                     strlen("clients-estab") + 1) == 0) {
+                       strlen("clients-estab") + 1) == 0) {
         criteria = CRIT_CL_ESTAB(pr->criteria_val);
-    } else if (strncmp(pr->criteria_kw, "data-MB", strlen("data-MB") + 1) == 0) {
+    } else if (strncmp(pr->criteria_kw, "data-MB", strlen("data-MB") + 1) ==
+               0) {
         criteria = CRIT_DATA_MB(pr->criteria_val);
     } else {
         assert(false);

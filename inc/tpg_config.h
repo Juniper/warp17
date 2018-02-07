@@ -245,9 +245,6 @@ typedef struct global_config_s {
     uint32_t    gcfg_mbuf_poolsize;
     uint32_t    gcfg_mbuf_size;
     uint32_t    gcfg_mbuf_cache_size;
-    uint32_t    gcfg_mbuf_poolsize;
-    uint32_t    gcfg_mbuf_size;
-    uint32_t    gcfg_mbuf_cache_size;
 
     uint32_t    gcfg_mbuf_hdr_poolsize;
     uint32_t    gcfg_mbuf_hdr_size;
