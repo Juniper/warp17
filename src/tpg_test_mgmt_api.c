@@ -532,7 +532,9 @@ test_mgmt_validate_test_case(const tpg_test_case_t *cfg,
 static bool test_mgmt_validate_port_options(const tpg_port_options_t *options,
                                             printer_arg_t *printer_arg)
 {
-    if (options->po_mtu < PORT_MIN_MTU || options->po_mtu > PORT_MAX_MTU) {
+    if (options->has_po_mtu &&
+            (options->po_mtu < PORT_MIN_MTU ||
+             options->po_mtu > PORT_MAX_MTU)) {
         tpg_printf(printer_arg,
                    "ERROR: Invalid MTU value. Supported range: %u -> %u\n",
                    PORT_MIN_MTU,
@@ -549,63 +551,70 @@ static bool test_mgmt_validate_port_options(const tpg_port_options_t *options,
 static bool test_mgmt_validate_tcp_sockopt(const tpg_tcp_sockopt_t *options,
                                            printer_arg_t *printer_arg)
 {
-    if (options->to_win_size > TCP_MAX_WINDOW_SIZE) {
+    if (options->has_to_win_size &&
+            options->to_win_size > TCP_MAX_WINDOW_SIZE) {
         tpg_printf(printer_arg,
                    "ERROR: Invalid TCP window size. Max allowed: %u\n",
                    TCP_MAX_WINDOW_SIZE);
         return false;
     }
 
-    if (options->to_syn_retry_cnt > TCP_MAX_RETRY_CNT) {
+    if (options->has_to_syn_retry_cnt &&
+            options->to_syn_retry_cnt > TCP_MAX_RETRY_CNT) {
         tpg_printf(printer_arg,
                    "ERROR: Invalid TCP SYN retry count. Max allowed: %u\n",
                    TCP_MAX_RETRY_CNT);
         return false;
     }
 
-    if (options->to_syn_ack_retry_cnt > TCP_MAX_RETRY_CNT) {
+    if (options->has_to_syn_ack_retry_cnt &&
+            options->to_syn_ack_retry_cnt > TCP_MAX_RETRY_CNT) {
         tpg_printf(printer_arg,
                    "ERROR: Invalid TCP SYN/ACK retry count. Max allowed: %u\n",
                    TCP_MAX_RETRY_CNT);
         return false;
     }
 
-    if (options->to_data_retry_cnt > TCP_MAX_RETRY_CNT) {
+    if (options->has_to_data_retry_cnt &&
+            options->to_data_retry_cnt > TCP_MAX_RETRY_CNT) {
         tpg_printf(printer_arg,
                    "ERROR: Invalid TCP DATA retry count. Max allowed: %u\n",
                    TCP_MAX_RETRY_CNT);
         return false;
     }
 
-    if (options->to_retry_cnt > TCP_MAX_RETRY_CNT) {
+    if (options->has_to_retry_cnt &&
+            options->to_retry_cnt > TCP_MAX_RETRY_CNT) {
         tpg_printf(printer_arg,
                    "ERROR: Invalid TCP retry count. Max allowed: %u\n",
                    TCP_MAX_RETRY_CNT);
         return false;
     }
 
-    if (options->to_rto > TCP_MAX_RTO_MS) {
+    if (options->has_to_rto && options->to_rto > TCP_MAX_RTO_MS) {
         tpg_printf(printer_arg,
                    "ERROR: Invalid TCP retransmission timeout. Max allowed: %ums\n",
                    TCP_MAX_RTO_MS);
         return false;
     }
 
-    if (options->to_fin_to > TCP_MAX_FIN_TO_MS) {
+    if (options->has_to_fin_to && options->to_fin_to > TCP_MAX_FIN_TO_MS) {
         tpg_printf(printer_arg,
                    "ERROR: Invalid TCP FIN timeout. Max allowed: %ums\n",
                    TCP_MAX_FIN_TO_MS);
         return false;
     }
 
-    if (options->to_twait_to > TCP_MAX_TWAIT_TO_MS) {
+    if (options->has_to_twait_to &&
+            options->to_twait_to > TCP_MAX_TWAIT_TO_MS) {
         tpg_printf(printer_arg,
                    "ERROR: Invalid TCP TIME_WAIT timeout. Max allowed: %ums\n",
                    TCP_MAX_TWAIT_TO_MS);
         return false;
     }
 
-    if (options->to_orphan_to > TCP_MAX_ORPHAN_TO_MS) {
+    if (options->has_to_orphan_to &&
+            options->to_orphan_to > TCP_MAX_ORPHAN_TO_MS) {
         tpg_printf(printer_arg,
                    "ERROR: Invalid TCP orphan timeout. Max allowed: %ums\n",
                    TCP_MAX_ORPHAN_TO_MS);
@@ -643,17 +652,27 @@ test_mgmt_validate_vlan_sockopt(const tpg_vlan_sockopt_t *options,
                                 printer_arg_t *printer_arg)
 {
      /* Basic validation for user provided vlan options */
-    if (options->vlanso_id < VLAN_MIN || options->vlanso_id > VLAN_MAX) {
+    if (options->has_vlanso_id &&
+            (options->vlanso_id < VLAN_MIN || options->vlanso_id > VLAN_MAX)) {
         tpg_printf(printer_arg,
-             "ERROR: Invalid value for vlan-id: Valid range are %u-%u\n",
-              VLAN_MIN, VLAN_MAX);
+                   "ERROR: Invalid value for vlan-id: Valid range are %u-%u\n",
+                   VLAN_MIN, VLAN_MAX);
         return false;
     }
-    if (options->vlanso_pri > 7) {
-        tpg_printf(printer_arg,
-             "ERROR: Invalid value for vlan-pri: Valid range are %u-%u\n",
-              0, 7);
-        return false;
+
+    if (options->has_vlanso_pri) {
+        if (!options->has_vlanso_id) {
+            tpg_printf(printer_arg,
+                       "ERROR: VLAN PRI configured without VLAN ID!\n");
+            return false;
+        }
+
+        if (options->vlanso_pri > 7) {
+            tpg_printf(printer_arg,
+                       "ERROR: Invalid value for vlan-pri: Valid range are %u-%u\n",
+                       0, 7);
+            return false;
+        }
     }
 
     return true;
@@ -1321,8 +1340,7 @@ test_mgmt_set_port_options(uint32_t eth_port, tpg_port_options_t *opts,
 
     port_get_conn_options(eth_port, &old_opts);
 
-    if (opts->has_po_mtu)
-        old_opts.po_mtu = opts->po_mtu;
+    TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, po_mtu);
 
     if (!test_mgmt_validate_port_options(opts, printer_arg))
         return -EINVAL;
@@ -1387,38 +1405,17 @@ test_mgmt_set_tcp_sockopt(uint32_t eth_port, uint32_t test_case_id,
     tcp_load_sockopt(&old_opts,
                      &tenv->te_test_cases[test_case_id].sockopt.so_tcp);
 
-    if (opts->has_to_win_size)
-        old_opts.to_win_size = opts->to_win_size;
-
-    if (opts->has_to_syn_retry_cnt)
-        old_opts.to_syn_retry_cnt = opts->to_syn_retry_cnt;
-
-    if (opts->has_to_syn_ack_retry_cnt)
-        old_opts.to_syn_ack_retry_cnt = opts->to_syn_ack_retry_cnt;
-
-    if (opts->has_to_data_retry_cnt)
-        old_opts.to_data_retry_cnt = opts->to_data_retry_cnt;
-
-    if (opts->has_to_retry_cnt)
-        old_opts.to_retry_cnt = opts->to_retry_cnt;
-
-    if (opts->has_to_rto)
-        old_opts.to_rto = opts->to_rto;
-
-    if (opts->has_to_fin_to)
-        old_opts.to_fin_to = opts->to_fin_to;
-
-    if (opts->has_to_twait_to)
-        old_opts.to_twait_to = opts->to_twait_to;
-
-    if (opts->has_to_orphan_to)
-        old_opts.to_orphan_to = opts->to_orphan_to;
-
-    if (opts->has_to_skip_timewait)
-        old_opts.to_skip_timewait = opts->to_skip_timewait;
-
-    if (opts->has_to_ack_delay)
-        old_opts.to_ack_delay = opts->to_ack_delay;
+    TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, to_win_size);
+    TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, to_syn_retry_cnt);
+    TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, to_syn_ack_retry_cnt);
+    TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, to_data_retry_cnt);
+    TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, to_retry_cnt);
+    TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, to_rto);
+    TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, to_fin_to);
+    TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, to_twait_to);
+    TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, to_orphan_to);
+    TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, to_skip_timewait);
+    TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, to_ack_delay);
 
     if (!test_mgmt_validate_tcp_sockopt(&old_opts, printer_arg))
         return -EINVAL;
@@ -1488,14 +1485,9 @@ test_mgmt_set_ipv4_sockopt(uint32_t eth_port, uint32_t test_case_id,
     ipv4_load_sockopt(&old_opts,
                       &tenv->te_test_cases[test_case_id].sockopt.so_ipv4);
 
-    if (opts->has_ip4so_rx_tstamp)
-        old_opts.ip4so_rx_tstamp = opts->ip4so_rx_tstamp;
-
-    if (opts->has_ip4so_tx_tstamp)
-        old_opts.ip4so_tx_tstamp = opts->ip4so_tx_tstamp;
-
-    if (opts->has_ip4so_tos)
-        old_opts.ip4so_tos = opts->ip4so_tos;
+    TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, ip4so_rx_tstamp);
+    TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, ip4so_tx_tstamp);
+    TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, ip4so_tos);
 
     if (!test_mgmt_validate_ipv4_sockopt(&old_opts, printer_arg))
         return -EINVAL;
@@ -1553,9 +1545,8 @@ test_mgmt_set_vlan_sockopt(uint32_t eth_port, uint32_t test_case_id,
     vlan_load_sockopt(&old_opts,
                       &tenv->te_test_cases[test_case_id].sockopt.so_vlan);
 
-    if (opts->has_vlanso_id)
-        old_opts.vlanso_id = opts->vlanso_id;
-        old_opts.vlanso_pri = opts->vlanso_pri;
+    TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, vlanso_id);
+    TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, vlanso_pri);
 
     if (!test_mgmt_validate_vlan_sockopt(&old_opts, printer_arg))
         return -EINVAL;

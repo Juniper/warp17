@@ -304,8 +304,10 @@ class TestVlanSockOpt(Warp17TrafficTestCase, Warp17UnitTestCase):
 
         self.lh.info('Vlan vlan-pri')
         for opt in [TestVlanSockOpt.MIN_PRI, TestVlanSockOpt.MAX_PRI]:
-            yield (VlanSockopt(vlanso_pri=opt),
-                   VlanSockopt(vlanso_pri=opt))
+            yield (VlanSockopt(vlanso_id=TestVlanSockOpt.MAX_VLAN,
+                               vlanso_pri=opt),
+                   VlanSockopt(vlanso_id=TestVlanSockOpt.MAX_VLAN,
+                               vlanso_pri=opt))
 
     def get_invalid_updates(self):
         self.lh.info('VLAN id Min value')
@@ -315,6 +317,11 @@ class TestVlanSockOpt(Warp17TrafficTestCase, Warp17UnitTestCase):
         self.lh.info('VLAN id Max value')
         yield(VlanSockopt(vlanso_id=TestVlanSockOpt.MAX_VLAN+1),
               VlanSockopt(vlanso_id=TestVlanSockOpt.MAX_VLAN+1))
+
+        self.lh.info('Vlan vlan-pri & no VLAN id')
+        for opt in [TestVlanSockOpt.MIN_PRI, TestVlanSockOpt.MAX_PRI]:
+            yield (VlanSockopt(vlanso_pri=opt),
+                   VlanSockopt(vlanso_pri=opt))
 
         #self.lh.info('VLAN pri Min value')
         #yield(VlanSockopt(vlanso_pri=TestVlanSockOpt.MIN_PRI-1),
