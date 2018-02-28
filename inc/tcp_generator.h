@@ -81,6 +81,7 @@
 #include <cmdline_parse_ipaddr.h>
 #include <cmdline_parse_num.h>
 #include <cmdline_parse_string.h>
+#include <cmdline_parse_portlist.h>
 #include <cmdline_rdline.h>
 #include <cmdline_socket.h>
 #include <cmdline.h>
@@ -141,6 +142,7 @@ extern uint64_t cycles_per_us;
 #include "warp17-l3.proto.xlate.h"
 #include "warp17-app-raw.proto.xlate.h"
 #include "warp17-app-http.proto.xlate.h"
+#include "warp17-app.proto.xlate.h"
 #include "warp17-client.proto.xlate.h"
 #include "warp17-server.proto.xlate.h"
 #include "warp17-test-case.proto.xlate.h"
@@ -154,8 +156,10 @@ extern uint64_t cycles_per_us;
 typedef struct l4_control_block_s l4_control_block_t;
 typedef struct tcp_control_block_s tcp_control_block_t;
 typedef struct udp_control_block_s udp_control_block_t;
+typedef union  app_storage_u app_storage_t;
 typedef struct app_data_s app_data_t;
 typedef struct test_case_info_s test_case_info_t;
+typedef TAILQ_HEAD(tcp_test_cb_list_s, l4_control_block_s) tlkp_test_cb_list_t;
 
 #include "tpg_utils.h"
 #include "tpg_rpc.h"
@@ -164,8 +168,6 @@ typedef struct test_case_info_s test_case_info_t;
 #include "tpg_config.h"
 #include "tpg_main.h"
 #include "tpg_msg.h"
-
-#include "tpg_notif.h"
 
 #include "tpg_trace.h"
 #include "tpg_trace_filter.h"
@@ -180,16 +182,18 @@ typedef struct test_case_info_s test_case_info_t;
 #include "tpg_rate.h"
 
 #include "tpg_sockopts.h"
-#include "tpg_tests.h"
-#include "tpg_tests_sm.h"
 
 #include "tpg_test_app_data.h"
 #include "tpg_test_raw_app.h"
 #include "tpg_test_http_1_1_app.h"
 #include "tpg_test_generic_app.h"
+#include "tpg_test_imix_app.h"
 #include "tpg_test_app.h"
 
+#include "tpg_tests_sm_states.h"
 #include "tpg_lookup.h"
+#include "tpg_tests.h"
+#include "tpg_tests_sm.h"
 
 #include "tpg_ethernet.h"
 #include "tpg_arp.h"

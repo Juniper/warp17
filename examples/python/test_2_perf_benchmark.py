@@ -74,6 +74,7 @@ from warp17_common_pb2    import *
 from warp17_l3_pb2        import *
 from warp17_server_pb2    import *
 from warp17_client_pb2    import *
+from warp17_app_pb2       import *
 from warp17_app_raw_pb2   import *
 from warp17_app_http_pb2  import *
 from warp17_test_case_pb2 import *
@@ -108,26 +109,26 @@ def server_test_case(protocol, app_cfg):
                       l4s_tcp_udp=TcpUdpServer(tus_ports=b2b_ports(dport_cnt)))
     return TestCase(
         tc_type=SERVER, tc_eth_port=1, tc_id=0,
-        tc_server=Server(srv_ips=b2b_sips(1, sip_cnt), srv_l4=l4_cfg,
-                         srv_app=app_cfg),
+        tc_server=Server(srv_ips=b2b_sips(1, sip_cnt), srv_l4=l4_cfg),
+        tc_app=app_cfg,
         tc_criteria=TestCriteria(tc_crit_type=SRV_UP,
                                  tc_srv_up=serv_cnt),
         tc_async=False)
 
 def server_raw_app_cfg(req_size):
-    return AppServer(as_app_proto=RAW,
-                     as_raw=RawServer(rs_req_plen=req_size,
-                                      rs_resp_plen=req_size))
+    return App(app_proto=RAW_SERVER,
+               app_raw_server=RawServer(rs_req_plen=req_size,
+                                        rs_resp_plen=req_size))
 
 def server_http_app_cfg(req_size):
-    return AppServer(as_app_proto=HTTP,
-                     as_http=HttpServer(hs_resp_code=OK_200,
-                                        hs_resp_size=req_size))
+    return App(app_proto=HTTP_SERVER,
+               app_http_server=HttpServer(hs_resp_code=OK_200,
+                                          hs_resp_size=req_size))
 
 def server_udp_app_cfg(req_size):
-    return AppServer(as_app_proto=RAW,
-                     as_raw=RawServer(rs_req_plen=req_size,
-                                      rs_resp_plen=0))
+    return App(app_proto=RAW_SERVER,
+               app_raw_server=RawServer(rs_req_plen=req_size,
+                                        rs_resp_plen=0))
 
 def client_test_case(protocol, app_cfg, criteria):
     l4_cfg = L4Client(l4c_proto=protocol,
@@ -137,37 +138,32 @@ def client_test_case(protocol, app_cfg, criteria):
                           rc_close_rate=Rate(),
                           rc_send_rate=Rate())
 
-    delay_cfg = DelayClient(dc_init_delay=Delay(d_value=0),
-                            dc_uptime=Delay(),
-                            dc_downtime=Delay())
-
     return TestCase(tc_type=CLIENT, tc_eth_port=0,
                     tc_id=0,
                     tc_client=Client(cl_src_ips=b2b_sips(0, sip_cnt),
                                      cl_dst_ips=b2b_dips(0, dip_cnt),
                                      cl_l4=l4_cfg,
-                                     cl_rates=rate_cfg,
-                                     cl_delays=delay_cfg,
-                                     cl_app=app_cfg),
+                                     cl_rates=rate_cfg),
+                    tc_app=app_cfg,
                     tc_criteria=criteria,
                     tc_async=False)
 
 def client_raw_app_cfg(req_size):
-    return AppClient(ac_app_proto=RAW,
-                     ac_raw=RawClient(rc_req_plen=req_size,
-                                      rc_resp_plen=req_size))
+    return App(app_proto=RAW_CLIENT,
+               app_raw_client=RawClient(rc_req_plen=req_size,
+                                        rc_resp_plen=req_size))
 
 def client_http_app_cfg(req_size):
-    return AppClient(ac_app_proto=HTTP,
-                     ac_http=HttpClient(hc_req_method=GET,
-                                        hc_req_object_name='/index.html',
-                                        hc_req_host_name='www.foobar.net',
-                                        hc_req_size=req_size))
+    return App(app_proto=HTTP_CLIENT,
+               app_http_client=HttpClient(hc_req_method=GET,
+                                          hc_req_object_name='/index.html',
+                                          hc_req_host_name='www.foobar.net',
+                                          hc_req_size=req_size))
 
 def client_udp_app_cfg(req_size):
-    return AppClient(ac_app_proto=RAW,
-                     ac_raw=RawClient(rc_req_plen=req_size,
-                                      rc_resp_plen=0))
+    return App(app_proto=RAW_CLIENT,
+               app_raw_client=RawClient(rc_req_plen=req_size,
+                                        rc_resp_plen=0))
 
 def server_port_cfg():
     pcfg = b2b_port_add(eth_port=1, def_gw=Ip(ip_version=IPV4, ip_v4=0))
@@ -214,8 +210,8 @@ def run_setup_test(w17_call, cl_cfg, srv_cfg):
     if result.tsr_state != PASSED:
         die('Test case didn\'t pass: ' + str(result))
 
-    start_time = result.tsr_stats.tcs_start_time
-    end_time = result.tsr_stats.tcs_end_time
+    start_time = result.tsr_stats.gs_start_time
+    end_time = result.tsr_stats.gs_end_time
 
     # start and stop ts are in usecs
     duration = (end_time - start_time) / float(1000000)

@@ -57,8 +57,7 @@
 import "warp17-common.proto";
 import "warp17-client.proto";
 import "warp17-server.proto";
-import "warp17-app-raw.proto";
-import "warp17-app-http.proto";
+import "warp17-app.proto";
 
 enum TestCritType {
     RUN_TIME    = 0;
@@ -93,20 +92,6 @@ enum TestCaseType {
     MAX    = 2;
 }
 
-message TestCaseServerStats {
-    required uint32 tcss_up     = 1;
-    required uint32 tcss_estab  = 2;
-    required uint32 tcss_down   = 3;
-    required uint32 tcss_failed = 4;
-}
-
-message TestCaseClientStats {
-    required uint32 tccs_up     = 1;
-    required uint32 tccs_estab  = 2;
-    required uint32 tccs_down   = 3;
-    required uint32 tccs_failed = 4;
-}
-
 message LatencyStats {
     required uint32 ls_max_exceeded         = 1;
     required uint32 ls_max_average_exceeded = 2;
@@ -114,48 +99,38 @@ message LatencyStats {
     required uint32 ls_max_latency          = 4;
     required uint64 ls_sum_latency          = 5;
     required uint64 ls_sum_jitter           = 6;
-    required uint64 ls_instant_jitter        = 7;
+    required uint64 ls_instant_jitter       = 7;
     required uint64 ls_samples_count        = 8;
 }
 
-message TestCaseLatencyStats {
-    required LatencyStats tcls_stats        = 1;
-    required LatencyStats tcls_sample_stats = 2;
-    required uint32       tcls_invalid_lat  = 3;
+message GenLatencyStats {
+    required LatencyStats gls_stats        = 1;
+    required LatencyStats gls_sample_stats = 2;
+    required uint32       gls_invalid_lat  = 3;
 }
 
-message TestCaseStats {
-    /* The user will do the translation. */
-    option (warp17_xlate_tpg) = false;
+message GenStats {
+    required uint32 gs_up          = 1;
+    required uint32 gs_estab       = 2;
+    required uint32 gs_down        = 3;
+    required uint32 gs_failed      = 4;
+    required uint32 gs_data_failed = 5;
+    required uint32 gs_data_null   = 6;
 
-    optional TestCaseServerStats  tcs_server        = 1 [(warp17_union_anon) = true];
-    optional TestCaseClientStats  tcs_client        = 2 [(warp17_union_anon) = true];
+    required uint64 gs_start_time = 7;
+    required uint64 gs_end_time   = 8;
 
-    required uint32               tcs_data_failed   = 3;
-    required uint32               tcs_data_null     = 4;
-
-    required uint64               tcs_start_time    = 5;
-    required uint64               tcs_end_time      = 6;
-    required TestCaseLatencyStats tcs_latency_stats = 7;
+    required GenLatencyStats gs_latency_stats = 9;
 }
 
-message TestCaseRateStats {
+message RateStats {
 
-    required uint32 tcrs_estab_per_s  = 1;
-    required uint32 tcrs_closed_per_s = 2;
-    required uint32 tcrs_data_per_s   = 3;
+    required uint32 rs_estab_per_s  = 1;
+    required uint32 rs_closed_per_s = 2;
+    required uint32 rs_data_per_s   = 3;
 
-    required uint64 tcrs_start_time   = 4;
-    required uint64 tcrs_end_time     = 5;
-}
-
-message TestCaseAppStats {
-    /* The user will do the translation. */
-    option (warp17_xlate_tpg) = false;
-
-    optional RawStats  tcas_raw  = 1 [(warp17_union_anon) = true];
-    optional HttpStats tcas_http = 2 [(warp17_union_anon) = true];
-
+    required uint64 rs_start_time = 4;
+    required uint64 rs_end_time   = 5;
 }
 
 message TestCaseLatency {
@@ -165,17 +140,23 @@ message TestCaseLatency {
 }
 
 message TestCase {
-    required TestCaseType    tc_type     = 1;
+    required TestCaseType tc_type = 1;
 
-    required uint32          tc_eth_port = 2;
-    required uint32          tc_id       = 3;
+    required uint32 tc_eth_port = 2;
+    required uint32 tc_id       = 3;
 
     /* Add different Test Case configs below as optionals. */
-    optional Client          tc_client   = 4 [(warp17_union_anon) = true];
-    optional Server          tc_server   = 5 [(warp17_union_anon) = true];
+    optional Client tc_client = 4 [(warp17_union_anon) = true];
+    optional Server tc_server = 5 [(warp17_union_anon) = true];
 
-    required TestCriteria    tc_criteria = 6;
-    required bool            tc_async    = 7;
-    optional TestCaseLatency tc_latency  = 8;
+    optional Delay tc_init_delay = 6;
+    optional Delay tc_uptime     = 7;
+    optional Delay tc_downtime   = 8;
+
+    required App tc_app = 9;
+
+    required TestCriteria    tc_criteria = 10;
+    optional bool            tc_async    = 11 [default = false];
+    optional TestCaseLatency tc_latency  = 12;
 }
 

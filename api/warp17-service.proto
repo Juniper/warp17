@@ -56,8 +56,7 @@
 
 import "warp17-common.proto";
 import "warp17-l3.proto";
-import "warp17-client.proto";
-import "warp17-server.proto";
+import "warp17-app.proto";
 import "warp17-test-case.proto";
 import "warp17-sockopt.proto";
 import "warp17-stats.proto";
@@ -122,28 +121,27 @@ message UpdateArg {
     optional TestCaseLatency ua_latency    = 10;
 }
 
-message TestCaseClientResult {
-    required Error     tccr_error  = 1;
-    required AppClient tccr_cl_app = 2;
+message TestCaseAppResult {
+    required Error tcar_error  = 1;
+    required App   tcar_app = 2;
 }
 
-message TestCaseServerResult {
-    required Error     tcsr_error   = 1;
-    required AppServer tcsr_srv_app = 2;
-}
-
-message UpdClientArg {
-    required TestCaseArg uca_tc_arg = 1;
-    required AppClient   uca_cl_app = 2;
-}
-
-message UpdServerArg {
-    required TestCaseArg usa_tc_arg  = 1;
-    required AppServer   usa_srv_app = 2;
+message UpdateAppArg {
+    required TestCaseArg uaa_tc_arg = 1;
+    required App         uaa_app = 2;
 }
 
 message PortArg {
     required uint32 pa_eth_port = 1;
+}
+
+message ImixArg {
+    required uint32 ia_imix_id = 1;
+}
+
+message ImixResult {
+    required Error     ir_error = 1;
+    required ImixGroup ir_imix_group = 2;
 }
 
 message PortOptionsArg {
@@ -205,15 +203,20 @@ message TestStatusResult {
     /* The user will do the translation. */
     option (warp17_xlate_tpg) = false;
 
-    required Error             tsr_error      =  1;
+    required Error tsr_error = 1;
 
-    required TestCaseState     tsr_state      =  2;
-    required TestCaseType      tsr_type       =  3;
-    required L4Proto           tsr_l4_proto   =  4;
-    required AppProto          tsr_app_proto  =  5;
-    required TestCaseStats     tsr_stats      =  6;
-    required TestCaseRateStats tsr_rate_stats =  7;
-    required TestCaseAppStats  tsr_app_stats  =  8;
+    required TestCaseState tsr_state      = 2;
+    required TestCaseType  tsr_type       = 3;
+    required L4Proto       tsr_l4_proto   = 4;
+    required AppProto      tsr_app_proto  = 5;
+    required GenStats      tsr_stats      = 6;
+    required RateStats     tsr_rate_stats = 7;
+    required AppStats      tsr_app_stats  = 8;
+}
+
+message ImixStatsResult {
+    required Error        isr_error = 1;
+    required ImixAppStats isr_stats = 2;
 }
 
 service Warp17 {
@@ -227,6 +230,11 @@ service Warp17 {
     rpc ConfigureTestCase(TestCase)           returns (Error);
     rpc GetTestCase(TestCaseArg)              returns (TestCaseResult);
     rpc DelTestCase(TestCaseArg)              returns (Error);
+
+    /* Imix groups. */
+    rpc ConfigureImixGroup(ImixGroup)         returns (Error);
+    rpc GetImixGroup(ImixArg)                 returns (ImixResult);
+    rpc DelImixGroup(ImixArg)                 returns (Error);
 
     /* Stack customization RPCs. */
     rpc SetPortOptions(PortOptionsArg)        returns (Error);
@@ -242,6 +250,7 @@ service Warp17 {
     rpc PortStart(PortArg)                    returns (Error);
     rpc PortStop(PortArg)                     returns (Error);
     rpc GetTestStatus(TestCaseArg)            returns (TestStatusResult);
+    rpc GetImixStatistics(ImixArg)            returns (ImixStatsResult);
     rpc GetStatistics(PortArg)                returns (StatsResult);
     rpc ClearStatistics(PortArg)              returns (Error);
 
@@ -252,9 +261,7 @@ service Warp17 {
     /* Partial test case configs: FOR WARP17 INTERNAL USE ONLY! */
     rpc UpdateTestCase(UpdateArg)             returns (Error);
 
-    rpc GetTestCaseAppClient(TestCaseArg)     returns (TestCaseClientResult);
-    rpc GetTestCaseAppServer(TestCaseArg)     returns (TestCaseServerResult);
-    rpc UpdateTestCaseAppClient(UpdClientArg) returns (Error);
-    rpc UpdateTestCaseAppServer(UpdServerArg) returns (Error);
+    rpc GetTestCaseApp(TestCaseArg)           returns (TestCaseAppResult);
+    rpc UpdateTestCaseApp(UpdateAppArg)       returns (Error);
 }
 

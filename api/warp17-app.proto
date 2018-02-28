@@ -1,7 +1,7 @@
 //
 // DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
 //
-// Copyright (c) 2016, Juniper Networks, Inc. All rights reserved.
+// Copyright (c) 2018, Juniper Networks, Inc. All rights reserved.
 //
 //
 // The contents of this file are subject to the terms of the BSD 3 clause
@@ -39,37 +39,74 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 // File name:
-//     warp17-server.proto
+//     warp17-app.proto
 //
 // Description:
-//     Server object definitions.
+//     Base application and Imix object definitions.
 //
 // Author:
-//     Dumitru Ceara, Eelco Chaudron
+//     Dumitru Ceara
 //
 // Initial Created:
-//     01/15/2016
+//     01/16/2018
 //
 // Notes:
 //
 //
 
 import "warp17-common.proto";
+import "warp17-app-raw.proto";
+import "warp17-app-http.proto";
 
-message TcpUdpServer {
-    required L4PortRange tus_ports = 1;
+// IMIX "adaptation" layer (i.e., imix-id) to be used in the App and AppStats
+// definitions.
+message Imix {
+    required uint32 imix_id = 1;
 }
 
-message L4Server {
-    required L4Proto      l4s_proto   = 1;
-
-    /* Add different L4 configs below as optionals. */
-    optional TcpUdpServer l4s_tcp_udp = 2 [(warp17_union_anon) = true];
+message ImixStats {
+    required uint32 imix_id = 1;
 }
 
-message Server {
-    required IpRange   srv_ips = 1;
+message App {
+    required AppProto app_proto = 1;
 
-    required L4Server  srv_l4  = 2;
+    /* Add different App configs below as optionals. */
+    optional RawClient  app_raw_client  = 2 [(warp17_union_anon) = true];
+    optional RawServer  app_raw_server  = 3 [(warp17_union_anon) = true];
+    optional HttpClient app_http_client = 4 [(warp17_union_anon) = true];
+    optional HttpServer app_http_server = 5 [(warp17_union_anon) = true];
+    optional Imix       app_imix        = 6 [(warp17_union_anon) = true];
+}
+
+message AppStats {
+    /* The user will do the translation. */
+    option (warp17_xlate_tpg) = false;
+
+    optional RawStats  as_raw  = 1 [(warp17_union_anon) = true];
+    optional HttpStats as_http = 2 [(warp17_union_anon) = true];
+    optional ImixStats as_imix = 3 [(warp17_union_anon) = true];
+}
+
+// IMIX application config and stats.
+message ImixApp {
+    required uint32 ia_weight = 1;
+    required App    ia_app    = 2;
+}
+
+message ImixGroup {
+    required uint32 imix_id = 1;
+
+    repeated ImixApp imix_apps = 2 [(warp17_array_size) = 'TPG_IMIX_MAX_APPS'];
+}
+
+message ImixAppStats {
+    /* The user will do the translation. */
+    option (warp17_xlate_tpg) = false;
+
+    required uint32 ias_imix_id = 1;
+
+    repeated AppProto ias_app_protos = 2 [(warp17_array_size) = 'TPG_IMIX_MAX_APPS'];
+    repeated AppStats ias_apps       = 3 [(warp17_array_size) = 'TPG_IMIX_MAX_APPS'];
 }
 

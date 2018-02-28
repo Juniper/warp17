@@ -70,6 +70,7 @@
 /*****************************************************************************
  * Local Definitions.
  ****************************************************************************/
+
 #define HTTP_TPG_USER_AGENT "WARP17 HTTP CL"
 
 #define HTTP_DEFAULT_OBJECT_NAME    "/index.html"
@@ -121,24 +122,6 @@ static cmdline_parse_ctx_t cli_ctx[];
  * allocated stats which are accessible through STATS_GLOBAL(type, core, port).
  */
 STATS_DEFINE(http_statistics_t);
-
-/* Predefined requests. Array indexed by eth_port and test_case_id.
- * An entry should be initialized when a testcase starts and freed when the
- * testcase ends.
- */
-RTE_DEFINE_PER_LCORE(struct rte_mbuf **, http_req_msg);
-
-#define HTTP_REQ_MSG(eth_port, tcid) \
-    (RTE_PER_LCORE(http_req_msg)[(eth_port) * TPG_TEST_MAX_ENTRIES + (tcid)])
-
-/* Predefined responses. Array indexed by eth_port and test_case_id.
- * An entry should be initialized when a testcase starts and freed when the
- * testcase ends.
- */
-RTE_DEFINE_PER_LCORE(struct rte_mbuf **, http_resp_msg);
-
-#define HTTP_RESP_MSG(eth_port, tcid) \
-    (RTE_PER_LCORE(http_resp_msg)[(eth_port) * TPG_TEST_MAX_ENTRIES + (tcid)])
 
 /*****************************************************************************
  * Static functions
@@ -486,18 +469,20 @@ error:
 /*****************************************************************************
  * http_init_req_msg()
  ****************************************************************************/
-static int http_init_req_msg(uint32_t eth_port, uint32_t test_case_id,
+static int http_init_req_msg(http_storage_t *http_storage,
                              const tpg_http_client_t *client_cfg)
 {
     int err;
 
-    err = http_build_req_pkt(&HTTP_REQ_MSG(eth_port, test_case_id),
+    assert(http_storage->http_mbuf == NULL);
+
+    err = http_build_req_pkt(&http_storage->http_mbuf,
                              mem_get_mbuf_local_pool(),
                              client_cfg,
                              FALSE);
 
     if (err != 0)
-        INC_STATS(STATS_LOCAL(http_statistics_t, eth_port), hts_req_err);
+        INC_STATS(STATS_LOCAL(http_statistics_t, 0), hts_req_err);
 
     return err;
 }
@@ -505,27 +490,27 @@ static int http_init_req_msg(uint32_t eth_port, uint32_t test_case_id,
 /*****************************************************************************
  * http_free_req_msg()
  ****************************************************************************/
-static void http_free_req_msg(uint32_t eth_port, uint32_t test_case_id)
+static void http_free_req_msg(http_storage_t *http_storage)
 {
-    pkt_mbuf_free(HTTP_REQ_MSG(eth_port, test_case_id));
-    HTTP_REQ_MSG(eth_port, test_case_id) = NULL;
+    pkt_mbuf_free(http_storage->http_mbuf);
+    http_storage->http_mbuf = NULL;
 }
 
 /*****************************************************************************
  * http_init_resp_msg()
  ****************************************************************************/
-static int http_init_resp_msg(uint32_t eth_port, uint32_t test_case_id,
+static int http_init_resp_msg(http_storage_t *http_storage,
                               const tpg_http_server_t *server_cfg)
 {
     int err;
 
-    err = http_build_resp_pkt(&HTTP_RESP_MSG(eth_port, test_case_id),
+    err = http_build_resp_pkt(&http_storage->http_mbuf,
                               mem_get_mbuf_local_pool(),
                               server_cfg,
                               FALSE);
 
     if (err != 0)
-        INC_STATS(STATS_LOCAL(http_statistics_t, eth_port), hts_resp_err);
+        INC_STATS(STATS_LOCAL(http_statistics_t, 0), hts_resp_err);
 
     return err;
 }
@@ -533,50 +518,50 @@ static int http_init_resp_msg(uint32_t eth_port, uint32_t test_case_id,
 /*****************************************************************************
  * http_free_resp_msg()
  ****************************************************************************/
-static void http_free_resp_msg(uint32_t eth_port, uint32_t test_case_id)
+static void http_free_resp_msg(http_storage_t *http_storage)
 {
-    pkt_mbuf_free(HTTP_RESP_MSG(eth_port, test_case_id));
-    HTTP_RESP_MSG(eth_port, test_case_id) = NULL;
+    pkt_mbuf_free(http_storage->http_mbuf);
+    http_storage->http_mbuf = NULL;
 }
 
 /*****************************************************************************
  * http_client_goto_send_req()
  ****************************************************************************/
 static void http_client_goto_send_req(l4_control_block_t *l4,
-                                      http_app_t *http_client_app)
+                                      http_app_t *http_client_app,
+                                      http_storage_t *http_storage)
 {
-    struct rte_mbuf *request;
+    struct rte_mbuf *request = http_storage->http_mbuf;
 
-    request = HTTP_REQ_MSG(l4->l4cb_interface, l4->l4cb_test_case_id);
     http_client_app->ha_state = HTTPS_CL_SEND_REQ;
 
     /* Send pointer should point to the beginning of the request. */
     APP_SEND_PTR_INIT(&http_client_app->ha_send, request);
-    http_client_app->ha_content_length = APP_SEND_PTR_LEN(&http_client_app->ha_send);
+    http_client_app->ha_content_length =
+        APP_SEND_PTR_LEN(&http_client_app->ha_send);
 
     /* Notify the stack that we need to send data. */
-    TEST_NOTIF(TEST_NOTIF_APP_CLIENT_SEND_START, l4, l4->l4cb_test_case_id,
-               l4->l4cb_interface);
+    TEST_NOTIF(TEST_NOTIF_APP_SEND_START, l4);
 }
 
 /*****************************************************************************
  * http_server_goto_send_resp()
  ****************************************************************************/
 static void http_server_goto_send_resp(l4_control_block_t *l4,
-                                       http_app_t *http_server_app)
+                                       http_app_t *http_server_app,
+                                       http_storage_t *http_storage)
 {
-    struct rte_mbuf *response;
+    struct rte_mbuf *response = http_storage->http_mbuf;
 
-    response = HTTP_RESP_MSG(l4->l4cb_interface, l4->l4cb_test_case_id);
     http_server_app->ha_state = HTTPS_SRV_SEND_RESP;
 
     /* Write pointer should point to the beginning of the response. */
     APP_SEND_PTR_INIT(&http_server_app->ha_send, response);
-    http_server_app->ha_content_length = APP_SEND_PTR_LEN(&http_server_app->ha_send);
+    http_server_app->ha_content_length =
+        APP_SEND_PTR_LEN(&http_server_app->ha_send);
 
     /* Notify the stack that we need to send data. */
-    TEST_NOTIF(TEST_NOTIF_APP_SERVER_SEND_START, l4, l4->l4cb_test_case_id,
-               l4->l4cb_interface);
+    TEST_NOTIF(TEST_NOTIF_APP_SEND_START, l4);
 }
 
 /*****************************************************************************
@@ -847,6 +832,13 @@ static bool http_consume_body(http_app_t *http_app __rte_unused,
     /* Just consume everything so we are as fast as possible! */
     consumed = rx_data->pkt_len - offset;
     *delivered += consumed;
+
+    /* In case of a malformed HTTP packet the real payload might be more than
+     * the content length stored in the header. Just consume everything.
+     */
+    if (unlikely(consumed > http_app->ha_content_length))
+        consumed = http_app->ha_content_length;
+
     http_app->ha_content_length -= consumed;
     return http_app->ha_content_length == 0;
 }
@@ -859,7 +851,7 @@ static bool http_consume_body(http_app_t *http_app __rte_unused,
  ****************************************************************************/
 void http_client_default_cfg(tpg_test_case_t *cfg)
 {
-    tpg_http_client_t *http_client = &cfg->tc_client.cl_app.ac_http;
+    tpg_http_client_t *http_client = &cfg->tc_app.app_http_client;
 
     http_client->hc_req_method = HTTP_METHOD__GET;
     http_client->hc_req_object_name = NULL;
@@ -873,7 +865,7 @@ void http_client_default_cfg(tpg_test_case_t *cfg)
  ****************************************************************************/
 void http_server_default_cfg(tpg_test_case_t *cfg)
 {
-    tpg_http_server_t *http_server = &cfg->tc_server.srv_app.as_http;
+    tpg_http_server_t *http_server = &cfg->tc_app.app_http_server;
 
     http_server->hs_resp_code = HTTP_STATUS_CODE__NOT_FOUND_404;
     http_server->hs_resp_size = 0;
@@ -883,10 +875,11 @@ void http_server_default_cfg(tpg_test_case_t *cfg)
 /*****************************************************************************
  * http_client_validate_cfg()
  ****************************************************************************/
-bool http_client_validate_cfg(const tpg_test_case_t *cfg,
+bool http_client_validate_cfg(const tpg_test_case_t *cfg __rte_unused,
+                              const tpg_app_t *app_cfg,
                               printer_arg_t *printer_arg)
 {
-    const tpg_http_client_t *http_client = &cfg->tc_client.cl_app.ac_http;
+    const tpg_http_client_t *http_client = &app_cfg->app_http_client;
 
     if (http_client->hc_req_method >= HTTP_METHOD__HTTP_METHOD_MAX) {
         tpg_printf(printer_arg, "ERROR: Invalid HTTP Request method!\n");
@@ -914,10 +907,11 @@ bool http_client_validate_cfg(const tpg_test_case_t *cfg,
 /*****************************************************************************
  * http_server_validate_cfg()
  ****************************************************************************/
-bool http_server_validate_cfg(const tpg_test_case_t *cfg,
+bool http_server_validate_cfg(const tpg_test_case_t *cfg __rte_unused,
+                              const tpg_app_t *app_cfg,
                               printer_arg_t *printer_arg)
 {
-    const tpg_http_server_t *http_server = &cfg->tc_server.srv_app.as_http;
+    const tpg_http_server_t *http_server = &app_cfg->app_http_server;
 
     if (http_server->hs_resp_code >= HTTP_STATUS_CODE__HTTP_STATUS_CODE_MAX) {
         tpg_printf(printer_arg, "ERROR: Invalid HTTP Response type!\n");
@@ -945,47 +939,59 @@ bool http_server_validate_cfg(const tpg_test_case_t *cfg,
 /*****************************************************************************
  * http_client_print_cfg()
  ****************************************************************************/
-void http_client_print_cfg(const tpg_test_case_t *cfg,
+void http_client_print_cfg(const tpg_app_t *app_cfg,
                            printer_arg_t *printer_arg)
 {
-    const tpg_http_client_t *http_client = &cfg->tc_client.cl_app.ac_http;
+    const tpg_http_client_t *http_client = &app_cfg->app_http_client;
 
     tpg_printf(printer_arg, "HTTP CLIENT:\n");
-    tpg_printf(printer_arg, "%-22s : %s\n", "Request Method",
+    tpg_printf(printer_arg, "%-20s: %s\n", "Request Method",
                http_method_names[http_client->hc_req_method]);
-    tpg_printf(printer_arg, "%-22s : %s\n", "Request Object",
+    tpg_printf(printer_arg, "%-20s: %s\n", "Request Object",
                HTTP_OBJECT_NAME(http_client->hc_req_object_name));
-    tpg_printf(printer_arg, "%-22s : %s\n", "Request Host",
+    tpg_printf(printer_arg, "%-20s: %s\n", "Request Host",
                HTTP_HOST_NAME(http_client->hc_req_host_name));
-    tpg_printf(printer_arg, "%-22s : %"PRIu32"\n", "Request Size",
+    tpg_printf(printer_arg, "%-20s: %"PRIu32"\n", "Request Size",
                http_client->hc_req_size);
-    tpg_printf(printer_arg, "%-22s :\n%s\n", "Request HTTP Fields",
+    tpg_printf(printer_arg, "%-20s:\n%s\n", "Request HTTP Fields",
                HTTP_FIELDS(http_client->hc_req_fields));
 }
 
 /*****************************************************************************
  * http_server_print_cfg()
  ****************************************************************************/
-void http_server_print_cfg(const tpg_test_case_t *cfg,
+void http_server_print_cfg(const tpg_app_t *app_cfg,
                            printer_arg_t *printer_arg)
 {
-    const tpg_http_server_t *http_server = &cfg->tc_server.srv_app.as_http;
+    const tpg_http_server_t *http_server = &app_cfg->app_http_server;
 
     tpg_printf(printer_arg, "HTTP SERVER:\n");
-    tpg_printf(printer_arg, "%-22s : %s\n", "Response Status",
+    tpg_printf(printer_arg, "%-20s: %s\n", "Response Status",
                http_status_names[http_server->hs_resp_code]);
-    tpg_printf(printer_arg, "%-22s : %"PRIu32"\n", "Response Size",
+    tpg_printf(printer_arg, "%-20s: %"PRIu32"\n", "Response Size",
                http_server->hs_resp_size);
-    tpg_printf(printer_arg, "%-22s :\n%s\n", "Response HTTP Fields",
+    tpg_printf(printer_arg, "%-20s:\n%s\n", "Response HTTP Fields",
                HTTP_FIELDS(http_server->hs_resp_fields));
+}
+
+/*****************************************************************************
+ * http_client_add_cfg()
+ ****************************************************************************/
+void http_client_add_cfg(const tpg_test_case_t *cfg __rte_unused,
+                         const tpg_app_t *app_cfg __rte_unused)
+{
+    /* Nothing to alloc here. Everything is preallocated before the config is
+     * built.
+     */
 }
 
 /*****************************************************************************
  * http_client_delete_cfg()
  ****************************************************************************/
-void http_client_delete_cfg(const tpg_test_case_t *cfg)
+void http_client_delete_cfg(const tpg_test_case_t *cfg __rte_unused,
+                            const tpg_app_t *app_cfg)
 {
-    const tpg_http_client_t *http_client = &cfg->tc_client.cl_app.ac_http;
+    const tpg_http_client_t *http_client = &app_cfg->app_http_client;
 
     if (http_client->hc_req_object_name)
         free(http_client->hc_req_object_name);
@@ -998,11 +1004,23 @@ void http_client_delete_cfg(const tpg_test_case_t *cfg)
 }
 
 /*****************************************************************************
+ * http_server_add_cfg()
+ ****************************************************************************/
+void http_server_add_cfg(const tpg_test_case_t *cfg __rte_unused,
+                         const tpg_app_t *app_cfg __rte_unused)
+{
+    /* Nothing to alloc here. Everything is preallocated before the config is
+     * built.
+     */
+}
+
+/*****************************************************************************
  * http_server_delete_cfg()
  ****************************************************************************/
-void http_server_delete_cfg(const tpg_test_case_t *cfg __rte_unused)
+void http_server_delete_cfg(const tpg_test_case_t *cfg __rte_unused,
+                            const tpg_app_t *app_cfg)
 {
-    const tpg_http_server_t *http_server = &cfg->tc_server.srv_app.as_http;
+    const tpg_http_server_t *http_server = &app_cfg->app_http_server;
 
     if (http_server->hs_resp_fields)
         free(http_server->hs_resp_fields);
@@ -1011,7 +1029,8 @@ void http_server_delete_cfg(const tpg_test_case_t *cfg __rte_unused)
 /*****************************************************************************
  * http_client_pkts_per_send()
  ****************************************************************************/
-uint32_t http_client_pkts_per_send(const tpg_test_case_t *cfg,
+uint32_t http_client_pkts_per_send(const tpg_test_case_t *cfg __rte_unused,
+                                   const tpg_app_t *app_cfg,
                                    uint32_t max_pkt_size)
 {
     struct rte_mbuf *cfg_mbuf = NULL;
@@ -1019,7 +1038,7 @@ uint32_t http_client_pkts_per_send(const tpg_test_case_t *cfg,
     int              err;
 
     err = http_build_req_pkt(&cfg_mbuf, mem_get_mbuf_cfg_pool(),
-                             &cfg->tc_client.cl_app.ac_http,
+                             &app_cfg->app_http_client,
                              TRUE);
 
     if (err != 0 || !cfg_mbuf)
@@ -1034,7 +1053,8 @@ uint32_t http_client_pkts_per_send(const tpg_test_case_t *cfg,
 /*****************************************************************************
  * http_server_pkts_per_send()
  ****************************************************************************/
-uint32_t http_server_pkts_per_send(const tpg_test_case_t *cfg,
+uint32_t http_server_pkts_per_send(const tpg_test_case_t *cfg __rte_unused,
+                                   const tpg_app_t *app_cfg,
                                    uint32_t max_pkt_size)
 {
     struct rte_mbuf *cfg_mbuf = NULL;
@@ -1042,7 +1062,7 @@ uint32_t http_server_pkts_per_send(const tpg_test_case_t *cfg,
     int              err;
 
     err = http_build_resp_pkt(&cfg_mbuf, mem_get_mbuf_cfg_pool(),
-                              &cfg->tc_server.srv_app.as_http,
+                              &app_cfg->app_http_server,
                               TRUE);
 
     if (err != 0 || !cfg_mbuf)
@@ -1058,7 +1078,7 @@ uint32_t http_server_pkts_per_send(const tpg_test_case_t *cfg,
  * http_client_server_init()
  ****************************************************************************/
 void http_client_server_init(app_data_t *app_data __rte_unused,
-                             test_case_init_msg_t *init_msg __rte_unused)
+                             const tpg_app_t *app_cfg __rte_unused)
 {
     /* We don't need to do anything on client/server init. Most of the
      * initialization will be done when the L4 connection goes to established
@@ -1069,14 +1089,15 @@ void http_client_server_init(app_data_t *app_data __rte_unused,
 /*****************************************************************************
  * http_client_tc_start()
  ****************************************************************************/
-void http_client_tc_start(test_case_init_msg_t *init_msg)
+void http_client_tc_start(const tpg_test_case_t *cfg, const tpg_app_t *app_cfg,
+                          app_storage_t *app_storage)
 {
-    tpg_http_client_t *client_cfg = &init_msg->tcim_client.cl_app.ac_http;
-    int                err;
+    const tpg_http_client_t *client_cfg = &app_cfg->app_http_client;
+    http_storage_t          *http_storage = &app_storage->ast_http;
 
-    err = http_init_req_msg(init_msg->tcim_eth_port,
-                            init_msg->tcim_test_case_id,
-                            client_cfg);
+    int err;
+
+    err = http_init_req_msg(http_storage, client_cfg);
 
     if (err) {
         TPG_ERROR_ABORT("[%d:%s()] Failed to initialize HTTP request. "
@@ -1085,22 +1106,23 @@ void http_client_tc_start(test_case_init_msg_t *init_msg)
                         __func__,
                         -err,
                         rte_strerror(-err),
-                        init_msg->tcim_eth_port,
-                        init_msg->tcim_test_case_id);
+                        cfg->tc_eth_port,
+                        cfg->tc_id);
     }
 }
 
 /*****************************************************************************
  * http_server_tc_start()
  ****************************************************************************/
-void http_server_tc_start(test_case_init_msg_t *init_msg)
+void http_server_tc_start(const tpg_test_case_t *cfg, const tpg_app_t *app_cfg,
+                          app_storage_t *app_storage)
 {
-    tpg_http_server_t *server_cfg = &init_msg->tcim_server.srv_app.as_http;
-    int                err;
+    const tpg_http_server_t *server_cfg = &app_cfg->app_http_server;
+    http_storage_t          *http_storage = &app_storage->ast_http;
 
-    err = http_init_resp_msg(init_msg->tcim_eth_port,
-                             init_msg->tcim_test_case_id,
-                             server_cfg);
+    int err;
+
+    err = http_init_resp_msg(http_storage, server_cfg);
 
     if (err) {
         TPG_ERROR_ABORT("[%d:%s()] Failed to initialize HTTP responses. "
@@ -1109,42 +1131,51 @@ void http_server_tc_start(test_case_init_msg_t *init_msg)
                         __func__,
                         -err,
                         rte_strerror(-err),
-                        init_msg->tcim_eth_port,
-                        init_msg->tcim_test_case_id);
+                        cfg->tc_eth_port,
+                        cfg->tc_id);
     }
 }
 
 /*****************************************************************************
  * http_client_tc_stop()
  ****************************************************************************/
-void http_client_tc_stop(test_case_init_msg_t *init_msg)
+void http_client_tc_stop(const tpg_test_case_t *cfg __rte_unused,
+                         const tpg_app_t *app_cfg __rte_unused,
+                         app_storage_t *app_storage)
 {
-    http_free_req_msg(init_msg->tcim_eth_port, init_msg->tcim_test_case_id);
+    http_storage_t *http_storage = &app_storage->ast_http;
+
+    http_free_req_msg(http_storage);
 }
 
 /*****************************************************************************
  * http_server_tc_stop()
  ****************************************************************************/
-void http_server_tc_stop(test_case_init_msg_t *init_msg)
+void http_server_tc_stop(const tpg_test_case_t *cfg __rte_unused,
+                         const tpg_app_t *app_cfg __rte_unused,
+                         app_storage_t *app_storage)
 {
-    http_free_resp_msg(init_msg->tcim_eth_port, init_msg->tcim_test_case_id);
+    http_storage_t *http_storage = &app_storage->ast_http;
+
+    http_free_resp_msg(http_storage);
 }
 
 /*****************************************************************************
  * http_client_conn_up()
  ****************************************************************************/
 void http_client_conn_up(l4_control_block_t *l4, app_data_t *app_data,
-                         tpg_test_case_app_stats_t *stats __rte_unused)
+                         tpg_app_stats_t *stats __rte_unused)
 {
     APP_RECV_PTR_INIT(&app_data->ad_http.ha_recv);
-    http_client_goto_send_req(l4, &app_data->ad_http);
+    http_client_goto_send_req(l4, &app_data->ad_http,
+                              &app_data->ad_storage.ast_http);
 }
 
 /*****************************************************************************
  * http_server_conn_up()
  ****************************************************************************/
 void http_server_conn_up(l4_control_block_t *l4, app_data_t *app_data,
-                         tpg_test_case_app_stats_t *stats __rte_unused)
+                         tpg_app_stats_t *stats __rte_unused)
 {
     APP_RECV_PTR_INIT(&app_data->ad_http.ha_recv);
     http_goto_recv_headers(l4, &app_data->ad_http, HTTPS_SRV_PARSE_REQ_HDR);
@@ -1155,7 +1186,7 @@ void http_server_conn_up(l4_control_block_t *l4, app_data_t *app_data,
  ****************************************************************************/
 void http_client_server_conn_down(l4_control_block_t *l4 __rte_unused,
                                   app_data_t *app_data __rte_unused,
-                                  tpg_test_case_app_stats_t *stats __rte_unused)
+                                  tpg_app_stats_t *stats __rte_unused)
 {
     /* Normally we would need to free everything allocated when the connection
      * was initialized or went to established but we don't have anything in this
@@ -1163,10 +1194,10 @@ void http_client_server_conn_down(l4_control_block_t *l4 __rte_unused,
      */
 
     if (unlikely(app_data->ad_http.ha_req_cnt == 0))
-        INC_STATS(&stats->tcas_http, hsts_no_req);
+        INC_STATS(&stats->as_http, hsts_no_req);
 
     if (unlikely(app_data->ad_http.ha_resp_cnt == 0))
-        INC_STATS(&stats->tcas_http, hsts_no_resp);
+        INC_STATS(&stats->as_http, hsts_no_resp);
 
 }
 
@@ -1174,12 +1205,13 @@ void http_client_server_conn_down(l4_control_block_t *l4 __rte_unused,
  * http_client_deliver_data()
  ****************************************************************************/
 uint32_t http_client_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
-                                  tpg_test_case_app_stats_t *stats,
+                                  tpg_app_stats_t *stats,
                                   struct rte_mbuf *rx_data,
                                   uint64_t rx_tstamp __rte_unused)
 {
     http_app_t       *http_client_data = &app_data->ad_http;
-    tpg_http_stats_t *http_stats = &stats->tcas_http;
+    http_storage_t   *http_storage = &app_data->ad_storage.ast_http;
+    tpg_http_stats_t *http_stats = &stats->as_http;
     uint32_t          delivered = 0;
     bool              invalid = false;
     bool              header_done;
@@ -1193,8 +1225,7 @@ uint32_t http_client_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
         /* If the header is invalid close the underlying connection! */
         if (unlikely(invalid)) {
             /* Notify the stack that the connection should be closed. */
-            TEST_NOTIF(TEST_NOTIF_APP_CLIENT_CLOSE, l4, l4->l4cb_test_case_id,
-                       l4->l4cb_interface);
+            TEST_NOTIF(TEST_NOTIF_APP_CLOSE, l4);
             INC_STATS(http_stats, hsts_invalid_msg_cnt);
             return 0;
         }
@@ -1210,8 +1241,7 @@ uint32_t http_client_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
          */
         if (unlikely(http_client_data->ha_content_length == HTTP_CONTENT_LENGTH_INVALID)) {
             /* Notify the stack that the connection should be closed. */
-            TEST_NOTIF(TEST_NOTIF_APP_CLIENT_CLOSE, l4, l4->l4cb_test_case_id,
-                       l4->l4cb_interface);
+            TEST_NOTIF(TEST_NOTIF_APP_CLOSE, l4);
             INC_STATS(http_stats, hsts_no_content_len_cnt);
             return 0;
         }
@@ -1244,14 +1274,13 @@ uint32_t http_client_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
 
             TRACE_FMT(HTTP, DEBUG, "CL Body: %s", "Recvd");
 
-            http_client_goto_send_req(l4, http_client_data);
+            http_client_goto_send_req(l4, http_client_data, http_storage);
         }
         return delivered;
     default:
         INC_STATS(http_stats, hsts_invalid_msg_cnt);
         /* Notify the stack that the connection should be closed. */
-        TEST_NOTIF(TEST_NOTIF_APP_CLIENT_CLOSE, l4, l4->l4cb_test_case_id,
-                   l4->l4cb_interface);
+        TEST_NOTIF(TEST_NOTIF_APP_CLOSE, l4);
         return 0;
     }
 }
@@ -1260,12 +1289,13 @@ uint32_t http_client_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
  * http_server_deliver_data()
  ****************************************************************************/
 uint32_t http_server_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
-                                  tpg_test_case_app_stats_t *stats,
+                                  tpg_app_stats_t *stats,
                                   struct rte_mbuf *rx_data,
                                   uint64_t rx_tstamp __rte_unused)
 {
     http_app_t       *http_server_data = &app_data->ad_http;
-    tpg_http_stats_t *http_stats = &stats->tcas_http;
+    http_storage_t   *http_storage = &app_data->ad_storage.ast_http;
+    tpg_http_stats_t *http_stats = &stats->as_http;
     uint32_t          delivered = 0;
     bool              invalid = false;
     bool              header_done; /* We reach the end of the header */
@@ -1280,8 +1310,7 @@ uint32_t http_server_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
         /* If the header is invalid close the underlying connection! */
         if (unlikely(invalid)) {
             /* Notify the stack that the connection should be closed. */
-            TEST_NOTIF(TEST_NOTIF_APP_SERVER_CLOSE, l4, l4->l4cb_test_case_id,
-                       l4->l4cb_interface);
+            TEST_NOTIF(TEST_NOTIF_APP_CLOSE, l4);
             INC_STATS(http_stats, hsts_invalid_msg_cnt);
             return 0;
         }
@@ -1299,7 +1328,7 @@ uint32_t http_server_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
             INC_STATS(http_stats, hsts_no_content_len_cnt);
             /* WARNING! Assuming no content-length implies length 0! */
             http_server_data->ha_content_length = 0;
-            http_server_goto_send_resp(l4, http_server_data);
+            http_server_goto_send_resp(l4, http_server_data, http_storage);
             return delivered;
         }
 
@@ -1331,14 +1360,13 @@ uint32_t http_server_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
 
             TRACE_FMT(HTTP, DEBUG, "SRV Body: %s", "Recvd");
 
-            http_server_goto_send_resp(l4, http_server_data);
+            http_server_goto_send_resp(l4, http_server_data, http_storage);
         }
         return delivered;
     default:
         INC_STATS(http_stats, hsts_invalid_msg_cnt);
         /* Notify the stack that the connection should be closed. */
-        TEST_NOTIF(TEST_NOTIF_APP_SERVER_CLOSE, l4, l4->l4cb_test_case_id,
-                   l4->l4cb_interface);
+        TEST_NOTIF(TEST_NOTIF_APP_CLOSE, l4);
         return 0;
     }
 }
@@ -1348,11 +1376,11 @@ uint32_t http_server_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
  ****************************************************************************/
 struct rte_mbuf *http_client_send_data(l4_control_block_t *l4 __rte_unused,
                                        app_data_t *app_data,
-                                       tpg_test_case_app_stats_t *stats,
+                                       tpg_app_stats_t *stats,
                                        uint32_t max_tx_size)
 {
     http_app_t       *http_client_data = &app_data->ad_http;
-    tpg_http_stats_t *http_stats = &stats->tcas_http;
+    tpg_http_stats_t *http_stats = &stats->as_http;
     app_send_ptr_t   *send_ptr = &http_client_data->ha_send;
 
     switch (http_client_data->ha_state) {
@@ -1365,8 +1393,7 @@ struct rte_mbuf *http_client_send_data(l4_control_block_t *l4 __rte_unused,
     default:
         /* Notify the stack that the connection should be closed. */
         INC_STATS(http_stats, hsts_invalid_msg_cnt);
-        TEST_NOTIF(TEST_NOTIF_APP_CLIENT_CLOSE, l4, l4->l4cb_test_case_id,
-                   l4->l4cb_interface);
+        TEST_NOTIF(TEST_NOTIF_APP_CLOSE, l4);
         return NULL;
     }
 }
@@ -1376,11 +1403,11 @@ struct rte_mbuf *http_client_send_data(l4_control_block_t *l4 __rte_unused,
  ****************************************************************************/
 struct rte_mbuf *http_server_send_data(l4_control_block_t *l4 __rte_unused,
                                        app_data_t *app_data,
-                                       tpg_test_case_app_stats_t *stats,
+                                       tpg_app_stats_t *stats,
                                        uint32_t max_tx_size)
 {
     http_app_t       *http_server_data = &app_data->ad_http;
-    tpg_http_stats_t *http_stats = &stats->tcas_http;
+    tpg_http_stats_t *http_stats = &stats->as_http;
     app_send_ptr_t   *send_ptr = &http_server_data->ha_send;
 
     switch (http_server_data->ha_state) {
@@ -1393,8 +1420,7 @@ struct rte_mbuf *http_server_send_data(l4_control_block_t *l4 __rte_unused,
     default:
         /* Notify the stack that the connection should be closed. */
         INC_STATS(http_stats, hsts_invalid_msg_cnt);
-        TEST_NOTIF(TEST_NOTIF_APP_SERVER_CLOSE, l4, l4->l4cb_test_case_id,
-                   l4->l4cb_interface);
+        TEST_NOTIF(TEST_NOTIF_APP_CLOSE, l4);
         return NULL;
     }
 }
@@ -1403,11 +1429,11 @@ struct rte_mbuf *http_server_send_data(l4_control_block_t *l4 __rte_unused,
  * http_client_data_sent()
  ****************************************************************************/
 bool http_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
-                           tpg_test_case_app_stats_t *stats,
+                           tpg_app_stats_t *stats,
                            uint32_t bytes_sent)
 {
     http_app_t       *http_client_data = &app_data->ad_http;
-    tpg_http_stats_t *http_stats = &stats->tcas_http;
+    tpg_http_stats_t *http_stats = &stats->as_http;
     app_send_ptr_t   *send_ptr = &http_client_data->ha_send;
 
     switch (http_client_data->ha_state) {
@@ -1426,17 +1452,14 @@ bool http_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
                                    HTTPS_CL_PARSE_RESP_HDR);
 
             /* Notify the stack that we're done sending data. */
-            TEST_NOTIF(TEST_NOTIF_APP_CLIENT_SEND_STOP, l4,
-                       l4->l4cb_test_case_id,
-                       l4->l4cb_interface);
+            TEST_NOTIF(TEST_NOTIF_APP_SEND_STOP, l4);
             return true;
         }
         break;
     default:
         INC_STATS(http_stats, hsts_invalid_msg_cnt);
         /* Notify the stack that the connection should be closed. */
-        TEST_NOTIF(TEST_NOTIF_APP_CLIENT_CLOSE, l4, l4->l4cb_test_case_id,
-                   l4->l4cb_interface);
+        TEST_NOTIF(TEST_NOTIF_APP_CLOSE, l4);
         return true;
     }
 
@@ -1446,11 +1469,11 @@ bool http_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
  * http_server_data_sent()
  ****************************************************************************/
 bool http_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
-                           tpg_test_case_app_stats_t *stats,
+                           tpg_app_stats_t *stats,
                            uint32_t bytes_sent)
 {
     http_app_t       *http_server_data = &app_data->ad_http;
-    tpg_http_stats_t *http_stats = &stats->tcas_http;
+    tpg_http_stats_t *http_stats = &stats->as_http;
     app_send_ptr_t   *send_ptr = &http_server_data->ha_send;
 
     switch (http_server_data->ha_state) {
@@ -1468,17 +1491,14 @@ bool http_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
             http_goto_recv_headers(l4, http_server_data,
                                    HTTPS_SRV_PARSE_REQ_HDR);
             /* Notify the stack that we're done sending data. */
-            TEST_NOTIF(TEST_NOTIF_APP_SERVER_SEND_STOP, l4,
-                       l4->l4cb_test_case_id,
-                       l4->l4cb_interface);
+            TEST_NOTIF(TEST_NOTIF_APP_SEND_STOP, l4);
             return true;
         }
         break;
     default:
         /* Notify the stack that the connection should be closed. */
         INC_STATS(http_stats, hsts_invalid_msg_cnt);
-        TEST_NOTIF(TEST_NOTIF_APP_SERVER_CLOSE, l4, l4->l4cb_test_case_id,
-                   l4->l4cb_interface);
+        TEST_NOTIF(TEST_NOTIF_APP_CLOSE, l4);
         return true;
     }
 
@@ -1486,25 +1506,44 @@ bool http_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
 }
 
 /*****************************************************************************
+ * http_stats_init()
+ ****************************************************************************/
+void http_stats_init(const tpg_app_t *app_cfg __rte_unused,
+                     tpg_app_stats_t *stats)
+{
+    bzero(stats, sizeof(*stats));
+}
+
+/*****************************************************************************
+ * http_stats_copy()
+ ****************************************************************************/
+void http_stats_copy(tpg_app_stats_t *dest, const tpg_app_stats_t *src)
+{
+    *dest = *src;
+}
+
+
+/*****************************************************************************
  * http_stats_add()
  ****************************************************************************/
-void http_stats_add(tpg_test_case_app_stats_t *total,
-                    const tpg_test_case_app_stats_t *elem)
+void http_stats_add(tpg_app_stats_t *total, const tpg_app_stats_t *elem)
 {
-    total->tcas_http.hsts_req_cnt += elem->tcas_http.hsts_req_cnt;
-    total->tcas_http.hsts_resp_cnt += elem->tcas_http.hsts_resp_cnt;
-    total->tcas_http.hsts_invalid_msg_cnt += elem->tcas_http.hsts_invalid_msg_cnt;
-    total->tcas_http.hsts_no_content_len_cnt += elem->tcas_http.hsts_no_content_len_cnt;
-    total->tcas_http.hsts_transfer_enc_cnt += elem->tcas_http.hsts_transfer_enc_cnt;
-    total->tcas_http.hsts_no_req += elem->tcas_http.hsts_no_req;
-    total->tcas_http.hsts_no_resp += elem->tcas_http.hsts_no_resp;
+    tpg_http_stats_t       *htotal = &total->as_http;
+    const tpg_http_stats_t *helem = &elem->as_http;
+
+    htotal->hsts_req_cnt += helem->hsts_req_cnt;
+    htotal->hsts_resp_cnt += helem->hsts_resp_cnt;
+    htotal->hsts_invalid_msg_cnt += helem->hsts_invalid_msg_cnt;
+    htotal->hsts_no_content_len_cnt += helem->hsts_no_content_len_cnt;
+    htotal->hsts_transfer_enc_cnt += helem->hsts_transfer_enc_cnt;
+    htotal->hsts_no_req += helem->hsts_no_req;
+    htotal->hsts_no_resp += helem->hsts_no_resp;
 }
 
 /*****************************************************************************
  * http_stats_print()
  ****************************************************************************/
-void http_stats_print(const tpg_test_case_app_stats_t *stats,
-                      printer_arg_t *printer_arg)
+void http_stats_print(const tpg_app_stats_t *stats, printer_arg_t *printer_arg)
 {
     tpg_printf(printer_arg, "%13s %13s %13s %13s %13s\n", "Requests",
                "Responses",
@@ -1513,19 +1552,19 @@ void http_stats_print(const tpg_test_case_app_stats_t *stats,
                "Trans-Enc");
     tpg_printf(printer_arg,
                "%13"PRIu64" %13"PRIu64" %13"PRIu32" %13"PRIu32" %13"PRIu32"\n",
-               stats->tcas_http.hsts_req_cnt,
-               stats->tcas_http.hsts_resp_cnt,
-               stats->tcas_http.hsts_invalid_msg_cnt,
-               stats->tcas_http.hsts_no_content_len_cnt,
-               stats->tcas_http.hsts_transfer_enc_cnt);
+               stats->as_http.hsts_req_cnt,
+               stats->as_http.hsts_resp_cnt,
+               stats->as_http.hsts_invalid_msg_cnt,
+               stats->as_http.hsts_no_content_len_cnt,
+               stats->as_http.hsts_transfer_enc_cnt);
 
     tpg_printf(printer_arg, "%27s %27s\n",
                "Closed (No Request)",
                "Closed (No Response)");
 
     tpg_printf(printer_arg, "%27"PRIu32" %27"PRIu32"\n",
-           stats->tcas_http.hsts_no_req,
-           stats->tcas_http.hsts_no_resp);
+           stats->as_http.hsts_no_req,
+           stats->as_http.hsts_no_resp);
 }
 
 /*****************************************************************************
@@ -1558,35 +1597,6 @@ bool http_init(void)
  ****************************************************************************/
 void http_lcore_init(uint32_t lcore_id)
 {
-    /*
-     * Allocate memory for the per thread message templates.
-     */
-    RTE_PER_LCORE(http_req_msg) =
-        rte_calloc_socket("HTTP_REQ_MSG",
-                          rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
-                          sizeof(*RTE_PER_LCORE(http_req_msg)),
-                          0,
-                          rte_lcore_to_socket_id(lcore_id));
-
-    if (RTE_PER_LCORE(http_req_msg) == NULL) {
-        TPG_ERROR_ABORT("[%d:%s() Failed to allocate per lcore http_req_msg!\n",
-                        rte_lcore_index(lcore_id),
-                        __func__);
-    }
-
-    RTE_PER_LCORE(http_resp_msg) =
-        rte_calloc_socket("HTTP_RESP_MSG",
-                          rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
-                          sizeof(*RTE_PER_LCORE(http_resp_msg)),
-                          0,
-                          rte_lcore_to_socket_id(lcore_id));
-
-    if (RTE_PER_LCORE(http_resp_msg) == NULL) {
-        TPG_ERROR_ABORT("[%d:%s() Failed to allocate per lcore http_resp_msg!\n",
-                        rte_lcore_index(lcore_id),
-                        __func__);
-    }
-
     /* Init the local stats. */
     if (STATS_LOCAL_INIT(http_statistics_t, "http_stats", lcore_id) == NULL) {
         TPG_ERROR_ABORT("[%d:%s() Failed to allocate per lcore http_stats!\n",
@@ -1605,12 +1615,15 @@ void http_lcore_init(uint32_t lcore_id)
  struct cmd_tests_set_app_http_client_result {
     cmdline_fixed_string_t set;
     cmdline_fixed_string_t tests;
+    cmdline_fixed_string_t imix;
     cmdline_fixed_string_t client;
     cmdline_fixed_string_t http;
     cmdline_fixed_string_t port_kw;
     uint32_t               port;
     cmdline_fixed_string_t tcid_kw;
     uint32_t               tcid;
+    cmdline_fixed_string_t app_index_kw;
+    uint32_t               app_index;
 
     cmdline_fixed_string_t method;
     cmdline_fixed_string_t obj_name;
@@ -1626,6 +1639,8 @@ static cmdline_parse_token_string_t cmd_tests_set_app_http_client_T_set =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_client_result, set, "set");
 static cmdline_parse_token_string_t cmd_tests_set_app_http_client_T_tests =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_client_result, tests, "tests");
+static cmdline_parse_token_string_t cmd_tests_set_app_http_client_T_imix =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_client_result, imix, "imix");
 static cmdline_parse_token_string_t cmd_tests_set_app_http_client_T_client =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_client_result, client,
                              TEST_CASE_CLIENT_CLI_STR);
@@ -1641,6 +1656,11 @@ static cmdline_parse_token_string_t cmd_tests_set_app_http_client_T_tcid_kw =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_client_result, tcid_kw, "test-case-id");
 static cmdline_parse_token_num_t cmd_tests_set_app_http_client_T_tcid =
     TOKEN_NUM_INITIALIZER(struct cmd_tests_set_app_http_client_result, tcid, UINT32);
+
+static cmdline_parse_token_string_t cmd_tests_set_app_http_client_T_app_index_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_client_result, app_index_kw, "app-index");
+static cmdline_parse_token_num_t cmd_tests_set_app_http_client_T_app_index =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_app_http_client_result, app_index, UINT32);
 
 static cmdline_parse_token_string_t cmd_tests_set_app_http_client_T_method =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_client_result, method, "GET#HEAD");
@@ -1658,17 +1678,21 @@ static cmdline_parse_token_num_t cmd_tests_set_app_http_client_T_req_size =
 static void cmd_tests_set_app_http_client_parsed(void *parsed_result, struct cmdline *cl,
                                                  void *data __rte_unused)
 {
-    printer_arg_t                                parg;
+    printer_arg_t     parg;
+    tpg_app_t         app_cfg;
+    tpg_http_method_t http_method;
+    int               err;
+    http_flags_type_t flags;
+
     struct cmd_tests_set_app_http_client_result *pr;
-    tpg_app_client_t                             app_client_cfg;
-    tpg_http_method_t                            http_method;
 
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
+    flags = (http_flags_type_t)(uintptr_t)data;
 
-    bzero(&app_client_cfg, sizeof(app_client_cfg));
+    bzero(&app_cfg, sizeof(app_cfg));
 
-    app_client_cfg.ac_app_proto = APP_PROTO__HTTP;
+    app_cfg.app_proto = APP_PROTO__HTTP_CLIENT;
 
     if (strncmp(pr->method, "GET", strlen("GET") + 1) == 0)
         http_method = HTTP_METHOD__GET;
@@ -1678,9 +1702,8 @@ static void cmd_tests_set_app_http_client_parsed(void *parsed_result, struct cmd
         assert(false);
 
     /* The config memory will be freed once the test case is deleted/updated. */
-    if (http_client_cfg_init(&app_client_cfg.ac_http, http_method, pr->obj_name,
-                             pr->host_name,
-                             NULL,
+    if (http_client_cfg_init(&app_cfg.app_http_client, http_method,
+                             pr->obj_name, pr->host_name, NULL,
                              pr->req_size)) {
         cmdline_printf(cl,
                        "ERROR: Failed allocating config for test case %"PRIu32
@@ -1690,27 +1713,41 @@ static void cmd_tests_set_app_http_client_parsed(void *parsed_result, struct cmd
         return;
     }
 
-    if (test_mgmt_update_test_case_app_client(pr->port, pr->tcid,
-                                              &app_client_cfg,
-                                              &parg) == 0) {
-        cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
-                       pr->port,
-                       pr->tcid);
+    if (!HTTP_IMIX_ISSET(flags)) {
+        err =  test_mgmt_update_test_case_app(pr->port, pr->tcid, &app_cfg,
+                                              &parg);
+        if (err == 0) {
+            cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
+                           pr->port,
+                           pr->tcid);
+        } else {
+            cmdline_printf(cl, "ERROR: Failed updating test case %"PRIu32
+                           " config on port %"PRIu32"\n",
+                           pr->tcid,
+                           pr->port);
+        }
     } else {
-        cmdline_printf(cl,
-                       "ERROR: Failed updating test case %"PRIu32
-                       " config on port %"PRIu32"\n",
-                       pr->tcid,
-                       pr->port);
+        err = imix_cli_set_app_cfg(pr->app_index, &app_cfg, &parg);
 
+        if (err == 0) {
+            cmdline_printf(cl, "IMIX app-index %"PRIu32" updated!\n",
+                           pr->app_index);
+        } else {
+            cmdline_printf(cl,
+                           "ERROR: Failed updating IMIX app-index %"PRIu32"!\n",
+                           pr->app_index);
+        }
+    }
+
+    if (err != 0) {
         /* If an error happened, free the config memory here. */
-        http_client_cfg_free(&app_client_cfg.ac_http);
+        http_client_cfg_free(&app_cfg.app_http_client);
     }
 }
 
 cmdline_parse_inst_t cmd_tests_set_app_http_client = {
     .f = cmd_tests_set_app_http_client_parsed,
-    .data = NULL,
+    .data = (void *)(uintptr_t)HTTP_FLAG_NONE,
     .help_str = "set tests client http port <port> test-case-id <tcid> "
                 "GET|HEAD <host-name> <obj-name> req-size <req-size>",
     .tokens = {
@@ -1731,6 +1768,28 @@ cmdline_parse_inst_t cmd_tests_set_app_http_client = {
     },
 };
 
+cmdline_parse_inst_t cmd_tests_set_app_http_client_imix = {
+    .f = cmd_tests_set_app_http_client_parsed,
+    .data = (void *)(uintptr_t)HTTP_FLAG_IMIX,
+    .help_str = "set tests imix app-index <app-index> client http "
+                "GET|HEAD <host-name> <obj-name> req-size <req-size>",
+    .tokens = {
+        (void *)&cmd_tests_set_app_http_client_T_set,
+        (void *)&cmd_tests_set_app_http_client_T_tests,
+        (void *)&cmd_tests_set_app_http_client_T_imix,
+        (void *)&cmd_tests_set_app_http_client_T_app_index_kw,
+        (void *)&cmd_tests_set_app_http_client_T_app_index,
+        (void *)&cmd_tests_set_app_http_client_T_client,
+        (void *)&cmd_tests_set_app_http_client_T_http,
+        (void *)&cmd_tests_set_app_http_client_T_method,
+        (void *)&cmd_tests_set_app_http_client_T_host_name,
+        (void *)&cmd_tests_set_app_http_client_T_obj_name,
+        (void *)&cmd_tests_set_app_http_client_T_req_size_kw,
+        (void *)&cmd_tests_set_app_http_client_T_req_size,
+        NULL,
+    },
+};
+
 /****************************************************************************
  * - "set tests client http port <port> test-case-id <tcid>
  *      http-field <http-field>"
@@ -1738,12 +1797,15 @@ cmdline_parse_inst_t cmd_tests_set_app_http_client = {
  struct cmd_tests_set_app_http_client_field_result {
     cmdline_fixed_string_t set;
     cmdline_fixed_string_t tests;
+    cmdline_fixed_string_t imix;
     cmdline_fixed_string_t client;
     cmdline_fixed_string_t http;
     cmdline_fixed_string_t port_kw;
     uint32_t               port;
     cmdline_fixed_string_t tcid_kw;
     uint32_t               tcid;
+    cmdline_fixed_string_t app_index_kw;
+    uint32_t               app_index;
 
     cmdline_fixed_string_t http_field_kw;
     cmdline_fixed_string_t http_field;
@@ -1753,6 +1815,8 @@ static cmdline_parse_token_string_t cmd_tests_set_app_http_client_field_T_set =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_client_field_result, set, "set");
 static cmdline_parse_token_string_t cmd_tests_set_app_http_client_field_T_tests =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_client_field_result, tests, "tests");
+static cmdline_parse_token_string_t cmd_tests_set_app_http_client_field_T_imix =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_client_field_result, imix, "imix");
 static cmdline_parse_token_string_t cmd_tests_set_app_http_client_field_T_client =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_client_field_result, client,
                              TEST_CASE_CLIENT_CLI_STR);
@@ -1769,6 +1833,11 @@ static cmdline_parse_token_string_t cmd_tests_set_app_http_client_field_T_tcid_k
 static cmdline_parse_token_num_t cmd_tests_set_app_http_client_field_T_tcid =
     TOKEN_NUM_INITIALIZER(struct cmd_tests_set_app_http_client_field_result, tcid, UINT32);
 
+static cmdline_parse_token_string_t cmd_tests_set_app_http_client_field_T_app_index_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_client_field_result, app_index_kw, "app-index");
+static cmdline_parse_token_num_t cmd_tests_set_app_http_client_field_T_app_index =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_app_http_client_field_result, app_index, UINT32);
+
 static cmdline_parse_token_string_t cmd_tests_set_app_http_client_field_T_field_kw =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_client_field_result, http_field_kw, "http-field");
 static cmdline_parse_token_string_t cmd_tests_set_app_http_client_field_T_field =
@@ -1778,28 +1847,46 @@ static void cmd_tests_set_app_http_client_field_parsed(void *parsed_result, stru
                                                        void *data __rte_unused)
 {
     printer_arg_t      parg;
-    tpg_app_client_t   app_client_cfg;
+    tpg_app_t          app_cfg;
     tpg_http_client_t *http_cfg;
     char              *http_fields = NULL;
     int                err;
+    http_flags_type_t  flags;
 
     struct cmd_tests_set_app_http_client_field_result *pr;
 
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
+    flags = (http_flags_type_t)(uintptr_t)data;
 
-    err = test_mgmt_get_test_case_app_client_cfg(pr->port, pr->tcid,
-                                                 &app_client_cfg,
-                                                 &parg);
-    if (err) {
-        cmdline_printf(cl, "ERROR: Failed fetching test case %"PRIu32
-                       " config on port %"PRIu32"\n",
-                       pr->tcid,
-                       pr->port);
+    if (!HTTP_IMIX_ISSET(flags)) {
+        err = test_mgmt_get_test_case_app_cfg(pr->port, pr->tcid, &app_cfg,
+                                              &parg);
+        if (err) {
+            cmdline_printf(cl, "ERROR: Failed fetching test case %"PRIu32
+                        " config on port %"PRIu32"\n",
+                        pr->tcid,
+                        pr->port);
+            return;
+        }
+    } else {
+        err = imix_cli_get_app_cfg(pr->app_index, &app_cfg, &parg);
+
+        if (err) {
+            cmdline_printf(cl,
+                           "ERROR: Failed fetching IMIX app-index %"PRIu32" app config!\n",
+                           pr->app_index);
+            return;
+        }
+    }
+
+    if (app_cfg.app_proto != APP_PROTO__HTTP_CLIENT) {
+        cmdline_printf(cl,
+                       "ERROR: Trying to update NON HTTP-CLIENT test case!\n");
         return;
     }
 
-    http_cfg = &app_client_cfg.ac_http;
+    http_cfg = &app_cfg.app_http_client;
 
     /* Append new field to old ones (if any). */
     if (http_cfg->hc_req_fields) {
@@ -1811,10 +1898,7 @@ static void cmd_tests_set_app_http_client_field_parsed(void *parsed_result, stru
     }
 
     if (!http_fields) {
-        cmdline_printf(cl, "ERROR: Failed allocating test case %"PRIu32
-                       " http fields on port %"PRIu32"\n",
-                       pr->tcid,
-                       pr->port);
+        cmdline_printf(cl, "ERROR: Failed allocating http fields!\n");
         return;
     }
 
@@ -1823,11 +1907,7 @@ static void cmd_tests_set_app_http_client_field_parsed(void *parsed_result, stru
                              http_cfg->hc_req_host_name,
                              http_fields,
                              http_cfg->hc_req_size)) {
-        cmdline_printf(cl,
-                       "ERROR: Failed allocating config for test case %"PRIu32
-                       " on port %"PRIu32"\n",
-                       pr->tcid,
-                       pr->port);
+        cmdline_printf(cl, "ERROR: Failed allocating http client config!\n");
 
         /* Free the memory allocated by asprintf. */
         free(http_fields);
@@ -1837,28 +1917,42 @@ static void cmd_tests_set_app_http_client_field_parsed(void *parsed_result, stru
     /* Free the memory allocated by asprintf. */
     free(http_fields);
 
-    if (test_mgmt_update_test_case_app_client(pr->port, pr->tcid,
-                                              &app_client_cfg,
-                                              &parg) == 0) {
-        cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
-                       pr->port,
-                       pr->tcid);
+    if (!HTTP_IMIX_ISSET(flags)) {
+        err =  test_mgmt_update_test_case_app(pr->port, pr->tcid, &app_cfg,
+                                              &parg);
+        if (err == 0) {
+            cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
+                           pr->port,
+                           pr->tcid);
+        } else {
+            cmdline_printf(cl, "ERROR: Failed updating test case %"PRIu32
+                           " config on port %"PRIu32"\n",
+                           pr->tcid,
+                           pr->port);
+        }
     } else {
-        cmdline_printf(cl,
-                       "ERROR: Failed updating test case %"PRIu32
-                       " config on port %"PRIu32"\n",
-                       pr->tcid,
-                       pr->port);
+        err = imix_cli_set_app_cfg(pr->app_index, &app_cfg, &parg);
 
-        /* If an error happened, free the alloced memory here. */
-        http_client_cfg_free(http_cfg);
+        if (err == 0) {
+            cmdline_printf(cl, "IMIX app-index %"PRIu32" updated!\n",
+                           pr->app_index);
+        } else {
+            cmdline_printf(cl,
+                           "ERROR: Failed updating IMIX app-index %"PRIu32"!\n",
+                           pr->app_index);
+        }
+    }
+
+    if (err != 0) {
+        /* If an error happened, free the config memory here. */
+        http_client_cfg_free(&app_cfg.app_http_client);
     }
 }
 
 cmdline_parse_inst_t cmd_tests_set_app_http_field_client = {
     .f = cmd_tests_set_app_http_client_field_parsed,
-    .data = NULL,
-    .help_str = "set tests client http port <port> test-case-id <tcid>"
+    .data = (void *)(uintptr_t)HTTP_FLAG_NONE,
+    .help_str = "set tests client http port <port> test-case-id <tcid> "
                 "http-field <http-field>",
     .tokens = {
         (void *)&cmd_tests_set_app_http_client_field_T_set,
@@ -1875,6 +1969,25 @@ cmdline_parse_inst_t cmd_tests_set_app_http_field_client = {
     },
 };
 
+cmdline_parse_inst_t cmd_tests_set_app_http_field_client_imix = {
+    .f = cmd_tests_set_app_http_client_field_parsed,
+    .data = (void *)(uintptr_t)HTTP_FLAG_IMIX,
+    .help_str = "set tests imix app-index <app-index> client http "
+                "http-field <http-field>",
+    .tokens = {
+        (void *)&cmd_tests_set_app_http_client_field_T_set,
+        (void *)&cmd_tests_set_app_http_client_field_T_tests,
+        (void *)&cmd_tests_set_app_http_client_field_T_imix,
+        (void *)&cmd_tests_set_app_http_client_field_T_app_index_kw,
+        (void *)&cmd_tests_set_app_http_client_field_T_app_index,
+        (void *)&cmd_tests_set_app_http_client_field_T_client,
+        (void *)&cmd_tests_set_app_http_client_field_T_http,
+        (void *)&cmd_tests_set_app_http_client_field_T_field_kw,
+        (void *)&cmd_tests_set_app_http_client_field_T_field,
+        NULL,
+    },
+};
+
 /****************************************************************************
  * - "set tests server http port <port> test-case-id <tcid>
  *      GET|HEAD <obj-name> req-size <req-size>"
@@ -1882,12 +1995,15 @@ cmdline_parse_inst_t cmd_tests_set_app_http_field_client = {
  struct cmd_tests_set_app_http_server_result {
     cmdline_fixed_string_t set;
     cmdline_fixed_string_t tests;
+    cmdline_fixed_string_t imix;
     cmdline_fixed_string_t server;
     cmdline_fixed_string_t http;
     cmdline_fixed_string_t port_kw;
     uint32_t               port;
     cmdline_fixed_string_t tcid_kw;
     uint32_t               tcid;
+    cmdline_fixed_string_t app_index_kw;
+    uint32_t               app_index;
 
     cmdline_fixed_string_t resp_code;
 
@@ -1899,6 +2015,8 @@ static cmdline_parse_token_string_t cmd_tests_set_app_http_server_T_set =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_server_result, set, "set");
 static cmdline_parse_token_string_t cmd_tests_set_app_http_server_T_tests =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_server_result, tests, "tests");
+static cmdline_parse_token_string_t cmd_tests_set_app_http_server_T_imix =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_server_result, imix, "imix");
 static cmdline_parse_token_string_t cmd_tests_set_app_http_server_T_server =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_server_result, server,
                              TEST_CASE_SERVER_CLI_STR);
@@ -1915,6 +2033,11 @@ static cmdline_parse_token_string_t cmd_tests_set_app_http_server_T_tcid_kw =
 static cmdline_parse_token_num_t cmd_tests_set_app_http_server_T_tcid =
     TOKEN_NUM_INITIALIZER(struct cmd_tests_set_app_http_server_result, tcid, UINT32);
 
+static cmdline_parse_token_string_t cmd_tests_set_app_http_server_T_app_index_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_server_result, app_index_kw, "app-index");
+static cmdline_parse_token_num_t cmd_tests_set_app_http_server_T_app_index =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_app_http_server_result, app_index, UINT32);
+
 static cmdline_parse_token_string_t cmd_tests_set_app_http_server_T_resp_code =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_server_result, resp_code, "200-OK#404-NOT-FOUND");
 
@@ -1927,17 +2050,21 @@ static cmdline_parse_token_num_t cmd_tests_set_app_http_server_T_resp_size =
 static void cmd_tests_set_app_http_server_parsed(void *parsed_result, struct cmdline *cl,
                                                  void *data __rte_unused)
 {
-    printer_arg_t                                parg;
+    printer_arg_t          parg;
+    tpg_app_t              app_cfg;
+    tpg_http_status_code_t http_status_code;
+    int                    err;
+    http_flags_type_t      flags;
+
     struct cmd_tests_set_app_http_server_result *pr;
-    tpg_app_server_t                             app_server_cfg;
-    tpg_http_status_code_t                       http_status_code;
 
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
+    flags = (http_flags_type_t)(uintptr_t)data;
 
-    bzero(&app_server_cfg, sizeof(app_server_cfg));
+    bzero(&app_cfg, sizeof(app_cfg));
 
-    app_server_cfg.as_app_proto = APP_PROTO__HTTP;
+    app_cfg.app_proto = APP_PROTO__HTTP_SERVER;
 
     if (strncmp(pr->resp_code, "200-OK", strlen("200-OK") + 1) == 0)
         http_status_code = HTTP_STATUS_CODE__OK_200;
@@ -1948,7 +2075,7 @@ static void cmd_tests_set_app_http_server_parsed(void *parsed_result, struct cmd
         assert(false);
 
     /* The config memory will be freed once the test case is deleted/updated. */
-    if (http_server_cfg_init(&app_server_cfg.as_http, http_status_code, NULL,
+    if (http_server_cfg_init(&app_cfg.app_http_server, http_status_code, NULL,
                              pr->resp_size)) {
         cmdline_printf(cl,
                        "ERROR: Failed allocating config for test case %"PRIu32
@@ -1958,28 +2085,42 @@ static void cmd_tests_set_app_http_server_parsed(void *parsed_result, struct cmd
         return;
     }
 
-    if (test_mgmt_update_test_case_app_server(pr->port, pr->tcid,
-                                              &app_server_cfg,
-                                              &parg) == 0) {
-        cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
-                       pr->port,
-                       pr->tcid);
+    if (!HTTP_IMIX_ISSET(flags)) {
+        err =  test_mgmt_update_test_case_app(pr->port, pr->tcid, &app_cfg,
+                                              &parg);
+        if (err == 0) {
+            cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
+                           pr->port,
+                           pr->tcid);
+        } else {
+            cmdline_printf(cl, "ERROR: Failed updating test case %"PRIu32
+                           " config on port %"PRIu32"\n",
+                           pr->tcid,
+                           pr->port);
+        }
     } else {
-        cmdline_printf(cl,
-                       "ERROR: Failed updating test case %"PRIu32
-                       " config on port %"PRIu32"\n",
-                       pr->tcid,
-                       pr->port);
+        err = imix_cli_set_app_cfg(pr->app_index, &app_cfg, &parg);
 
+        if (err == 0) {
+            cmdline_printf(cl, "IMIX app-index %"PRIu32" updated!\n",
+                           pr->app_index);
+        } else {
+            cmdline_printf(cl,
+                           "ERROR: Failed updating IMIX app-index %"PRIu32"!\n",
+                           pr->app_index);
+        }
+    }
+
+    if (err != 0) {
         /* If an error happened, free the config memory here. */
-        http_server_cfg_free(&app_server_cfg.as_http);
+        http_server_cfg_free(&app_cfg.app_http_server);
     }
 }
 
 cmdline_parse_inst_t cmd_tests_set_app_http_server = {
     .f = cmd_tests_set_app_http_server_parsed,
-    .data = NULL,
-    .help_str = "set tests server http port <port> test-case-id <tcid>"
+    .data = (void *)(uintptr_t)HTTP_FLAG_NONE,
+    .help_str = "set tests server http port <port> test-case-id <tcid> "
                 "200-OK|404-NOT-FOUND resp-size <resp-size>",
     .tokens = {
         (void *)&cmd_tests_set_app_http_server_T_set,
@@ -1997,6 +2138,26 @@ cmdline_parse_inst_t cmd_tests_set_app_http_server = {
     },
 };
 
+cmdline_parse_inst_t cmd_tests_set_app_http_server_imix = {
+    .f = cmd_tests_set_app_http_server_parsed,
+    .data = (void *)(uintptr_t)HTTP_FLAG_IMIX,
+    .help_str = "set tests imix app-index <app-index> server http "
+                "200-OK|404-NOT-FOUND resp-size <resp-size>",
+    .tokens = {
+        (void *)&cmd_tests_set_app_http_server_T_set,
+        (void *)&cmd_tests_set_app_http_server_T_tests,
+        (void *)&cmd_tests_set_app_http_server_T_imix,
+        (void *)&cmd_tests_set_app_http_server_T_app_index_kw,
+        (void *)&cmd_tests_set_app_http_server_T_app_index,
+        (void *)&cmd_tests_set_app_http_server_T_server,
+        (void *)&cmd_tests_set_app_http_server_T_http,
+        (void *)&cmd_tests_set_app_http_server_T_resp_code,
+        (void *)&cmd_tests_set_app_http_server_T_resp_size_kw,
+        (void *)&cmd_tests_set_app_http_server_T_resp_size,
+        NULL,
+    },
+};
+
 /****************************************************************************
  * - "set tests server http port <port> test-case-id <tcid>
  *      http-field <http-field>"
@@ -2004,12 +2165,15 @@ cmdline_parse_inst_t cmd_tests_set_app_http_server = {
  struct cmd_tests_set_app_http_server_field_result {
     cmdline_fixed_string_t set;
     cmdline_fixed_string_t tests;
+    cmdline_fixed_string_t imix;
     cmdline_fixed_string_t server;
     cmdline_fixed_string_t http;
     cmdline_fixed_string_t port_kw;
     uint32_t               port;
     cmdline_fixed_string_t tcid_kw;
     uint32_t               tcid;
+    cmdline_fixed_string_t app_index_kw;
+    uint32_t               app_index;
 
     cmdline_fixed_string_t http_field_kw;
     cmdline_fixed_string_t http_field;
@@ -2019,6 +2183,8 @@ static cmdline_parse_token_string_t cmd_tests_set_app_http_server_field_T_set =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_server_field_result, set, "set");
 static cmdline_parse_token_string_t cmd_tests_set_app_http_server_field_T_tests =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_server_field_result, tests, "tests");
+static cmdline_parse_token_string_t cmd_tests_set_app_http_server_field_T_imix =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_server_field_result, imix, "imix");
 static cmdline_parse_token_string_t cmd_tests_set_app_http_server_field_T_server =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_server_field_result, server,
                              TEST_CASE_SERVER_CLI_STR);
@@ -2035,6 +2201,11 @@ static cmdline_parse_token_string_t cmd_tests_set_app_http_server_field_T_tcid_k
 static cmdline_parse_token_num_t cmd_tests_set_app_http_server_field_T_tcid =
     TOKEN_NUM_INITIALIZER(struct cmd_tests_set_app_http_server_field_result, tcid, UINT32);
 
+static cmdline_parse_token_string_t cmd_tests_set_app_http_server_field_T_app_index_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_server_field_result, app_index_kw, "app-index");
+static cmdline_parse_token_num_t cmd_tests_set_app_http_server_field_T_app_index =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_app_http_server_field_result, app_index, UINT32);
+
 static cmdline_parse_token_string_t cmd_tests_set_app_http_server_field_T_field_kw =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_http_server_field_result, http_field_kw, "http-field");
 static cmdline_parse_token_string_t cmd_tests_set_app_http_server_field_T_field =
@@ -2044,28 +2215,46 @@ static void cmd_tests_set_app_http_server_field_parsed(void *parsed_result, stru
                                                        void *data __rte_unused)
 {
     printer_arg_t      parg;
-    tpg_app_server_t   app_server_cfg;
+    tpg_app_t          app_cfg;
     tpg_http_server_t *http_cfg;
     char              *http_fields = NULL;
     int                err;
+    http_flags_type_t  flags;
 
     struct cmd_tests_set_app_http_server_field_result *pr;
 
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
+    flags = (http_flags_type_t)(uintptr_t)data;
 
-    err = test_mgmt_get_test_case_app_server_cfg(pr->port, pr->tcid,
-                                                 &app_server_cfg,
-                                                 &parg);
-    if (err) {
-        cmdline_printf(cl, "ERROR: Failed fetching test case %"PRIu32
-                       " config on port %"PRIu32"\n",
-                       pr->tcid,
-                       pr->port);
+    if (!HTTP_IMIX_ISSET(flags)) {
+        err = test_mgmt_get_test_case_app_cfg(pr->port, pr->tcid, &app_cfg,
+                                              &parg);
+        if (err) {
+            cmdline_printf(cl, "ERROR: Failed fetching test case %"PRIu32
+                        " config on port %"PRIu32"\n",
+                        pr->tcid,
+                        pr->port);
+            return;
+        }
+    } else {
+        err = imix_cli_get_app_cfg(pr->app_index, &app_cfg, &parg);
+
+        if (err) {
+            cmdline_printf(cl,
+                           "ERROR: Failed fetching IMIX app-index %"PRIu32" app config!\n",
+                           pr->app_index);
+            return;
+        }
+    }
+
+    if (app_cfg.app_proto != APP_PROTO__HTTP_SERVER) {
+        cmdline_printf(cl,
+                       "ERROR: Trying to update NON HTTP-SERVER test case!\n");
         return;
     }
 
-    http_cfg = &app_server_cfg.as_http;
+    http_cfg = &app_cfg.app_http_server;
 
     /* Append new field to old ones (if any). */
     if (http_cfg->hs_resp_fields) {
@@ -2077,21 +2266,14 @@ static void cmd_tests_set_app_http_server_field_parsed(void *parsed_result, stru
     }
 
     if (!http_fields) {
-        cmdline_printf(cl, "ERROR: Failed allocating test case %"PRIu32
-                       " http fields on port %"PRIu32"\n",
-                       pr->tcid,
-                       pr->port);
+        cmdline_printf(cl, "ERROR: Failed allocating http fields!\n");
         return;
     }
 
     if (http_server_cfg_init(http_cfg, http_cfg->hs_resp_code,
                              http_fields,
                              http_cfg->hs_resp_size)) {
-        cmdline_printf(cl,
-                       "ERROR: Failed allocating config for test case %"PRIu32
-                       " on port %"PRIu32"\n",
-                       pr->tcid,
-                       pr->port);
+        cmdline_printf(cl, "ERROR: Failed allocating http server config!\n");
 
         /* Free the memory allocated by asprintf. */
         free(http_fields);
@@ -2101,28 +2283,42 @@ static void cmd_tests_set_app_http_server_field_parsed(void *parsed_result, stru
     /* Free the memory allocated by asprintf. */
     free(http_fields);
 
-    if (test_mgmt_update_test_case_app_server(pr->port, pr->tcid,
-                                              &app_server_cfg,
-                                              &parg) == 0) {
-        cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
-                       pr->port,
-                       pr->tcid);
+    if (!HTTP_IMIX_ISSET(flags)) {
+        err =  test_mgmt_update_test_case_app(pr->port, pr->tcid, &app_cfg,
+                                              &parg);
+        if (err == 0) {
+            cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
+                           pr->port,
+                           pr->tcid);
+        } else {
+            cmdline_printf(cl, "ERROR: Failed updating test case %"PRIu32
+                           " config on port %"PRIu32"\n",
+                           pr->tcid,
+                           pr->port);
+        }
     } else {
-        cmdline_printf(cl,
-                       "ERROR: Failed updating test case %"PRIu32
-                       " config on port %"PRIu32"\n",
-                       pr->tcid,
-                       pr->port);
+        err = imix_cli_set_app_cfg(pr->app_index, &app_cfg, &parg);
 
-        /* If an error happened, free the alloced memory here. */
-        http_server_cfg_free(http_cfg);
+        if (err == 0) {
+            cmdline_printf(cl, "IMIX app-index %"PRIu32" updated!\n",
+                           pr->app_index);
+        } else {
+            cmdline_printf(cl,
+                           "ERROR: Failed updating IMIX app-index %"PRIu32"!\n",
+                           pr->app_index);
+        }
+    }
+
+    if (err != 0) {
+        /* If an error happened, free the config memory here. */
+        http_server_cfg_free(&app_cfg.app_http_server);
     }
 }
 
 cmdline_parse_inst_t cmd_tests_set_app_http_field_server = {
     .f = cmd_tests_set_app_http_server_field_parsed,
-    .data = NULL,
-    .help_str = "set tests server http port <port> test-case-id <tcid>"
+    .data = (void *)(uintptr_t)HTTP_FLAG_NONE,
+    .help_str = "set tests server http port <port> test-case-id <tcid> "
                 "http-field <http-field>",
     .tokens = {
         (void *)&cmd_tests_set_app_http_server_field_T_set,
@@ -2133,6 +2329,25 @@ cmdline_parse_inst_t cmd_tests_set_app_http_field_server = {
         (void *)&cmd_tests_set_app_http_server_field_T_port,
         (void *)&cmd_tests_set_app_http_server_field_T_tcid_kw,
         (void *)&cmd_tests_set_app_http_server_field_T_tcid,
+        (void *)&cmd_tests_set_app_http_server_field_T_field_kw,
+        (void *)&cmd_tests_set_app_http_server_field_T_field,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_tests_set_app_http_field_server_imix = {
+    .f = cmd_tests_set_app_http_server_field_parsed,
+    .data = (void *)(uintptr_t)HTTP_FLAG_IMIX,
+    .help_str = "set tests imix app-index <app-index> server http "
+                "http-field <http-field>",
+    .tokens = {
+        (void *)&cmd_tests_set_app_http_server_field_T_set,
+        (void *)&cmd_tests_set_app_http_server_field_T_tests,
+        (void *)&cmd_tests_set_app_http_server_field_T_imix,
+        (void *)&cmd_tests_set_app_http_server_field_T_app_index_kw,
+        (void *)&cmd_tests_set_app_http_server_field_T_app_index,
+        (void *)&cmd_tests_set_app_http_server_field_T_server,
+        (void *)&cmd_tests_set_app_http_server_field_T_http,
         (void *)&cmd_tests_set_app_http_server_field_T_field_kw,
         (void *)&cmd_tests_set_app_http_server_field_T_field,
         NULL,
@@ -2228,9 +2443,13 @@ cmdline_parse_inst_t cmd_show_http_statistics_details = {
 
 static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_set_app_http_client,
+    &cmd_tests_set_app_http_client_imix,
     &cmd_tests_set_app_http_field_client,
+    &cmd_tests_set_app_http_field_client_imix,
     &cmd_tests_set_app_http_server,
+    &cmd_tests_set_app_http_server_imix,
     &cmd_tests_set_app_http_field_server,
+    &cmd_tests_set_app_http_field_server_imix,
     &cmd_show_http_statistics,
     &cmd_show_http_statistics_details,
     NULL,

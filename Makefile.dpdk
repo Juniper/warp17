@@ -106,6 +106,7 @@ SRCS-y += tpg_test_mgmt_cli.c
 SRCS-y += tpg_test_app.c
 SRCS-y += tpg_test_http_1_1_app.c
 SRCS-y += tpg_test_raw_app.c
+SRCS-y += tpg_test_imix_app.c
 SRCS-y += tpg_test_stats.c
 SRCS-y += tpg_tests.c
 SRCS-y += tpg_tests_sm.c

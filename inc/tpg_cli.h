@@ -91,6 +91,27 @@ extern struct cmdline_token_ops cli_token_quoted_string_ops;
 }
 
 /*****************************************************************************
+ * ID List parser definitions.
+ ****************************************************************************/
+
+/* WARNING: HACK! We abuse cmdline_parse_token_portlist_t because it's
+ * exactly what we need (except for the help string)..
+ */
+typedef cmdline_portlist_t             cmdline_id_list_t;
+typedef cmdline_parse_token_portlist_t cmdline_parse_token_id_list_t;
+
+extern struct cmdline_token_ops cmdline_token_id_list_ops;
+
+#define TOKEN_ID_LIST_INITIALIZER(structure, field)  \
+{                                                    \
+    /* hdr */                                        \
+    {                                                \
+        &cmdline_token_id_list_ops,   /* ops */      \
+        offsetof(structure, field),   /* offset */   \
+    },                                               \
+}
+
+/*****************************************************************************
  * Externals for tpg_cli.c
  ****************************************************************************/
 extern void cli_printer(void *printer_arg, const char *fmt, va_list ap);
@@ -107,6 +128,9 @@ extern int  cli_parse_quoted_string(cmdline_parse_token_hdr_t *tk,
                                     const char *buf,
                                     void *res,
                                     unsigned ressize);
+extern int cmdline_get_help_id_list(cmdline_parse_token_hdr_t *tk,
+                                    char *dstbuf,
+                                    unsigned int size);
 
 extern cmdline_arg_parser_res_t cli_handle_cmdline_opt(const char *opt_name,
                                                        char *opt_arg);

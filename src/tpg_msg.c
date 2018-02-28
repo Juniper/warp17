@@ -241,9 +241,10 @@ bool msg_sys_init(void)
             continue;
 
         snprintf(q_name, MSG_Q_NAME_MAXLEN, "%s%d", GCFG_MSGQ_NAME, lcore);
-        msg_queues[lcore_idx] = rte_ring_create(q_name,
-                                                queue_size,
-                                                SOCKET_ID_ANY, RING_F_SC_DEQ);
+        msg_queues[lcore_idx] =
+            rte_ring_create(q_name, queue_size,
+                            rte_lcore_to_socket_id(lcore),
+                            RING_F_SC_DEQ);
         if (!msg_queues[lcore_idx]) {
             TPG_ERROR_ABORT("ERROR: %s!\n",
                             "Failed to allocate core msg queue");
@@ -252,9 +253,10 @@ bool msg_sys_init(void)
 
         snprintf(q_name, MSG_Q_NAME_MAXLEN, "%s%d-local", GCFG_MSGQ_NAME,
                  lcore);
-        msg_local_queues[lcore_idx] = rte_ring_create(q_name, queue_size,
-                                                      SOCKET_ID_ANY,
-                                                      RING_F_SC_DEQ | RING_F_SP_ENQ);
+        msg_local_queues[lcore_idx] =
+            rte_ring_create(q_name, queue_size,
+                            rte_lcore_to_socket_id(lcore),
+                            RING_F_SC_DEQ | RING_F_SP_ENQ);
         if (!msg_local_queues[lcore_idx]) {
             TPG_ERROR_ABORT("ERROR: %s!\n",
                             "Failed to allocate core local msg queue");

@@ -72,6 +72,7 @@ from warp17_server_pb2    import *
 from warp17_client_pb2    import *
 from warp17_app_http_pb2  import *
 from warp17_app_raw_pb2   import *
+from warp17_app_pb2       import *
 from warp17_test_case_pb2 import *
 from warp17_service_pb2   import *
 
@@ -82,19 +83,19 @@ class TestHttpCfg(Warp17TrafficTestCase, Warp17UnitTestCase):
 
     def _http_client_cfg(self, method=GET, req_size=42,
                          fields='Content-Type: plain/text'):
-        return AppClient(ac_app_proto=HTTP,
-                         ac_http=HttpClient(hc_req_method=method,
-                                            hc_req_object_name='/index.html',
-                                            hc_req_host_name='www.foobar.net',
-                                            hc_req_size=req_size,
-                                            hc_req_fields=fields))
+        return App(app_proto=HTTP_CLIENT,
+                   app_http_client=HttpClient(hc_req_method=method,
+                                              hc_req_object_name='/index.html',
+                                              hc_req_host_name='www.foobar.net',
+                                              hc_req_size=req_size,
+                                              hc_req_fields=fields))
 
     def _http_server_cfg(self, resp_code=OK_200, resp_size=42,
                          fields='Content-Type: plain/text'):
-        return AppServer(as_app_proto=HTTP,
-                         as_http=HttpServer(hs_resp_code=resp_code,
-                                            hs_resp_size=resp_size,
-                                            hs_resp_fields=fields))
+        return App(app_proto=HTTP_SERVER,
+                   app_http_server=HttpServer(hs_resp_code=resp_code,
+                                              hs_resp_size=resp_size,
+                                              hs_resp_fields=fields))
 
     #####################################################
     # Overrides of Warp17TrafficTestCase specific to HTTP
@@ -141,37 +142,33 @@ class TestHttpCfg(Warp17TrafficTestCase, Warp17UnitTestCase):
             yield (self._http_client_cfg(fields=fields),
                    self._http_server_cfg(fields=fields))
 
-    def update_client(self, tc_arg, http_client, expected_err=0):
-        err = self.warp17_call('UpdateTestCaseAppClient',
-                               UpdClientArg(uca_tc_arg=tc_arg,
-                                            uca_cl_app=http_client))
+    def _update(self, descr, tc_arg, app, expected_err):
+        self.lh.info('Run Update {}'.format(descr))
+
+        update_arg = UpdateAppArg(uaa_tc_arg=tc_arg, uaa_app=app)
+        err = self.warp17_call('UpdateTestCaseApp', update_arg)
         self.assertEqual(err.e_code, expected_err)
 
         if expected_err == 0:
-            cl_result = self.warp17_call('GetTestCaseAppClient', tc_arg)
-            self.assertEqual(cl_result.tccr_error.e_code, 0)
-            self.assertTrue(cl_result.tccr_cl_app == http_client)
+            result = self.warp17_call('GetTestCaseApp', update_arg.uaa_tc_arg)
+            self.assertEqual(result.tcar_error.e_code, 0)
+            self.assertTrue(result.tcar_app == app)
+
+    def update_client(self, tc_arg, http_client, expected_err=0):
+        self._update('update_client', tc_arg, http_client, expected_err)
 
     def update_server(self, tc_arg, http_server, expected_err=0):
-        err = self.warp17_call('UpdateTestCaseAppServer',
-                               UpdServerArg(usa_tc_arg=tc_arg,
-                                            usa_srv_app=http_server))
-        self.assertEqual(err.e_code, expected_err)
-
-        if expected_err == 0:
-            srv_result = self.warp17_call('GetTestCaseAppServer', tc_arg)
-            self.assertEqual(srv_result.tcsr_error.e_code, 0)
-            self.assertTrue(srv_result.tcsr_srv_app == http_server)
+        self._update('update_server', tc_arg, http_server, expected_err)
 
     def verify_stats(self, cl_result, srv_result, cl_update, srv_update):
-        req_cnt = cl_result.tsr_app_stats.tcas_http.hsts_req_cnt
-        resp_cnt = cl_result.tsr_app_stats.tcas_http.hsts_resp_cnt
+        req_cnt = cl_result.tsr_app_stats.as_http.hsts_req_cnt
+        resp_cnt = cl_result.tsr_app_stats.as_http.hsts_resp_cnt
         self.lh.info('cl req_cnt: {} resp_cnt: {}'.format(req_cnt, resp_cnt))
         self.assertTrue(req_cnt > 0)
         self.assertTrue(resp_cnt > 0)
 
-        req_cnt = srv_result.tsr_app_stats.tcas_http.hsts_req_cnt
-        resp_cnt = srv_result.tsr_app_stats.tcas_http.hsts_resp_cnt
+        req_cnt = srv_result.tsr_app_stats.as_http.hsts_req_cnt
+        resp_cnt = srv_result.tsr_app_stats.as_http.hsts_resp_cnt
         self.lh.info('srv req_cnt: {} resp_cnt: {}'.format(req_cnt, resp_cnt))
         self.assertTrue(req_cnt > 0)
         self.assertTrue(resp_cnt > 0)
@@ -214,16 +211,16 @@ class TestHttpRaw(Warp17TrafficTestCase, Warp17UnitTestCase):
     RUN_TIME_S = 3
 
     def _raw_client_cfg(self):
-        return AppClient(ac_app_proto=RAW,
-                         ac_raw=RawClient(rc_req_plen=10000,
-                                          rc_resp_plen=20000))
+        return App(app_proto=RAW_CLIENT,
+                   app_raw_client=RawClient(rc_req_plen=10000,
+                                            rc_resp_plen=20000))
 
     def _http_server_cfg(self, resp_code=OK_200, resp_size=42,
                          fields='Content-Type: plain/text'):
-        return AppServer(as_app_proto=HTTP,
-                         as_http=HttpServer(hs_resp_code=resp_code,
-                                            hs_resp_size=resp_size,
-                                            hs_resp_fields=fields))
+        return App(app_proto=HTTP_SERVER,
+                   app_http_server=HttpServer(hs_resp_code=resp_code,
+                                              hs_resp_size=resp_size,
+                                              hs_resp_fields=fields))
 
     #####################################################
     # Overrides of Warp17TrafficTestCase specific to HTTP
@@ -249,37 +246,33 @@ class TestHttpRaw(Warp17TrafficTestCase, Warp17UnitTestCase):
     def get_invalid_updates(self):
         for _ in []: yield ()
 
-    def update_client(self, tc_arg, raw_client, expected_err=0):
-        err = self.warp17_call('UpdateTestCaseAppClient',
-                               UpdClientArg(uca_tc_arg=tc_arg,
-                                            uca_cl_app=raw_client))
+    def _update(self, descr, tc_arg, app, expected_err):
+        self.lh.info('Run Update {}'.format(descr))
+
+        update_arg = UpdateAppArg(uaa_tc_arg=tc_arg, uaa_app=app)
+        err = self.warp17_call('UpdateTestCaseApp', update_arg)
         self.assertEqual(err.e_code, expected_err)
 
         if expected_err == 0:
-            cl_result = self.warp17_call('GetTestCaseAppClient', tc_arg)
-            self.assertEqual(cl_result.tccr_error.e_code, 0)
-            self.assertTrue(cl_result.tccr_cl_app == raw_client)
+            result = self.warp17_call('GetTestCaseApp', update_arg.uaa_tc_arg)
+            self.assertEqual(result.tcar_error.e_code, 0)
+            self.assertTrue(result.tcar_app == app)
+
+    def update_client(self, tc_arg, raw_client, expected_err=0):
+        self._update('update_client', tc_arg, raw_client, expected_err)
 
     def update_server(self, tc_arg, http_server, expected_err=0):
-        err = self.warp17_call('UpdateTestCaseAppServer',
-                               UpdServerArg(usa_tc_arg=tc_arg,
-                                            usa_srv_app=http_server))
-        self.assertEqual(err.e_code, expected_err)
-
-        if expected_err == 0:
-            srv_result = self.warp17_call('GetTestCaseAppServer', tc_arg)
-            self.assertEqual(srv_result.tcsr_error.e_code, 0)
-            self.assertTrue(srv_result.tcsr_srv_app == http_server)
+        self._update('update_server', tc_arg, http_server, expected_err)
 
     def verify_stats(self, cl_result, srv_result, cl_update, srv_update):
-        req_cnt = cl_result.tsr_app_stats.tcas_raw.rsts_req_cnt
-        resp_cnt = cl_result.tsr_app_stats.tcas_raw.rsts_resp_cnt
+        req_cnt = cl_result.tsr_app_stats.as_raw.rsts_req_cnt
+        resp_cnt = cl_result.tsr_app_stats.as_raw.rsts_resp_cnt
         self.lh.info('req_cnt: {} resp_cnt: {}'.format(req_cnt, resp_cnt))
         self.assertEqual(req_cnt, 0)
         self.assertEqual(resp_cnt, 0)
 
-        req_cnt = srv_result.tsr_app_stats.tcas_http.hsts_req_cnt
-        resp_cnt = srv_result.tsr_app_stats.tcas_http.hsts_resp_cnt
+        req_cnt = srv_result.tsr_app_stats.as_http.hsts_req_cnt
+        resp_cnt = srv_result.tsr_app_stats.as_http.hsts_resp_cnt
         self.lh.info('srv req_cnt: {} resp_cnt: {}'.format(req_cnt, resp_cnt))
         self.assertEqual(req_cnt, 0)
         self.assertEqual(resp_cnt, 0)

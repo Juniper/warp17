@@ -122,29 +122,12 @@ typedef struct tsm_data_arg_s {
 
 } tsm_data_arg_t;
 
-/*****************************************************************************
- * TCP stack notifications
- ****************************************************************************/
-enum {
-    TCB_NOTIF_STATE_MACHINE_INIT = NOTIFID_INITIALIZER(NOTIF_TCP_MODULE),
-    TCB_NOTIF_STATE_CHANGE,
-    TCB_NOTIF_SEG_DELIVERED,
-    TCB_NOTIF_SEG_WIN_UNAVAILABLE,
-    TCB_NOTIF_SEG_WIN_AVAILABLE,
-    TCB_NOTIF_SEG_RECEIVED,
-    TCB_NOTIF_STATE_MACHINE_TERM,
-};
+/*
+ * Helper to send out TCP related notifications.
+ */
+#define TCP_NOTIF(notif, tcb) \
+    TEST_NOTIF((notif), &(tcb)->tcb_l4)
 
-#define TCP_NOTIF(notif, tcb)                                        \
-    do {                                                             \
-        notif_arg_t arg = TCP_NOTIF_ARG((tcb),                       \
-                                    (tcb)->tcb_l4.l4cb_test_case_id, \
-                                    (tcb)->tcb_l4.l4cb_interface);   \
-        tcp_notif_cb((notif), &arg);                                 \
-    } while (0)
-
-/* Callback to be executed whenever an interesting event happens. */
-extern notif_cb_t tcp_notif_cb;
 
 /*****************************************************************************
  * Globals for tpg_tcp_sm.c

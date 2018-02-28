@@ -75,10 +75,21 @@ static tpg_cli_override_cb_t  cli_override;
  * quotes.
  ****************************************************************************/
 struct cmdline_token_ops cli_token_quoted_string_ops = {
-	.parse = cli_parse_quoted_string,
-	.complete_get_nb = cmdline_complete_get_nb_string,
-	.complete_get_elt = cmdline_complete_get_elt_string,
-	.get_help = cmdline_get_help_string,
+    .parse = cli_parse_quoted_string,
+    .complete_get_nb = cmdline_complete_get_nb_string,
+    .complete_get_elt = cmdline_complete_get_elt_string,
+    .get_help = cmdline_get_help_string,
+};
+
+/*****************************************************************************
+ * Wrapper on top of the DPDK port list parser which allows parsing generic
+ * id lists.
+ ****************************************************************************/
+struct cmdline_token_ops cmdline_token_id_list_ops = {
+    .parse = cmdline_parse_portlist,
+    .complete_get_nb = NULL,
+    .complete_get_elt = NULL,
+    .get_help = cmdline_get_help_id_list,
 };
 
 /*****************************************************************************
@@ -476,5 +487,21 @@ int cli_parse_quoted_string(cmdline_parse_token_hdr_t *tk, const char *buf,
     }
 
     return token_len;
+}
+
+/*****************************************************************************
+ * cmdline_get_help_id_list()
+ ****************************************************************************/
+int
+cmdline_get_help_id_list(cmdline_parse_token_hdr_t *tk __rte_unused,
+                         char *dstbuf, unsigned int size)
+{
+    int ret;
+
+    ret = snprintf(dstbuf, size, "range of indices as 3,4-6,8-19,20");
+    if (ret < 0)
+        return -1;
+
+    return 0;
 }
 

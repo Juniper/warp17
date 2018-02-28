@@ -72,7 +72,7 @@
 #define TPG_HASH_BUCKET_MASK     (TPG_HASH_BUCKET_SIZE - 1)
 
 /* The proper modulo fun should be `(((uint32_t)hash) & TPG_HASH_BUCKET_MASK)`
- * but this actually affect a lot performance, so we decided to use a simpler
+ * but this actually affects a lot performance, so we decided to use a simpler
  * function.
  */
 #define TPG_HASH_MOD(hash)                                                     \
@@ -99,24 +99,40 @@ typedef struct l4_control_block_s {
     TAILQ_ENTRY(l4_control_block_s) l4cb_test_list_entry;
 
     /*
-     * Test state-machine information
-     */
-    test_sm_state_t  l4cb_test_state;
-
-    /*
      * TPG test timer linkage.
      */
     tmr_list_entry(l4_control_block_s) l4cb_test_tmr_entry;
 
     /*
-     * Address information
+     * Test state-machine information
+     */
+    test_sm_state_t  l4cb_test_state;
+
+    /* Physical control block address. If the phys address can't be computed
+     * (e.g., non-contiguous mempools) this field will be RTE_BAD_PHYS_ADDR.
+     */
+    phys_addr_t      l4cb_phys_addr;
+
+    /*
+     * Port and test information.
      */
     uint32_t         l4cb_rx_hash;
 #if defined(TPG_L4_CB_TX_HASH)
     uint32_t         l4cb_tx_hash;
 #endif /* defined(TPG_L4_CB_TX_HASH) */
 
-    uint32_t         l4cb_interface;
+    uint16_t         l4cb_interface;
+    uint16_t         l4cb_test_case_id;
+
+    /* Socket options. */
+    sockopt_t        l4cb_sockopt;
+
+    /* Application level state storage. */
+    app_data_t       l4cb_app_data;
+
+    /*
+     * Address information
+     */
     int              l4cb_domain;
     uint16_t         l4cb_src_port;
     uint16_t         l4cb_dst_port;
@@ -127,23 +143,9 @@ typedef struct l4_control_block_s {
     /*
      * Flags.
      */
-    uint32_t         l4cb_test_case_id     :16;
     uint32_t         l4cb_on_test_tmr_list :1;
-
     uint32_t         l4cb_valid            :1; /* Only with TPG_L4_CB_DEBUG */
-
-    /* uint32_t      l4cb_unused           :14; */
-
-    /* Socket options. */
-    sockopt_t        l4cb_sockopt;
-
-    /* Application level state storage. */
-    app_data_t       l4cb_app_data;
-
-    /* Physical control block address. If the phys address can't be computed
-     * (e.g., non-contiguous mempools) this field will be RTE_BAD_PHYS_ADDR.
-     */
-    phys_addr_t      l4cb_phys_addr;
+    /* uint32_t      l4cb_unused           :30; */
 
 } l4_control_block_t;
 

@@ -664,22 +664,22 @@ static int kni_eth_set_mtu(struct rte_eth_dev *dev, uint16_t mtu)
  * Ethernet device operations table
  ****************************************************************************/
 static const struct eth_dev_ops kni_pmd_ops = {
-	.dev_start = kni_eth_dev_start,
-	.dev_stop = kni_eth_dev_stop,
-	.dev_set_link_up = kni_eth_dev_set_link_up,
-	.dev_set_link_down = kni_eth_dev_set_link_down,
-	.dev_configure = kni_eth_dev_configure,
-	.dev_infos_get = kni_eth_dev_info,
-        .rx_queue_setup = kni_eth_rx_queue_setup,
-	.tx_queue_setup = kni_eth_tx_queue_setup,
-	.rx_queue_release = kni_eth_rx_queue_release,
-	.tx_queue_release = kni_eth_tx_queue_release,
-	.link_update = kni_eth_link_update,
-	.stats_get = kni_eth_stats_get,
-        .stats_reset = kni_eth_stats_reset,
-	.mac_addr_remove = kni_eth_mac_addr_remove,
-	.mac_addr_add = kni_eth_mac_addr_add,
-        .mtu_set = kni_eth_set_mtu
+    .dev_start = kni_eth_dev_start,
+    .dev_stop = kni_eth_dev_stop,
+    .dev_set_link_up = kni_eth_dev_set_link_up,
+    .dev_set_link_down = kni_eth_dev_set_link_down,
+    .dev_configure = kni_eth_dev_configure,
+    .dev_infos_get = kni_eth_dev_info,
+    .rx_queue_setup = kni_eth_rx_queue_setup,
+    .tx_queue_setup = kni_eth_tx_queue_setup,
+    .rx_queue_release = kni_eth_rx_queue_release,
+    .tx_queue_release = kni_eth_tx_queue_release,
+    .link_update = kni_eth_link_update,
+    .stats_get = kni_eth_stats_get,
+    .stats_reset = kni_eth_stats_reset,
+    .mac_addr_remove = kni_eth_mac_addr_remove,
+    .mac_addr_add = kni_eth_mac_addr_add,
+    .mtu_set = kni_eth_set_mtu
 };
 
 /*****************************************************************************

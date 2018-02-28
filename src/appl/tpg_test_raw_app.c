@@ -70,22 +70,10 @@
  ****************************************************************************/
 #define RAW_DATA_TEMPLATE_SIZE GCFG_MBUF_PACKET_FRAGMENT_SIZE
 
+
 /*****************************************************************************
  * Latency related local definitions
  ****************************************************************************/
-#define RAW_TSTAMP_NONE 0x00000000
-#define RAW_TSTAMP_RX   0x00000001
-#define RAW_TSTAMP_TX   0x00000002
-#define RAW_TSTAMP_RXTX (RAW_TSTAMP_RX | RAW_TSTAMP_TX)
-#define RAW_TSTAMP_MASK (RAW_TSTAMP_NONE | RAW_TSTAMP_RX | RAW_TSTAMP_TX)
-
-typedef uint32_t raw_tstamp_type_t;
-
-#define RAW_TSTAMP_SET(cfg, value) \
-    ((cfg) |= ((value) & RAW_TSTAMP_MASK))
-
-#define RAW_TSTAMP_ISSET(cfg, value) \
-    ((cfg) & RAW_TSTAMP_MASK & (value))
 
 /* Latency "tag" to let the destination know that we added a TX timestamp.
  * It expands to "WLATENCY" (without the null terminator).
@@ -107,80 +95,30 @@ static_assert(sizeof(raw_latency_magic) ==
 static cmdline_parse_ctx_t cli_ctx[];
 
 /*****************************************************************************
- * Globals
+ * Globals.
  ****************************************************************************/
 
-/* Predefined raw packets to be sent on the wire. Array indexed by eth_port
- * and test case id. And entry should be initialized when a test case starts
- * and freed when the test case ends.
+/*
+ * Shared (across lcore) template for RAW traffic.
  */
-RTE_DEFINE_PER_LCORE(struct rte_mbuf **, raw_msg);
-
-#define RAW_MSG(eth_port, tcid) \
-    (RTE_PER_LCORE(raw_msg)[(eth_port) * TPG_TEST_MAX_ENTRIES + (tcid)])
-
-/* Info about TX/RX timestamping for test cases. Array indexed by eth_port
- * and test case id. And entry should be initialized when a test case starts
- * and cleanedup when the test case ends.
- */
-RTE_DEFINE_PER_LCORE(raw_tstamp_type_t *, raw_tstamp_cfg);
-
-#define RAW_TSTAMP_CFG(eth_port, tcid) \
-    (RTE_PER_LCORE(raw_tstamp_cfg)[(eth_port) * TPG_TEST_MAX_ENTRIES + (tcid)])
-
-/*****************************************************************************
- * raw_init_msg()
- ****************************************************************************/
-static int raw_init_msg(uint32_t eth_port, uint32_t test_case_id)
-{
-    struct rte_mbuf **msg_mbuf_p;
-    struct rte_mbuf  *msg_mbuf;
-
-    msg_mbuf_p = &RAW_MSG(eth_port, test_case_id);
-
-    if (*msg_mbuf_p == NULL) {
-        *msg_mbuf_p = pkt_mbuf_alloc(mem_get_mbuf_local_pool());
-        if (*msg_mbuf_p == NULL)
-            return -ENOMEM;
-    }
-
-    msg_mbuf = *msg_mbuf_p;
-
-    if (msg_mbuf->buf_len < RAW_DATA_TEMPLATE_SIZE)
-        TPG_ERROR_ABORT("ERROR: %s!\n",
-                        "RAW template doesn't fit in a single segment");
-
-    /* Initialize the template with some random values. */
-    memset(rte_pktmbuf_mtod(msg_mbuf, uint8_t *), 42, RAW_DATA_TEMPLATE_SIZE);
-
-    return 0;
-}
-
-/*****************************************************************************
- * raw_free_msg()
- ****************************************************************************/
-static void raw_free_msg(uint32_t eth_port, uint32_t test_case_id)
-{
-    pkt_mbuf_free(RAW_MSG(eth_port, test_case_id));
-    RAW_MSG(eth_port, test_case_id) = NULL;
-}
+static RTE_DEFINE_PER_LCORE(struct rte_mbuf *, raw_mbuf_template);
 
 /*****************************************************************************
  * raw_init_tstamp_cfg()
  ****************************************************************************/
-static int raw_init_tstamp_cfg(uint32_t eth_port, uint32_t test_case_id,
+static int raw_init_tstamp_cfg(raw_storage_t *raw_storage,
                                bool rx_tstamp, bool tx_tstamp)
 {
-    raw_tstamp_type_t tstamp_type = RAW_TSTAMP_NONE;
+    raw_tstamp_type_t tstamp_type = RAW_FLAG_TSTAMP_NONE;
 
     if (rx_tstamp && tx_tstamp)
-        RAW_TSTAMP_SET(tstamp_type, RAW_TSTAMP_RXTX);
+        RAW_TSTAMP_SET(tstamp_type, RAW_FLAG_TSTAMP_RXTX);
     else if (rx_tstamp)
-        RAW_TSTAMP_SET(tstamp_type, RAW_TSTAMP_RX);
+        RAW_TSTAMP_SET(tstamp_type, RAW_FLAG_TSTAMP_RX);
     else if (tx_tstamp)
-        RAW_TSTAMP_SET(tstamp_type, RAW_TSTAMP_TX);
+        RAW_TSTAMP_SET(tstamp_type, RAW_FLAG_TSTAMP_TX);
 
-    RAW_TSTAMP_CFG(eth_port, test_case_id) = tstamp_type;
+    raw_storage->rst_tstamp = tstamp_type;
 
     return 0;
 }
@@ -188,9 +126,9 @@ static int raw_init_tstamp_cfg(uint32_t eth_port, uint32_t test_case_id,
 /*****************************************************************************
  * raw_clear_tstamp_cfg()
  ****************************************************************************/
-static void raw_clear_tstamp_cfg(uint32_t eth_port, uint32_t test_case_id)
+static void raw_clear_tstamp_cfg(raw_storage_t *raw_storage)
 {
-    RAW_TSTAMP_CFG(eth_port, test_case_id) = RAW_TSTAMP_NONE;
+    raw_storage->rst_tstamp = RAW_FLAG_TSTAMP_NONE;
 }
 
 /*****************************************************************************
@@ -217,11 +155,11 @@ static void raw_goto_state(raw_app_t *raw, raw_state_t state, uint16_t remaining
  ****************************************************************************/
 void raw_client_default_cfg(tpg_test_case_t *cfg)
 {
-    cfg->tc_client.cl_app.ac_raw.rc_req_plen = 0;
-    cfg->tc_client.cl_app.ac_raw.rc_resp_plen = 0;
-    TPG_XLATE_OPTIONAL_SET_FIELD(&cfg->tc_client.cl_app.ac_raw, rc_rx_tstamp,
+    cfg->tc_app.app_raw_client.rc_req_plen = 0;
+    cfg->tc_app.app_raw_client.rc_resp_plen = 0;
+    TPG_XLATE_OPTIONAL_SET_FIELD(&cfg->tc_app.app_raw_client, rc_rx_tstamp,
                                  false);
-    TPG_XLATE_OPTIONAL_SET_FIELD(&cfg->tc_client.cl_app.ac_raw, rc_tx_tstamp,
+    TPG_XLATE_OPTIONAL_SET_FIELD(&cfg->tc_app.app_raw_client, rc_tx_tstamp,
                                  false);
 }
 
@@ -230,11 +168,11 @@ void raw_client_default_cfg(tpg_test_case_t *cfg)
  ****************************************************************************/
 void raw_server_default_cfg(tpg_test_case_t *cfg)
 {
-    cfg->tc_server.srv_app.as_raw.rs_req_plen = 0;
-    cfg->tc_server.srv_app.as_raw.rs_resp_plen = 0;
-    TPG_XLATE_OPTIONAL_SET_FIELD(&cfg->tc_server.srv_app.as_raw, rs_rx_tstamp,
+    cfg->tc_app.app_raw_server.rs_req_plen = 0;
+    cfg->tc_app.app_raw_server.rs_resp_plen = 0;
+    TPG_XLATE_OPTIONAL_SET_FIELD(&cfg->tc_app.app_raw_server, rs_rx_tstamp,
                                  false);
-    TPG_XLATE_OPTIONAL_SET_FIELD(&cfg->tc_server.srv_app.as_raw, rs_tx_tstamp,
+    TPG_XLATE_OPTIONAL_SET_FIELD(&cfg->tc_app.app_raw_server, rs_tx_tstamp,
                                  false);
 }
 
@@ -291,9 +229,10 @@ static bool raw_validate_cfg(uint32_t eth_port, uint32_t test_case_id,
  * raw_validate_cfg()
  ****************************************************************************/
 bool raw_client_validate_cfg(const tpg_test_case_t *cfg,
+                             const tpg_app_t *app_cfg,
                              printer_arg_t *printer_arg)
 {
-    const tpg_raw_client_t *raw_client = &cfg->tc_client.cl_app.ac_raw;
+    const tpg_raw_client_t *raw_client = &app_cfg->app_raw_client;
 
     return raw_validate_cfg(cfg->tc_eth_port, cfg->tc_id,
                             raw_client->rc_resp_plen,
@@ -307,9 +246,10 @@ bool raw_client_validate_cfg(const tpg_test_case_t *cfg,
  * raw_validate_cfg()
  ****************************************************************************/
 bool raw_server_validate_cfg(const tpg_test_case_t *cfg,
+                             const tpg_app_t *app_cfg,
                              printer_arg_t *printer_arg)
 {
-    const tpg_raw_server_t *raw_server = &cfg->tc_server.srv_app.as_raw;
+    const tpg_raw_server_t *raw_server = &app_cfg->app_raw_server;
 
     return raw_validate_cfg(cfg->tc_eth_port, cfg->tc_id,
                             raw_server->rs_req_plen,
@@ -322,45 +262,46 @@ bool raw_server_validate_cfg(const tpg_test_case_t *cfg,
 /*****************************************************************************
  * raw_client_print_cfg()
  ****************************************************************************/
-void raw_client_print_cfg(const tpg_test_case_t *cfg,
+void raw_client_print_cfg(const tpg_app_t *app_cfg,
                           printer_arg_t *printer_arg)
 {
     tpg_printf(printer_arg, "RAW CLIENT:\n");
-    tpg_printf(printer_arg, "%-16s : %"PRIu32"\n", "Request Len",
-               cfg->tc_client.cl_app.ac_raw.rc_req_plen);
-    tpg_printf(printer_arg, "%-16s : %"PRIu32"\n", "Response Len",
-               cfg->tc_client.cl_app.ac_raw.rc_resp_plen);
-    tpg_printf(printer_arg, "%-16s : %-3s\n",  "RX-TS",
-               TPG_XLATE_OPT_BOOL(&cfg->tc_client.cl_app.ac_raw,
-                                  rc_rx_tstamp) ? "ON" : "OFF");
-    tpg_printf(printer_arg, "%-16s : %-3s\n", "TX-TS",
-               TPG_XLATE_OPT_BOOL(&cfg->tc_client.cl_app.ac_raw,
-                                  rc_tx_tstamp) ? "ON" : "OFF");
+    tpg_printf(printer_arg, "%-15s: %"PRIu32"\n", "Request Len",
+               app_cfg->app_raw_client.rc_req_plen);
+    tpg_printf(printer_arg, "%-15s: %"PRIu32"\n", "Response Len",
+               app_cfg->app_raw_client.rc_resp_plen);
+    tpg_printf(printer_arg, "%-15s: %-3s\n",  "RX-TS",
+               TPG_XLATE_OPT_BOOL(&app_cfg->app_raw_client, rc_rx_tstamp) ?
+                                  "ON" : "OFF");
+    tpg_printf(printer_arg, "%-15s: %-3s\n", "TX-TS",
+               TPG_XLATE_OPT_BOOL(&app_cfg->app_raw_client, rc_tx_tstamp) ?
+                                  "ON" : "OFF");
 }
 
 /*****************************************************************************
  * raw_server_print_cfg()
  ****************************************************************************/
-void raw_server_print_cfg(const tpg_test_case_t *cfg,
+void raw_server_print_cfg(const tpg_app_t *app_cfg,
                           printer_arg_t *printer_arg)
 {
     tpg_printf(printer_arg, "RAW SERVER:\n");
-    tpg_printf(printer_arg, "%-16s : %"PRIu32"\n", "Request Len",
-               cfg->tc_server.srv_app.as_raw.rs_req_plen);
-    tpg_printf(printer_arg, "%-16s : %"PRIu32"\n", "Response Len",
-               cfg->tc_server.srv_app.as_raw.rs_resp_plen);
-    tpg_printf(printer_arg, "%-16s : %-3s\n",  "RX-TS",
-               TPG_XLATE_OPT_BOOL(&cfg->tc_server.srv_app.as_raw,
-                                  rs_rx_tstamp) ? "ON" : "OFF");
-    tpg_printf(printer_arg, "%-16s : %-3s\n", "TX-TS",
-               TPG_XLATE_OPT_BOOL(&cfg->tc_server.srv_app.as_raw,
-                                  rs_tx_tstamp) ? "ON" : "OFF");
+    tpg_printf(printer_arg, "%-15s: %"PRIu32"\n", "Request Len",
+               app_cfg->app_raw_server.rs_req_plen);
+    tpg_printf(printer_arg, "%-15s: %"PRIu32"\n", "Response Len",
+               app_cfg->app_raw_server.rs_resp_plen);
+    tpg_printf(printer_arg, "%-15s: %-3s\n",  "RX-TS",
+               TPG_XLATE_OPT_BOOL(&app_cfg->app_raw_server, rs_rx_tstamp) ?
+                                  "ON" : "OFF");
+    tpg_printf(printer_arg, "%-15s: %-3s\n", "TX-TS",
+               TPG_XLATE_OPT_BOOL(&app_cfg->app_raw_server, rs_tx_tstamp) ?
+                                  "ON" : "OFF");
 }
 
 /*****************************************************************************
- * raw_delete_cfg()
+ * raw_add_delete_cfg()
  ****************************************************************************/
-void raw_delete_cfg(const tpg_test_case_t *cfg __rte_unused)
+void raw_add_delete_cfg(const tpg_test_case_t *cfg __rte_unused,
+                        const tpg_app_t *app_cfg __rte_unused)
 {
     /* Nothing allocated, nothing to do. */
 }
@@ -368,85 +309,98 @@ void raw_delete_cfg(const tpg_test_case_t *cfg __rte_unused)
 /*****************************************************************************
  * raw_client_pkts_per_send()
  ****************************************************************************/
-uint32_t raw_client_pkts_per_send(const tpg_test_case_t *cfg,
+uint32_t raw_client_pkts_per_send(const tpg_test_case_t *cfg __rte_unused,
+                                  const tpg_app_t *app_cfg,
                                   uint32_t max_pkt_size)
 {
-    return (cfg->tc_client.cl_app.ac_raw.rc_req_plen + max_pkt_size - 1) /
+    return (app_cfg->app_raw_client.rc_req_plen + max_pkt_size - 1) /
                 max_pkt_size;
 }
 
 /*****************************************************************************
  * raw_server_pkts_per_send()
  ****************************************************************************/
-uint32_t raw_server_pkts_per_send(const tpg_test_case_t *cfg,
+uint32_t raw_server_pkts_per_send(const tpg_test_case_t *cfg __rte_unused,
+                                  const tpg_app_t *app_cfg,
                                   uint32_t max_pkt_size)
 {
-    return (cfg->tc_server.srv_app.as_raw.rs_resp_plen + max_pkt_size - 1) /
+    return (app_cfg->app_raw_server.rs_resp_plen + max_pkt_size - 1) /
                 max_pkt_size;
+}
+
+/*****************************************************************************
+ * raw_conn_init()
+ ****************************************************************************/
+static void raw_conn_init(app_data_t *app_data, uint32_t req_len,
+                          uint32_t resp_len)
+{
+    raw_tstamp_type_t tstamp_type;
+
+    tstamp_type = app_data->ad_storage.ast_raw.rst_tstamp;
+
+    /* If the config needs RX timestamping, enable for this session. */
+    if (unlikely(RAW_TSTAMP_ISSET(tstamp_type, RAW_FLAG_TSTAMP_RX)))
+        app_data->ad_raw.ra_rx_tstamp_size = sizeof(raw_latency_data_t);
+
+    /* If the config needs TX timestamping, enable for this session. */
+    if (unlikely(RAW_TSTAMP_ISSET(tstamp_type, RAW_FLAG_TSTAMP_TX))) {
+        app_data->ad_raw.ra_tx_tstamp_size = sizeof(raw_latency_data_t);
+
+        raw_latency_data_init(&app_data->ad_raw.ra_tx_tstamp);
+    }
+
+    app_data->ad_raw.ra_req_size = req_len;
+    app_data->ad_raw.ra_resp_size = resp_len;
 }
 
 /*****************************************************************************
  * raw_client_init()
  ****************************************************************************/
-void raw_client_init(app_data_t *app_data, test_case_init_msg_t *init_msg)
+void raw_client_init(app_data_t *app_data, const tpg_app_t *app_cfg)
 {
-    app_data->ad_raw.ra_req_size =
-        init_msg->tcim_client.cl_app.ac_raw.rc_req_plen;
-    app_data->ad_raw.ra_resp_size =
-        init_msg->tcim_client.cl_app.ac_raw.rc_resp_plen;
+    raw_conn_init(app_data, app_cfg->app_raw_client.rc_req_plen,
+                  app_cfg->app_raw_client.rc_resp_plen);
 }
 
 /*****************************************************************************
  * raw_server_init()
  ****************************************************************************/
-void raw_server_init(app_data_t *app_data, test_case_init_msg_t *init_msg)
+void raw_server_init(app_data_t *app_data, const tpg_app_t *app_cfg)
 {
     /* Servers act exactly in the same way as clients except that requests and
      * responses are swapped.
      */
-    app_data->ad_raw.ra_resp_size =
-        init_msg->tcim_server.srv_app.as_raw.rs_req_plen;
-    app_data->ad_raw.ra_req_size =
-        init_msg->tcim_server.srv_app.as_raw.rs_resp_plen;
+    raw_conn_init(app_data, app_cfg->app_raw_server.rs_resp_plen,
+                  app_cfg->app_raw_server.rs_req_plen);
 }
 
 /*****************************************************************************
  * raw_tc_start()
  ****************************************************************************/
-static void raw_tc_start(uint32_t eth_port, uint32_t test_case_id,
-                         bool rx_tstamp, bool tx_tstamp)
+static void raw_tc_start(raw_storage_t *raw_storage, bool rx_tstamp,
+                         bool tx_tstamp)
 {
     int err;
 
-    /* Initialize per test case data templates. */
-    err = raw_init_msg(eth_port, test_case_id);
-    if (err) {
-        TPG_ERROR_ABORT("[%d:%s()] Failed to initialize RAW msg. "
-                        "Error: %d(%s) Port: %"PRIu32 " TCID: %"PRIu32"\n",
-                        rte_lcore_index(rte_lcore_id()), __func__,
-                        -err, rte_strerror(-err),
-                        eth_port, test_case_id);
-    }
-
     /* Initialize per test case timestamping configs. */
-    err = raw_init_tstamp_cfg(eth_port, test_case_id, rx_tstamp, tx_tstamp);
+    err = raw_init_tstamp_cfg(raw_storage, rx_tstamp, tx_tstamp);
     if (err) {
-        TPG_ERROR_ABORT("[%d:%s()] Failed to initialize RAW tstamp cfg. "
-                        "Error: %d(%s) Port: %"PRIu32 " TCID: %"PRIu32"\n",
+        TPG_ERROR_ABORT("[%d:%s()] Failed to initialize RAW tstamp cfg. Error: %d(%s)\n",
                         rte_lcore_index(rte_lcore_id()), __func__,
-                        -err, rte_strerror(-err),
-                        eth_port, test_case_id);
+                        -err, rte_strerror(-err));
     }
 }
 
 /*****************************************************************************
  * raw_client_tc_start()
  ****************************************************************************/
-void raw_client_tc_start(test_case_init_msg_t *init_msg)
+void raw_client_tc_start(const tpg_test_case_t *cfg __rte_unused,
+                         const tpg_app_t *app_cfg,
+                         app_storage_t *app_storage)
 {
-    tpg_raw_client_t *client_cfg = &init_msg->tcim_client.cl_app.ac_raw;
+    const tpg_raw_client_t *client_cfg = &app_cfg->app_raw_client;
 
-    raw_tc_start(init_msg->tcim_eth_port, init_msg->tcim_test_case_id,
+    raw_tc_start(&app_storage->ast_raw,
                  TPG_XLATE_OPT_BOOL(client_cfg, rc_rx_tstamp),
                  TPG_XLATE_OPT_BOOL(client_cfg, rc_tx_tstamp));
 }
@@ -454,11 +408,13 @@ void raw_client_tc_start(test_case_init_msg_t *init_msg)
 /*****************************************************************************
  * raw_server_tc_start()
  ****************************************************************************/
-void raw_server_tc_start(test_case_init_msg_t *init_msg)
+void raw_server_tc_start(const tpg_test_case_t *cfg __rte_unused,
+                         const tpg_app_t *app_cfg,
+                         app_storage_t *app_storage)
 {
-    tpg_raw_server_t *server_cfg = &init_msg->tcim_server.srv_app.as_raw;
+    const tpg_raw_server_t *server_cfg = &app_cfg->app_raw_server;
 
-    raw_tc_start(init_msg->tcim_eth_port, init_msg->tcim_test_case_id,
+    raw_tc_start(&app_storage->ast_raw,
                  TPG_XLATE_OPT_BOOL(server_cfg, rs_rx_tstamp),
                  TPG_XLATE_OPT_BOOL(server_cfg, rs_tx_tstamp));
 }
@@ -466,42 +422,20 @@ void raw_server_tc_start(test_case_init_msg_t *init_msg)
 /*****************************************************************************
  * raw_tc_stop()
  ****************************************************************************/
-void raw_tc_stop(test_case_init_msg_t *init_msg)
+void raw_tc_stop(const tpg_test_case_t *cfg __rte_unused,
+                 const tpg_app_t *app_cfg __rte_unused,
+                 app_storage_t *app_storage)
 {
-    /* Free per test case data templates and clear the timestamping configs. */
-
-    raw_free_msg(init_msg->tcim_eth_port, init_msg->tcim_test_case_id);
-    raw_clear_tstamp_cfg(init_msg->tcim_eth_port, init_msg->tcim_test_case_id);
-}
-
-/*****************************************************************************
- * raw_conn_up()
- ****************************************************************************/
-static void raw_conn_up(l4_control_block_t *l4, app_data_t *app_data)
-{
-    raw_tstamp_type_t tstamp_type;
-
-    tstamp_type = RAW_TSTAMP_CFG(l4->l4cb_interface, l4->l4cb_test_case_id);
-
-    /* If the config needs RX timestamping, enable for this session. */
-    if (unlikely(RAW_TSTAMP_ISSET(tstamp_type, RAW_TSTAMP_RX)))
-        app_data->ad_raw.ra_rx_tstamp_size = sizeof(raw_latency_data_t);
-
-    /* If the config needs TX timestamping, enable for this session. */
-    if (unlikely(RAW_TSTAMP_ISSET(tstamp_type, RAW_TSTAMP_TX))) {
-        app_data->ad_raw.ra_tx_tstamp_size = sizeof(raw_latency_data_t);
-
-        raw_latency_data_init(&app_data->ad_raw.ra_tx_tstamp);
-    }
+    /* Clear the timestamping configs. */
+    raw_clear_tstamp_cfg(&app_storage->ast_raw);
 }
 
 /*****************************************************************************
  * raw_client_conn_up()
  ****************************************************************************/
 void raw_client_conn_up(l4_control_block_t *l4, app_data_t *app_data,
-                        tpg_test_case_app_stats_t *stats __rte_unused)
+                        tpg_app_stats_t *stats __rte_unused)
 {
-    raw_conn_up(l4, app_data);
     raw_goto_state(&app_data->ad_raw, RAWS_SENDING,
                    app_data->ad_raw.ra_req_size);
 
@@ -509,17 +443,16 @@ void raw_client_conn_up(l4_control_block_t *l4, app_data_t *app_data,
     if (app_data->ad_raw.ra_req_size == 0)
         return;
 
-    TEST_NOTIF(TEST_NOTIF_APP_CLIENT_SEND_START, l4, l4->l4cb_test_case_id,
-               l4->l4cb_interface);
+    TEST_NOTIF(TEST_NOTIF_APP_SEND_START, l4);
 }
 
 /*****************************************************************************
  * raw_server_conn_up()
  ****************************************************************************/
-void raw_server_conn_up(l4_control_block_t *l4, app_data_t *app_data,
-                        tpg_test_case_app_stats_t *stats __rte_unused)
+void raw_server_conn_up(l4_control_block_t *l4 __rte_unused,
+                        app_data_t *app_data,
+                        tpg_app_stats_t *stats __rte_unused)
 {
-    raw_conn_up(l4, app_data);
     raw_goto_state(&app_data->ad_raw, RAWS_RECEIVING,
                    app_data->ad_raw.ra_resp_size);
 }
@@ -529,7 +462,7 @@ void raw_server_conn_up(l4_control_block_t *l4, app_data_t *app_data,
  ****************************************************************************/
 void raw_conn_down(l4_control_block_t *l4 __rte_unused,
                   app_data_t *app_data __rte_unused,
-                  tpg_test_case_app_stats_t *stats __rte_unused)
+                  tpg_app_stats_t *stats __rte_unused)
 {
     /* Normally we should go through the state machine but there's nothing to
      * cleanup for RAW connections.
@@ -587,11 +520,11 @@ raw_deliver_data(l4_control_block_t *l4, raw_app_t *raw_app_data,
  * raw_client_deliver_data()
  ****************************************************************************/
 uint32_t raw_client_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
-                                 tpg_test_case_app_stats_t *stats,
+                                 tpg_app_stats_t *stats,
                                  struct rte_mbuf *rx_data,
                                  uint64_t rx_tstamp)
 {
-    tpg_raw_stats_t *raw_stats = &stats->tcas_raw;
+    tpg_raw_stats_t *raw_stats = &stats->as_raw;
     uint32_t         delivered;
 
     delivered = raw_deliver_data(l4, &app_data->ad_raw, rx_data, rx_tstamp);
@@ -599,9 +532,7 @@ uint32_t raw_client_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
         INC_STATS(raw_stats, rsts_resp_cnt);
 
         if (app_data->ad_raw.ra_req_size != 0) {
-            TEST_NOTIF(TEST_NOTIF_APP_CLIENT_SEND_START, l4,
-                       l4->l4cb_test_case_id,
-                       l4->l4cb_interface);
+            TEST_NOTIF(TEST_NOTIF_APP_SEND_START, l4);
             raw_goto_state(&app_data->ad_raw, RAWS_SENDING,
                            app_data->ad_raw.ra_req_size);
         } else {
@@ -617,11 +548,11 @@ uint32_t raw_client_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
  * raw_server_deliver_data()
  ****************************************************************************/
 uint32_t raw_server_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
-                                 tpg_test_case_app_stats_t *stats,
+                                 tpg_app_stats_t *stats,
                                  struct rte_mbuf *rx_data,
                                  uint64_t rx_tstamp)
 {
-    tpg_raw_stats_t *raw_stats = &stats->tcas_raw;
+    tpg_raw_stats_t *raw_stats = &stats->as_raw;
     uint32_t         delivered;
 
     delivered = raw_deliver_data(l4, &app_data->ad_raw, rx_data, rx_tstamp);
@@ -630,9 +561,7 @@ uint32_t raw_server_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
         INC_STATS(raw_stats, rsts_req_cnt);
 
         if (app_data->ad_raw.ra_req_size != 0) {
-            TEST_NOTIF(TEST_NOTIF_APP_SERVER_SEND_START, l4,
-                       l4->l4cb_test_case_id,
-                       l4->l4cb_interface);
+            TEST_NOTIF(TEST_NOTIF_APP_SEND_START, l4);
             raw_goto_state(&app_data->ad_raw, RAWS_SENDING,
                            app_data->ad_raw.ra_req_size);
         } else {
@@ -732,7 +661,7 @@ raw_prepend_tstamp(l4_control_block_t *l4, raw_app_t *raw_app_data,
  ****************************************************************************/
 struct rte_mbuf *raw_send_data(l4_control_block_t *l4,
                                app_data_t *app_data,
-                               tpg_test_case_app_stats_t *stats,
+                               tpg_app_stats_t *stats,
                                uint32_t max_tx_size)
 {
     struct rte_mbuf *template;
@@ -743,14 +672,14 @@ struct rte_mbuf *raw_send_data(l4_control_block_t *l4,
 
     to_send = TPG_MIN(app_data->ad_raw.ra_remaining_count, max_tx_size);
 
-    template = RAW_MSG(l4->l4cb_interface, l4->l4cb_test_case_id);
+    template = RTE_PER_LCORE(raw_mbuf_template);
     template_data = rte_pktmbuf_mtod(template, uint8_t *);
     template_data_phys = rte_pktmbuf_mtophys(template);
     tx_mbuf = data_chain_from_static_template(to_send, template_data,
                                               template_data_phys,
                                               RAW_DATA_TEMPLATE_SIZE);
 
-    return raw_prepend_tstamp(l4, &app_data->ad_raw, &stats->tcas_raw, tx_mbuf);
+    return raw_prepend_tstamp(l4, &app_data->ad_raw, &stats->as_raw, tx_mbuf);
 }
 
 /*****************************************************************************
@@ -765,28 +694,22 @@ static void raw_data_sent(app_data_t *app_data, uint32_t bytes_sent)
  * raw_client_data_sent()
  ****************************************************************************/
 bool raw_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
-                          tpg_test_case_app_stats_t *stats,
+                          tpg_app_stats_t *stats,
                           uint32_t bytes_sent)
 {
-    tpg_raw_stats_t *raw_stats = &stats->tcas_raw;
+    tpg_raw_stats_t *raw_stats = &stats->as_raw;
 
     raw_data_sent(app_data, bytes_sent);
     if (app_data->ad_raw.ra_remaining_count == 0) {
         INC_STATS(raw_stats, rsts_req_cnt);
 
         if (app_data->ad_raw.ra_resp_size != 0) {
-            TEST_NOTIF(TEST_NOTIF_APP_CLIENT_SEND_STOP, l4,
-                       l4->l4cb_test_case_id,
-                       l4->l4cb_interface);
+            TEST_NOTIF(TEST_NOTIF_APP_SEND_STOP, l4);
             raw_goto_state(&app_data->ad_raw, RAWS_RECEIVING,
                            app_data->ad_raw.ra_resp_size);
         } else {
-            TEST_NOTIF(TEST_NOTIF_APP_CLIENT_SEND_STOP, l4,
-                       l4->l4cb_test_case_id,
-                       l4->l4cb_interface);
-            TEST_NOTIF(TEST_NOTIF_APP_CLIENT_SEND_START, l4,
-                       l4->l4cb_test_case_id,
-                       l4->l4cb_interface);
+            TEST_NOTIF(TEST_NOTIF_APP_SEND_STOP, l4);
+            TEST_NOTIF(TEST_NOTIF_APP_SEND_START, l4);
             raw_goto_state(&app_data->ad_raw, RAWS_SENDING,
                            app_data->ad_raw.ra_req_size);
         }
@@ -801,17 +724,16 @@ bool raw_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
  * raw_server_data_sent()
  ****************************************************************************/
 bool raw_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
-                          tpg_test_case_app_stats_t *stats,
+                          tpg_app_stats_t *stats,
                           uint32_t bytes_sent)
 {
-    tpg_raw_stats_t *raw_stats = &stats->tcas_raw;
+    tpg_raw_stats_t *raw_stats = &stats->as_raw;
 
     raw_data_sent(app_data, bytes_sent);
     if (app_data->ad_raw.ra_remaining_count == 0) {
         INC_STATS(raw_stats, rsts_resp_cnt);
 
-        TEST_NOTIF(TEST_NOTIF_APP_SERVER_SEND_STOP, l4, l4->l4cb_test_case_id,
-                   l4->l4cb_interface);
+        TEST_NOTIF(TEST_NOTIF_APP_SEND_STOP, l4);
         raw_goto_state(&app_data->ad_raw, RAWS_RECEIVING,
                        app_data->ad_raw.ra_resp_size);
         return true;
@@ -821,38 +743,53 @@ bool raw_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
 }
 
 /*****************************************************************************
+ * raw_stats_init()
+ ****************************************************************************/
+void raw_stats_init(const tpg_app_t *app_cfg __rte_unused,
+                    tpg_app_stats_t *stats)
+{
+    bzero(stats, sizeof(*stats));
+}
+
+/*****************************************************************************
+ * raw_stats_copy()
+ ****************************************************************************/
+void raw_stats_copy(tpg_app_stats_t *dest, const tpg_app_stats_t *src)
+{
+    *dest = *src;
+}
+
+/*****************************************************************************
  * raw_stats_add()
  ****************************************************************************/
-void raw_stats_add(tpg_test_case_app_stats_t *total,
-                   const tpg_test_case_app_stats_t *elem)
+void raw_stats_add(tpg_app_stats_t *total, const tpg_app_stats_t *elem)
 {
-    total->tcas_raw.rsts_req_cnt += elem->tcas_raw.rsts_req_cnt;
-    total->tcas_raw.rsts_resp_cnt += elem->tcas_raw.rsts_resp_cnt;
+    total->as_raw.rsts_req_cnt += elem->as_raw.rsts_req_cnt;
+    total->as_raw.rsts_resp_cnt += elem->as_raw.rsts_resp_cnt;
 
-    total->tcas_raw.rsts_tstamp_no_phys_addr +=
-        elem->tcas_raw.rsts_tstamp_no_phys_addr;
-    total->tcas_raw.rsts_tstamp_no_mbuf +=
-        elem->tcas_raw.rsts_tstamp_no_mbuf;
-    total->tcas_raw.rsts_tstamp_no_win +=
-        elem->tcas_raw.rsts_tstamp_no_win;
+    total->as_raw.rsts_tstamp_no_phys_addr +=
+        elem->as_raw.rsts_tstamp_no_phys_addr;
+    total->as_raw.rsts_tstamp_no_mbuf +=
+        elem->as_raw.rsts_tstamp_no_mbuf;
+    total->as_raw.rsts_tstamp_no_win +=
+        elem->as_raw.rsts_tstamp_no_win;
 }
 
 /*****************************************************************************
  * raw_stats_print()
  ****************************************************************************/
-void raw_stats_print(const tpg_test_case_app_stats_t *stats,
-                     printer_arg_t *printer_arg)
+void raw_stats_print(const tpg_app_stats_t *stats, printer_arg_t *printer_arg)
 {
     tpg_printf(printer_arg, "%13s %13s %13s %13s %13s\n",
                "Requests", "Replies", "TsNoPhys", "TsNoMbuf", "TsNoWin");
     tpg_printf(printer_arg,
                "%13"PRIu64 " %13"PRIu64 " %13"PRIu32 " %13"PRIu32 " %13"PRIu32
                "\n",
-               stats->tcas_raw.rsts_req_cnt,
-               stats->tcas_raw.rsts_resp_cnt,
-               stats->tcas_raw.rsts_tstamp_no_phys_addr,
-               stats->tcas_raw.rsts_tstamp_no_mbuf,
-               stats->tcas_raw.rsts_tstamp_no_win);
+               stats->as_raw.rsts_req_cnt,
+               stats->as_raw.rsts_resp_cnt,
+               stats->as_raw.rsts_tstamp_no_phys_addr,
+               stats->as_raw.rsts_tstamp_no_mbuf,
+               stats->as_raw.rsts_tstamp_no_win);
 }
 
 /*****************************************************************************
@@ -874,38 +811,25 @@ bool raw_init(void)
 /*****************************************************************************
  * raw_lcore_init()
  ****************************************************************************/
-void raw_lcore_init(uint32_t lcore_id)
+void raw_lcore_init(uint32_t lcore_id __rte_unused)
 {
-    /*
-     * Allocate memory for the per thread message templates.
-     */
-    RTE_PER_LCORE(raw_msg) =
-        rte_calloc_socket("RAW_MSG", rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
-                          sizeof(*RTE_PER_LCORE(raw_msg)),
-                          0,
-                          rte_lcore_to_socket_id(lcore_id));
+    struct rte_mbuf *msg_mbuf;
 
-    if (RTE_PER_LCORE(raw_msg) == NULL) {
-        TPG_ERROR_ABORT("[%d:%s() Failed to allocate per lcore raw_msg!\n",
-                        rte_lcore_index(lcore_id),
-                        __func__);
+    RTE_PER_LCORE(raw_mbuf_template) =
+        pkt_mbuf_alloc(mem_get_mbuf_local_pool());
+    if (RTE_PER_LCORE(raw_mbuf_template) == NULL) {
+        TPG_ERROR_ABORT("ERROR: Failed to allocate RAW template!\n");
+        return;
     }
 
-    /*
-     * Allocate memory for the per thread timestamping configs.
-     */
-    RTE_PER_LCORE(raw_tstamp_cfg) =
-        rte_calloc_socket("RAW_TSTAMP",
-                          rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
-                          sizeof(*RTE_PER_LCORE(raw_tstamp_cfg)),
-                          0,
-                          rte_lcore_to_socket_id(lcore_id));
+    msg_mbuf = RTE_PER_LCORE(raw_mbuf_template);
 
-    if (RTE_PER_LCORE(raw_tstamp_cfg) == NULL) {
-        TPG_ERROR_ABORT("[%d:%s() Failed to allocate per lcore tstamp_cfg!\n",
-                        rte_lcore_index(lcore_id),
-                        __func__);
-    }
+    if (msg_mbuf->buf_len < RAW_DATA_TEMPLATE_SIZE)
+        TPG_ERROR_ABORT("ERROR: %s!\n",
+                        "RAW template doesn't fit in a single segment");
+
+    /* Initialize the template with some random values. */
+    memset(rte_pktmbuf_mtod(msg_mbuf, uint8_t *), 42, RAW_DATA_TEMPLATE_SIZE);
 }
 
 /*****************************************************************************
@@ -919,12 +843,15 @@ void raw_lcore_init(uint32_t lcore_id)
  struct cmd_tests_set_app_raw_client_result {
     cmdline_fixed_string_t set;
     cmdline_fixed_string_t tests;
+    cmdline_fixed_string_t imix;
     cmdline_fixed_string_t client;
     cmdline_fixed_string_t raw;
     cmdline_fixed_string_t port_kw;
     uint32_t               port;
     cmdline_fixed_string_t tcid_kw;
     uint32_t               tcid;
+    cmdline_fixed_string_t app_index_kw;
+    uint32_t               app_index;
 
     cmdline_fixed_string_t data_req_kw;
     uint32_t               data_req_plen;
@@ -940,6 +867,8 @@ static cmdline_parse_token_string_t cmd_tests_set_app_raw_client_T_set =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_client_result, set, "set");
 static cmdline_parse_token_string_t cmd_tests_set_app_raw_client_T_tests =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_client_result, tests, "tests");
+static cmdline_parse_token_string_t cmd_tests_set_app_raw_client_T_imix =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_client_result, imix, "imix");
 static cmdline_parse_token_string_t cmd_tests_set_app_raw_client_T_client =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_client_result, client,
                              TEST_CASE_CLIENT_CLI_STR);
@@ -955,6 +884,11 @@ static cmdline_parse_token_string_t cmd_tests_set_app_raw_client_T_tcid_kw =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_client_result, tcid_kw, "test-case-id");
 static cmdline_parse_token_num_t cmd_tests_set_app_raw_client_T_tcid =
     TOKEN_NUM_INITIALIZER(struct cmd_tests_set_app_raw_client_result, tcid, UINT32);
+
+static cmdline_parse_token_string_t cmd_tests_set_app_raw_client_T_app_index_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_client_result, app_index_kw, "app-index");
+static cmdline_parse_token_num_t cmd_tests_set_app_raw_client_T_app_index =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_app_raw_client_result, app_index, UINT32);
 
 static cmdline_parse_token_string_t cmd_tests_set_app_raw_client_T_data_req_kw =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_client_result, data_req_kw, "data-req-plen");
@@ -975,52 +909,64 @@ static void cmd_tests_set_app_raw_client_parsed(void *parsed_result,
                                                 struct cmdline *cl,
                                                 void *data)
 {
-    printer_arg_t                               parg;
+    printer_arg_t    parg;
+    tpg_app_t        app_cfg;
+    int              err;
+    raw_flags_type_t flags;
+
     struct cmd_tests_set_app_raw_client_result *pr;
-    tpg_app_client_t                            app_client_cfg;
-    int                                         err;
-    raw_tstamp_type_t                           tstamp_type;
 
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
-    tstamp_type = (raw_tstamp_type_t)(uintptr_t)data;
+    flags = (raw_flags_type_t)(uintptr_t)data;
 
-    bzero(&app_client_cfg, sizeof(app_client_cfg));
+    bzero(&app_cfg, sizeof(app_cfg));
 
-    app_client_cfg.ac_app_proto = APP_PROTO__RAW;
-    app_client_cfg.ac_raw.rc_req_plen = pr->data_req_plen;
-    app_client_cfg.ac_raw.rc_resp_plen = pr->data_resp_plen;
+    app_cfg.app_proto = APP_PROTO__RAW_CLIENT;
+    app_cfg.app_raw_client.rc_req_plen = pr->data_req_plen;
+    app_cfg.app_raw_client.rc_resp_plen = pr->data_resp_plen;
 
-    if (RAW_TSTAMP_ISSET(tstamp_type, RAW_TSTAMP_RX)) {
-        TPG_XLATE_OPTIONAL_SET_FIELD(&app_client_cfg.ac_raw, rc_rx_tstamp,
+    if (RAW_TSTAMP_ISSET(flags, RAW_FLAG_TSTAMP_RX)) {
+        TPG_XLATE_OPTIONAL_SET_FIELD(&app_cfg.app_raw_client, rc_rx_tstamp,
                                      true);
     }
 
-    if (RAW_TSTAMP_ISSET(tstamp_type, RAW_TSTAMP_TX)) {
-        TPG_XLATE_OPTIONAL_SET_FIELD(&app_client_cfg.ac_raw, rc_tx_tstamp,
+    if (RAW_TSTAMP_ISSET(flags, RAW_FLAG_TSTAMP_TX)) {
+        TPG_XLATE_OPTIONAL_SET_FIELD(&app_cfg.app_raw_client, rc_tx_tstamp,
                                      true);
     }
 
-    err = test_mgmt_update_test_case_app_client(pr->port, pr->tcid,
-                                                &app_client_cfg,
-                                                &parg);
-    if (err == 0) {
-        cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
-                       pr->port,
-                       pr->tcid);
+    if (!RAW_IMIX_ISSET(flags)) {
+        err = test_mgmt_update_test_case_app(pr->port, pr->tcid, &app_cfg,
+                                             &parg);
+        if (err == 0) {
+            cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
+                           pr->port,
+                           pr->tcid);
+        } else {
+            cmdline_printf(cl, "ERROR: Failed updating test case %"PRIu32
+                           " config on port %"PRIu32"\n",
+                           pr->tcid,
+                           pr->port);
+        }
     } else {
-        cmdline_printf(cl,
-                       "ERROR: Failed updating test case %"PRIu32
-                       " config on port %"PRIu32"\n",
-                       pr->tcid,
-                       pr->port);
+        err = imix_cli_set_app_cfg(pr->app_index, &app_cfg, &parg);
+
+        if (err == 0) {
+            cmdline_printf(cl, "IMIX app-index %"PRIu32" updated!\n",
+                           pr->app_index);
+        } else {
+            cmdline_printf(cl,
+                           "ERROR: Failed updating IMIX app-index %"PRIu32"!\n",
+                           pr->app_index);
+        }
     }
 }
 
 cmdline_parse_inst_t cmd_tests_set_app_raw_client = {
     .f = cmd_tests_set_app_raw_client_parsed,
-    .data = NULL,
-    .help_str = "set tests client raw port <port> test-case-id <tcid>"
+    .data = (void *)(uintptr_t)RAW_FLAG_TSTAMP_NONE,
+    .help_str = "set tests client raw port <port> test-case-id <tcid> "
                 "data-req-plen <len> data-resp-plen <len>",
     .tokens = {
         (void *)&cmd_tests_set_app_raw_client_T_set,
@@ -1039,10 +985,31 @@ cmdline_parse_inst_t cmd_tests_set_app_raw_client = {
     },
 };
 
+cmdline_parse_inst_t cmd_tests_set_app_raw_client_imix = {
+    .f = cmd_tests_set_app_raw_client_parsed,
+    .data = (void *)(uintptr_t)RAW_FLAG_IMIX,
+    .help_str = "set tests imix app-index <app-index> client raw "
+                "data-req-plen <len> data-resp-plen <len>",
+    .tokens = {
+        (void *)&cmd_tests_set_app_raw_client_T_set,
+        (void *)&cmd_tests_set_app_raw_client_T_tests,
+        (void *)&cmd_tests_set_app_raw_client_T_imix,
+        (void *)&cmd_tests_set_app_raw_client_T_app_index_kw,
+        (void *)&cmd_tests_set_app_raw_client_T_app_index,
+        (void *)&cmd_tests_set_app_raw_client_T_client,
+        (void *)&cmd_tests_set_app_raw_client_T_raw,
+        (void *)&cmd_tests_set_app_raw_client_T_data_req_kw,
+        (void *)&cmd_tests_set_app_raw_client_T_data_req_plen,
+        (void *)&cmd_tests_set_app_raw_client_T_data_resp_kw,
+        (void *)&cmd_tests_set_app_raw_client_T_data_resp_plen,
+        NULL,
+    },
+};
+
 cmdline_parse_inst_t cmd_tests_set_app_raw_client_rx_tstamp = {
     .f = cmd_tests_set_app_raw_client_parsed,
-    .data = (void *)(uintptr_t)RAW_TSTAMP_RX,
-    .help_str = "set tests client raw port <port> test-case-id <tcid>"
+    .data = (void *)(uintptr_t)RAW_FLAG_TSTAMP_RX,
+    .help_str = "set tests client raw port <port> test-case-id <tcid> "
                 "data-req-plen <len> data-resp-plen <len> rx-timestamp",
     .tokens = {
         (void *)&cmd_tests_set_app_raw_client_T_set,
@@ -1062,10 +1029,32 @@ cmdline_parse_inst_t cmd_tests_set_app_raw_client_rx_tstamp = {
     },
 };
 
+cmdline_parse_inst_t cmd_tests_set_app_raw_client_rx_tstamp_imix = {
+    .f = cmd_tests_set_app_raw_client_parsed,
+    .data = (void *)(uintptr_t)(RAW_FLAG_TSTAMP_RX | RAW_FLAG_IMIX),
+    .help_str = "set tests imix app-index <app-index> client raw "
+                "data-req-plen <len> data-resp-plen <len> rx-timestamp",
+    .tokens = {
+        (void *)&cmd_tests_set_app_raw_client_T_set,
+        (void *)&cmd_tests_set_app_raw_client_T_tests,
+        (void *)&cmd_tests_set_app_raw_client_T_imix,
+        (void *)&cmd_tests_set_app_raw_client_T_app_index_kw,
+        (void *)&cmd_tests_set_app_raw_client_T_app_index,
+        (void *)&cmd_tests_set_app_raw_client_T_client,
+        (void *)&cmd_tests_set_app_raw_client_T_raw,
+        (void *)&cmd_tests_set_app_raw_client_T_data_req_kw,
+        (void *)&cmd_tests_set_app_raw_client_T_data_req_plen,
+        (void *)&cmd_tests_set_app_raw_client_T_data_resp_kw,
+        (void *)&cmd_tests_set_app_raw_client_T_data_resp_plen,
+        (void *)&cmd_tests_set_app_raw_client_T_rx_tstamp_kw,
+        NULL,
+    },
+};
+
 cmdline_parse_inst_t cmd_tests_set_app_raw_client_tx_tstamp = {
     .f = cmd_tests_set_app_raw_client_parsed,
-    .data = (void *)(uintptr_t)RAW_TSTAMP_TX,
-    .help_str = "set tests client raw port <port> test-case-id <tcid>"
+    .data = (void *)(uintptr_t)RAW_FLAG_TSTAMP_TX,
+    .help_str = "set tests client raw port <port> test-case-id <tcid> "
                 "data-req-plen <len> data-resp-plen <len> tx-timestamp",
     .tokens = {
         (void *)&cmd_tests_set_app_raw_client_T_set,
@@ -1085,10 +1074,32 @@ cmdline_parse_inst_t cmd_tests_set_app_raw_client_tx_tstamp = {
     },
 };
 
+cmdline_parse_inst_t cmd_tests_set_app_raw_client_tx_tstamp_imix = {
+    .f = cmd_tests_set_app_raw_client_parsed,
+    .data = (void *)(uintptr_t)(RAW_FLAG_TSTAMP_TX | RAW_FLAG_IMIX),
+    .help_str = "set tests imix app-index <app-index> client raw "
+                "data-req-plen <len> data-resp-plen <len> tx-timestamp",
+    .tokens = {
+        (void *)&cmd_tests_set_app_raw_client_T_set,
+        (void *)&cmd_tests_set_app_raw_client_T_tests,
+        (void *)&cmd_tests_set_app_raw_client_T_imix,
+        (void *)&cmd_tests_set_app_raw_client_T_app_index_kw,
+        (void *)&cmd_tests_set_app_raw_client_T_app_index,
+        (void *)&cmd_tests_set_app_raw_client_T_client,
+        (void *)&cmd_tests_set_app_raw_client_T_raw,
+        (void *)&cmd_tests_set_app_raw_client_T_data_req_kw,
+        (void *)&cmd_tests_set_app_raw_client_T_data_req_plen,
+        (void *)&cmd_tests_set_app_raw_client_T_data_resp_kw,
+        (void *)&cmd_tests_set_app_raw_client_T_data_resp_plen,
+        (void *)&cmd_tests_set_app_raw_client_T_tx_tstamp_kw,
+        NULL,
+    },
+};
+
 cmdline_parse_inst_t cmd_tests_set_app_raw_client_rxtx_tstamp = {
     .f = cmd_tests_set_app_raw_client_parsed,
-    .data = (void *)(uintptr_t)RAW_TSTAMP_RXTX,
-    .help_str = "set tests client raw port <port> test-case-id <tcid>"
+    .data = (void *)(uintptr_t)RAW_FLAG_TSTAMP_RXTX,
+    .help_str = "set tests client raw port <port> test-case-id <tcid> "
                 "data-req-plen <len> data-resp-plen <len> rx-timestamp tx-timestamp",
     .tokens = {
         (void *)&cmd_tests_set_app_raw_client_T_set,
@@ -1109,6 +1120,29 @@ cmdline_parse_inst_t cmd_tests_set_app_raw_client_rxtx_tstamp = {
     },
 };
 
+cmdline_parse_inst_t cmd_tests_set_app_raw_client_rxtx_tstamp_imix = {
+    .f = cmd_tests_set_app_raw_client_parsed,
+    .data = (void *)(uintptr_t)(RAW_FLAG_TSTAMP_RXTX | RAW_FLAG_IMIX),
+    .help_str = "set tests imix app-index <app-index> client raw "
+                "data-req-plen <len> data-resp-plen <len> rx-timestamp tx-timestamp",
+    .tokens = {
+        (void *)&cmd_tests_set_app_raw_client_T_set,
+        (void *)&cmd_tests_set_app_raw_client_T_tests,
+        (void *)&cmd_tests_set_app_raw_client_T_imix,
+        (void *)&cmd_tests_set_app_raw_client_T_app_index_kw,
+        (void *)&cmd_tests_set_app_raw_client_T_app_index,
+        (void *)&cmd_tests_set_app_raw_client_T_client,
+        (void *)&cmd_tests_set_app_raw_client_T_raw,
+        (void *)&cmd_tests_set_app_raw_client_T_data_req_kw,
+        (void *)&cmd_tests_set_app_raw_client_T_data_req_plen,
+        (void *)&cmd_tests_set_app_raw_client_T_data_resp_kw,
+        (void *)&cmd_tests_set_app_raw_client_T_data_resp_plen,
+        (void *)&cmd_tests_set_app_raw_client_T_rx_tstamp_kw,
+        (void *)&cmd_tests_set_app_raw_client_T_tx_tstamp_kw,
+        NULL,
+    },
+};
+
 
 /****************************************************************************
  * - "set tests server raw port <port> test-case-id <tcid>
@@ -1117,12 +1151,15 @@ cmdline_parse_inst_t cmd_tests_set_app_raw_client_rxtx_tstamp = {
  struct cmd_tests_set_app_raw_server_result {
     cmdline_fixed_string_t set;
     cmdline_fixed_string_t tests;
+    cmdline_fixed_string_t imix;
     cmdline_fixed_string_t server;
     cmdline_fixed_string_t raw;
     cmdline_fixed_string_t port_kw;
     uint32_t               port;
     cmdline_fixed_string_t tcid_kw;
     uint32_t               tcid;
+    cmdline_fixed_string_t app_index_kw;
+    uint32_t               app_index;
 
     cmdline_fixed_string_t data_req_kw;
     uint32_t               data_req_plen;
@@ -1138,6 +1175,8 @@ static cmdline_parse_token_string_t cmd_tests_set_app_raw_server_T_set =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_server_result, set, "set");
 static cmdline_parse_token_string_t cmd_tests_set_app_raw_server_T_tests =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_server_result, tests, "tests");
+static cmdline_parse_token_string_t cmd_tests_set_app_raw_server_T_imix =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_server_result, imix, "imix");
 static cmdline_parse_token_string_t cmd_tests_set_app_raw_server_T_server =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_server_result, server,
                              TEST_CASE_SERVER_CLI_STR);
@@ -1153,6 +1192,11 @@ static cmdline_parse_token_string_t cmd_tests_set_app_raw_server_T_tcid_kw =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_server_result, tcid_kw, "test-case-id");
 static cmdline_parse_token_num_t cmd_tests_set_app_raw_server_T_tcid =
     TOKEN_NUM_INITIALIZER(struct cmd_tests_set_app_raw_server_result, tcid, UINT32);
+
+static cmdline_parse_token_string_t cmd_tests_set_app_raw_server_T_app_index_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_server_result, app_index_kw, "app-index");
+static cmdline_parse_token_num_t cmd_tests_set_app_raw_server_T_app_index =
+    TOKEN_NUM_INITIALIZER(struct cmd_tests_set_app_raw_server_result, app_index, UINT32);
 
 static cmdline_parse_token_string_t cmd_tests_set_app_raw_server_T_data_req_kw =
     TOKEN_STRING_INITIALIZER(struct cmd_tests_set_app_raw_server_result, data_req_kw, "data-req-plen");
@@ -1173,52 +1217,64 @@ static void cmd_tests_set_app_raw_server_parsed(void *parsed_result,
                                                 struct cmdline *cl,
                                                 void *data)
 {
-    printer_arg_t                               parg;
+    printer_arg_t    parg;
+    tpg_app_t        app_cfg;
+    int              err;
+    raw_flags_type_t flags;
+
     struct cmd_tests_set_app_raw_server_result *pr;
-    tpg_app_server_t                            app_server_cfg;
-    int                                         err;
-    raw_tstamp_type_t                           tstamp_type;
 
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
-    tstamp_type = (raw_tstamp_type_t)(uintptr_t)data;
+    flags = (raw_flags_type_t)(uintptr_t)data;
 
-    bzero(&app_server_cfg, sizeof(app_server_cfg));
+    bzero(&app_cfg, sizeof(app_cfg));
 
-    app_server_cfg.as_app_proto = APP_PROTO__RAW;
-    app_server_cfg.as_raw.rs_req_plen = pr->data_req_plen;
-    app_server_cfg.as_raw.rs_resp_plen = pr->data_resp_plen;
+    app_cfg.app_proto = APP_PROTO__RAW_SERVER;
+    app_cfg.app_raw_server.rs_req_plen = pr->data_req_plen;
+    app_cfg.app_raw_server.rs_resp_plen = pr->data_resp_plen;
 
-    if (RAW_TSTAMP_ISSET(tstamp_type, RAW_TSTAMP_RX)) {
-        TPG_XLATE_OPTIONAL_SET_FIELD(&app_server_cfg.as_raw, rs_rx_tstamp,
+    if (RAW_TSTAMP_ISSET(flags, RAW_FLAG_TSTAMP_RX)) {
+        TPG_XLATE_OPTIONAL_SET_FIELD(&app_cfg.app_raw_server, rs_rx_tstamp,
                                      true);
     }
 
-    if (RAW_TSTAMP_ISSET(tstamp_type, RAW_TSTAMP_TX)) {
-        TPG_XLATE_OPTIONAL_SET_FIELD(&app_server_cfg.as_raw, rs_tx_tstamp,
+    if (RAW_TSTAMP_ISSET(flags, RAW_FLAG_TSTAMP_TX)) {
+        TPG_XLATE_OPTIONAL_SET_FIELD(&app_cfg.app_raw_server, rs_tx_tstamp,
                                      true);
     }
 
-    err = test_mgmt_update_test_case_app_server(pr->port, pr->tcid,
-                                                &app_server_cfg,
-                                                &parg);
-    if (err == 0) {
-        cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
-                       pr->port,
-                       pr->tcid);
+    if (!RAW_IMIX_ISSET(flags)) {
+        err = test_mgmt_update_test_case_app(pr->port, pr->tcid, &app_cfg,
+                                             &parg);
+        if (err == 0) {
+            cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" updated!\n",
+                           pr->port,
+                           pr->tcid);
+        } else {
+            cmdline_printf(cl, "ERROR: Failed updating test case %"PRIu32
+                           " config on port %"PRIu32"\n",
+                           pr->tcid,
+                           pr->port);
+        }
     } else {
-        cmdline_printf(cl,
-                       "ERROR: Failed updating test case %"PRIu32
-                       " config on port %"PRIu32"\n",
-                       pr->tcid,
-                       pr->port);
+        err = imix_cli_set_app_cfg(pr->app_index, &app_cfg, &parg);
+
+        if (err == 0) {
+            cmdline_printf(cl, "IMIX app-index %"PRIu32" updated!\n",
+                           pr->app_index);
+        } else {
+            cmdline_printf(cl,
+                           "ERROR: Failed updating IMIX app-index %"PRIu32"!\n",
+                           pr->app_index);
+        }
     }
 }
 
 cmdline_parse_inst_t cmd_tests_set_app_raw_server = {
     .f = cmd_tests_set_app_raw_server_parsed,
-    .data = (void *)(uintptr_t)RAW_TSTAMP_NONE,
-    .help_str = "set tests server raw port <port> test-case-id <tcid>"
+    .data = (void *)(uintptr_t)RAW_FLAG_TSTAMP_NONE,
+    .help_str = "set tests server raw port <port> test-case-id <tcid> "
                 "data-req-plen <len> data-resp-plen <len>",
     .tokens = {
         (void *)&cmd_tests_set_app_raw_server_T_set,
@@ -1237,10 +1293,31 @@ cmdline_parse_inst_t cmd_tests_set_app_raw_server = {
     },
 };
 
+cmdline_parse_inst_t cmd_tests_set_app_raw_server_imix = {
+    .f = cmd_tests_set_app_raw_server_parsed,
+    .data = (void *)(uintptr_t)RAW_FLAG_IMIX,
+    .help_str = "set tests imix app-index <app-index> server raw "
+                "data-req-plen <len> data-resp-plen <len>",
+    .tokens = {
+        (void *)&cmd_tests_set_app_raw_server_T_set,
+        (void *)&cmd_tests_set_app_raw_server_T_tests,
+        (void *)&cmd_tests_set_app_raw_server_T_imix,
+        (void *)&cmd_tests_set_app_raw_server_T_app_index_kw,
+        (void *)&cmd_tests_set_app_raw_server_T_app_index,
+        (void *)&cmd_tests_set_app_raw_server_T_server,
+        (void *)&cmd_tests_set_app_raw_server_T_raw,
+        (void *)&cmd_tests_set_app_raw_server_T_data_req_kw,
+        (void *)&cmd_tests_set_app_raw_server_T_data_req_plen,
+        (void *)&cmd_tests_set_app_raw_server_T_data_resp_kw,
+        (void *)&cmd_tests_set_app_raw_server_T_data_resp_plen,
+        NULL,
+    },
+};
+
 cmdline_parse_inst_t cmd_tests_set_app_raw_server_rx_tstamp = {
     .f = cmd_tests_set_app_raw_server_parsed,
-    .data = (void *)(uintptr_t)RAW_TSTAMP_RX,
-    .help_str = "set tests server raw port <port> test-case-id <tcid>"
+    .data = (void *)(uintptr_t)RAW_FLAG_TSTAMP_RX,
+    .help_str = "set tests server raw port <port> test-case-id <tcid> "
                 "data-req-plen <len> data-resp-plen <len> rx-timestamp",
     .tokens = {
         (void *)&cmd_tests_set_app_raw_server_T_set,
@@ -1260,10 +1337,32 @@ cmdline_parse_inst_t cmd_tests_set_app_raw_server_rx_tstamp = {
     },
 };
 
+cmdline_parse_inst_t cmd_tests_set_app_raw_server_rx_tstamp_imix = {
+    .f = cmd_tests_set_app_raw_server_parsed,
+    .data = (void *)(uintptr_t)(RAW_FLAG_TSTAMP_RX | RAW_FLAG_IMIX),
+    .help_str = "set tests imix app-index <app-index> server raw "
+                "data-req-plen <len> data-resp-plen <len> rx-timestamp",
+    .tokens = {
+        (void *)&cmd_tests_set_app_raw_server_T_set,
+        (void *)&cmd_tests_set_app_raw_server_T_tests,
+        (void *)&cmd_tests_set_app_raw_server_T_imix,
+        (void *)&cmd_tests_set_app_raw_server_T_app_index_kw,
+        (void *)&cmd_tests_set_app_raw_server_T_app_index,
+        (void *)&cmd_tests_set_app_raw_server_T_server,
+        (void *)&cmd_tests_set_app_raw_server_T_raw,
+        (void *)&cmd_tests_set_app_raw_server_T_data_req_kw,
+        (void *)&cmd_tests_set_app_raw_server_T_data_req_plen,
+        (void *)&cmd_tests_set_app_raw_server_T_data_resp_kw,
+        (void *)&cmd_tests_set_app_raw_server_T_data_resp_plen,
+        (void *)&cmd_tests_set_app_raw_server_T_rx_tstamp_kw,
+        NULL,
+    },
+};
+
 cmdline_parse_inst_t cmd_tests_set_app_raw_server_tx_tstamp = {
     .f = cmd_tests_set_app_raw_server_parsed,
-    .data = (void *)(uintptr_t)RAW_TSTAMP_TX,
-    .help_str = "set tests server raw port <port> test-case-id <tcid>"
+    .data = (void *)(uintptr_t)RAW_FLAG_TSTAMP_TX,
+    .help_str = "set tests server raw port <port> test-case-id <tcid> "
                 "data-req-plen <len> data-resp-plen <len> tx-timestamp",
     .tokens = {
         (void *)&cmd_tests_set_app_raw_server_T_set,
@@ -1283,9 +1382,31 @@ cmdline_parse_inst_t cmd_tests_set_app_raw_server_tx_tstamp = {
     },
 };
 
+cmdline_parse_inst_t cmd_tests_set_app_raw_server_tx_tstamp_imix = {
+    .f = cmd_tests_set_app_raw_server_parsed,
+    .data = (void *)(uintptr_t)(RAW_FLAG_TSTAMP_TX | RAW_FLAG_IMIX),
+    .help_str = "set tests imix app-index <app-index> server raw "
+                "data-req-plen <len> data-resp-plen <len> tx-timestamp",
+    .tokens = {
+        (void *)&cmd_tests_set_app_raw_server_T_set,
+        (void *)&cmd_tests_set_app_raw_server_T_tests,
+        (void *)&cmd_tests_set_app_raw_server_T_imix,
+        (void *)&cmd_tests_set_app_raw_server_T_app_index_kw,
+        (void *)&cmd_tests_set_app_raw_server_T_app_index,
+        (void *)&cmd_tests_set_app_raw_server_T_server,
+        (void *)&cmd_tests_set_app_raw_server_T_raw,
+        (void *)&cmd_tests_set_app_raw_server_T_data_req_kw,
+        (void *)&cmd_tests_set_app_raw_server_T_data_req_plen,
+        (void *)&cmd_tests_set_app_raw_server_T_data_resp_kw,
+        (void *)&cmd_tests_set_app_raw_server_T_data_resp_plen,
+        (void *)&cmd_tests_set_app_raw_server_T_tx_tstamp_kw,
+        NULL,
+    },
+};
+
 cmdline_parse_inst_t cmd_tests_set_app_raw_server_rxtx_tstamp = {
     .f = cmd_tests_set_app_raw_server_parsed,
-    .data = (void *)(uintptr_t)RAW_TSTAMP_RXTX,
+    .data = (void *)(uintptr_t)RAW_FLAG_TSTAMP_RXTX,
     .help_str = "set tests server raw port <port> test-case-id <tcid>"
                 "data-req-plen <len> data-resp-plen <len> rx-timestamp tx-timestamp",
     .tokens = {
@@ -1307,18 +1428,49 @@ cmdline_parse_inst_t cmd_tests_set_app_raw_server_rxtx_tstamp = {
     },
 };
 
+cmdline_parse_inst_t cmd_tests_set_app_raw_server_rxtx_tstamp_imix = {
+    .f = cmd_tests_set_app_raw_server_parsed,
+    .data = (void *)(uintptr_t)(RAW_FLAG_TSTAMP_RXTX | RAW_FLAG_IMIX),
+    .help_str = "set tests imix app-index <app-index> server raw "
+                "data-req-plen <len> data-resp-plen <len> rx-timestamp tx-timestamp",
+    .tokens = {
+        (void *)&cmd_tests_set_app_raw_server_T_set,
+        (void *)&cmd_tests_set_app_raw_server_T_tests,
+        (void *)&cmd_tests_set_app_raw_server_T_imix,
+        (void *)&cmd_tests_set_app_raw_server_T_app_index_kw,
+        (void *)&cmd_tests_set_app_raw_server_T_app_index,
+        (void *)&cmd_tests_set_app_raw_server_T_server,
+        (void *)&cmd_tests_set_app_raw_server_T_raw,
+        (void *)&cmd_tests_set_app_raw_server_T_data_req_kw,
+        (void *)&cmd_tests_set_app_raw_server_T_data_req_plen,
+        (void *)&cmd_tests_set_app_raw_server_T_data_resp_kw,
+        (void *)&cmd_tests_set_app_raw_server_T_data_resp_plen,
+        (void *)&cmd_tests_set_app_raw_server_T_rx_tstamp_kw,
+        (void *)&cmd_tests_set_app_raw_server_T_tx_tstamp_kw,
+        NULL,
+    },
+};
+
 /*****************************************************************************
  * Main menu context
  ****************************************************************************/
 static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_set_app_raw_client,
+    &cmd_tests_set_app_raw_client_imix,
     &cmd_tests_set_app_raw_client_rx_tstamp,
+    &cmd_tests_set_app_raw_client_rx_tstamp_imix,
     &cmd_tests_set_app_raw_client_tx_tstamp,
+    &cmd_tests_set_app_raw_client_tx_tstamp_imix,
     &cmd_tests_set_app_raw_client_rxtx_tstamp,
+    &cmd_tests_set_app_raw_client_rxtx_tstamp_imix,
     &cmd_tests_set_app_raw_server,
+    &cmd_tests_set_app_raw_server_imix,
     &cmd_tests_set_app_raw_server_rx_tstamp,
+    &cmd_tests_set_app_raw_server_rx_tstamp_imix,
     &cmd_tests_set_app_raw_server_tx_tstamp,
+    &cmd_tests_set_app_raw_server_tx_tstamp_imix,
     &cmd_tests_set_app_raw_server_rxtx_tstamp,
+    &cmd_tests_set_app_raw_server_rxtx_tstamp_imix,
     NULL,
 };
 

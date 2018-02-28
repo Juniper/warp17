@@ -73,6 +73,9 @@ enum Constants {
     TPG_TS_MAX_STATE               = 12;
     TPG_HTTP_MAX_OPTIONS           = 32;
     TPG_TSTAMP_SAMPLES_MAX_BUFSIZE = 1000;
+    TPG_IMIX_MAX_GROUPS            = 16;
+    TPG_IMIX_MAX_APPS              = 16;
+    TPG_IMIX_MAX_TOTAL_APP_WEIGHT  = 100;
 }
 
 extend google.protobuf.FieldOptions {
@@ -118,9 +121,12 @@ enum L4Proto {
 }
 
 enum AppProto {
-    RAW           = 0;
-    HTTP          = 1;
-    APP_PROTO_MAX = 2;
+    RAW_CLIENT    = 0;
+    RAW_SERVER    = 1;
+    HTTP_CLIENT   = 2;
+    HTTP_SERVER   = 3;
+    IMIX          = 4;
+    APP_PROTO_MAX = 5;
 }
 
 message Delay {

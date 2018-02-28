@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
  *
- * Copyright (c) 2016, Juniper Networks, Inc. All rights reserved.
+ * Copyright (c) 2018, Juniper Networks, Inc. All rights reserved.
  *
  *
  * The contents of this file are subject to the terms of the BSD 3 clause
@@ -39,16 +39,16 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  * File name:
- *     tpg_test_generic_app.h
+ *     tpg_tests_sm_states.h
  *
  * Description:
- *     Generic application state storage.
+ *     State machine states and events.
  *
  * Author:
- *     Dumitru Ceara, Eelco Chaudron
+ *     Dumitru Ceara
  *
  * Initial Created:
- *     02/22/2016
+ *     02/08/2018
  *
  * Notes:
  *
@@ -57,25 +57,77 @@
 /*****************************************************************************
  * Multiple include protection
  ****************************************************************************/
-#ifndef _H_TPG_TEST_GENERIC_APP_
-#define _H_TPG_TEST_GENERIC_APP_
+#ifndef _H_TPG_TESTS_SM_STATES_
+#define _H_TPG_TESTS_SM_STATES_
 
 /*****************************************************************************
- * Generic application wrapper to allow complex application state pointers to
- * be stored.
+ * Test state machine:
+ * See tpg_test_sm.dot for the diagram. (xdot dot/tpg_test_sm.dot)
+ *
+ * In state TSTS_SENDING the control block is on the to-send list and the
+ * test engine will try sending traffic on that connection.
+ * Once the uptime timer fires the control block will change state (from
+ * TSTS_OPEN/TSTS_SENDING/TSTS_NO_SND_WIN) to TSTS_TO_CLOSE and the
+ * control block will be added on the to-close list. The to-close list is
+ * walked by the test engine which will issue CLOSE on the control blocks on
+ * that list.
+ * In state TSTS_CLOSED the downtime timer might be running (based on config)
+ * so if the timer fires then the control block moves to state TSTS_TO_OPEN
+ * and is added to the to-open list which is walked by the test engine.
  ****************************************************************************/
-typedef struct generic_app_s {
 
-    uint32_t  ga_app_id;
-    void     *ga_state;
+typedef enum {
 
-} generic_app_t;
+    TSTS_CL_TO_INIT,
+    TSTS_CL_TO_OPEN,
+    TSTS_CL_OPENING,
+    TSTS_CL_OPEN,
+    TSTS_CL_SENDING,
+    TSTS_CL_NO_SND_WIN,
+    TSTS_CL_TO_CLOSE,
+    TSTS_CL_CLOSING,
+    TSTS_CL_CLOSED,
 
-typedef struct generic_storage_s {
+    TSTS_SRV_OPENING,
+    TSTS_SRV_OPEN,
+    TSTS_SRV_SENDING,
+    TSTS_SRV_NO_SND_WIN,
+    TSTS_SRV_CLOSING,
+    TSTS_SRV_CLOSED,
 
-    /* No app yet, so no storage either.. */
+    TSTS_LISTEN,
 
-} generic_storage_t;
+    TSTS_PURGED,
 
-#endif /* _H_TPG_TEST_GENERIC_APP_ */
+    TSTS_MAX_STATE
+
+} test_sm_state_t;
+
+typedef enum {
+
+    TSTE_ENTER_STATE,
+
+    /* Timeouts */
+    TSTE_TMR_TO,
+
+    /* Session state events. */
+    TSTE_CONNECTING,
+    TSTE_CONNECTED,
+    TSTE_CLOSING,
+    TSTE_CLOSED,
+    TSTE_NO_SND_WIN,
+    TSTE_SND_WIN,
+
+    /* APP Events. */
+    TSTE_APP_SEND_START,
+    TSTE_APP_SEND_STOP,
+
+    /* Test case events. */
+    TSTE_PURGE,
+
+    TSTE_MAX_EVENT
+
+} test_sm_event_t;
+
+#endif /* _H_TPG_TESTS_SM_STATES_ */
 

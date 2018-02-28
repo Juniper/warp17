@@ -72,6 +72,7 @@ from warp17_common_pb2    import *
 from warp17_l3_pb2        import *
 from warp17_app_raw_pb2   import *
 from warp17_app_http_pb2  import *
+from warp17_app_pb2       import *
 from warp17_server_pb2    import *
 from warp17_client_pb2    import *
 from warp17_test_case_pb2 import *
@@ -252,18 +253,14 @@ class TestPerf(Warp17UnitTestCase):
         l4_ccfg = L4Client(l4c_proto=l4_proto,
                            l4c_tcp_udp=TcpUdpClient(tuc_sports=b2b_ports(sport_cnt),
                                                     tuc_dports=b2b_ports(dport_cnt)))
-        delay_ccfg = DelayClient(dc_init_delay=Delay(d_value=0),
-                                 dc_uptime=Delay(),
-                                 dc_downtime=Delay())
 
         ccfg = TestCase(tc_type=CLIENT, tc_eth_port=0,
                         tc_id=0,
                         tc_client=Client(cl_src_ips=b2b_sips(0, sip_cnt),
                                          cl_dst_ips=b2b_dips(0, dip_cnt),
                                          cl_l4=l4_ccfg,
-                                         cl_rates=rate_ccfg,
-                                         cl_delays=delay_ccfg,
-                                         cl_app=app_ccfg),
+                                         cl_rates=rate_ccfg),
+                        tc_app=app_ccfg,
                         tc_criteria=TestCriteria(tc_crit_type=CL_ESTAB,
                                                   tc_cl_estab=sess_cnt),
                         tc_async=False)
@@ -277,8 +274,8 @@ class TestPerf(Warp17UnitTestCase):
                            l4s_tcp_udp=TcpUdpServer(tus_ports=b2b_ports(dport_cnt)))
         scfg = TestCase(tc_type=SERVER, tc_eth_port=1, tc_id=0,
                         tc_server=Server(srv_ips=b2b_sips(1, 1),
-                                         srv_l4=l4_scfg,
-                                         srv_app=app_scfg),
+                                         srv_l4=l4_scfg),
+                        tc_app=app_scfg,
                         tc_criteria=TestCriteria(tc_crit_type=SRV_UP,
                                                  tc_srv_up=serv_cnt),
                         tc_async=False, tc_latency=s_latency)
@@ -296,7 +293,7 @@ class TestPerf(Warp17UnitTestCase):
         sresult = self._get_tc_stats(eth_port=1, test_case_id=0,
                                      tc_expected=PASSED,
                                      timeout_s=1)
-        self.assertEqual(sresult.tsr_stats.tcs_server.tcss_up, serv_cnt,
+        self.assertEqual(sresult.tsr_stats.gs_up, serv_cnt,
                          'PortStart SERVER UP')
 
         # Start client test
@@ -309,12 +306,11 @@ class TestPerf(Warp17UnitTestCase):
         cresult = self._get_tc_stats(eth_port=0, test_case_id=0,
                                      tc_expected=PASSED,
                                      timeout_s=timeout_cl_s)
-        self.assertTrue(cresult.tsr_stats.tcs_client.tccs_estab >= sess_cnt,
-                        'CL ESTAB')
+        self.assertTrue(cresult.tsr_stats.gs_estab >= sess_cnt, 'CL ESTAB')
 
         # check client setup rate
-        start_time = cresult.tsr_stats.tcs_start_time
-        end_time = cresult.tsr_stats.tcs_end_time
+        start_time = cresult.tsr_stats.gs_start_time
+        end_time = cresult.tsr_stats.gs_end_time
 
         # start and stop ts are in usecs
         duration = (end_time - start_time) / float(1000000)
@@ -385,7 +381,7 @@ class TestPerf(Warp17UnitTestCase):
         if not tx_ts is None:
             rc.rc_tx_tstamp = tx_ts
 
-        return AppClient(ac_app_proto=RAW, ac_raw=rc)
+        return App(app_proto=RAW_CLIENT, app_raw_client=rc)
 
     def _get_raw_app_server(self, data_size, rx_ts=None, tx_ts=None):
         rs = RawServer(rs_req_plen=data_size, rs_resp_plen=data_size)
@@ -395,19 +391,19 @@ class TestPerf(Warp17UnitTestCase):
         if not tx_ts is None:
             rs.rs_tx_tstamp = tx_ts
 
-        return AppServer(as_app_proto=RAW, as_raw=rs)
+        return App(app_proto=RAW_SERVER, app_raw_server=rs)
 
     def _get_http_app_client(self, req_method, req_size):
-        return AppClient(ac_app_proto=HTTP,
-                         ac_http=HttpClient(hc_req_method=req_method,
-                                            hc_req_object_name='/index.html',
-                                            hc_req_host_name='www.foobar.net',
-                                            hc_req_size=req_size))
+        return App(app_proto=HTTP_CLIENT,
+                   app_http_client=HttpClient(hc_req_method=req_method,
+                                              hc_req_object_name='/index.html',
+                                              hc_req_host_name='www.foobar.net',
+                                              hc_req_size=req_size))
 
     def _get_http_app_server(self, resp_code, resp_size):
-        return AppServer(as_app_proto=HTTP,
-                         as_http=HttpServer(hs_resp_code=resp_code,
-                                            hs_resp_size=resp_size))
+        return App(app_proto=HTTP_SERVER,
+                   app_http_server=HttpServer(hs_resp_code=resp_code,
+                                              hs_resp_size=resp_size))
 
     def test_01_4M_tcp_sess_setup_rate(self):
         """Tests setting up 4M TCP sessions (no traffic)."""

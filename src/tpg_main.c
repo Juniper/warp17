@@ -298,6 +298,11 @@ int main(int argc, char **argv)
                        "Failed initializing the RAW Application module");
     }
 
+    if (!imix_init()) {
+        TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",
+                       "Failed initializing the IMIX Application module");
+    }
+
     start_cores();
 
     /*
@@ -358,3 +363,4 @@ cmdline_arg_parser_res_t main_handle_cmdline_opt(const char *opt_name,
 
     return CAPR_IGNORED;
 }
+

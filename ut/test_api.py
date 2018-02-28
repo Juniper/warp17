@@ -70,6 +70,7 @@ from b2b_setup import *
 from warp17_common_pb2    import *
 from warp17_l3_pb2        import *
 from warp17_app_raw_pb2   import *
+from warp17_app_pb2       import *
 from warp17_server_pb2    import *
 from warp17_client_pb2    import *
 from warp17_test_case_pb2 import *
@@ -185,29 +186,21 @@ class TestApi(Warp17UnitTestCase):
 
         eth_port = self.PORT_CNT + 1
 
-        l4cfg = L4Server(l4s_proto=UDP,
-                         l4s_tcp_udp=TcpUdpServer(
-                             tus_ports=L4PortRange(l4pr_start=1,
-                                                   l4pr_end=1)))
+        iprange = IpRange(ipr_start=Ip(ip_version=IPV4, ip_v4=b2b_ipv4(eth_port, 0)),
+                          ipr_end=Ip(ip_version=IPV4, ip_v4=b2b_ipv4(eth_port, 0) + 1))
+        tcp_udp = TcpUdpServer(tus_ports=L4PortRange(l4pr_start=1, l4pr_end=1))
+        l4cfg = L4Server(l4s_proto=UDP, l4s_tcp_udp=tcp_udp)
 
-        appcfg = AppServer(as_app_proto=RAW, as_raw=RawServer(rs_req_plen=0,
-                                                              rs_resp_plen=0))
+        appcfg = App(app_proto=RAW_SERVER,
+                     app_raw_server=RawServer(rs_req_plen=0, rs_resp_plen=0))
 
-        scfg = Server(srv_ips=IpRange(ipr_start=Ip(ip_version=IPV4,
-                                                   ip_v4=b2b_ipv4(eth_port, 0)),
-                                      ipr_end=Ip(ip_version=IPV4,
-                                                 ip_v4=b2b_ipv4(eth_port,
-                                                                0) + 1)),
-                      srv_l4=l4cfg,
-                      srv_app=appcfg)
+        scfg = Server(srv_ips=iprange, srv_l4=l4cfg)
+        criteria = TestCriteria(tc_crit_type=SRV_UP, tc_srv_up=1)
 
-        critcfg = TestCriteria(tc_crit_type=SRV_UP, tc_srv_up=1)
-
-        tccfg = TestCase(tc_type=SERVER, tc_eth_port=eth_port,
-                         tc_id=0,
+        tccfg = TestCase(tc_type=SERVER, tc_eth_port=eth_port, tc_id=0,
                          tc_server=scfg,
-                         tc_criteria=critcfg,
-                         tc_async=False)
+                         tc_app=appcfg,
+                         tc_criteria=criteria)
 
         error = self.warp17_call('ConfigureTestCase', tccfg)
         self.assertEqual(error.e_code, -errno.EINVAL, 'ConfigureTestCase')
@@ -220,28 +213,22 @@ class TestApi(Warp17UnitTestCase):
     def test_configure_test_case_invalid_tcid(self):
         """Tests the ConfigureTestCase API with invalid tcid"""
 
-        l4cfg = L4Server(l4s_proto=UDP,
-                         l4s_tcp_udp=TcpUdpServer(
-                             tus_ports=L4PortRange(l4pr_start=1,
-                                                   l4pr_end=1)))
+        iprange = IpRange(ipr_start=Ip(ip_version=IPV4, ip_v4=b2b_ipv4(0, 0)),
+                          ipr_end=Ip(ip_version=IPV4, ip_v4=b2b_ipv4(0, 0) + 1))
+        tcp_udp = TcpUdpServer(tus_ports=L4PortRange(l4pr_start=1, l4pr_end=1))
+        l4cfg = L4Server(l4s_proto=UDP, l4s_tcp_udp=tcp_udp)
 
-        appcfg = AppServer(as_app_proto=RAW,
-                           as_raw=RawServer(rs_req_plen=0, rs_resp_plen=0))
+        appcfg = App(app_proto=RAW_SERVER,
+                     app_raw_server=RawServer(rs_req_plen=0, rs_resp_plen=0))
 
-        scfg = Server(srv_ips=IpRange(ipr_start=Ip(ip_version=IPV4,
-                                                   ip_v4=b2b_ipv4(0, 0)),
-                                      ipr_end=Ip(ip_version=IPV4,
-                                                 ip_v4=b2b_ipv4(0, 0) + 1)),
-                      srv_l4=l4cfg,
-                      srv_app=appcfg)
-
-        critcfg = TestCriteria(tc_crit_type=SRV_UP, tc_srv_up=1)
+        scfg = Server(srv_ips=iprange, srv_l4=l4cfg)
+        criteria = TestCriteria(tc_crit_type=SRV_UP, tc_srv_up=1)
 
         tccfg = TestCase(tc_type=SERVER, tc_eth_port=0,
                          tc_id=TPG_TEST_MAX_ENTRIES + 1,
                          tc_server=scfg,
-                         tc_criteria=critcfg,
-                         tc_async=False)
+                         tc_app=appcfg,
+                         tc_criteria=criteria)
 
         error = self.warp17_call('ConfigureTestCase', tccfg)
         self.assertEqual(error.e_code, -errno.EINVAL, 'ConfigureTestCase')
@@ -264,13 +251,9 @@ class TestApi(Warp17UnitTestCase):
                               rc_close_rate=Rate(r_value=42),
                               rc_send_rate=Rate(r_value=42))
 
-        delay_cfg = DelayClient(dc_init_delay=Delay(d_value=42),
-                                dc_uptime=Delay(d_value=42),
-                                dc_downtime=Delay(d_value=42))
-
-        app_cfg = AppClient(ac_app_proto=RAW,
-                            ac_raw=RawClient(rc_req_plen=req_plen,
-                                             rc_resp_plen=resp_plen))
+        app_cfg = App(app_proto=RAW_CLIENT,
+                      app_raw_client=RawClient(rc_req_plen=req_plen,
+                                               rc_resp_plen=resp_plen))
 
         tcs = [
             TestCase(tc_type=CLIENT, tc_eth_port=eth_port,
@@ -278,9 +261,8 @@ class TestApi(Warp17UnitTestCase):
                      tc_client=Client(cl_src_ips=b2b_sips(eth_port, ip_count),
                                       cl_dst_ips=b2b_dips(eth_port, ip_count),
                                       cl_l4=l4cfg,
-                                      cl_rates=rate_cfg,
-                                      cl_delays=delay_cfg,
-                                      cl_app=app_cfg),
+                                      cl_rates=rate_cfg),
+                     tc_app=app_cfg,
                      tc_criteria=criteria,
                      tc_async=async)
             for eth_port in range(0, self.PORT_CNT)
@@ -367,16 +349,16 @@ class TestApi(Warp17UnitTestCase):
                          l4s_tcp_udp=TcpUdpServer(
                              tus_ports=b2b_ports(l4_port_count)))
 
-        app_cfg = AppServer(as_app_proto=RAW,
-                            as_raw=RawServer(rs_req_plen=req_plen,
-                                             rs_resp_plen=resp_plen))
+        app_cfg = App(app_proto=RAW_SERVER,
+                      app_raw_server=RawServer(rs_req_plen=req_plen,
+                                               rs_resp_plen=resp_plen))
 
         tcs = [
             TestCase(tc_type=SERVER, tc_eth_port=eth_port,
                      tc_id=tcid,
                      tc_server=Server(srv_ips=b2b_sips(eth_port, ip_count),
-                                      srv_l4=l4cfg,
-                                      srv_app=app_cfg),
+                                      srv_l4=l4cfg),
+                     tc_app=app_cfg,
                      tc_criteria=criteria,
                      tc_async=async)
             for eth_port in range(0, self.PORT_CNT)
@@ -479,7 +461,7 @@ class TestApi(Warp17UnitTestCase):
     def test_single_session(self):
         """Setup a single UDP/TCP session and check that the test passed"""
 
-        app_ccfg, app_scfg, delay_ccfg, rate_ccfg = self.SetUp(ip_cnt=1)
+        app_ccfg, app_scfg, rate_ccfg = self.SetUp(ip_cnt=1)
 
         for l4_proto in [TCP, UDP]:
             l4_ccfg = L4Client(l4c_proto=l4_proto,
@@ -491,12 +473,10 @@ class TestApi(Warp17UnitTestCase):
                             tc_client=Client(cl_src_ips=b2b_sips(0, 1),
                                              cl_dst_ips=b2b_dips(0, 1),
                                              cl_l4=l4_ccfg,
-                                             cl_rates=rate_ccfg,
-                                             cl_delays=delay_ccfg,
-                                             cl_app=app_ccfg),
+                                             cl_rates=rate_ccfg),
+                            tc_app=app_ccfg,
                             tc_criteria=TestCriteria(tc_crit_type=RUN_TIME,
-                                                     tc_run_time_s=1),
-                            tc_async=False)
+                                                     tc_run_time_s=1))
             self.assertEqual(self.warp17_call('ConfigureTestCase', ccfg).e_code,
                              0,
                              'ConfigureTestCase')
@@ -505,11 +485,10 @@ class TestApi(Warp17UnitTestCase):
                                l4s_tcp_udp=TcpUdpServer(tus_ports=b2b_ports(1)))
             scfg = TestCase(tc_type=SERVER, tc_eth_port=1, tc_id=0,
                             tc_server=Server(srv_ips=b2b_sips(1, 1),
-                                             srv_l4=l4_scfg,
-                                             srv_app=app_scfg),
+                                             srv_l4=l4_scfg),
+                            tc_app=app_scfg,
                             tc_criteria=TestCriteria(tc_crit_type=SRV_UP,
-                                                     tc_srv_up=1),
-                            tc_async=False)
+                                                     tc_srv_up=1))
             self.assertEqual(self.warp17_call('ConfigureTestCase', scfg).e_code,
                              0,
                              'ConfigureTestCase')
@@ -529,8 +508,7 @@ class TestApi(Warp17UnitTestCase):
                              'PortStatus L4')
 
             if l4_proto == TCP:
-                self.assertEqual(client_result.tsr_stats.tcs_client.tccs_estab,
-                                 1,
+                self.assertEqual(client_result.tsr_stats.gs_estab, 1,
                                  'PortStatus ESTAB')
 
             # Check server test to be passed
@@ -544,8 +522,7 @@ class TestApi(Warp17UnitTestCase):
                              'PortStatus SERVER')
             self.assertEqual(server_result.tsr_l4_proto, l4_proto,
                              'PortStatus L4')
-            self.assertEqual(server_result.tsr_stats.tcs_server.tcss_estab,
-                             1,
+            self.assertEqual(server_result.tsr_stats.gs_estab, 1,
                              'PortStatus ESTAB')
 
             for i in range(0, self.PORT_CNT):
@@ -689,7 +666,7 @@ class TestApi(Warp17UnitTestCase):
                     (None, None, 100),
                     (0, 0, 100)]
 
-        app_ccfg, app_scfg, delay_ccfg, rate_ccfg = self.SetUp(ip_cnt)
+        app_ccfg, app_scfg, rate_ccfg = self.SetUp(ip_cnt)
 
         for tcs_max, tcs_max_avg, tcs_samples in ciclemap:
             s_latency = TestCaseLatency()  # latency options container
@@ -719,12 +696,10 @@ class TestApi(Warp17UnitTestCase):
                                 tc_client=Client(cl_src_ips=b2b_sips(0, ip_cnt),
                                                  cl_dst_ips=b2b_dips(0, 1),
                                                  cl_l4=l4_ccfg,
-                                                 cl_rates=rate_ccfg,
-                                                 cl_delays=delay_ccfg,
-                                                 cl_app=app_ccfg),
+                                                 cl_rates=rate_ccfg),
+                                tc_app=app_ccfg,
                                 tc_criteria=TestCriteria(tc_crit_type=RUN_TIME,
-                                                         tc_run_time_s=run_t),
-                                tc_async=False)
+                                                         tc_run_time_s=run_t))
                 self.assertEqual(
                     self.warp17_call('ConfigureTestCase', ccfg).e_code,
                     0, 'ConfigureTestCase')
@@ -749,11 +724,11 @@ class TestApi(Warp17UnitTestCase):
 
                 scfg = TestCase(tc_type=SERVER, tc_eth_port=1, tc_id=0,
                                 tc_server=Server(srv_ips=b2b_sips(1, 1),
-                                                 srv_l4=l4_scfg,
-                                                 srv_app=app_scfg),
+                                                 srv_l4=l4_scfg),
+                                tc_app=app_scfg,
                                 tc_criteria=TestCriteria(tc_crit_type=SRV_UP,
                                                          tc_srv_up=1),
-                                tc_async=False, tc_latency=s_latency)
+                                tc_latency=s_latency)
 
                 self.assertEqual(
                     self.warp17_call('ConfigureTestCase', scfg).e_code,
@@ -789,8 +764,7 @@ class TestApi(Warp17UnitTestCase):
                 self.assertEqual(c_result.tsr_l4_proto, l4_proto,
                                  'PortStatus L4')
                 if l4_proto == TCP:
-                    self.assertEqual(c_result.tsr_stats.tcs_client.tccs_estab,
-                                     n_sess,
+                    self.assertEqual(c_result.tsr_stats.gs_estab, n_sess,
                                      'PortStatus ESTAB')
 
                 # check ip options
@@ -820,8 +794,7 @@ class TestApi(Warp17UnitTestCase):
                 self.assertEqual(s_result.tsr_l4_proto, l4_proto,
                                  'PortStatus L4')
                 if l4_proto == TCP:
-                    self.assertEqual(s_result.tsr_stats.tcs_server.tcss_estab,
-                                     n_sess,
+                    self.assertEqual(s_result.tsr_stats.gs_estab, n_sess,
                                      'PortStatus ESTAB')
 
                 # check ip options
@@ -843,7 +816,7 @@ class TestApi(Warp17UnitTestCase):
                                                  tca_test_case_id=0))
                 self.assertEqual(tc_result.tsr_error.e_code, 0, 'GetTestStatus')
 
-                stat = tc_result.tsr_stats.tcs_latency_stats.tcls_stats
+                stat = tc_result.tsr_stats.gs_latency_stats.gls_stats
 
                 if tcs_max is not None and tcs_max_avg is not None:
                     self.assertGreater(stat.ls_max_exceeded, 0,
@@ -861,7 +834,7 @@ class TestApi(Warp17UnitTestCase):
                 self.assertGreater(stat.ls_samples_count, 0, 'ls_samples_count')
 
                 if tcs_samples is not None:
-                    stat = tc_result.tsr_stats.tcs_latency_stats.tcls_sample_stats
+                    stat = tc_result.tsr_stats.gs_latency_stats.gls_sample_stats
 
                     if tcs_max is not None and tcs_max_avg is not None:
                         self.assertGreater(stat.ls_max_exceeded, 0,
@@ -880,8 +853,8 @@ class TestApi(Warp17UnitTestCase):
                     self.assertGreater(stat.ls_samples_count, 0,
                                        'ls_samples_count')
                 else:
-                    self.assertEqual(tc_result.tsr_stats.tcs_latency_stats.
-                                     tcls_sample_stats.ls_samples_count, 0,
+                    self.assertEqual(tc_result.tsr_stats.gs_latency_stats.
+                                     gls_sample_stats.ls_samples_count, 0,
                                      'ls_samples_count')
 
 
@@ -894,7 +867,7 @@ class TestApi(Warp17UnitTestCase):
         ipv4_opt_def = Ipv4Sockopt(ip4so_rx_tstamp=False,
                                    ip4so_tx_tstamp=False, ip4so_tos=0)
 
-        app_ccfg, app_scfg, delay_ccfg, rate_ccfg = self.SetUp(ip_cnt=1)
+        app_ccfg, app_scfg, rate_ccfg = self.SetUp(ip_cnt=1)
 
         for l4_proto in [TCP, UDP]:
             # configure client
@@ -911,13 +884,11 @@ class TestApi(Warp17UnitTestCase):
                             tc_client=Client(cl_src_ips=b2b_sips(0, 1),
                                              cl_dst_ips=b2b_dips(0, 1),
                                              cl_l4=l4_ccfg,
-                                             cl_rates=rate_ccfg,
-                                             cl_delays=delay_ccfg,
-                                             cl_app=app_ccfg),
+                                             cl_rates=rate_ccfg),
+                            tc_app=app_ccfg,
                             tc_latency=latency_cfg,
                             tc_criteria=TestCriteria(tc_crit_type=RUN_TIME,
-                                                     tc_run_time_s=1),
-                            tc_async=False)
+                                                     tc_run_time_s=1))
             self.assertEqual(self.warp17_call('ConfigureTestCase', ccfg).e_code,
                              -errno.EINVAL, 'ConfigureTestCase')
 
@@ -928,12 +899,11 @@ class TestApi(Warp17UnitTestCase):
 
             scfg = TestCase(tc_type=SERVER, tc_eth_port=1, tc_id=0,
                             tc_server=Server(srv_ips=b2b_sips(1, 1),
-                                             srv_l4=l4_scfg,
-                                             srv_app=app_scfg),
+                                             srv_l4=l4_scfg),
+                            tc_app=app_scfg,
                             tc_latency=latency_cfg,
                             tc_criteria=TestCriteria(tc_crit_type=SRV_UP,
-                                                     tc_srv_up=1),
-                            tc_async=False)
+                                                     tc_srv_up=1))
             self.assertEqual(self.warp17_call('ConfigureTestCase', scfg).e_code,
                              -errno.EINVAL, 'ConfigureTestCase')
 
@@ -958,16 +928,13 @@ class TestApi(Warp17UnitTestCase):
         rate_ccfg = RateClient(rc_open_rate=Rate(),
                                rc_close_rate=Rate(),
                                rc_send_rate=Rate())
-        delay_ccfg = DelayClient(dc_init_delay=Delay(d_value=0),
-                                 dc_uptime=Delay(),
-                                 dc_downtime=Delay())
-        app_ccfg = AppClient(ac_app_proto=RAW,
-                             ac_raw=RawClient(rc_req_plen=10,
-                                              rc_resp_plen=10))
-        app_scfg = AppServer(as_app_proto=RAW,
-                             as_raw=RawServer(rs_req_plen=10,
-                                              rs_resp_plen=10))
-        return app_ccfg, app_scfg, delay_ccfg, rate_ccfg
+        app_ccfg = App(app_proto=RAW_CLIENT,
+                       app_raw_client=RawClient(rc_req_plen=10,
+                                                rc_resp_plen=10))
+        app_scfg = App(app_proto=RAW_SERVER,
+                       app_raw_server=RawServer(rs_req_plen=10,
+                                                rs_resp_plen=10))
+        return app_ccfg, app_scfg, rate_ccfg
 
     def Start(self):
         # Start server test
@@ -1030,16 +997,15 @@ class TestPartialPortApi(Warp17UnitTestCase):
     def _get_server_test(self, eth_port, tc_id):
         l4_scfg = L4Server(l4s_proto=TCP,
                            l4s_tcp_udp=TcpUdpServer(tus_ports=b2b_ports(1)))
-        app_scfg = AppServer(as_app_proto=RAW,
-                             as_raw=RawServer(rs_req_plen=42,
-                                              rs_resp_plen=42))
+        app_scfg = App(app_proto=RAW_SERVER,
+                       app_raw_server=RawServer(rs_req_plen=42,
+                                               rs_resp_plen=42))
         return TestCase(tc_type=SERVER, tc_eth_port=eth_port, tc_id=tc_id,
                         tc_server=Server(srv_ips=b2b_sips(1, 1),
-                                         srv_l4=l4_scfg,
-                                         srv_app=app_scfg),
+                                         srv_l4=l4_scfg),
+                        tc_app=app_scfg,
                         tc_criteria=TestCriteria(tc_crit_type=SRV_UP,
-                                                 tc_srv_up=1),
-                        tc_async=False)
+                                                 tc_srv_up=1))
 
     def _get_client_test(self, eth_port, tc_id):
         l4cfg = L4Client(l4c_proto=TCP,
@@ -1050,25 +1016,19 @@ class TestPartialPortApi(Warp17UnitTestCase):
                               rc_close_rate=Rate(r_value=42),
                               rc_send_rate=Rate(r_value=42))
 
-        delay_cfg = DelayClient(dc_init_delay=Delay(d_value=42),
-                                dc_uptime=Delay(d_value=42),
-                                dc_downtime=Delay(d_value=42))
-
-        app_cfg = AppClient(ac_app_proto=RAW,
-                            ac_raw=RawClient(rc_req_plen=1,
-                                             rc_resp_plen=1))
+        app_cfg = App(app_proto=RAW_CLIENT,
+                      app_raw_client=RawClient(rc_req_plen=1,
+                                               rc_resp_plen=1))
 
         return TestCase(tc_type=CLIENT, tc_eth_port=eth_port,
                         tc_id=tc_id,
                         tc_client=Client(cl_src_ips=b2b_sips(eth_port, 1),
                                          cl_dst_ips=b2b_dips(eth_port, 1),
                                          cl_l4=l4cfg,
-                                         cl_rates=rate_cfg,
-                                         cl_delays=delay_cfg,
-                                         cl_app=app_cfg),
+                                         cl_rates=rate_cfg),
+                        tc_app=app_cfg,
                         tc_criteria=TestCriteria(tc_crit_type=RUN_TIME,
-                                                 tc_run_time_s=42),
-                        tc_async=False)
+                                                 tc_run_time_s=42))
 
     def setUp(self):
         self._pcfg = b2b_configure_port(eth_port=0,
@@ -1250,46 +1210,37 @@ class TestPartialAppApi(Warp17NoTrafficTestCase, Warp17UnitTestCase):
 
     tca = TestCaseArg(tca_eth_port=0, tca_test_case_id=0)
 
-    cl_app = AppClient(ac_app_proto=RAW,
-                       ac_raw=RawClient(rc_req_plen=84, rc_resp_plen=84))
-    srv_app = AppServer(as_app_proto=RAW, as_raw=RawServer(rs_req_plen=42,
-                                                           rs_resp_plen=42))
+    cl_app = App(app_proto=RAW_CLIENT,
+                 app_raw_client=RawClient(rc_req_plen=84, rc_resp_plen=84))
+    srv_app = App(app_proto=RAW_SERVER,
+                  app_raw_server=RawServer(rs_req_plen=42, rs_resp_plen=42))
 
     def get_updates(self):
-        yield (UpdClientArg(uca_tc_arg=self.tca, uca_cl_app=self.cl_app),
-               UpdServerArg(usa_tc_arg=self.tca, usa_srv_app=self.srv_app))
+        yield (UpdateAppArg(uaa_tc_arg=self.tca, uaa_app=self.cl_app),
+               UpdateAppArg(uaa_tc_arg=self.tca, uaa_app=self.srv_app))
+
+        yield (UpdateAppArg(uaa_tc_arg=self.tca, uaa_app=self.srv_app),
+               UpdateAppArg(uaa_tc_arg=self.tca, uaa_app=self.cl_app))
 
     def get_invalid_updates(self):
-        yield (UpdServerArg(usa_tc_arg=self.tca, usa_srv_app=self.srv_app),
-               UpdClientArg(uca_tc_arg=self.tca, uca_cl_app=self.cl_app))
+        for _ in []: yield ()
 
-    def _update(self, tc_arg, update_arg):
-        if update_arg.__class__.__name__ == 'UpdClientArg':
-            update_arg.uca_tc_arg.tca_eth_port = tc_arg.tca_eth_port
-            update_arg.uca_tc_arg.tca_test_case_id = tc_arg.tca_test_case_id
-            err = self.warp17_call('UpdateTestCaseAppClient', update_arg)
-        elif update_arg.__class__.__name__ == 'UpdServerArg':
-            update_arg.usa_tc_arg.tca_eth_port = tc_arg.tca_eth_port
-            update_arg.usa_tc_arg.tca_test_case_id = tc_arg.tca_test_case_id
-            err = self.warp17_call('UpdateTestCaseAppServer', update_arg)
-        return err
+    def _update(self, descr, tc_arg, update_arg, expected_err):
+        self.lh.info('Run Update {}'.format(descr))
+
+        update_arg.uaa_tc_arg.tca_eth_port = tc_arg.tca_eth_port
+        update_arg.uaa_tc_arg.tca_test_case_id = tc_arg.tca_test_case_id
+        err = self.warp17_call('UpdateTestCaseApp', update_arg)
+        self.assertEqual(err.e_code, expected_err)
+
+        if expected_err == 0:
+            result = self.warp17_call('GetTestCaseApp', update_arg.uaa_tc_arg)
+            self.assertEqual(result.tcar_error.e_code, 0)
+            self.assertTrue(result.tcar_app == update_arg.uaa_app)
 
     def update_client(self, tc_arg, update_arg, expected_err=0):
-        err = self._update(tc_arg, update_arg)
-        self.assertEqual(err.e_code, expected_err)
-
-        if expected_err == 0:
-            cl_result = self.warp17_call('GetTestCaseAppClient',
-                                         update_arg.uca_tc_arg)
-            self.assertEqual(cl_result.tccr_error.e_code, 0)
-            self.assertTrue(cl_result.tccr_cl_app == update_arg.uca_cl_app)
+        self._update('update_client', tc_arg, update_arg, expected_err)
 
     def update_server(self, tc_arg, update_arg, expected_err=0):
-        err = self._update(tc_arg, update_arg)
-        self.assertEqual(err.e_code, expected_err)
+        self._update('update_server', tc_arg, update_arg, expected_err)
 
-        if expected_err == 0:
-            srv_result = self.warp17_call('GetTestCaseAppServer',
-                                          update_arg.usa_tc_arg)
-            self.assertEqual(srv_result.tcsr_error.e_code, 0)
-            self.assertTrue(srv_result.tcsr_srv_app == update_arg.usa_srv_app)

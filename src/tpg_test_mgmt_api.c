@@ -101,9 +101,12 @@ static void test_init_server_defaults(tpg_test_case_t *cfg)
     cfg->tc_server.srv_l4.l4s_proto = L4_PROTO__TCP;
     cfg->tc_server.srv_l4.l4s_tcp_udp.tus_ports = TPG_PORT_RANGE(1, 1);
 
-    cfg->tc_server.srv_app.as_app_proto = APP_PROTO__RAW;
+    cfg->tc_init_delay = TPG_DELAY(0);
+    cfg->tc_uptime = TPG_DELAY_INF();
+    cfg->tc_downtime = TPG_DELAY_INF();
 
-    APP_SRV_CALL(default_cfg, APP_PROTO__RAW)(cfg);
+    cfg->tc_app.app_proto = APP_PROTO__RAW_SERVER;
+    APP_CALL(default_cfg, APP_PROTO__RAW_SERVER)(cfg);
 }
 
 /*****************************************************************************
@@ -122,15 +125,14 @@ static void test_init_client_defaults(tpg_test_case_t *cfg)
     cfg->tc_client.cl_rates.rc_close_rate = TPG_RATE_INF();
     cfg->tc_client.cl_rates.rc_send_rate = TPG_RATE_INF();
 
-    cfg->tc_client.cl_delays.dc_init_delay = TPG_DELAY_INF();
-    cfg->tc_client.cl_delays.dc_uptime = TPG_DELAY_INF();
-    cfg->tc_client.cl_delays.dc_downtime = TPG_DELAY_INF();
-
-    cfg->tc_client.cl_app.ac_app_proto = APP_PROTO__RAW;
-
-    APP_CL_CALL(default_cfg, APP_PROTO__RAW)(cfg);
-
     cfg->tc_client.cl_mcast_src = false;
+
+    cfg->tc_init_delay = TPG_DELAY(0);
+    cfg->tc_uptime = TPG_DELAY_INF();
+    cfg->tc_downtime = TPG_DELAY_INF();
+
+    cfg->tc_app.app_proto = APP_PROTO__RAW_CLIENT;
+    APP_CALL(default_cfg, APP_PROTO__RAW_CLIENT)(cfg);
 }
 
 /*****************************************************************************
@@ -347,19 +349,6 @@ test_mgmt_validate_client_l4(const tpg_l4_client_t *cfg,
 }
 
 /*****************************************************************************
- * test_mgmt_validate_client_app()
- ****************************************************************************/
-static bool
-test_mgmt_validate_client_app(const tpg_test_case_t *cfg,
-                              printer_arg_t *printer_arg)
-{
-    tpg_app_proto_t app_id;
-
-    app_id = cfg->tc_client.cl_app.ac_app_proto;
-    return APP_CL_CALL(validate_cfg, app_id)(cfg, printer_arg);
-}
-
-/*****************************************************************************
  * test_mgmt_validate_test_case_client()
  ****************************************************************************/
 static bool
@@ -378,11 +367,6 @@ test_mgmt_validate_test_case_client(const tpg_test_case_t *cfg,
 
     if (!test_mgmt_validate_client_l4(&cfg->tc_client.cl_l4, printer_arg))
         return false;
-
-    if (cfg->tc_client.cl_app.ac_app_proto >= APP_PROTO__APP_PROTO_MAX) {
-        tpg_printf(printer_arg, "ERROR: Invalid APP protocol type!\n");
-        return false;
-    }
 
     if (cfg->tc_client.cl_mcast_src) {
         /* Validate Multicast IP ranges. */
@@ -414,9 +398,6 @@ test_mgmt_validate_test_case_client(const tpg_test_case_t *cfg,
         return false;
     }
 
-    if (!test_mgmt_validate_client_app(cfg, printer_arg))
-        return false;
-
     return true;
 }
 
@@ -444,16 +425,21 @@ test_mgmt_validate_server_l4(const tpg_l4_server_t *cfg,
 }
 
 /*****************************************************************************
- * test_mgmt_validate_server_app()
+ * test_mgmt_validate_app()
  ****************************************************************************/
 static bool
-test_mgmt_validate_server_app(const tpg_test_case_t *cfg,
-                              printer_arg_t *printer_arg)
+test_mgmt_validate_app(const tpg_test_case_t *cfg, printer_arg_t *printer_arg)
 {
     tpg_app_proto_t app_id;
 
-    app_id = cfg->tc_server.srv_app.as_app_proto;
-    return APP_SRV_CALL(validate_cfg, app_id)(cfg, printer_arg);
+    app_id = cfg->tc_app.app_proto;
+
+    if (app_id >= APP_PROTO__APP_PROTO_MAX) {
+        tpg_printf(printer_arg, "ERROR: Invalid APP protocol type!\n");
+        return false;
+    }
+
+    return APP_CALL(validate_cfg, app_id)(cfg, &cfg->tc_app, printer_arg);
 }
 
 /*****************************************************************************
@@ -489,13 +475,12 @@ test_mgmt_validate_test_case_server(const tpg_test_case_t *cfg,
     if (!test_mgmt_validate_server_l4(&cfg->tc_server.srv_l4, printer_arg))
         return false;
 
-    if (cfg->tc_server.srv_app.as_app_proto >= APP_PROTO__APP_PROTO_MAX) {
-        tpg_printf(printer_arg, "ERROR: Invalid APP protocol type!\n");
+    /* Don't allow server test-case timeouts (i.e., init/uptime/downtime). */
+    if (cfg->has_tc_init_delay || cfg->has_tc_uptime || cfg->has_tc_downtime) {
+        tpg_printf(printer_arg,
+                   "ERROR: test case timeouts not supported on server test cases!\n");
         return false;
     }
-
-    if (!test_mgmt_validate_server_app(cfg, printer_arg))
-        return false;
 
     return true;
 }
@@ -507,13 +492,16 @@ static bool
 test_mgmt_validate_test_case(const tpg_test_case_t *cfg,
                              printer_arg_t *printer_arg)
 {
-    if (!test_mgmt_validate_port_id(cfg->tc_eth_port, printer_arg) != 0)
+    if (!test_mgmt_validate_port_id(cfg->tc_eth_port, printer_arg))
         return false;
 
     if (!test_mgmt_validate_test_case_id(cfg->tc_id, printer_arg))
         return false;
 
-    if (!test_mgmt_validate_latency(cfg, printer_arg) != 0)
+    if (!test_mgmt_validate_latency(cfg, printer_arg))
+        return false;
+
+    if (!test_mgmt_validate_app(cfg, printer_arg))
         return false;
 
     switch (cfg->tc_type) {
@@ -827,25 +815,19 @@ static int test_mgmt_get_test_case_check(uint32_t eth_port,
 }
 
 /*****************************************************************************
+ * test_mgmt_app_add_test_case()
+ ****************************************************************************/
+static void test_mgmt_app_add_test_case(const tpg_test_case_t *cfg)
+{
+    APP_CALL(add_cfg, cfg->tc_app.app_proto)(cfg, &cfg->tc_app);
+}
+
+/*****************************************************************************
  * test_mgmt_app_del_test_case()
  ****************************************************************************/
 static void test_mgmt_app_del_test_case(const tpg_test_case_t *cfg)
 {
-    tpg_app_proto_t app_id;
-
-    switch (cfg->tc_type) {
-    case TEST_CASE_TYPE__SERVER:
-        app_id = cfg->tc_server.srv_app.as_app_proto;
-        APP_SRV_CALL(delete_cfg, app_id)(cfg);
-        break;
-    case TEST_CASE_TYPE__CLIENT:
-        app_id = cfg->tc_client.cl_app.ac_app_proto;
-        APP_CL_CALL(delete_cfg, app_id)(cfg);
-        break;
-    default:
-        assert(false);
-        break;
-    }
+    APP_CALL(delete_cfg, cfg->tc_app.app_proto)(cfg, &cfg->tc_app);
 }
 
 /*****************************************************************************
@@ -900,6 +882,8 @@ void test_init_defaults(tpg_test_case_t *te, tpg_test_case_type_t type,
                         uint32_t eth_port,
                         uint32_t test_case_id)
 {
+    bzero(te, sizeof(*te));
+
     te->tc_type = type;
     te->tc_eth_port = eth_port;
     te->tc_id = test_case_id;
@@ -948,7 +932,7 @@ int test_mgmt_add_port_cfg(uint32_t eth_port, const tpg_port_cfg_t *cfg,
 const tpg_port_cfg_t *test_mgmt_get_port_cfg(uint32_t eth_port,
                                              printer_arg_t *printer_arg)
 {
-    if (!test_mgmt_validate_port_id(eth_port, printer_arg) != 0)
+    if (!test_mgmt_validate_port_id(eth_port, printer_arg))
         return NULL;
 
     return &test_mgmt_get_port_env(eth_port)->te_port_cfg;
@@ -1034,6 +1018,11 @@ int test_mgmt_add_test_case(uint32_t eth_port, const tpg_test_case_t *cfg,
     /* Struct copy. */
     tenv->te_test_cases[cfg->tc_id].cfg = *cfg;
 
+    /* Call the application add callback to initialize any memory that will
+     * be used for the application config.
+     */
+    test_mgmt_app_add_test_case(&tenv->te_test_cases[cfg->tc_id].cfg);
+
     tenv->te_test_cases[cfg->tc_id].state.teos_configured = true;
     test_init_sockopt_defaults(&tenv->te_test_cases[cfg->tc_id].sockopt, cfg);
     tenv->te_test_cases_count++;
@@ -1104,13 +1093,13 @@ int test_mgmt_update_test_case(uint32_t eth_port, uint32_t test_case_id,
         test_case->tc_client.cl_rates.rc_send_rate = arg->ua_rate_send;
 
     if (arg->has_ua_init_delay)
-        test_case->tc_client.cl_delays.dc_init_delay = arg->ua_init_delay;
+        test_case->tc_init_delay = arg->ua_init_delay;
 
     if (arg->has_ua_uptime)
-        test_case->tc_client.cl_delays.dc_uptime = arg->ua_uptime;
+        test_case->tc_uptime = arg->ua_uptime;
 
     if (arg->has_ua_downtime)
-        test_case->tc_client.cl_delays.dc_downtime = arg->ua_downtime;
+        test_case->tc_downtime = arg->ua_downtime;
 
     if (arg->has_ua_criteria)
         test_case->tc_criteria = arg->ua_criteria;
@@ -1158,10 +1147,9 @@ test_mgmt_get_test_case_cfg(uint32_t eth_port, uint32_t test_case_id,
 /*****************************************************************************
  * test_mgmt_get_test_case_app_client_cfg()
  ****************************************************************************/
-int test_mgmt_get_test_case_app_client_cfg(uint32_t eth_port,
-                                           uint32_t test_case_id,
-                                           tpg_app_client_t *out,
-                                           printer_arg_t *printer_arg)
+int test_mgmt_get_test_case_app_cfg(uint32_t eth_port, uint32_t test_case_id,
+                                    tpg_app_t *out,
+                                    printer_arg_t *printer_arg)
 {
     int         err;
     test_env_t *tenv;
@@ -1170,118 +1158,242 @@ int test_mgmt_get_test_case_app_client_cfg(uint32_t eth_port,
         return -EINVAL;
 
     err = test_mgmt_get_test_case_check(eth_port, test_case_id,
-                                        TEST_CASE_TYPE__CLIENT,
+                                        TEST_CASE_TYPE__MAX,
                                         &tenv,
                                         printer_arg);
     if (err != 0)
         return err;
 
-    *out = tenv->te_test_cases[test_case_id].cfg.tc_client.cl_app;
+    *out = tenv->te_test_cases[test_case_id].cfg.tc_app;
     return 0;
 }
 
 /*****************************************************************************
- * test_mgmt_get_test_case_app_server_cfg()
+ * test_mgmt_update_test_case_app()
  ****************************************************************************/
-int test_mgmt_get_test_case_app_server_cfg(uint32_t eth_port,
-                                           uint32_t test_case_id,
-                                           tpg_app_server_t *out,
-                                           printer_arg_t *printer_arg)
+int test_mgmt_update_test_case_app(uint32_t eth_port, uint32_t test_case_id,
+                                   const tpg_app_t *app_cfg,
+                                   printer_arg_t *printer_arg)
 {
-    int         err;
-    test_env_t *tenv;
+    test_env_t      *tenv;
+    tpg_test_case_t  tmp_cfg;
+    int              err;
+
+    if (!app_cfg)
+        return -EINVAL;
+
+    err = test_mgmt_update_test_case_check(eth_port, test_case_id,
+                                           TEST_CASE_TYPE__MAX,
+                                           &tenv,
+                                           printer_arg);
+    if (err != 0)
+        return err;
+
+    /* Struct copy. */
+    tmp_cfg = tenv->te_test_cases[test_case_id].cfg;
+    tmp_cfg.tc_app = *app_cfg;
+
+    if (!test_mgmt_validate_test_case(&tmp_cfg, printer_arg))
+        return -EINVAL;
+
+    /* Call the application delete callback to cleanup any memory that was
+     * allocated for the application config.
+     */
+    test_mgmt_app_del_test_case(&tenv->te_test_cases[test_case_id].cfg);
+
+    /* Struct copy. */
+    tenv->te_test_cases[test_case_id].cfg.tc_app = *app_cfg;
+
+    /* Call the application add callback to initialize any memory that will
+     * be used for the application config.
+     */
+    test_mgmt_app_add_test_case(&tenv->te_test_cases[test_case_id].cfg);
+
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_validate_imix_id()
+ ****************************************************************************/
+static bool test_mgmt_validate_imix_id(uint32_t imix_id,
+                                       printer_arg_t *printer_arg)
+{
+    if (imix_id >= TPG_IMIX_MAX_GROUPS) {
+        tpg_printf(printer_arg, "ERROR: Invalid IMIX id! Max allowed %u\n",
+                   TPG_IMIX_MAX_GROUPS);
+        return false;
+    }
+
+    return true;
+}
+
+/*****************************************************************************
+ * test_mgmt_validate_imix_group()
+ ****************************************************************************/
+static bool test_mgmt_validate_imix_group(uint32_t imix_id,
+                                          const tpg_imix_group_t *imix_cfg,
+                                          printer_arg_t *printer_arg)
+{
+    uint32_t app_idx;
+    uint32_t total_weight = 0;
+
+    if (imix_cfg->imix_apps_count == 0) {
+        tpg_printf(printer_arg,
+                   "ERROR: IMIX GROUP %"PRIu32" configured without applications!\n",
+                   imix_id);
+        return false;
+    }
+
+    if (imix_cfg->imix_apps_count > TPG_IMIX_MAX_APPS) {
+        tpg_printf(printer_arg,
+                   "ERROR: IMIX GROUP %"PRIu32": Max apps allowed per IMIX group is: %u!\n",
+                   imix_id,
+                   TPG_IMIX_MAX_APPS);
+        return false;
+    }
+
+    for (app_idx = 0; app_idx < imix_cfg->imix_apps_count; app_idx++) {
+        uint32_t weight = imix_cfg->imix_apps[app_idx].ia_weight;
+
+        if (weight == 0) {
+            tpg_printf(printer_arg,
+                       "ERROR: IMIX GROUP %"PRIu32": App index %"PRIu32" has weight 0!\n",
+                       imix_id, app_idx);
+            return false;
+        }
+
+        total_weight += weight;
+    }
+
+    if (total_weight > TPG_IMIX_MAX_TOTAL_APP_WEIGHT) {
+        tpg_printf(printer_arg,
+                   "ERROR: IMIX GROUP %"PRIu32": Total weight (%"PRIu32") above maximum limit (of )%"PRIu32")!\n",
+                   imix_id, total_weight, TPG_IMIX_MAX_TOTAL_APP_WEIGHT);
+        return false;
+    }
+
+    return true;
+}
+
+/*****************************************************************************
+ * test_mgmt_add_imix_group()
+ ****************************************************************************/
+int test_mgmt_add_imix_group(uint32_t imix_id, const tpg_imix_group_t *imix_cfg,
+                             printer_arg_t *printer_arg)
+{
+    test_imix_group_t *imix_group;
+
+    if (!imix_cfg)
+        return -EINVAL;
+
+    if (!test_mgmt_validate_imix_id(imix_id, printer_arg))
+        return -EINVAL;
+
+    imix_group = test_imix_get_env(imix_id);
+
+    if (imix_group->tig_configured) {
+        tpg_printf(printer_arg,
+                   "ERROR: IMIX GROUP %"PRIu32" already configured!\n",
+                   imix_id);
+        return -EEXIST;
+    }
+
+    if (!test_mgmt_validate_imix_group(imix_id, imix_cfg, printer_arg))
+        return -EINVAL;
+
+    /* Struct copy. */
+    imix_group->tig_group = *imix_cfg;
+    imix_group->tig_configured = true;
+
+    tpg_printf(printer_arg, "Successfully added IMIX GROUP %"PRIu32"!\n",
+               imix_id);
+
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_del_imix_group()
+ ****************************************************************************/
+int test_mgmt_del_imix_group(uint32_t imix_id, printer_arg_t *printer_arg)
+{
+    test_imix_group_t *imix_group;
+
+    if (!test_mgmt_validate_imix_id(imix_id, printer_arg))
+        return -EINVAL;
+
+    imix_group = test_imix_get_env(imix_id);
+
+    if (!imix_group->tig_configured) {
+        tpg_printf(printer_arg, "ERROR: IMIX GROUP %"PRIu32" not configured!\n",
+                   imix_id);
+        return -ENOENT;
+    }
+
+    if (imix_group->tig_referenced) {
+        tpg_printf(printer_arg, "ERROR: IMIX GROUP %"PRIu32" still in use!\n",
+                   imix_id);
+        return -EBUSY;
+    }
+
+    /* Just reset the configured flag. */
+    imix_group->tig_configured = false;
+
+    tpg_printf(printer_arg, "Successfully deleted IMIX GROUP %"PRIu32"!\n",
+               imix_id);
+    return 0;
+}
+
+/*****************************************************************************
+ * test_mgmt_get_imix_group()
+ ****************************************************************************/
+int test_mgmt_get_imix_group(uint32_t imix_id, tpg_imix_group_t *out,
+                             printer_arg_t *printer_arg)
+{
+    test_imix_group_t *imix_group;
 
     if (!out)
         return -EINVAL;
 
-    err = test_mgmt_get_test_case_check(eth_port, test_case_id,
-                                        TEST_CASE_TYPE__SERVER,
-                                        &tenv,
-                                        printer_arg);
-    if (err != 0)
-        return err;
+    if (!test_mgmt_validate_imix_id(imix_id, printer_arg))
+        return -EINVAL;
 
-    *out = tenv->te_test_cases[test_case_id].cfg.tc_server.srv_app;
+    imix_group = test_imix_get_env(imix_id);
+
+    if (!imix_group->tig_configured) {
+        tpg_printf(printer_arg, "ERROR: IMIX id %"PRIu32" not configured!\n",
+                   imix_id);
+        return -ENOENT;
+    }
+
+    /* Struct copy */
+    *out = imix_group->tig_group;
     return 0;
 }
 
 /*****************************************************************************
- * test_mgmt_update_test_case_app_client()
+ * test_mgmt_get_imix_stats()
  ****************************************************************************/
-int test_mgmt_update_test_case_app_client(uint32_t eth_port,
-                                          uint32_t test_case_id,
-                                          const tpg_app_client_t *app_cl_cfg,
-                                          printer_arg_t *printer_arg)
+int test_mgmt_get_imix_stats(uint32_t imix_id, tpg_imix_app_stats_t *out,
+                             printer_arg_t *printer_arg)
 {
-    test_env_t      *tenv;
-    tpg_test_case_t  tmp_cfg;
-    int              err;
+    test_imix_group_t *imix_group;
 
-    if (!app_cl_cfg)
+    if (!out)
         return -EINVAL;
 
-    err = test_mgmt_update_test_case_check(eth_port, test_case_id,
-                                           TEST_CASE_TYPE__CLIENT,
-                                           &tenv,
-                                           printer_arg);
-    if (err != 0)
-        return err;
-
-    /* Struct copy. */
-    tmp_cfg = tenv->te_test_cases[test_case_id].cfg;
-    tmp_cfg.tc_client.cl_app = *app_cl_cfg;
-
-    if (!test_mgmt_validate_test_case_client(&tmp_cfg, printer_arg))
+    if (!test_mgmt_validate_imix_id(imix_id, printer_arg))
         return -EINVAL;
 
-    /* Call the application delete callback to cleanup any memory that was
-     * allocated for the application config.
-     */
-    test_mgmt_app_del_test_case(&tenv->te_test_cases[test_case_id].cfg);
+    imix_group = test_imix_get_env(imix_id);
 
-    /* Struct copy. */
-    tenv->te_test_cases[test_case_id].cfg.tc_client.cl_app = *app_cl_cfg;
+    if (!imix_group->tig_configured) {
+        tpg_printf(printer_arg, "ERROR: IMIX id %"PRIu32" not configured!\n",
+                   imix_id);
+        return -ENOENT;
+    }
 
-    return 0;
-}
-
-/*****************************************************************************
- * test_mgmt_update_test_case_app_server()
- ****************************************************************************/
-int test_mgmt_update_test_case_app_server(uint32_t eth_port,
-                                          uint32_t test_case_id,
-                                          const tpg_app_server_t *app_srv_cfg,
-                                          printer_arg_t *printer_arg)
-{
-    test_env_t      *tenv;
-    tpg_test_case_t  tmp_cfg;
-    int              err;
-
-    if (!app_srv_cfg)
-        return -EINVAL;
-
-    err = test_mgmt_update_test_case_check(eth_port, test_case_id,
-                                           TEST_CASE_TYPE__SERVER,
-                                           &tenv,
-                                           printer_arg);
-    if (err != 0)
-        return err;
-
-    /* Struct copy. */
-    tmp_cfg = tenv->te_test_cases[test_case_id].cfg;
-    tmp_cfg.tc_server.srv_app = *app_srv_cfg;
-
-    if (!test_mgmt_validate_test_case_server(&tmp_cfg, printer_arg))
-        return -EINVAL;
-
-    /* Call the application delete callback to cleanup any memory that was
-     * allocated for the application config.
-     */
-    test_mgmt_app_del_test_case(&tenv->te_test_cases[test_case_id].cfg);
-
-    /* Struct copy. */
-    tenv->te_test_cases[test_case_id].cfg.tc_server.srv_app = *app_srv_cfg;
-
+    /* Struct copy */
+    *out = *test_imix_get_stats(imix_id);
     return 0;
 }
 
@@ -1636,7 +1748,7 @@ int test_mgmt_stop_port(uint32_t eth_port, printer_arg_t *printer_arg)
  ****************************************************************************/
 int
 test_mgmt_get_test_case_stats(uint32_t eth_port, uint32_t test_case_id,
-                              tpg_test_case_stats_t *out,
+                              tpg_gen_stats_t *out,
                               printer_arg_t *printer_arg)
 {
     int         err;
@@ -1661,7 +1773,7 @@ test_mgmt_get_test_case_stats(uint32_t eth_port, uint32_t test_case_id,
  ****************************************************************************/
 int
 test_mgmt_get_test_case_rate_stats(uint32_t eth_port, uint32_t test_case_id,
-                                   tpg_test_case_rate_stats_t *out,
+                                   tpg_rate_stats_t *out,
                                    printer_arg_t *printer_arg)
 {
     int         err;
@@ -1686,7 +1798,7 @@ test_mgmt_get_test_case_rate_stats(uint32_t eth_port, uint32_t test_case_id,
  ****************************************************************************/
 int
 test_mgmt_get_test_case_app_stats(uint32_t eth_port, uint32_t test_case_id,
-                                  tpg_test_case_app_stats_t *out,
+                                  tpg_app_stats_t *out,
                                   printer_arg_t *printer_arg)
 {
     int         err;
@@ -2134,15 +2246,11 @@ bool test_mgmt_rx_tstamp_enabled(const tpg_test_case_t *entry)
     if (sockopt->so_ipv4.ip4so_rx_tstamp)
         return true;
 
-    switch (entry->tc_type) {
-    case TEST_CASE_TYPE__CLIENT:
-        return entry->tc_client.cl_app.ac_app_proto == APP_PROTO__RAW &&
-                    TPG_XLATE_OPT_BOOL(&entry->tc_client.cl_app.ac_raw,
-                                       rc_rx_tstamp);
-    case TEST_CASE_TYPE__SERVER:
-        return entry->tc_server.srv_app.as_app_proto == APP_PROTO__RAW &&
-                    TPG_XLATE_OPT_BOOL(&entry->tc_server.srv_app.as_raw,
-                                       rs_rx_tstamp);
+    switch (entry->tc_app.app_proto) {
+    case APP_PROTO__RAW_CLIENT:
+        return TPG_XLATE_OPT_BOOL(&entry->tc_app.app_raw_client, rc_rx_tstamp);
+    case APP_PROTO__RAW_SERVER:
+        return TPG_XLATE_OPT_BOOL(&entry->tc_app.app_raw_server, rs_rx_tstamp);
     default:
         return false;
     }
@@ -2159,15 +2267,11 @@ bool test_mgmt_tx_tstamp_enabled(const tpg_test_case_t *entry)
     if (sockopt->so_ipv4.ip4so_tx_tstamp)
         return true;
 
-    switch (entry->tc_type) {
-    case TEST_CASE_TYPE__CLIENT:
-        return entry->tc_client.cl_app.ac_app_proto == APP_PROTO__RAW &&
-                    TPG_XLATE_OPT_BOOL(&entry->tc_client.cl_app.ac_raw,
-                                       rc_tx_tstamp);
-    case TEST_CASE_TYPE__SERVER:
-        return entry->tc_server.srv_app.as_app_proto == APP_PROTO__RAW &&
-                    TPG_XLATE_OPT_BOOL(&entry->tc_server.srv_app.as_raw,
-                                       rs_tx_tstamp);
+    switch (entry->tc_app.app_proto) {
+    case APP_PROTO__RAW_CLIENT:
+        return TPG_XLATE_OPT_BOOL(&entry->tc_app.app_raw_client, rc_tx_tstamp);
+    case APP_PROTO__RAW_SERVER:
+        return TPG_XLATE_OPT_BOOL(&entry->tc_app.app_raw_server, rs_tx_tstamp);
     default:
         return false;
     }

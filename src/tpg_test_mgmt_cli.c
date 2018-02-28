@@ -360,7 +360,7 @@ static void cmd_show_tests_config_parsed(void *parsed_result, struct cmdline *cl
         if (test_mgmt_get_test_case_cfg(pr->port, tcid, &entry, NULL) != 0)
             continue;
 
-        cmdline_printf(cl, "%-16s : %"PRIu32"\n", "Test Case Id", tcid);
+        cmdline_printf(cl, "%-15s: %"PRIu32"\n", "Test Case Id", tcid);
         test_config_show_tc(&entry, &parg);
         cmdline_printf(cl, "\n\n");
     }
