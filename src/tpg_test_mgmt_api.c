@@ -530,15 +530,16 @@ test_mgmt_validate_test_case(const tpg_test_case_t *cfg,
  * test_mgmt_validate_port_options()
  ****************************************************************************/
 static bool test_mgmt_validate_port_options(const tpg_port_options_t *options,
-                                            printer_arg_t *printer_arg)
+                                            printer_arg_t *printer_arg,
+                                            uint32_t port)
 {
     if (options->has_po_mtu &&
             (options->po_mtu < PORT_MIN_MTU ||
-             options->po_mtu > PORT_MAX_MTU)) {
+             options->po_mtu > port_dev_info[port].pi_dev_info.max_rx_pktlen)) {
         tpg_printf(printer_arg,
                    "ERROR: Invalid MTU value. Supported range: %u -> %u\n",
                    PORT_MIN_MTU,
-                   PORT_MAX_MTU);
+                   port_dev_info[port].pi_dev_info.max_rx_pktlen);
         return false;
     }
 
@@ -1342,7 +1343,7 @@ test_mgmt_set_port_options(uint32_t eth_port, tpg_port_options_t *opts,
 
     TPG_XLATE_OPTIONAL_COPY_FIELD(&old_opts, opts, po_mtu);
 
-    if (!test_mgmt_validate_port_options(opts, printer_arg))
+    if (!test_mgmt_validate_port_options(opts, printer_arg, eth_port))
         return -EINVAL;
 
     err = port_set_conn_options(eth_port, opts);

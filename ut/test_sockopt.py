@@ -90,8 +90,11 @@ class TestPortSockOpt(Warp17PortTestCase, Warp17UnitTestCase):
             self.lh.info('MTU %(arg)u' % {'arg': mtu})
             yield (PortOptions(po_mtu=mtu), PortOptions(po_mtu=mtu))
 
+    # We use to have many other testcases with highter mtu but since we don't
+    #  force the Max mtu anymore and we are not yet able to determine in
+    #  advace which NIC we are using, we cannot test the maximum anymore
     def get_invalid_updates(self):
-        for mtu in [0, 67, 9199, 15000, 65000]:
+        for mtu in [0, 67]:
             yield (PortOptions(po_mtu=mtu), PortOptions(po_mtu=mtu))
 
     def update(self, eth_port, port_opts, expected_err):
