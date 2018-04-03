@@ -477,6 +477,9 @@ raw_deliver_data(l4_control_block_t *l4, raw_app_t *raw_app_data,
 {
     uint32_t pkt_len = rx_data->pkt_len;
 
+    if (raw_app_data->ra_state != RAWS_RECEIVING)
+        return pkt_len;
+
     if (unlikely(pkt_len > raw_app_data->ra_remaining_count))
         pkt_len = raw_app_data->ra_remaining_count;
 
@@ -526,7 +529,8 @@ uint32_t raw_client_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
     uint32_t         delivered;
 
     delivered = raw_deliver_data(l4, &app_data->ad_raw, rx_data, rx_tstamp);
-    if (app_data->ad_raw.ra_remaining_count == 0) {
+    if (app_data->ad_raw.ra_remaining_count == 0 &&
+            app_data->ad_raw.ra_resp_size != 0) {
         INC_STATS(raw_stats, rsts_resp_cnt);
 
         if (app_data->ad_raw.ra_req_size != 0) {
@@ -555,7 +559,8 @@ uint32_t raw_server_deliver_data(l4_control_block_t *l4, app_data_t *app_data,
 
     delivered = raw_deliver_data(l4, &app_data->ad_raw, rx_data, rx_tstamp);
 
-    if (app_data->ad_raw.ra_remaining_count == 0) {
+    if (app_data->ad_raw.ra_remaining_count == 0 &&
+            app_data->ad_raw.ra_resp_size != 0) {
         INC_STATS(raw_stats, rsts_req_cnt);
 
         if (app_data->ad_raw.ra_req_size != 0) {

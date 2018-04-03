@@ -290,6 +290,15 @@ static void test_sm_SF_client_sending(l4_control_block_t *l4_cb,
         test_sm_enter_state(l4_cb, TSTS_CL_CLOSING, ctx);
         return;
 
+    case TSTE_SND_WIN:
+        /* Ignore the SND_WIN event because we didn't get to try to send yet.
+         * Might be that there was a time when the session was on the to_send
+         * list but didn't have any send window available. It's not a bad
+         * thing but it's quite hard to order the SND/NO_SND window messages
+         * with the APP_SEND_START/STOP messages.
+         */
+        return;
+
     case TSTE_NO_SND_WIN:
         TEST_CBQ_REM_TO_SEND(&ctx->tci_state, l4_cb);
         test_sm_enter_state(l4_cb, TSTS_CL_NO_SND_WIN, ctx);
@@ -598,6 +607,15 @@ static void test_sm_SF_server_sending(l4_control_block_t *l4_cb,
                                                ctx->tci_app_stats);
 
         test_sm_enter_state(l4_cb, TSTS_SRV_CLOSING, ctx);
+        return;
+
+    case TSTE_SND_WIN:
+        /* Ignore the SND_WIN event because we didn't get to try to send yet.
+         * Might be that there was a time when the session was on the to_send
+         * list but didn't have any send window available. It's not a bad
+         * thing but it's quite hard to order the SND/NO_SND window messages
+         * with the APP_SEND_START/STOP messages.
+         */
         return;
 
     case TSTE_NO_SND_WIN:
