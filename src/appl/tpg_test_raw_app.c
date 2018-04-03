@@ -200,14 +200,12 @@ static bool raw_validate_cfg(uint32_t eth_port, uint32_t test_case_id,
          * case.
          */
         if (test_mgmt_get_ipv4_sockopt(eth_port, test_case_id, &ipv4_sockopt,
-                                       printer_arg)) {
-            return false;
-        }
-
-        if (ipv4_sockopt.ip4so_tx_tstamp) {
-            tpg_printf(printer_arg,
-                       "ERROR: RAW TX timestamping and IP timestamping can't be both ON!\n");
-            return false;
+                                       printer_arg) == 0) {
+            if (ipv4_sockopt.ip4so_tx_tstamp) {
+                tpg_printf(printer_arg,
+                           "ERROR: RAW TX timestamping and IP timestamping can't be both ON!\n");
+                return false;
+            }
         }
 
         if (outgoing_len < sizeof(raw_latency_data_t)) {

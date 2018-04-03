@@ -513,6 +513,16 @@ tpg_xlate_tpgTestAppStats_by_proto(const tpg_app_stats_t *in, AppStats *out,
 }
 
 /*****************************************************************************
+ * tpg_LatencyStats_adjust()
+ *  NOTE: zero out min latency if we have no samples
+ ****************************************************************************/
+static void tpg_LatencyStats_adjust(LatencyStats *stats)
+{
+    if (stats->ls_samples_count == 0)
+        stats->ls_min_latency = 0;
+}
+
+/*****************************************************************************
  * tpg_xlate_tpg_TestStatusResult()
  ****************************************************************************/
 int tpg_xlate_tpg_TestStatusResult(const tpg_test_status_result_t *in,
@@ -575,6 +585,12 @@ int tpg_xlate_tpg_TestStatusResult(const tpg_test_status_result_t *in,
                                         out->tsr_stats->gs_latency_stats);
     if (err)
         return err;
+
+    /* Zero out min latency stats if we don't have any samples. */
+    tpg_LatencyStats_adjust(out->tsr_stats->gs_latency_stats->gls_stats);
+
+    /* Zero out recent latency stats if we don't have any samples. */
+    tpg_LatencyStats_adjust(out->tsr_stats->gs_latency_stats->gls_sample_stats);
 
     /* Translate RateStats. */
     err = tpg_xlate_tpg_RateStats(&in->tsr_rate_stats, out->tsr_rate_stats);

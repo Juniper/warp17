@@ -580,8 +580,8 @@ class TestPerf(Warp17UnitTestCase):
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
                                        dport_cnt=100, l4_proto=TCP,
                                        rate_ccfg=self._get_rates_client(),
-                                       app_ccfg=self._get_raw_app_client(1024),
-                                       app_scfg=self._get_raw_app_server(1024),
+                                       app_ccfg=self._get_raw_app_client(1024, rx_ts=True, tx_ts=True),
+                                       app_scfg=self._get_raw_app_server(1024, rx_ts=True, tx_ts=True),
                                        expected_rate=self._get_expected_tcp_data_tstamp())
 
     def test_15_timestamp_raw_4M_udp_sess_data_1024b_setup_rate(self):
@@ -593,8 +593,8 @@ class TestPerf(Warp17UnitTestCase):
                                        dport_cnt=100, l4_proto=UDP,
                                        rate_ccfg=self._get_rates_client(
                                            rate_limit=False),
-                                       app_ccfg=self._get_raw_app_client(1024),
-                                       app_scfg=self._get_raw_app_server(1024),
+                                       app_ccfg=self._get_raw_app_client(1024, rx_ts=True, tx_ts=True),
+                                       app_scfg=self._get_raw_app_server(1024, rx_ts=True, tx_ts=True),
                                        expected_rate=self._get_expected_udp_data_tstamp())
 
     def test_16_recent_timestamp_raw_4M_tcp_sess_data_1024b_setup_rate(self):
@@ -608,8 +608,8 @@ class TestPerf(Warp17UnitTestCase):
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
                                        dport_cnt=100, l4_proto=TCP,
                                        rate_ccfg=self._get_rates_client(),
-                                       app_ccfg=self._get_raw_app_client(1024),
-                                       app_scfg=self._get_raw_app_server(1024),
+                                       app_ccfg=self._get_raw_app_client(1024, rx_ts=True, tx_ts=True),
+                                       app_scfg=self._get_raw_app_server(1024, rx_ts=True, tx_ts=True),
                                        expected_rate=self._get_expected_tcp_data_tstamp(),
                                        recent_stats=True)
 
@@ -622,8 +622,8 @@ class TestPerf(Warp17UnitTestCase):
                                        dport_cnt=100, l4_proto=UDP,
                                        rate_ccfg=self._get_rates_client(
                                            rate_limit=False),
-                                       app_ccfg=self._get_raw_app_client(1024),
-                                       app_scfg=self._get_raw_app_server(1024),
+                                       app_ccfg=self._get_raw_app_client(1024, rx_ts=True, tx_ts=True),
+                                       app_scfg=self._get_raw_app_server(1024, rx_ts=True, tx_ts=True),
                                        expected_rate=self._get_expected_udp_data_tstamp(),
                                        recent_stats=True)
 
