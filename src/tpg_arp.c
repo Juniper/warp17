@@ -130,8 +130,8 @@ static void cmd_show_arp_entries_parsed(void *parsed_result __rte_unused,
         arp_entry_t *port_entries = arp_per_port_tables[port];
 
         cmdline_printf(cl, "ARP table for port %u:\n\n", port);
-        cmdline_printf(cl, "IPv4             MAC address        Age         Flags\n");
-        cmdline_printf(cl, "---------------  -----------------  ----------  -----\n");
+        cmdline_printf(cl, "IPv4             MAC address        Age         Flags  Vlan-id\n");
+        cmdline_printf(cl, "---------------  -----------------  ----------  -----  -------\n");
 
         /*
          *   This really kills performance, but we assume this is only done
@@ -167,7 +167,9 @@ static void cmd_show_arp_entries_parsed(void *parsed_result __rte_unused,
                              (uint8_t) (port_entries[entry].ae_mac_flags >>  0) & 0xff);
                 }
 
-                cmdline_printf(cl, "%15s  %17s  %10d  %s\n", ip_str, mac_str, age, flag_str);
+                cmdline_printf(cl, "%15s  %17s  %10d  %5s %7"PRIu16"\n",
+                               ip_str, mac_str, age, flag_str,
+                               port_entries[entry].ae_vlan_id);
             }
         }
 
@@ -427,8 +429,8 @@ void arp_lcore_init(uint32_t lcore_id)
 /*****************************************************************************
  * arp_update_entry()
  ****************************************************************************/
-static bool arp_update_entry(uint32_t port, uint32_t ip, uint64_t mac,
-                             bool local)
+static bool arp_update_entry(uint32_t port, uint32_t ip, uint64_t mac, bool local,
+                             uint32_t vlan_id)
 {
     int          i;
     bool         rc = true;
@@ -471,6 +473,7 @@ static bool arp_update_entry(uint32_t port, uint32_t ip, uint64_t mac,
         }
 
         arp_set_mac_in_entry_as_uint64(update_entry, mac);
+        update_entry->ae_vlan_id = vlan_id;
 
         if (free_entry != NULL)
             arp_set_entry_in_use(update_entry);
@@ -716,14 +719,15 @@ bool arp_send_grat_arp_reply(uint32_t port, uint32_t ip, uint16_t vlan_tci)
 /*****************************************************************************
  * arp_lookup()
  ****************************************************************************/
-static arp_entry_t *arp_lookup(uint32_t port, uint32_t ip)
+static arp_entry_t *arp_lookup(uint32_t port, uint32_t ip, uint16_t vlan_id)
 {
     int          i;
     arp_entry_t *port_entries = RTE_PER_LCORE(arp_local_per_port_tables)[port];
 
     for (i = 0; i < TPG_ARP_PORT_TABLE_SIZE; i++) {
         if (arp_is_entry_in_use(&port_entries[i]) &&
-            port_entries[i].ae_ip_address == ip) {
+            port_entries[i].ae_ip_address == ip &&
+            port_entries[i].ae_vlan_id == vlan_id) {
 
             return &port_entries[i];
         }
@@ -735,13 +739,13 @@ static arp_entry_t *arp_lookup(uint32_t port, uint32_t ip)
 /*****************************************************************************
  * arp_lookup_mac()
  ****************************************************************************/
-uint64_t arp_lookup_mac(uint32_t port, uint32_t ip)
+uint64_t arp_lookup_mac(uint32_t port, uint32_t ip, uint16_t vlan_id)
 {
     arp_entry_t *arp;
 
-    arp = arp_lookup(port, ip);
+    arp = arp_lookup(port, ip, vlan_id);
      if (!arp)
-        return TPG_ARP_MAC_NOT_FOUND;
+         return TPG_ARP_MAC_NOT_FOUND;
 
     return arp_get_mac_from_entry_as_uint64(arp);
 }
@@ -749,24 +753,24 @@ uint64_t arp_lookup_mac(uint32_t port, uint32_t ip)
 /*****************************************************************************
  * arp_add_local()
  ****************************************************************************/
-bool arp_add_local(uint32_t port, uint32_t ip)
+bool arp_add_local(uint32_t port, uint32_t ip, uint16_t vlan_id)
 {
     struct ether_addr mac;
 
     rte_eth_macaddr_get(port, &mac);
 
     return arp_update_entry(port, ip, eth_mac_to_uint64(&mac.addr_bytes[0]),
-                            true);
+                            true, vlan_id);
 }
 
 /*****************************************************************************
  * arp_delete_local()
  ****************************************************************************/
-bool arp_delete_local(uint32_t port, uint32_t ip)
+bool arp_delete_local(uint32_t port, uint32_t ip, uint16_t vlan_id)
 {
     arp_entry_t *local_arp;
 
-    local_arp = arp_lookup(port, ip);
+    local_arp = arp_lookup(port, ip, vlan_id);
     if (local_arp == NULL)
         return false;
 
@@ -781,7 +785,7 @@ bool arp_delete_local(uint32_t port, uint32_t ip)
 /*****************************************************************************
  * arp_process_request()
  ****************************************************************************/
-static void arp_process_request(packet_control_block_t *pcb, uint16_t vlan_tci)
+static void arp_process_request(packet_control_block_t *pcb, uint16_t vlan_id)
 {
     struct arp_hdr *arp_hdr = pcb->pcb_arp;
     uint32_t        arp_req_ip;
@@ -796,7 +800,7 @@ static void arp_process_request(packet_control_block_t *pcb, uint16_t vlan_tci)
     /*
      * If the request is not for this port ignore it....
      */
-    local_arp = arp_lookup(pcb->pcb_port, arp_req_ip);
+    local_arp = arp_lookup(pcb->pcb_port, arp_req_ip, vlan_id);
     if (local_arp == NULL || !ARP_IS_FLAG_SET(local_arp, TPG_ARP_FLAG_LOCAL)) {
         INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, pcb->pcb_port),
                   as_req_not_mine);
@@ -809,7 +813,7 @@ static void arp_process_request(packet_control_block_t *pcb, uint16_t vlan_tci)
     arp_req_sip = rte_be_to_cpu_32(arp_hdr->arp_data.arp_sip);
 
     arp_send_arp_reply(pcb->pcb_port, arp_req_ip, arp_req_sip,
-                       arp_hdr->arp_data.arp_sha.addr_bytes, vlan_tci);
+                       arp_hdr->arp_data.arp_sha.addr_bytes, vlan_id);
 
     /*
      * TODO: a real stack would probably check for duplicate IP,
@@ -820,13 +824,13 @@ static void arp_process_request(packet_control_block_t *pcb, uint16_t vlan_tci)
 
     arp_update_entry(pcb->pcb_port, arp_req_sip,
                      eth_mac_to_uint64(arp_hdr->arp_data.arp_sha.addr_bytes),
-                     false);
+                     false, vlan_id);
 }
 
 /*****************************************************************************
  * arp_process_reply()
  ****************************************************************************/
-static void arp_process_reply(packet_control_block_t *pcb)
+static void arp_process_reply(packet_control_block_t *pcb, uint16_t vlan_id)
 {
     struct arp_hdr *arp_hdr = pcb->pcb_arp;
     uint32_t        arp_req_ip;
@@ -844,9 +848,9 @@ static void arp_process_reply(packet_control_block_t *pcb)
     RTE_LOG(DEBUG, USER2, "[%d:%s()] DBG: ARP reply from DUT, update entry\n",
             pcb->pcb_core_index, __func__);
 
-    arp_update_entry(pcb->pcb_port,  arp_req_ip,
+    arp_update_entry(pcb->pcb_port, arp_req_ip,
                      eth_mac_to_uint64(arp_hdr->arp_data.arp_sha.addr_bytes),
-                     false);
+                     false, vlan_id);
 }
 
 /*****************************************************************************
@@ -970,9 +974,9 @@ struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
         pcb->pcb_arp = arp_hdr;
 
         if (op == ARP_OP_REQUEST)
-            arp_process_request(pcb, vlan_tci);
+            arp_process_request(pcb, VLAN_TAG_ID(vlan_tci));
         else if (op == ARP_OP_REPLY)
-            arp_process_reply(pcb);
+            arp_process_reply(pcb, VLAN_TAG_ID(vlan_tci));
 
         return mbuf;
 }

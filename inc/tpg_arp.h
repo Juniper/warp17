@@ -85,6 +85,7 @@ typedef struct arp_entry_s {
 
     uint64_t ae_mac_flags;
     uint32_t ae_ip_address;
+    uint16_t ae_vlan_id;
 
 } arp_entry_t;
 
@@ -148,9 +149,12 @@ extern void             arp_lcore_init(uint32_t lcore_id);
 extern struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
                                         struct rte_mbuf *mbuf,
                                         uint16_t vlan_tci);
-extern uint64_t         arp_lookup_mac(uint32_t port, uint32_t ip);
-extern bool             arp_add_local(uint32_t port, uint32_t ip);
-extern bool             arp_delete_local(uint32_t port, uint32_t ip);
+extern uint64_t         arp_lookup_mac(uint32_t port, uint32_t ip,
+                                       uint16_t vlan_id);
+extern bool             arp_add_local(uint32_t port, uint32_t ip,
+                                      uint16_t vlan_id);
+extern bool             arp_delete_local(uint32_t port, uint32_t ip,
+                                         uint16_t vlan_id);
 extern bool             arp_send_arp_request(uint32_t port, uint32_t local_ip,
                                        uint32_t remote_ip, uint16_t vlan_tci);
 extern bool             arp_send_grat_arp_request(uint32_t port, uint32_t ip,

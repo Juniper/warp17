@@ -310,7 +310,7 @@ struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
 {
     uint16_t          etype;
     struct ether_hdr *eth_hdr;
-    uint16_t          vlan_tci = 0;
+    uint16_t          vlan_tci  = VLAN_NO_TAG;
 
     if (unlikely(rte_pktmbuf_data_len(mbuf) < sizeof(struct ether_hdr))) {
         RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: mbuf fragment to small for ether_hdr!\n",

@@ -351,3 +351,32 @@ class TestVlanSockOpt(Warp17TrafficTestCase, Warp17UnitTestCase):
     def update_server(self, tc_arg, srv_vlan_opts, expected_err=0):
         self.update(tc_arg, srv_vlan_opts, expected_err)
 
+    def get_port_cfg(self, eth_port, vlan_id=0):
+        pcfg = super(TestVlanSockOpt, self).get_port_cfg(eth_port, vlan_id)
+        for i in range(0, self.L3_INTF_COUNT):
+            pcfg.pc_l3_intfs[i].l3i_vlan_id = vlan_id
+
+        return pcfg
+
+    def test_update_run_traffic(self):
+        """Tests updates and runs traffic"""
+
+        self.lh.info('Running: test_update_run_traffic')
+        for (cl_update, srv_update) in self.get_updates():
+
+            # Configure ports
+            port_cfg_client = self.get_port_cfg(0, cl_update.vlanso_id)
+            self.update_client(self._tc_arg_client, cl_update)
+            port_cfg_server = self.get_port_cfg(1, srv_update.vlanso_id)
+            self.update_server(self._tc_arg_server, srv_update)
+
+            self.configurePort(port_cfg_client, 'Client')
+            self.configurePort(port_cfg_server, 'Server')
+
+            self.startPorts()
+
+            cl_result = self.check_test_case_status(self._tc_arg_client)
+            srv_result = self.check_test_case_status(self._tc_arg_server)
+            self.verify_stats(cl_result, srv_result, cl_update, srv_update)
+
+            self.stopPorts()

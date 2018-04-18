@@ -169,7 +169,7 @@ class Warp17TrafficTestCase():
         """Override in child class if a specific value is needed."""
         return Rate()
 
-    def get_port_cfg(self, eth_port):
+    def get_port_cfg(self, eth_port, vlan_id=0):
         # No def gw
         no_def_gw = Ip(ip_version=IPV4, ip_v4=0)
 
