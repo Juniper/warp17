@@ -1304,6 +1304,13 @@ static void tpg_rpc__get_statistics(Warp17_Service *service __rte_unused,
         goto done;
 
     RPC_STORE_RETCODE(tpg_result.sr_error,
+                      test_mgmt_get_phy_rate_stats(port_arg.pa_eth_port,
+                                                   &tpg_result.sr_phy_rate, NULL));
+
+    if (tpg_result.sr_error.e_code != 0)
+        goto done;
+
+    RPC_STORE_RETCODE(tpg_result.sr_error,
                       test_mgmt_get_eth_stats(port_arg.pa_eth_port,
                                               &tpg_result.sr_eth, NULL));
 

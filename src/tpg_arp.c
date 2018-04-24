@@ -744,8 +744,8 @@ uint64_t arp_lookup_mac(uint32_t port, uint32_t ip, uint16_t vlan_id)
     arp_entry_t *arp;
 
     arp = arp_lookup(port, ip, vlan_id);
-     if (!arp)
-         return TPG_ARP_MAC_NOT_FOUND;
+    if (!arp)
+        return TPG_ARP_MAC_NOT_FOUND;
 
     return arp_get_mac_from_entry_as_uint64(arp);
 }

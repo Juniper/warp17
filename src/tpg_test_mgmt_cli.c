@@ -181,7 +181,7 @@ static void cmd_tests_start_parsed(void *parsed_result,
      * Might be nice though if the user could specify a timeout and/or retry
      * count.
      */
-    rte_eth_link_get_nowait(pr->port, &link);
+    port_link_info_get_nowait(pr->port, &link);
     if (!link.link_status) {
         cmdline_printf(cl, "ERROR: Ehernet port %u: Link down!\n", pr->port);
         return;

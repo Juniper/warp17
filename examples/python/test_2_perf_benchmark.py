@@ -57,12 +57,9 @@
 
 import sys
 import time
+import argparse
 
 from functools import partial
-
-sys.path.append('../../python')
-sys.path.append('../../api/generated/py')
-sys.path.append('../../ut/lib')
 
 from warp17_api import *
 
@@ -307,6 +304,12 @@ def run_test_averaged(w17_call, cl_cfg_fn, srv_cfg_fn, tcp_opts_cfg):
     return [sum(result, 0.0) / run_cnt for result in zip(*results)]
 
 def run():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('-f', '--file', help='path to warp17 binary',
+                        required=True)
+    args = parser.parse_args()
+
     configs = [
         ('TCP',  TCP,  client_raw_app_cfg,  server_raw_app_cfg, TcpSockopt(to_win_size=tcp_win_size)),
         ('HTTP', TCP,  client_http_app_cfg, server_http_app_cfg, TcpSockopt(to_win_size=tcp_win_size)),
@@ -315,8 +318,9 @@ def run():
 
     payload_sizes = [0, 32, 64, 128, 256, 512, 1024, 4096, 8192]
 
-    env = Warp17Env(path='./test_2_perf_benchmark.ini')
-    warp17_pid = warp17_start(env=env, exec_file='../../build/warp17',
+    env = Warp17Env(path=os.path.join(os.path.dirname(__file__),
+                                      './test_2_perf_benchmark.ini'))
+    warp17_pid = warp17_start(env=env, exec_file=args.file,
                               output_args=Warp17OutputArgs(out_file='/tmp/test_2_perf.out'))
     warp17_wait(env=env, logger=LogHelper(name='benchmark',
                                           filename='/tmp/test_2_perf.log'))

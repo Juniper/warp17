@@ -54,13 +54,6 @@
 #
 #
 
-import sys
-import os
-
-sys.path.append('./lib')
-sys.path.append('../python')
-sys.path.append('../api/generated/py')
-
 import warp17_api
 
 from warp17_ut import Warp17BaseUnitTestCase

@@ -1879,6 +1879,35 @@ int test_mgmt_get_phy_stats(uint32_t eth_port,
 }
 
 /*****************************************************************************
+ * test_mgmt_get_phy_rate_stats()
+ *****************************************************************************/
+int test_mgmt_get_phy_rate_stats(uint32_t eth_port,
+                                 tpg_phy_statistics_t *rate_stats,
+                                 printer_arg_t *printer_arg)
+{
+    struct rte_eth_link  link_info;
+    struct rte_eth_stats phy_stats;
+
+    if (!test_mgmt_validate_port_id(eth_port, printer_arg))
+        return -EINVAL;
+
+    port_link_rate_stats_get(eth_port, &phy_stats);
+    port_link_info_get_nowait(eth_port, &link_info);
+
+    bzero(rate_stats, sizeof(*rate_stats));
+
+    rate_stats->pys_rx_pkts = phy_stats.ipackets;
+    rate_stats->pys_rx_bytes = phy_stats.ibytes;
+    rate_stats->pys_tx_pkts = phy_stats.opackets;
+    rate_stats->pys_tx_bytes = phy_stats.obytes;
+    rate_stats->pys_rx_errors = phy_stats.ierrors;
+    rate_stats->pys_tx_errors = phy_stats.oerrors;
+    rate_stats->pys_link_speed = link_info.link_speed;
+
+    return 0;
+}
+
+/*****************************************************************************
  * test_mgmt_get_eth_stats()
  *****************************************************************************/
 int test_mgmt_get_eth_stats(uint32_t eth_port,

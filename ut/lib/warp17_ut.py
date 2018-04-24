@@ -62,9 +62,6 @@ import time
 
 from functools import partial
 
-sys.path.append('../../python')
-sys.path.append('../../api/generated/py')
-
 from helpers    import LogHelper
 from b2b_setup  import *
 from warp17_api import *

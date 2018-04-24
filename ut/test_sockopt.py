@@ -54,15 +54,6 @@
 #
 #
 
-import errno
-import sys
-import unittest
-import time
-
-sys.path.append('./lib')
-sys.path.append('../python')
-sys.path.append('../api/generated/py')
-
 from warp17_ut import Warp17UnitTestCase
 from warp17_ut import Warp17TrafficTestCase
 from warp17_ut import Warp17PortTestCase
@@ -380,3 +371,4 @@ class TestVlanSockOpt(Warp17TrafficTestCase, Warp17UnitTestCase):
             self.verify_stats(cl_result, srv_result, cl_update, srv_update)
 
             self.stopPorts()
+

@@ -54,8 +54,6 @@
 #
 #
 
-import sys
-sys.path.append('../api/generated/py')
 import warp17_service_pb2
 
 from google.protobuf.service import RpcChannel

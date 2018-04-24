@@ -387,13 +387,23 @@ test_mgmt_get_port_stats(uint32_t eth_port, tpg_port_statistics_t *total_stats,
                          printer_arg_t *printer_arg);
 
 /*
-* Returns:
-*  -EINVAL: port not valid.
-*  0 on success
-*/
+ * Returns:
+ *  -EINVAL: port not valid.
+ *  0 on success
+ */
 extern __tpg_api_func int
 test_mgmt_get_phy_stats(uint32_t eth_port, tpg_phy_statistics_t *total_stats,
                         printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -EINVAL: port not valid.
+ *  0 on success
+ */
+extern __tpg_api_func int
+test_mgmt_get_phy_rate_stats(uint32_t eth_port, tpg_phy_statistics_t *rate_stats,
+                             printer_arg_t *printer_arg);
+
 
 /*
  * Returns:

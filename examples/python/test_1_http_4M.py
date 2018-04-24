@@ -56,10 +56,8 @@
 
 import sys
 import time
-
-sys.path.append('../../python')
-sys.path.append('../../api/generated/py')
-sys.path.append('../../ut/lib')
+import os
+import argparse
 
 from warp17_api import *
 
@@ -80,7 +78,7 @@ def die(msg):
     sys.stderr.write(msg + ' Should cleanup but we just exit..\n')
     sys.exit(1)
 
-def init_test():
+def init_test(w17_binary):
     # Configure the WARP17 mandatory environment variables. These could also be
     # set outside the script (through normal env variables) but for this example
     # we do it here..
@@ -90,10 +88,10 @@ def init_test():
     global warp17_port
     global env
 
-    env = Warp17Env(path='./test_1_http_4M.ini')
+    env = Warp17Env(path=os.path.join(os.path.dirname(__file__),
+                                      './test_1_http_4M.ini'))
 
     # First start WARP17 on the local machine, default IP and port.
-    exec_bin = '../../build/warp17'
     warp17_host = env.get_host_name()
     warp17_port = env.get_rpc_port()
 
@@ -101,7 +99,7 @@ def init_test():
     # Returns the process id of WARP17.
     # This will throw an exception if the output file can't be created or if
     # WARP17 can't be started.
-    warp17_pid = warp17_start(env=env, exec_file=exec_bin,
+    warp17_pid = warp17_start(env=env, exec_file=w17_binary,
                               output_args=Warp17OutputArgs(out_file='/tmp/test_1_api_example.out'))
 
     # Now wait for WARP17 to finish initializing
@@ -274,7 +272,13 @@ def run_test():
     ''' Assumes a back to back topology with two 40G ports. '''
     ''' Port 0 emulates clients and port 1 emulates servers. '''
 
-    warp17_pid = init_test()
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('-f', '--file', help='path to warp17 binary',
+                        required=True)
+    args = parser.parse_args()
+
+    warp17_pid = init_test(args.file)
     configure_client_port()
     configure_server_port()
 

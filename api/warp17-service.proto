@@ -185,18 +185,19 @@ message VlanSockoptResult {
 }
 
 message StatsResult {
-    required Error           sr_error = 1;
-    required PortStatistics  sr_port  = 2;
-    required PhyStatistics   sr_phy   = 3;
-    required EthStatistics   sr_eth   = 4;
-    required ArpStatistics   sr_arp   = 5;
-    required RouteStatistics sr_route = 6;
-    required Ipv4Statistics  sr_ipv4  = 7;
-    required UdpStatistics   sr_udp   = 8;
-    required TcpStatistics   sr_tcp   = 9;
-    required TsmStatistics   sr_tsm   = 10;
-    required MsgStatistics   sr_msg   = 11;
-    required TimerStatistics sr_timer = 12;
+    required Error           sr_error    = 1;
+    required PortStatistics  sr_port     = 2;
+    required PhyStatistics   sr_phy      = 3;
+    required PhyStatistics   sr_phy_rate = 4;
+    required EthStatistics   sr_eth      = 5;
+    required ArpStatistics   sr_arp      = 6;
+    required RouteStatistics sr_route    = 7;
+    required Ipv4Statistics  sr_ipv4     = 8;
+    required UdpStatistics   sr_udp      = 9;
+    required TcpStatistics   sr_tcp      = 10;
+    required TsmStatistics   sr_tsm      = 11;
+    required MsgStatistics   sr_msg      = 12;
+    required TimerStatistics sr_timer    = 13;
 }
 
 message TestStatusResult {

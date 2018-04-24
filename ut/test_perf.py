@@ -56,13 +56,8 @@
 
 import errno
 import sys
-import unittest
 import time
-import os
-
-sys.path.append('./lib')
-sys.path.append('../python')
-sys.path.append('../api/generated/py')
+import unittest
 
 from warp17_ut  import Warp17UnitTestCase
 from warp17_api import Warp17Env

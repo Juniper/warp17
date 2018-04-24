@@ -1001,6 +1001,14 @@ void port_link_info_get(uint32_t port, struct rte_eth_link *link_info)
 }
 
 /*****************************************************************************
+ * port_link_info_get_nowait()
+ *****************************************************************************/
+void port_link_info_get_nowait(uint32_t port, struct rte_eth_link *link)
+{
+    rte_eth_link_get_nowait(port, link);
+}
+
+/*****************************************************************************
  * port_link_stats_get()
  *****************************************************************************/
 void port_link_stats_get(uint32_t port, struct rte_eth_stats *total_link_stats)

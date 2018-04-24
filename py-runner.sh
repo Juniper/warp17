@@ -1,7 +1,8 @@
+#!/bin/sh
 #
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
 #
-# Copyright (c) 2016, Juniper Networks, Inc. All rights reserved.
+# Copyright (c) 2018, Juniper Networks, Inc. All rights reserved.
 #
 #
 # The contents of this file are subject to the terms of the BSD 3 clause
@@ -39,46 +40,21 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # File name:
-#     Makefile.ut
+#     py-runner.sh
 #
 # Description:
-#     UT WARP17 makefile.
+#     Simple wrapper script to setup the proper python paths.
 #
 # Author:
-#     Dumitru Ceara, Eelco Chaudron
+#     Dumitru Ceara
 #
 # Initial Created:
-#     02/11/2016
+#     04/04/2018
 #
 # Notes:
 #
-#
 
-.PHONY: all clean
+topdir=`dirname $0`
 
-Q?=@
-
-WARP17_INI_FILE ?= ./ini/$(shell hostname).ini
-WARP17_UNIQ_STAMP ?= $(shell python ../python/uniq.py)
-TOPDIR = ..
-PY_RUNNER = $(TOPDIR)/py-runner.sh
-
-OBJS=*.pyc lib/*.pyc
-
-UT = $(PY_RUNNER) python -m unittest
-UT_FLAGS = -v
-
-TEST_TARGETS=$(sort $(patsubst %.py,%,$(wildcard *.py)))
-
-PARAMS  = WARP17_INI_FILE="$(WARP17_INI_FILE)"
-# Unique stamp to be used for creating output dir
-PARAMS += WARP17_UNIQ_STAMP="$(WARP17_UNIQ_STAMP)"
-
-all: $(TEST_TARGETS)
-
-clean:
-	$(Q)$(RM) -rf $(OBJS)
-
-%: %.py
-	$(Q)$(PARAMS) $(UT) $(UT_FLAGS) $@
+PYTHONPATH=$topdir/python:$topdir/api/generated/py:$topdir/ut/lib:$PYTHONPATH $@
 
