@@ -29,7 +29,7 @@ WARP17 will be able to run on all the platforms that are supported by DPDK.
 ## Reference platform HW configuration
 The configuration of the server on which the WARP17 benchmarks were run is:
 
-* [Super X10DRX](www.supermicro.com/products/motherboard/Xeon/C600/X10DRX.cfm)
+* [Super X10DRX](http://www.supermicro.com/products/motherboard/Xeon/C600/X10DRX.cfm)
   dual socket motherboard
 * Two [Intel&reg; Xeon&reg; Processor E5-2660 v3](http://ark.intel.com/products/81706/Intel-Xeon-Processor-E5-2660-v3-25M-Cache-2_60-GHz)
 * 128GB RAM, using 16x 8G DDR4 2133Mhz to fill all the memory slots
