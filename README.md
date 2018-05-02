@@ -264,11 +264,9 @@ RTE_SDK. For example:
  * Install [libprotobuf-c](http://packages.ubuntu.com/trusty/amd64/libprotobuf-c0/download),
    [libprotobuf-c-dev](http://packages.ubuntu.com/trusty/amd64/libprotobuf-c0-dev/download)
    from Ubuntu 14.04LTS:
-
-		```
+		
 		sudo dpkg -i libprotobuf-c0_0.15-1build1_amd64.deb
 		sudo dpkg -i libprotobuf-c0-dev_0.15-1build1_amd64.deb
-		```
 
  * Install [libprotobuf8](http://packages.ubuntu.com/trusty/amd64/libprotobuf8/download)
    from Ubuntu 14.04LTS:
