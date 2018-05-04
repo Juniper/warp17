@@ -265,25 +265,31 @@ RTE_SDK. For example:
    [libprotobuf-c-dev](http://packages.ubuntu.com/trusty/amd64/libprotobuf-c0-dev/download)
    from Ubuntu 14.04LTS:
 
-		```
-		sudo dpkg -i libprotobuf-c0_0.15-1build1_amd64.deb
-		sudo dpkg -i libprotobuf-c0-dev_0.15-1build1_amd64.deb
-		```
+    ```
+    sudo dpkg -i libprotobuf-c0_0.15-1build1_amd64.deb
+    sudo dpkg -i libprotobuf-c0-dev_0.15-1build1_amd64.deb
+    ```
 
  * Install [libprotobuf8](http://packages.ubuntu.com/trusty/amd64/libprotobuf8/download)
    from Ubuntu 14.04LTS:
 
-		sudo dpkg -i libprotobuf8_2.5.0-9ubuntu1_amd64.deb
+    ```
+    sudo dpkg -i libprotobuf8_2.5.0-9ubuntu1_amd64.deb
+    ```
 
  * Install [libprotoc8](http://packages.ubuntu.com/trusty/amd64/libprotoc8/download)
    from Ubuntu 14.04LTS:
 
-		sudo dpkg -i libprotoc8_2.5.0-9ubuntu1_amd64.deb
+    ```
+    sudo dpkg -i libprotoc8_2.5.0-9ubuntu1_amd64.deb
+    ```
 
  * Install [protobuf-c-compiler](http://packages.ubuntu.com/trusty/amd64/protobuf-c-compiler/download)
    from ubuntu 14.04LTS:
 
-		sudo dpkg -i protobuf-c-compiler_0.15-1build1_amd64.deb
+    ```
+    sudo dpkg -i protobuf-c-compiler_0.15-1build1_amd64.deb
+    ```
 
 ## Get WARP17
 Get the `warp17-<ver>.tgz` archive or clone the desired
