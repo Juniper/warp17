@@ -65,6 +65,7 @@
 #define VLAN_MAX        4094
 #define VLAN_VID_MASK   0x0fff /* VLAN Identifier */
 #define VLAN_PRIO_SHIFT 13
+#define VLAN_NO_TAG     0
 
 #define VLAN_TAG_ID(vlan_tci) ((vlan_tci) & VLAN_VID_MASK)
 

@@ -54,12 +54,6 @@
 #
 #
 
-import sys
-
-sys.path.append('./lib')
-sys.path.append('../python')
-sys.path.append('../api/generated/py')
-
 from warp17_ut import Warp17UnitTestCase
 from warp17_ut import Warp17TrafficTestCase
 
@@ -67,6 +61,7 @@ from warp17_common_pb2    import *
 from warp17_server_pb2    import *
 from warp17_client_pb2    import *
 from warp17_app_raw_pb2   import *
+from warp17_app_pb2       import *
 from warp17_test_case_pb2 import *
 from warp17_service_pb2   import *
 
@@ -83,7 +78,7 @@ class TestRaw(Warp17TrafficTestCase, Warp17UnitTestCase):
         if not tx_ts is None:
             rc.rc_tx_tstamp = tx_ts
 
-        return AppClient(ac_app_proto=RAW, ac_raw=rc)
+        return App(app_proto=RAW_CLIENT, app_raw_client=rc)
 
     def _raw_server_cfg(self, req_size, resp_size, rx_ts, tx_ts):
         rs = RawServer(rs_req_plen=req_size, rs_resp_plen=resp_size)
@@ -93,7 +88,7 @@ class TestRaw(Warp17TrafficTestCase, Warp17UnitTestCase):
         if not tx_ts is None:
             rs.rs_tx_tstamp = tx_ts
 
-        return AppServer(as_app_proto=RAW, as_raw=rs)
+        return App(app_proto=RAW_SERVER, app_raw_server=rs)
 
     #####################################################
     # Overrides of Warp17TrafficTestCase specific to RAW
@@ -129,27 +124,23 @@ class TestRaw(Warp17TrafficTestCase, Warp17UnitTestCase):
             yield (self._raw_client_cfg(req_size, resp_size, rx_ts, tx_ts),
                    self._raw_server_cfg(req_size, resp_size, tx_ts, rx_ts))
 
-    def update_client(self, tc_arg, raw_client, expected_err=0):
-        err = self.warp17_call('UpdateTestCaseAppClient',
-                               UpdClientArg(uca_tc_arg=tc_arg,
-                                            uca_cl_app=raw_client))
+    def _update(self, descr, tc_arg, app, expected_err):
+        self.lh.info('Run Update {}'.format(descr))
+
+        update_arg = UpdateAppArg(uaa_tc_arg=tc_arg, uaa_app=app)
+        err = self.warp17_call('UpdateTestCaseApp', update_arg)
         self.assertEqual(err.e_code, expected_err)
 
         if expected_err == 0:
-            cl_result = self.warp17_call('GetTestCaseAppClient', tc_arg)
-            self.assertEqual(cl_result.tccr_error.e_code, 0)
-            self.assertTrue(cl_result.tccr_cl_app == raw_client)
+            result = self.warp17_call('GetTestCaseApp', update_arg.uaa_tc_arg)
+            self.assertEqual(result.tcar_error.e_code, 0)
+            self.assertTrue(result.tcar_app == app)
+
+    def update_client(self, tc_arg, raw_client, expected_err=0):
+        self._update('update_client', tc_arg, raw_client, expected_err)
 
     def update_server(self, tc_arg, raw_server, expected_err=0):
-        err = self.warp17_call('UpdateTestCaseAppServer',
-                               UpdServerArg(usa_tc_arg=tc_arg,
-                                            usa_srv_app=raw_server))
-        self.assertEqual(err.e_code, expected_err)
-
-        if expected_err == 0:
-            srv_result = self.warp17_call('GetTestCaseAppServer', tc_arg)
-            self.assertEqual(srv_result.tcsr_error.e_code, 0)
-            self.assertTrue(srv_result.tcsr_srv_app == raw_server)
+        self._update('update_server', tc_arg, raw_server, expected_err)
 
     def verify_stats(self, cl_result, srv_result, raw_client, raw_server):
         super(TestRaw, self).verify_stats(cl_result, srv_result,
@@ -158,9 +149,9 @@ class TestRaw(Warp17TrafficTestCase, Warp17UnitTestCase):
 
         # If rx timestamping was enabled check that we could actually compute
         # latency.
-        if raw_client.ac_raw.HasField('rc_rx_tstamp') and \
-                raw_client.ac_raw.rc_rx_tstamp:
-            latency_stats = cl_result.tsr_stats.tcs_latency_stats.tcls_stats
+        if raw_client.app_raw_client.HasField('rc_rx_tstamp') and \
+                raw_client.app_raw_client.rc_rx_tstamp:
+            latency_stats = cl_result.tsr_stats.gs_latency_stats.gls_stats
             self.assertLess(latency_stats.ls_min_latency, UINT32MAX,
                             'ls_min_latency')
             self.assertGreater(latency_stats.ls_max_latency, 0,
@@ -172,9 +163,9 @@ class TestRaw(Warp17TrafficTestCase, Warp17UnitTestCase):
 
         # If tx timestamping was enabled check that we could actually compute
         # latency.
-        if raw_server.as_raw.HasField('rs_rx_tstamp') and \
-                raw_server.as_raw.rs_rx_tstamp:
-            latency_stats = srv_result.tsr_stats.tcs_latency_stats.tcls_stats
+        if raw_server.app_raw_server.HasField('rs_rx_tstamp') and \
+                raw_server.app_raw_server.rs_rx_tstamp:
+            latency_stats = srv_result.tsr_stats.gs_latency_stats.gls_stats
             self.assertLess(latency_stats.ls_min_latency, UINT32MAX,
                             'ls_min_latency')
             self.assertGreater(latency_stats.ls_max_latency, 0,

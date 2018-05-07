@@ -54,15 +54,6 @@
 #
 #
 
-import errno
-import sys
-import unittest
-import time
-
-sys.path.append('./lib')
-sys.path.append('../python')
-sys.path.append('../api/generated/py')
-
 from warp17_ut import Warp17UnitTestCase
 from warp17_ut import Warp17TrafficTestCase
 from warp17_ut import Warp17PortTestCase
@@ -90,8 +81,11 @@ class TestPortSockOpt(Warp17PortTestCase, Warp17UnitTestCase):
             self.lh.info('MTU %(arg)u' % {'arg': mtu})
             yield (PortOptions(po_mtu=mtu), PortOptions(po_mtu=mtu))
 
+    # We use to have many other testcases with highter mtu but since we don't
+    #  force the Max mtu anymore and we are not yet able to determine in
+    #  advace which NIC we are using, we cannot test the maximum anymore
     def get_invalid_updates(self):
-        for mtu in [0, 67, 9199, 15000, 65000]:
+        for mtu in [0, 67]:
             yield (PortOptions(po_mtu=mtu), PortOptions(po_mtu=mtu))
 
     def update(self, eth_port, port_opts, expected_err):
@@ -304,8 +298,10 @@ class TestVlanSockOpt(Warp17TrafficTestCase, Warp17UnitTestCase):
 
         self.lh.info('Vlan vlan-pri')
         for opt in [TestVlanSockOpt.MIN_PRI, TestVlanSockOpt.MAX_PRI]:
-            yield (VlanSockopt(vlanso_pri=opt),
-                   VlanSockopt(vlanso_pri=opt))
+            yield (VlanSockopt(vlanso_id=TestVlanSockOpt.MAX_VLAN,
+                               vlanso_pri=opt),
+                   VlanSockopt(vlanso_id=TestVlanSockOpt.MAX_VLAN,
+                               vlanso_pri=opt))
 
     def get_invalid_updates(self):
         self.lh.info('VLAN id Min value')
@@ -315,6 +311,11 @@ class TestVlanSockOpt(Warp17TrafficTestCase, Warp17UnitTestCase):
         self.lh.info('VLAN id Max value')
         yield(VlanSockopt(vlanso_id=TestVlanSockOpt.MAX_VLAN+1),
               VlanSockopt(vlanso_id=TestVlanSockOpt.MAX_VLAN+1))
+
+        self.lh.info('Vlan vlan-pri & no VLAN id')
+        for opt in [TestVlanSockOpt.MIN_PRI, TestVlanSockOpt.MAX_PRI]:
+            yield (VlanSockopt(vlanso_pri=opt),
+                   VlanSockopt(vlanso_pri=opt))
 
         #self.lh.info('VLAN pri Min value')
         #yield(VlanSockopt(vlanso_pri=TestVlanSockOpt.MIN_PRI-1),
@@ -340,4 +341,34 @@ class TestVlanSockOpt(Warp17TrafficTestCase, Warp17UnitTestCase):
 
     def update_server(self, tc_arg, srv_vlan_opts, expected_err=0):
         self.update(tc_arg, srv_vlan_opts, expected_err)
+
+    def get_port_cfg(self, eth_port, vlan_id=0):
+        pcfg = super(TestVlanSockOpt, self).get_port_cfg(eth_port, vlan_id)
+        for i in range(0, self.L3_INTF_COUNT):
+            pcfg.pc_l3_intfs[i].l3i_vlan_id = vlan_id
+
+        return pcfg
+
+    def test_update_run_traffic(self):
+        """Tests updates and runs traffic"""
+
+        self.lh.info('Running: test_update_run_traffic')
+        for (cl_update, srv_update) in self.get_updates():
+
+            # Configure ports
+            port_cfg_client = self.get_port_cfg(0, cl_update.vlanso_id)
+            self.update_client(self._tc_arg_client, cl_update)
+            port_cfg_server = self.get_port_cfg(1, srv_update.vlanso_id)
+            self.update_server(self._tc_arg_server, srv_update)
+
+            self.configurePort(port_cfg_client, 'Client')
+            self.configurePort(port_cfg_server, 'Server')
+
+            self.startPorts()
+
+            cl_result = self.check_test_case_status(self._tc_arg_client)
+            srv_result = self.check_test_case_status(self._tc_arg_server)
+            self.verify_stats(cl_result, srv_result, cl_update, srv_update)
+
+            self.stopPorts()
 

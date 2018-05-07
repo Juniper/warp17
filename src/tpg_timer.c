@@ -63,9 +63,9 @@
 /*****************************************************************************
  * Global variables
  ****************************************************************************/
-static RTE_DEFINE_PER_LCORE(tmr_wheel_t, tcp_slow_timer_wheel);
-static RTE_DEFINE_PER_LCORE(tmr_wheel_t, tcp_rto_timer_wheel);
-static RTE_DEFINE_PER_LCORE(tmr_wheel_t, l4cb_test_timer_wheel);
+static RTE_DEFINE_PER_LCORE(tmr_wheel_t *, tcp_slow_timer_wheel);
+static RTE_DEFINE_PER_LCORE(tmr_wheel_t *, tcp_rto_timer_wheel);
+static RTE_DEFINE_PER_LCORE(tmr_wheel_t *, l4cb_test_timer_wheel);
 
 /* Define TIMER global statistics. Each thread has its own set of locally
  * allocated stats which are accessible through STATS_GLOBAL(type, core, port).
@@ -90,22 +90,33 @@ static cmdline_parse_ctx_t cli_ctx[];
 /*****************************************************************************
  * timer_init_wheel()
  ****************************************************************************/
-static bool timer_init_wheel(tmr_wheel_t *wheel, uint32_t size, uint32_t step)
+static bool timer_init_wheel(uint32_t lcore_id, tmr_wheel_t **wheel_p,
+                             uint32_t size, uint32_t step)
 {
-    uint32_t i;
+    tmr_wheel_t *wheel;
+    uint32_t     i;
+
+    wheel = rte_zmalloc_socket("tmr_wheel_t", sizeof(*wheel), 0,
+                               rte_lcore_to_socket_id(lcore_id));
+    if (!wheel)
+        return false;
 
     wheel->tw_size = size;
     wheel->tw_step = step;
     wheel->tw_last_advance = 0;
     wheel->tw_current = ((rte_get_timer_cycles() / cycles_per_us) / step) % size;
-    wheel->tw_wheel = rte_malloc("tpg_timer_wheel",
-                                 wheel->tw_size * sizeof(*wheel->tw_wheel),
-                                 0);
+    wheel->tw_wheel =
+        rte_zmalloc_socket("tpg_timer_wheel",
+                           wheel->tw_size * sizeof(*wheel->tw_wheel),
+                           0,
+                           rte_lcore_to_socket_id(lcore_id));
     if (wheel->tw_wheel == NULL)
         return false;
 
     for (i = 0; i < wheel->tw_size; i++)
         TMR_LIST_INIT(&wheel->tw_wheel[i]);
+
+    *wheel_p = wheel;
 
     return true;
 }
@@ -147,7 +158,7 @@ void timer_lcore_init(uint32_t lcore_id)
     if (cfg == NULL)
         TPG_ERROR_ABORT("[%d] Cannot access config!\n", lcore_idx);
 
-    if (timer_init_wheel(&RTE_PER_LCORE(tcp_slow_timer_wheel),
+    if (timer_init_wheel(lcore_id, &RTE_PER_LCORE(tcp_slow_timer_wheel),
                          cfg->gcfg_slow_tmr_max / cfg->gcfg_slow_tmr_step,
                          cfg->gcfg_slow_tmr_step) == false) {
         TPG_ERROR_ABORT("[%d] Failed allocating tcp slow timer wheel, %s(%d)!\n",
@@ -155,7 +166,7 @@ void timer_lcore_init(uint32_t lcore_id)
                         rte_strerror(rte_errno), rte_errno);
     }
 
-    if (timer_init_wheel(&RTE_PER_LCORE(tcp_rto_timer_wheel),
+    if (timer_init_wheel(lcore_id, &RTE_PER_LCORE(tcp_rto_timer_wheel),
                          cfg->gcfg_rto_tmr_max / cfg->gcfg_rto_tmr_step,
                          cfg->gcfg_rto_tmr_step) == false) {
         TPG_ERROR_ABORT("[%d] Failed allocating tcp rto timer wheel, %s(%d)!\n",
@@ -163,7 +174,7 @@ void timer_lcore_init(uint32_t lcore_id)
                         rte_strerror(rte_errno), rte_errno);
     }
 
-    if (timer_init_wheel(&RTE_PER_LCORE(l4cb_test_timer_wheel),
+    if (timer_init_wheel(lcore_id, &RTE_PER_LCORE(l4cb_test_timer_wheel),
                          cfg->gcfg_test_tmr_max / cfg->gcfg_test_tmr_step,
                          cfg->gcfg_test_tmr_step) == false) {
         TPG_ERROR_ABORT("[%d] Failed allocating cb test timer wheel, %s(%d)!\n",
@@ -359,8 +370,7 @@ static void l4cb_handle_test_to(void *entry)
     /*
      * Send notification to the test module.
      */
-    TEST_NOTIF(TEST_NOTIF_TMR_FIRED, l4_cb, l4_cb->l4cb_test_case_id,
-               l4_cb->l4cb_interface);
+    TEST_NOTIF(TEST_NOTIF_TMR_FIRED, l4_cb);
 }
 
 /*****************************************************************************
@@ -476,22 +486,22 @@ void time_advance(void)
 
     now = rte_get_timer_cycles();
 
-    if (tcp_time_should_advance(&RTE_PER_LCORE(tcp_slow_timer_wheel), now)) {
-        tpg_time_wheel_advance(&RTE_PER_LCORE(tcp_slow_timer_wheel),
+    if (tcp_time_should_advance(RTE_PER_LCORE(tcp_slow_timer_wheel), now)) {
+        tpg_time_wheel_advance(RTE_PER_LCORE(tcp_slow_timer_wheel),
                                tcp_tcb_slow_next,
                                tcp_handle_slow_to,
                                now);
     }
 
-    if (tcp_time_should_advance(&RTE_PER_LCORE(tcp_rto_timer_wheel), now)) {
-        tpg_time_wheel_advance(&RTE_PER_LCORE(tcp_rto_timer_wheel),
+    if (tcp_time_should_advance(RTE_PER_LCORE(tcp_rto_timer_wheel), now)) {
+        tpg_time_wheel_advance(RTE_PER_LCORE(tcp_rto_timer_wheel),
                                tcp_tcb_rto_next,
                                tcp_handle_retrans_to,
                                now);
     }
 
-    if (tcp_time_should_advance(&RTE_PER_LCORE(l4cb_test_timer_wheel), now)) {
-        tpg_time_wheel_advance(&RTE_PER_LCORE(l4cb_test_timer_wheel),
+    if (tcp_time_should_advance(RTE_PER_LCORE(l4cb_test_timer_wheel), now)) {
+        tpg_time_wheel_advance(RTE_PER_LCORE(l4cb_test_timer_wheel),
                                l4cb_test_next,
                                l4cb_handle_test_to,
                                now);
@@ -524,7 +534,7 @@ int tcp_timer_rto_set(l4_control_block_t *l4_cb, uint32_t timeout_us)
     }
 
     /* status is set inside! */
-    TCP_TIMER_SET(&RTE_PER_LCORE(tcp_rto_timer_wheel), tcb,
+    TCP_TIMER_SET(RTE_PER_LCORE(tcp_rto_timer_wheel), tcb,
                   tcb_retrans_tmr_entry,
                   timeout_us,
                   status);
@@ -600,7 +610,7 @@ int tcp_timer_slow_set(l4_control_block_t *l4_cb, uint32_t timeout_us)
     }
 
     /* status is set inside! */
-    TCP_TIMER_SET(&RTE_PER_LCORE(tcp_slow_timer_wheel), tcb,
+    TCP_TIMER_SET(RTE_PER_LCORE(tcp_slow_timer_wheel), tcb,
                   tcb_slow_tmr_entry,
                   timeout_us,
                   status);
@@ -674,7 +684,7 @@ int l4cb_timer_test_set(l4_control_block_t *l4_cb, uint32_t timeout_us)
     }
 
     /* status is set inside! */
-    L4CB_TIMER_SET(&RTE_PER_LCORE(l4cb_test_timer_wheel), l4_cb,
+    L4CB_TIMER_SET(RTE_PER_LCORE(l4cb_test_timer_wheel), l4_cb,
                    l4cb_test_tmr_entry,
                    timeout_us,
                    status);

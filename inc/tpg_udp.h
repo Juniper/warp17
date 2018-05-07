@@ -91,27 +91,11 @@ typedef struct udp_control_block_s {
 
 } udp_control_block_t;
 
-/*****************************************************************************
- * UDP stack notifications
- ****************************************************************************/
-enum {
-    UCB_NOTIF_STATE_CHANGE = NOTIFID_INITIALIZER(NOTIF_UDP_MODULE),
-    UDP_NOTIF_SEG_SENT,
-    UDP_NOTIF_SEG_DELIVERED
-};
-
-#define UDP_NOTIF(notif, ucb, tcid, iface)                       \
-    do {                                                         \
-        notif_arg_t arg = UDP_NOTIF_ARG((ucb), (tcid), (iface)); \
-        udp_notif_cb((notif), &arg);                             \
-    } while (0)
-
-#define UDP_NOTIF_UCB(notif, ucb)                              \
-    UDP_NOTIF((notif), (ucb), (ucb)->ucb_l4.l4cb_test_case_id, \
-              (ucb)->ucb_l4.l4cb_interface)
-
-/* Callback to be executed whenever an interesting event happens. */
-extern notif_cb_t udp_notif_cb;
+/*
+ * Helper to send out UDP related notifications.
+ */
+#define UDP_NOTIF(notif, ucb) \
+    TEST_NOTIF((notif), &(ucb)->ucb_l4)
 
 /*****************************************************************************
  * DATA definitions

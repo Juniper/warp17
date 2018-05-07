@@ -54,10 +54,6 @@
 #
 #
 
-import sys
-
-sys.path.append('../../api/generated/py')
-
 from warp17_common_pb2 import *
 from warp17_l3_pb2 import *
 from warp17_service_pb2 import *

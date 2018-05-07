@@ -75,25 +75,31 @@ RTE_DEFINE_PER_LCORE(test_case_info_t *, test_case_info);
  */
 RTE_DEFINE_PER_LCORE(test_case_init_msg_t *, test_case_cfg);
 
+typedef struct test_stats_s {
+
+    tpg_gen_stats_t  ts_gen_stats;
+    tpg_rate_stats_t ts_rate_stats;
+    tpg_app_stats_t  ts_app_stats;
+
+} test_stats_t;
+
 /*
- * Arrays[port][tcid] holding the test case stats (gen, rate, app) for
+ * Array[port][tcid] holding the test case stats (gen, rate, app) for
  * testcases on a port.
  */
-RTE_DEFINE_PER_LCORE(tpg_test_case_stats_t *,      test_case_gen_stats);
-RTE_DEFINE_PER_LCORE(tpg_test_case_rate_stats_t *, test_case_rate_stats);
-RTE_DEFINE_PER_LCORE(tpg_test_case_app_stats_t *,  test_case_app_stats);
+RTE_DEFINE_PER_LCORE(test_stats_t *, test_case_stats);
 
-#define TEST_GET_GEN_STATS(port, tcid)       \
-    (RTE_PER_LCORE(test_case_gen_stats) +    \
-     (port) * TPG_TEST_MAX_ENTRIES + (tcid))
+#define TEST_GET_STATS(port, tcid) \
+    (&RTE_PER_LCORE(test_case_stats)[(port) * TPG_TEST_MAX_ENTRIES + (tcid)])
 
-#define TEST_GET_RATE_STATS(port, tcid)      \
-    (RTE_PER_LCORE(test_case_rate_stats) +   \
-     (port) * TPG_TEST_MAX_ENTRIES + (tcid))
+#define TEST_GET_GEN_STATS(port, tcid) \
+    (&TEST_GET_STATS((port), (tcid))->ts_gen_stats)
 
-#define TEST_GET_APP_STATS(port, tcid)       \
-    (RTE_PER_LCORE(test_case_app_stats) +    \
-     (port) * TPG_TEST_MAX_ENTRIES + (tcid))
+#define TEST_GET_RATE_STATS(port, tcid) \
+    (&TEST_GET_STATS((port), (tcid))->ts_rate_stats)
+
+#define TEST_GET_APP_STATS(port, tcid) \
+    (&TEST_GET_STATS((port), (tcid))->ts_app_stats)
 
 /*
  * Array[port][tcid] holding the test case latency operational state for
@@ -126,9 +132,6 @@ static RTE_DEFINE_PER_LCORE(test_tmr_arg_t *, test_tmr_send_args);
     (RTE_PER_LCORE(test_tmr_##type##_args) + \
      (port) * TPG_TEST_MAX_ENTRIES + (tcid))
 
-/* Callback to be executed whenever an interesting event happens. */
-notif_cb_t test_notif_cb;
-
 /*
  * Per test-type and protocol callbacks.
  * TODO: ideally this should be dynamic and allow registration of other
@@ -140,6 +143,7 @@ static int      test_case_tcp_send(l4_control_block_t *l4_cb,
                                    struct rte_mbuf *data_mbuf,
                                    uint32_t *data_sent);
 static void     test_case_tcp_close(l4_control_block_t *l4_cb);
+static void     test_case_tcp_purge(l4_control_block_t *l4_cb);
 
 static int      test_case_udp_client_open(l4_control_block_t *l4_cb);
 static uint32_t test_case_udp_mtu(l4_control_block_t *l4_cb);
@@ -147,6 +151,7 @@ static int      test_case_udp_send(l4_control_block_t *l4_cb,
                                    struct rte_mbuf *data_mbuf,
                                    uint32_t *data_sent);
 static void     test_case_udp_close(l4_control_block_t *l4_cb);
+static void     test_case_udp_purge(l4_control_block_t *l4_cb);
 
 
 static struct {
@@ -156,6 +161,8 @@ static struct {
     test_case_session_mtu_cb_t   mtu;
     test_case_session_send_cb_t  send;
     test_case_session_close_cb_t sess_close;
+    test_case_session_purge_cb_t sess_purge;
+    test_case_htable_walk_cb_t   sess_htable_walk;
 
 } test_callbacks[TEST_CASE_TYPE__MAX][L4_PROTO__L4_PROTO_MAX] = {
 
@@ -165,6 +172,8 @@ static struct {
         .mtu = test_case_tcp_mtu,
         .send = test_case_tcp_send,
         .sess_close = test_case_tcp_close,
+        .sess_purge = test_case_tcp_purge,
+        .sess_htable_walk = tlkp_walk_tcb,
     },
     [TEST_CASE_TYPE__SERVER][L4_PROTO__UDP] = {
         .open = NULL,
@@ -172,6 +181,8 @@ static struct {
         .mtu = test_case_udp_mtu,
         .send = test_case_udp_send,
         .sess_close = test_case_udp_close,
+        .sess_purge = test_case_udp_purge,
+        .sess_htable_walk = tlkp_walk_ucb,
     },
     [TEST_CASE_TYPE__CLIENT][L4_PROTO__TCP] = {
         .open = test_case_tcp_client_open,
@@ -179,6 +190,8 @@ static struct {
         .mtu = test_case_tcp_mtu,
         .send = test_case_tcp_send,
         .sess_close = test_case_tcp_close,
+        .sess_purge = test_case_tcp_purge,
+        .sess_htable_walk = tlkp_walk_tcb,
     },
     [TEST_CASE_TYPE__CLIENT][L4_PROTO__UDP] = {
         .open = test_case_udp_client_open,
@@ -186,6 +199,8 @@ static struct {
         .mtu = test_case_udp_mtu,
         .send = test_case_udp_send,
         .sess_close = test_case_udp_close,
+        .sess_purge = test_case_udp_purge,
+        .sess_htable_walk = tlkp_walk_ucb,
     },
 
 };
@@ -223,12 +238,18 @@ static void test_case_for_each_client(uint32_t lcore,
                                       test_walk_cfg_cb_t callback,
                                       void *callback_arg)
 {
+    uint32_t eth_port;
+    uint32_t tc_id;
     uint32_t src_ip, dst_ip;
     uint16_t src_port, dst_port;
     uint32_t conn_hash;
-    uint32_t rx_queue_id = port_get_rx_queue_id(lcore, cfg->tcim_eth_port);
+    uint32_t rx_queue_id;
+    const tpg_client_t *client_cfg;
 
-    const tpg_client_t *client_cfg = &cfg->tcim_client;
+    eth_port = cfg->tcim_test_case.tc_eth_port;
+    tc_id = cfg->tcim_test_case.tc_id;
+    rx_queue_id = port_get_rx_queue_id(lcore, eth_port);
+    client_cfg = &cfg->tcim_test_case.tc_client;
 
     TPG_FOREACH_CB_IN_RANGE(&client_cfg->cl_src_ips,
                             &client_cfg->cl_dst_ips,
@@ -237,12 +258,11 @@ static void test_case_for_each_client(uint32_t lcore,
                             src_ip, dst_ip, src_port, dst_port) {
         conn_hash = tlkp_calc_connection_hash(dst_ip, src_ip, dst_port,
                                               src_port);
-        if (tlkp_get_qindex_from_hash(conn_hash, cfg->tcim_eth_port) !=
-                rx_queue_id)
+        if (tlkp_get_qindex_from_hash(conn_hash, eth_port) != rx_queue_id)
             continue;
 
-        callback(lcore, cfg->tcim_eth_port, cfg->tcim_test_case_id,
-                 src_ip, dst_ip, src_port, dst_port, conn_hash, callback_arg);
+        callback(lcore, eth_port, tc_id, src_ip, dst_ip, src_port,
+                 dst_port, conn_hash, callback_arg);
     }
 }
 
@@ -268,15 +288,21 @@ static void test_case_for_each_server(uint32_t lcore,
                                       test_walk_cfg_cb_t callback,
                                       void *callback_arg)
 {
+    uint32_t eth_port;
+    uint32_t tc_id;
     uint32_t src_ip;
     uint16_t src_port;
 
-    const tpg_server_t *server_cfg = &cfg->tcim_server;
+    const tpg_server_t *server_cfg;
+
+    eth_port = cfg->tcim_test_case.tc_eth_port;
+    tc_id = cfg->tcim_test_case.tc_id;
+    server_cfg = &cfg->tcim_test_case.tc_server;
 
     TPG_IPV4_FOREACH(&server_cfg->srv_ips, src_ip) {
         TPG_PORT_FOREACH(&server_cfg->srv_l4.l4s_tcp_udp.tus_ports, src_port) {
-            callback(lcore, cfg->tcim_eth_port, cfg->tcim_test_case_id,
-                     src_ip, 0, src_port, 0, 0, callback_arg);
+            callback(lcore, eth_port, tc_id, src_ip, 0, src_port, 0, 0,
+                     callback_arg);
         }
     }
 }
@@ -307,7 +333,7 @@ static void test_latency_state_init(test_oper_latency_state_t *buffer,
  ****************************************************************************/
 static void test_latency_state_add(test_oper_latency_state_t *buffer,
                                    uint64_t tstamp,
-                                   tpg_latency_stats_t *tcls_sample_stats)
+                                   tpg_latency_stats_t *sample_stats)
 {
     uint32_t position;
 
@@ -323,8 +349,8 @@ static void test_latency_state_add(test_oper_latency_state_t *buffer,
         retain_tstamp = buffer->tols_timestamps[position];
         buffer->tols_timestamps[position] = tstamp;
 
-        tcls_sample_stats->ls_sum_latency -= retain_tstamp;
-        tcls_sample_stats->ls_samples_count--;
+        sample_stats->ls_sum_latency -= retain_tstamp;
+        sample_stats->ls_samples_count--;
     }
 
 }
@@ -367,31 +393,31 @@ static void test_update_latency_stats(tpg_latency_stats_t *stats,
 /*****************************************************************************
  * test_update_latency()
  ****************************************************************************/
-void test_update_latency(l4_control_block_t *l4cb, uint64_t sent_tstamp,
+void test_update_latency(l4_control_block_t *l4_cb, uint64_t sent_tstamp,
                          uint64_t rcv_tstamp)
 {
-    test_case_info_t              *tc_info;
-    tpg_test_case_latency_stats_t *stats;
-    int64_t                        latency;
+    test_case_info_t        *tc_info;
+    tpg_gen_latency_stats_t *stats;
+    int64_t                  latency;
 
-    tc_info = TEST_GET_INFO(l4cb->l4cb_interface, l4cb->l4cb_test_case_id);
-    stats = &tc_info->tci_general_stats->tcs_latency_stats;
+    tc_info = TEST_GET_INFO(l4_cb->l4cb_interface, l4_cb->l4cb_test_case_id);
+    stats = &tc_info->tci_gen_stats->gs_latency_stats;
 
     if (rcv_tstamp < sent_tstamp || sent_tstamp == 0 || rcv_tstamp == 0) {
-        INC_STATS(stats, tcls_invalid_lat);
+        INC_STATS(stats, gls_invalid_lat);
         return;
     }
 
     latency = rcv_tstamp - sent_tstamp;
 
     /* Global stats */
-    test_update_latency_stats(&stats->tcls_stats, latency,
-                              &tc_info->tci_cfg->tcim_latency);
+    test_update_latency_stats(&stats->gls_stats, latency,
+                              &tc_info->tci_cfg->tcim_test_case.tc_latency);
 
     /* Recent stats */
     if (tc_info->tci_latency_state->tols_length != 0) {
         test_latency_state_add(tc_info->tci_latency_state,
-                               latency, &stats->tcls_sample_stats);
+                               latency, &stats->gls_sample_stats);
     }
 }
 
@@ -455,299 +481,154 @@ static void test_case_tmr_cb(struct rte_timer *tmr __rte_unused, void *arg)
 /*****************************************************************************
  * Test notifications.
  ****************************************************************************/
-/****************************************************************************
- * test_tcp_notif_syn_recv()
+
+/*****************************************************************************
+ * test_sess_init()
  ****************************************************************************/
-static void test_tcp_notif_syn_recv(tcp_control_block_t *tcb,
-                                    test_case_info_t *tc_info)
+static void test_sess_init(l4_control_block_t *l4_cb,
+                           test_case_info_t *tc_info)
 {
-    tpg_app_proto_t app_id = tcb->tcb_l4.l4cb_app_data.ad_type;
+    tpg_app_proto_t app_id = l4_cb->l4cb_app_data.ad_type;
+
+    /* Struct copy the shared storage. */
+    l4_cb->l4cb_app_data.ad_storage = tc_info->tci_app_storage;
 
     /* Initialize the application state. */
-    APP_SRV_CALL(init, app_id)(&tcb->tcb_l4.l4cb_app_data, tc_info->tci_cfg);
+    APP_CALL(init, app_id)(&l4_cb->l4cb_app_data,
+                           &tc_info->tci_cfg->tcim_test_case.tc_app);
 
-    /* Start the server test state machine. */
-    test_server_sm_initialize(&tcb->tcb_l4, tc_info);
-}
-/****************************************************************************
- * test_tcp_notif_syn_sent()
- ****************************************************************************/
-static void test_tcp_notif_syn_sent(tcp_control_block_t *tcb __rte_unused,
-                                    test_case_info_t *tc_info)
-{
-    if (unlikely(tc_info->tci_general_stats->tcs_start_time == 0))
-        tc_info->tci_general_stats->tcs_start_time = rte_get_timer_cycles();
+    /* Initialize the test state machine for the new TCB. */
+    test_sm_client_initialize(l4_cb, tc_info);
 }
 
-/****************************************************************************
- * test_tcp_notif_established()
+/*****************************************************************************
+ * test_sess_record_start_time()
  ****************************************************************************/
-static void test_tcp_notif_established(tcp_control_block_t *tcb,
-                                       test_case_info_t *tc_info)
+static void test_sess_record_start_time(test_case_info_t *tc_info)
 {
-    if (tcb->tcb_active) {
-        tc_info->tci_general_stats->tcs_client.tccs_estab++;
-        /*
-         * This is not really the end time.. but we can keep it
-         * here for now for tracking how long it took to establish sessions.
-         */
-        tc_info->tci_general_stats->tcs_end_time = rte_get_timer_cycles();
-    } else {
-        tc_info->tci_general_stats->tcs_server.tcss_estab++;
-    }
-
-    /* Update rate per second. */
-    tc_info->tci_rate_stats->tcrs_estab_per_s++;
+    if (unlikely(tc_info->tci_gen_stats->gs_start_time == 0))
+        tc_info->tci_gen_stats->gs_start_time = rte_get_timer_cycles();
 }
 
-/****************************************************************************
- * test_tcp_notif_closed()
+/*****************************************************************************
+ * test_sess_record_end_time()
  ****************************************************************************/
-static void test_tcp_notif_closed(tcp_control_block_t *tcb __rte_unused,
-                                  test_case_info_t *tc_info)
+static void test_sess_record_end_time(test_case_info_t *tc_info)
 {
-    /* Update rate per second. */
-    tc_info->tci_rate_stats->tcrs_closed_per_s++;
-}
-
-/****************************************************************************
- * test_notif_state_chg_handler()
- *
- * NOTE:
- *   This will be called from the packet processing core context.
- ****************************************************************************/
-static void test_tcp_notif_state_chg_handler(notif_arg_t *arg)
-{
-    tcp_notif_arg_t     *tcp = &arg->narg_tcp;
-    tcp_control_block_t *tcb = tcp->tnarg_tcb;
-    test_case_info_t    *tc_info = TEST_GET_INFO(arg->narg_interface,
-                                                 arg->narg_tcid);
-
-    if (tcb->tcb_state == TS_SYN_RECV)
-        test_tcp_notif_syn_recv(tcb, tc_info);
-    else if (tcb->tcb_state == TS_SYN_SENT)
-        test_tcp_notif_syn_sent(tcb, tc_info);
-    else if (tcb->tcb_state == TS_ESTABLISHED)
-        test_tcp_notif_established(tcb, tc_info);
-    else if (tcb->tcb_state == TS_CLOSED)
-        test_tcp_notif_closed(tcb, tc_info);
-
-    if (tcb->tcb_active)
-        test_client_sm_tcp_state_change(tcb, tc_info);
-    else if (tcb->tcb_state >= TS_SYN_RECV) {
-        /* Server TCBs are not part of the TEST state machine until they reach
-         * SYN-RCVD.
-         */
-        test_server_sm_tcp_state_change(tcb, tc_info);
-    }
-}
-
-/****************************************************************************
- * test_tcp_notif_win_avail_handler()
- *
- * NOTE:
- *   This will be called from the packet processing core context.
- ****************************************************************************/
-static void test_tcp_notif_win_avail_handler(notif_arg_t *arg)
-{
-    test_case_info_t    *tc_info;
-    tcp_control_block_t *tcb;
-
-    tc_info = TEST_GET_INFO(arg->narg_interface, arg->narg_tcid);
-    tcb = arg->narg_tcp.tnarg_tcb;
-
-    if (tcb->tcb_active)
-        test_client_sm_tcp_snd_win_avail(tcb, tc_info);
-    else
-        test_server_sm_tcp_snd_win_avail(tcb, tc_info);
-}
-
-/****************************************************************************
- * test_tcp_notif_win_unavail_handler()
- *
- * NOTE:
- *   This will be called from the packet processing core context.
- ****************************************************************************/
-static void test_tcp_notif_win_unavail_handler(notif_arg_t *arg)
-{
-    test_case_info_t    *tc_info;
-    tcp_control_block_t *tcb;
-
-    tc_info = TEST_GET_INFO(arg->narg_interface, arg->narg_tcid);
-    tcb = arg->narg_tcp.tnarg_tcb;
-
-    if (tcb->tcb_active)
-        test_client_sm_tcp_snd_win_unavail(tcb, tc_info);
-    else
-        test_server_sm_tcp_snd_win_unavail(tcb, tc_info);
-}
-
-/****************************************************************************
- * test_udp_notif_client_connected()
- ****************************************************************************/
-static void test_udp_notif_client_connected(udp_control_block_t *ucb __rte_unused,
-                                            test_case_info_t *tc_info)
-{
-    if (unlikely(tc_info->tci_general_stats->tcs_start_time == 0))
-        tc_info->tci_general_stats->tcs_start_time = rte_get_timer_cycles();
-
-    tc_info->tci_general_stats->tcs_client.tccs_estab++;
     /*
      * This is not really the end time.. but we can keep it
      * here for now for tracking how long it took to establish sessions.
      */
-    tc_info->tci_general_stats->tcs_end_time = rte_get_timer_cycles();
+    tc_info->tci_gen_stats->gs_end_time = rte_get_timer_cycles();
+}
+
+/*****************************************************************************
+ * test_sess_connecting()
+ ****************************************************************************/
+static void test_sess_connecting(l4_control_block_t *l4_cb,
+                                 test_case_info_t *tc_info)
+{
+    test_sess_record_start_time(tc_info);
+    test_sm_sess_connecting(l4_cb, tc_info);
+}
+
+/*****************************************************************************
+ * test_sess_connected()
+ ****************************************************************************/
+static void test_sess_connected(l4_control_block_t *l4_cb,
+                                test_case_info_t *tc_info)
+{
+    tc_info->tci_gen_stats->gs_estab++;
 
     /* Update rate per second. */
-    tc_info->tci_rate_stats->tcrs_estab_per_s++;
+    tc_info->tci_rate_stats->rs_estab_per_s++;
+
+    test_sess_record_end_time(tc_info);
+    test_sm_sess_connected(l4_cb, tc_info);
 }
 
-/****************************************************************************
- * test_udp_notif_server_connected()
+/*****************************************************************************
+ * test_sess_connected_imm()
  ****************************************************************************/
-static void test_udp_notif_server_connected(udp_control_block_t *ucb __rte_unused,
-                                            test_case_info_t *tc_info)
+static void test_sess_connected_imm(l4_control_block_t *l4_cb,
+                                    test_case_info_t *tc_info)
 {
-    tc_info->tci_general_stats->tcs_server.tcss_estab++;
+    /* We skipped "connecting" so let's record the start time. */
+    test_sess_record_start_time(tc_info);
+    test_sess_connected(l4_cb, tc_info);
+}
+
+/*****************************************************************************
+ * test_sess_listen()
+ ****************************************************************************/
+static void test_sess_listen(l4_control_block_t *l4_cb,
+                             test_case_info_t *tc_info)
+{
+    tpg_app_proto_t app_id = l4_cb->l4cb_app_data.ad_type;
+
+    /* Struct copy the shared storage. */
+    l4_cb->l4cb_app_data.ad_storage = tc_info->tci_app_storage;
+
+    /* Initialize the application state. */
+    APP_CALL(init, app_id)(&l4_cb->l4cb_app_data,
+                           &tc_info->tci_cfg->tcim_test_case.tc_app);
+
+    /* Initialize the test state machine for the listening TCB. */
+    test_sm_listen_initialize(l4_cb, tc_info);
+}
+
+/*****************************************************************************
+ * test_sess_server_connected()
+ ****************************************************************************/
+static void test_sess_server_connected(l4_control_block_t *l4_cb,
+                                       test_case_info_t *tc_info)
+{
+    tc_info->tci_gen_stats->gs_estab++;
 
     /* Update rate per second. */
-    tc_info->tci_rate_stats->tcrs_estab_per_s++;
+    tc_info->tci_rate_stats->rs_estab_per_s++;
+
+    /* Initialize the test state machine for the new CB. */
+    test_sm_server_initialize(l4_cb, tc_info);
 }
 
-/****************************************************************************
- * test_udp_notif_state_chg_handler()
- *
- * NOTE:
- *   This will be called from the packet processing core context.
+/*****************************************************************************
+ * test_sess_closing()
  ****************************************************************************/
-static void test_udp_notif_state_chg_handler(notif_arg_t *arg)
+static void test_sess_closing(l4_control_block_t *l4_cb,
+                              test_case_info_t *tc_info)
 {
-    udp_notif_arg_t     *udp = &arg->narg_udp;
-    udp_control_block_t *ucb = udp->unarg_ucb;
-    test_case_info_t    *tc_info = TEST_GET_INFO(arg->narg_interface,
-                                                 arg->narg_tcid);
-
-    if (ucb->ucb_state == US_OPEN) {
-        if (ucb->ucb_active) {
-            test_udp_notif_client_connected(ucb, tc_info);
-        } else {
-            tpg_app_proto_t app_id = ucb->ucb_l4.l4cb_app_data.ad_type;
-
-            test_udp_notif_server_connected(ucb, tc_info);
-
-            /* Initialize the server state machine. */
-            test_server_sm_initialize(&ucb->ucb_l4, tc_info);
-
-            /* Initialize the application state. */
-            APP_SRV_CALL(init, app_id)(&ucb->ucb_l4.l4cb_app_data,
-                                       tc_info->tci_cfg);
-        }
-    }
-
-    /* Notify the test state machine about the state change. */
-    if (ucb->ucb_active) {
-        test_client_sm_udp_state_change(ucb, tc_info);
-    } else if (ucb->ucb_state > US_LISTEN) {
-        /* Server UCBs are not part of the TEST state machine until they reach
-         * US_OPEN.
-         */
-        test_server_sm_udp_state_change(ucb, tc_info);
-    }
+    test_sm_sess_closing(l4_cb, tc_info);
 }
 
-/****************************************************************************
- * test_tcp_udp_notif_handler()
- *
- * NOTE:
- *   This will be called from the packet processing core context.
+/*****************************************************************************
+ * test_sess_closed()
  ****************************************************************************/
-static void test_tcp_udp_notif_handler(uint32_t notification,
-                                       notif_arg_t *notif_arg)
+static void test_sess_closed(l4_control_block_t *l4_cb,
+                             test_case_info_t *tc_info)
 {
-    if (notification == TCB_NOTIF_STATE_CHANGE)
-        test_tcp_notif_state_chg_handler(notif_arg);
-    else if (notification == TCB_NOTIF_SEG_WIN_AVAILABLE)
-        test_tcp_notif_win_avail_handler(notif_arg);
-    else if (notification == TCB_NOTIF_SEG_WIN_UNAVAILABLE)
-        test_tcp_notif_win_unavail_handler(notif_arg);
-    else if (notification == UCB_NOTIF_STATE_CHANGE)
-        test_udp_notif_state_chg_handler(notif_arg);
+    /* Update rate per second. */
+    tc_info->tci_rate_stats->rs_closed_per_s++;
+
+    test_sm_sess_closed(l4_cb, tc_info);
 }
 
-/****************************************************************************
- * test_tmr_to()
+/*****************************************************************************
+ * test_sess_win_available()
  ****************************************************************************/
-static void test_tmr_to(l4_control_block_t *l4_cb, test_case_info_t *tc_info)
+static void test_sess_win_available(l4_control_block_t *l4_cb,
+                                    test_case_info_t *tc_info)
 {
-    test_client_sm_tmr_to(l4_cb, tc_info);
+    test_sm_app_send_win_avail(l4_cb, tc_info);
 }
 
-/****************************************************************************
- * test_notif_handler()
- *
- * NOTE:
- *   This will be called from the packet processing core context.
+/*****************************************************************************
+ * test_sess_win_unavailable()
  ****************************************************************************/
-static void test_notif_handler(uint32_t notification, notif_arg_t *arg)
+static void test_sess_win_unavailable(l4_control_block_t *l4_cb,
+                                      test_case_info_t *tc_info)
 {
-    test_case_info_t *tc_info;
-
-    tc_info = TEST_GET_INFO(arg->narg_interface, arg->narg_tcid);
-
-    switch (notification) {
-    case TEST_NOTIF_SERVER_UP:
-        tc_info->tci_general_stats->tcs_server.tcss_up++;
-        break;
-    case TEST_NOTIF_SERVER_DOWN:
-        tc_info->tci_general_stats->tcs_server.tcss_down++;
-        break;
-    case TEST_NOTIF_SERVER_FAILED:
-        tc_info->tci_general_stats->tcs_server.tcss_failed++;
-        break;
-
-    case TEST_NOTIF_CLIENT_UP:
-        tc_info->tci_general_stats->tcs_client.tccs_up++;
-        break;
-    case TEST_NOTIF_CLIENT_DOWN:
-        tc_info->tci_general_stats->tcs_client.tccs_down++;
-        break;
-    case TEST_NOTIF_CLIENT_FAILED:
-        tc_info->tci_general_stats->tcs_client.tccs_failed++;
-        break;
-
-    case TEST_NOTIF_TMR_FIRED:
-        test_tmr_to(arg->narg_test.tnarg_l4_cb, tc_info);
-        break;
-
-    case TEST_NOTIF_APP_CLIENT_SEND_START:
-        test_app_client_send_start(arg->narg_test.tnarg_l4_cb, tc_info);
-        break;
-    case TEST_NOTIF_APP_CLIENT_SEND_STOP:
-        test_app_client_send_stop(arg->narg_test.tnarg_l4_cb, tc_info);
-        break;
-    case TEST_NOTIF_APP_CLIENT_CLOSE:
-        tc_info->tci_state.tos_session_close_cb(arg->narg_test.tnarg_l4_cb);
-        break;
-    case TEST_NOTIF_APP_SERVER_SEND_START:
-        test_app_server_send_start(arg->narg_test.tnarg_l4_cb, tc_info);
-        break;
-    case TEST_NOTIF_APP_SERVER_SEND_STOP:
-        test_app_server_send_stop(arg->narg_test.tnarg_l4_cb, tc_info);
-        break;
-    case TEST_NOTIF_APP_SERVER_CLOSE:
-        tc_info->tci_state.tos_session_close_cb(arg->narg_test.tnarg_l4_cb);
-        break;
-
-    case TEST_NOTIF_DATA_FAILED:
-        tc_info->tci_general_stats->tcs_data_failed++;
-        break;
-    case TEST_NOTIF_DATA_NULL:
-        tc_info->tci_general_stats->tcs_data_null++;
-        break;
-
-    default:
-        assert(false);
-    }
+    test_sm_app_send_win_unavail(l4_cb, tc_info);
 }
 
 /*****************************************************************************
@@ -1034,7 +915,7 @@ static void test_case_init_state(uint32_t lcore, test_case_init_msg_t *im,
     /* Initialize the rates based on the percentage of clients running on
      * this core.
      */
-    switch (im->tcim_type) {
+    switch (im->tcim_test_case.tc_type) {
     case TEST_CASE_TYPE__CLIENT:
 
         /* Get local and total session count. Unfortunately there's no other
@@ -1043,14 +924,17 @@ static void test_case_init_state(uint32_t lcore, test_case_init_msg_t *im,
         test_case_for_each_client(lcore, im,
                                   test_case_init_state_client_counters_cb,
                                   &local_sessions);
-        total_sessions = test_case_client_cfg_count(&im->tcim_client);
+        total_sessions =
+            test_case_client_cfg_count(&im->tcim_test_case.tc_client);
         break;
     case TEST_CASE_TYPE__SERVER:
         /* We know that servers are created on all lcores
          * (i.e., local == total).
          */
-        local_sessions = test_case_server_cfg_count(&im->tcim_server);
-        total_sessions = test_case_server_cfg_count(&im->tcim_server);
+        local_sessions =
+            test_case_server_cfg_count(&im->tcim_test_case.tc_server);
+        total_sessions =
+            test_case_server_cfg_count(&im->tcim_test_case.tc_server);
         break;
 
     default:
@@ -1059,7 +943,8 @@ static void test_case_init_state(uint32_t lcore, test_case_init_msg_t *im,
     }
 
     /* Initialize the rates. */
-    test_case_rate_state_init(lcore, im->tcim_eth_port, im->tcim_test_case_id,
+    test_case_rate_state_init(lcore, im->tcim_test_case.tc_eth_port,
+                              im->tcim_test_case.tc_id,
                               ts, rate_timers, im,
                               total_sessions, local_sessions);
 
@@ -1084,10 +969,12 @@ test_case_start_tcp_server(uint32_t lcore __rte_unused,
 {
     tcp_control_block_t *server_tcb;
     test_case_info_t    *tc_info;
+    tpg_app_proto_t      app_id;
     sockopt_t           *sockopt;
     int                  error;
 
     tc_info = arg;
+    app_id = tc_info->tci_cfg->tcim_test_case.tc_app.app_proto;
     sockopt = &tc_info->tci_cfg->tcim_sockopt;
 
     /* We need to pass NULL in order for tcp_listen_v4 to allocate one
@@ -1098,16 +985,14 @@ test_case_start_tcp_server(uint32_t lcore __rte_unused,
     /* Listen on the specified address + port. */
     error = tcp_listen_v4(&server_tcb, eth_port, src_ip, src_port,
                           test_case_id,
-                          tc_info->tci_cfg->tcim_app_id,
-                          sockopt,
+                          app_id, sockopt,
                           TCG_CB_CONSUME_ALL_DATA);
     if (unlikely(error)) {
-        TEST_NOTIF(TEST_NOTIF_SERVER_FAILED, NULL, test_case_id, eth_port);
+        test_notification(TEST_NOTIF_SESS_FAILED, NULL, eth_port,
+                          test_case_id);
     } else {
-        TEST_NOTIF(TEST_NOTIF_SERVER_UP, NULL, test_case_id, eth_port);
-
-        /* Initialize the server state machine. */
-        test_server_sm_initialize(&server_tcb->tcb_l4, tc_info);
+        test_notification(TEST_NOTIF_SESS_UP, NULL, eth_port,
+                          test_case_id);
     }
 }
 
@@ -1124,10 +1009,12 @@ test_case_start_udp_server(uint32_t lcore __rte_unused,
 {
     udp_control_block_t *server_ucb;
     test_case_info_t    *tc_info;
+    tpg_app_proto_t      app_id;
     sockopt_t           *sockopt;
     int                  error;
 
     tc_info = arg;
+    app_id = tc_info->tci_cfg->tcim_test_case.tc_app.app_proto;
     sockopt = &tc_info->tci_cfg->tcim_sockopt;
 
     /* We need to pass NULL in order for udp_listen_v4 to allocate one
@@ -1138,16 +1025,14 @@ test_case_start_udp_server(uint32_t lcore __rte_unused,
     /* Listen on the first specified address + port. */
     error = udp_listen_v4(&server_ucb, eth_port, src_ip, src_port,
                           test_case_id,
-                          tc_info->tci_cfg->tcim_app_id,
-                          sockopt,
+                          app_id, sockopt,
                           0);
     if (unlikely(error)) {
-        TEST_NOTIF(TEST_NOTIF_SERVER_FAILED, NULL, test_case_id, eth_port);
+        test_notification(TEST_NOTIF_SESS_FAILED, NULL, eth_port,
+                          test_case_id);
     } else {
-        TEST_NOTIF(TEST_NOTIF_SERVER_UP, NULL, test_case_id, eth_port);
-
-        /* Initialize the server state machine. */
-        test_server_sm_initialize(&server_ucb->ucb_l4, tc_info);
+        test_notification(TEST_NOTIF_SESS_UP, NULL, eth_port,
+                          test_case_id);
     }
 }
 
@@ -1168,7 +1053,7 @@ test_case_start_tcp_client(uint32_t lcore,
     sockopt_t           *sockopt;
 
     tc_info = arg;
-    app_id = tc_info->tci_cfg->tcim_app_id;
+    app_id = tc_info->tci_cfg->tcim_test_case.tc_app.app_proto;
     sockopt = &tc_info->tci_cfg->tcim_sockopt;
 
     tcb = tlkp_alloc_tcb();
@@ -1183,11 +1068,7 @@ test_case_start_tcp_client(uint32_t lcore,
                          app_id, sockopt,
                          (TPG_CB_USE_L4_HASH_FLAG | TCG_CB_CONSUME_ALL_DATA));
 
-    /* Initialize the application state. */
-    APP_CL_CALL(init, app_id)(&tcb->tcb_l4.l4cb_app_data, tc_info->tci_cfg);
-
-    /* Initialize the client state machine. */
-    test_client_sm_initialize(&tcb->tcb_l4, tc_info);
+    test_sess_init(&tcb->tcb_l4, tc_info);
 }
 
 /*****************************************************************************
@@ -1207,7 +1088,7 @@ test_case_start_udp_client(uint32_t lcore,
     sockopt_t           *sockopt;
 
     tc_info = arg;
-    app_id = tc_info->tci_cfg->tcim_app_id;
+    app_id = tc_info->tci_cfg->tcim_test_case.tc_app.app_proto;
     sockopt = &tc_info->tci_cfg->tcim_sockopt;
 
     ucb = tlkp_alloc_ucb();
@@ -1223,11 +1104,7 @@ test_case_start_udp_client(uint32_t lcore,
                          app_id, sockopt,
                          (TPG_CB_USE_L4_HASH_FLAG | 0));
 
-    /* Initialize the application state. */
-    APP_CL_CALL(init, app_id)(&ucb->ucb_l4.l4cb_app_data, tc_info->tci_cfg);
-
-    /* Initialize the client state machine. */
-    test_client_sm_initialize(&ucb->ucb_l4, tc_info);
+    test_sess_init(&ucb->ucb_l4, tc_info);
 }
 
 /*****************************************************************************
@@ -1328,133 +1205,56 @@ static void test_case_udp_close(l4_control_block_t *l4_cb)
 }
 
 /*****************************************************************************
- * test_tcp_purge_tcb()
+ * test_case_tcp_purge()
  ****************************************************************************/
-static void test_tcp_purge_tcb(tcp_control_block_t *tcb)
+static void test_case_tcp_purge(l4_control_block_t *l4_cb)
 {
-    bool to_free = (!tcb->tcb_malloced);
-
-    if (L4CB_TEST_TMR_IS_SET(&tcb->tcb_l4))
-        L4CB_TEST_TMR_CANCEL(&tcb->tcb_l4);
+    tcp_control_block_t *tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
 
     if (tcb->tcb_state != TS_INIT && tcb->tcb_state != TS_CLOSED)
         tcp_close_connection(tcb, TCG_SILENT_CLOSE);
 
-    if (to_free)
+    if (!tcb->tcb_malloced)
         tcp_connection_cleanup(tcb);
 }
 
 /*****************************************************************************
- * test_udp_purge_ucb()
+ * test_case_udp_purge()
  ****************************************************************************/
-static void test_udp_purge_ucb(udp_control_block_t *ucb)
+static void test_case_udp_purge(l4_control_block_t *l4_cb)
 {
-    bool to_free = (!ucb->ucb_malloced);
-
-    if (L4CB_TEST_TMR_IS_SET(&ucb->ucb_l4))
-        L4CB_TEST_TMR_CANCEL(&ucb->ucb_l4);
+    udp_control_block_t *ucb = container_of(l4_cb, udp_control_block_t, ucb_l4);
 
     if (ucb->ucb_state != US_INIT && ucb->ucb_state != US_CLOSED)
         udp_close_v4(ucb);
 
-    if (to_free)
+    if (!ucb->ucb_malloced)
         udp_connection_cleanup(ucb);
 }
 
 /*****************************************************************************
- * test_tcp_purge_list()
+ * test_purge_list()
  ****************************************************************************/
-static uint32_t test_tcp_purge_list(tlkp_test_cb_list_t *cbs)
+static uint32_t test_purge_list(test_case_info_t *tc_info,
+                                tlkp_test_cb_list_t *cb_list)
 {
-    uint32_t purge_cnt = 0;
+    tpg_test_case_type_t tc_type = tc_info->tci_cfg->tcim_test_case.tc_type;
+    tpg_l4_proto_t       l4_proto = tc_info->tci_cfg->tcim_l4_type;
+    uint32_t             purge_cnt = 0;
 
-    while (!TEST_CBQ_EMPTY(cbs)) {
-        tcp_control_block_t *tcb;
+    while (!TEST_CBQ_EMPTY(cb_list)) {
+        l4_control_block_t *l4_cb = TAILQ_FIRST(cb_list);
 
         purge_cnt++;
 
-        tcb = TEST_CBQ_FIRST(cbs, tcp_control_block_t, tcb_l4);
-        TEST_CBQ_REM(cbs, &tcb->tcb_l4);
-        test_tcp_purge_tcb(tcb);
+        /* No need to remove from the list. It should be done by the cleanup
+         * function. Inform the state machine that we're purging the session.
+         */
+        test_sm_purge(l4_cb, tc_info);
+
+        /* Call the corresponding callback to purge the session. */
+        test_callbacks[tc_type][l4_proto].sess_purge(l4_cb);
     }
-
-    return purge_cnt;
-}
-
-/*****************************************************************************
- * test_udp_purge_list()
- ****************************************************************************/
-static uint32_t test_udp_purge_list(tlkp_test_cb_list_t *cbs)
-{
-    uint32_t purge_cnt = 0;
-
-    while (!TEST_CBQ_EMPTY(cbs)) {
-        udp_control_block_t *ucb;
-
-        purge_cnt++;
-
-        ucb = TEST_CBQ_FIRST(cbs, udp_control_block_t, ucb_l4);
-        TEST_CBQ_REM(cbs, &ucb->ucb_l4);
-        test_udp_purge_ucb(ucb);
-    }
-
-    return purge_cnt;
-}
-
-/*****************************************************************************
- * test_case_purge_tcp_cbs()
- ****************************************************************************/
-static uint32_t
-test_case_purge_tcp_cbs(test_case_info_t *tc_info, test_case_init_msg_t *tc_cfg)
-{
-    uint32_t purge_cnt = 0;
-
-    bool tcp_purge_htable_cb(l4_control_block_t *cb, void *arg __rte_unused)
-    {
-        if (cb->l4cb_test_case_id != tc_cfg->tcim_test_case_id)
-            return true;
-
-        purge_cnt++;
-
-        test_tcp_purge_tcb(container_of(cb, tcp_control_block_t, tcb_l4));
-        return true;
-    }
-
-    purge_cnt += test_tcp_purge_list(&tc_info->tci_state.tos_to_init_cbs);
-    purge_cnt += test_tcp_purge_list(&tc_info->tci_state.tos_to_open_cbs);
-    purge_cnt += test_tcp_purge_list(&tc_info->tci_state.tos_to_close_cbs);
-    purge_cnt += test_tcp_purge_list(&tc_info->tci_state.tos_to_send_cbs);
-    purge_cnt += test_tcp_purge_list(&tc_info->tci_state.tos_closed_cbs);
-    tlkp_walk_tcb(tc_cfg->tcim_eth_port, tcp_purge_htable_cb, NULL);
-
-    return purge_cnt;
-}
-
-/*****************************************************************************
- * test_case_purge_udp_cbs()
- ****************************************************************************/
-static uint32_t
-test_case_purge_udp_cbs(test_case_info_t *tc_info, test_case_init_msg_t *tc_cfg)
-{
-    uint32_t purge_cnt = 0;
-
-    bool udp_purge_htable_cb(l4_control_block_t *cb, void *arg __rte_unused)
-    {
-        if (cb->l4cb_test_case_id != tc_cfg->tcim_test_case_id)
-            return true;
-
-        purge_cnt++;
-
-        test_udp_purge_ucb(container_of(cb, udp_control_block_t, ucb_l4));
-        return true;
-    }
-
-    purge_cnt += test_udp_purge_list(&tc_info->tci_state.tos_to_init_cbs);
-    purge_cnt += test_udp_purge_list(&tc_info->tci_state.tos_to_open_cbs);
-    purge_cnt += test_udp_purge_list(&tc_info->tci_state.tos_to_close_cbs);
-    purge_cnt += test_udp_purge_list(&tc_info->tci_state.tos_to_send_cbs);
-    purge_cnt += test_udp_purge_list(&tc_info->tci_state.tos_closed_cbs);
-    tlkp_walk_ucb(tc_cfg->tcim_eth_port, udp_purge_htable_cb, NULL);
 
     return purge_cnt;
 }
@@ -1462,26 +1262,42 @@ test_case_purge_udp_cbs(test_case_info_t *tc_info, test_case_init_msg_t *tc_cfg)
 /*****************************************************************************
  * test_case_purge_cbs()
  ****************************************************************************/
-static void
-test_case_purge_cbs(test_case_info_t *tc_info, test_case_init_msg_t *tc_cfg)
+static void test_case_purge_cbs(test_case_info_t *tc_info)
 {
-    uint32_t purge_cnt;
+    tpg_test_case_type_t tc_type = tc_info->tci_cfg->tcim_test_case.tc_type;
+    tpg_l4_proto_t       l4_proto = tc_info->tci_cfg->tcim_l4_type;
 
-    switch (tc_cfg->tcim_l4_type) {
-    case L4_PROTO__TCP:
-        purge_cnt = test_case_purge_tcp_cbs(tc_info, tc_cfg);
-        break;
-    case L4_PROTO__UDP:
-        purge_cnt = test_case_purge_udp_cbs(tc_info, tc_cfg);
-        break;
-    default:
-        assert(false);
-        break;
+    uint32_t eth_port = tc_info->tci_cfg->tcim_test_case.tc_eth_port;
+    uint32_t tc_id    = tc_info->tci_cfg->tcim_test_case.tc_id;
+    uint32_t purge_cnt = 0;
+
+    test_case_htable_walk_cb_t htable_walk_fn;
+
+    bool purge_htable_cb(l4_control_block_t *l4_cb, void *arg __rte_unused)
+    {
+        if (l4_cb->l4cb_test_case_id != tc_id)
+            return true;
+
+        purge_cnt++;
+
+        test_sm_purge(l4_cb, tc_info);
+        test_callbacks[tc_type][l4_proto].sess_purge(l4_cb);
+        return true;
     }
 
-    RTE_LOG(INFO, USER1, "[%d:%s()] purged %u tcid %u\n", rte_lcore_index(-1),
-            __func__,
-            purge_cnt, tc_cfg->tcim_test_case_id);
+    purge_cnt += test_purge_list(tc_info, &tc_info->tci_state.tos_to_init_cbs);
+    purge_cnt += test_purge_list(tc_info, &tc_info->tci_state.tos_to_open_cbs);
+    purge_cnt += test_purge_list(tc_info, &tc_info->tci_state.tos_to_close_cbs);
+    purge_cnt += test_purge_list(tc_info, &tc_info->tci_state.tos_to_send_cbs);
+    purge_cnt += test_purge_list(tc_info, &tc_info->tci_state.tos_closed_cbs);
+
+    htable_walk_fn = test_callbacks[tc_type][l4_proto].sess_htable_walk;
+
+    htable_walk_fn(eth_port, purge_htable_cb, NULL);
+
+    RTE_LOG(INFO, USER1,
+            "Purged %u sessions on eth_port %"PRIu32" tcid %"PRIu32"\n",
+            purge_cnt, eth_port, tc_id);
 }
 
 /*****************************************************************************
@@ -1492,23 +1308,24 @@ test_case_purge_cbs(test_case_info_t *tc_info, test_case_init_msg_t *tc_cfg)
  ****************************************************************************/
 static int test_case_init_cb(uint16_t msgid, uint16_t lcore, void *msg)
 {
-    test_case_init_msg_t *im;
-    uint32_t              eth_port;
-    uint32_t              tcid;
-    test_case_info_t     *tc_info;
-    tpg_test_case_type_t  tc_type;
-    tpg_l4_proto_t        l4_proto;
-    tpg_app_proto_t       app_id;
+    test_case_init_msg_t    *im;
+    uint32_t                 eth_port;
+    uint32_t                 tcid;
+    test_case_info_t        *tc_info;
+    tpg_test_case_type_t     tc_type;
+    tpg_l4_proto_t           l4_proto;
+    tpg_app_proto_t          app_id;
+    tpg_test_case_latency_t *test_latency;
 
     if (MSG_INVALID(msgid, msg, MSG_TEST_CASE_INIT))
         return -EINVAL;
 
     im = msg;
 
-    eth_port = im->tcim_eth_port;
-    tcid     = im->tcim_test_case_id;
-    tc_type  = im->tcim_type;
-    app_id   = im->tcim_app_id;
+    eth_port = im->tcim_test_case.tc_eth_port;
+    tcid     = im->tcim_test_case.tc_id;
+    tc_type  = im->tcim_test_case.tc_type;
+    app_id   = im->tcim_test_case.tc_app.app_proto;
     l4_proto = im->tcim_l4_type;
 
     /* If the requested port is not handled by this core just ignore. */
@@ -1523,6 +1340,7 @@ static int test_case_init_cb(uint16_t msgid, uint16_t lcore, void *msg)
 
     /* Struct copy of the configuration. */
     *tc_info->tci_cfg = *im;
+    test_latency = &tc_info->tci_cfg->tcim_test_case.tc_latency;
 
     if (tc_info->tci_cfg->tcim_tx_tstamp) {
         tstamp_tx_post_cb_t cb = NULL;
@@ -1540,8 +1358,8 @@ static int test_case_init_cb(uint16_t msgid, uint16_t lcore, void *msg)
 
         /* Initialize latency buffer. */
         test_latency_state_init(tc_info->tci_latency_state,
-                                tc_info->tci_cfg->tcim_latency.has_tcs_samples ?
-                                tc_info->tci_cfg->tcim_latency.tcs_samples : 0);
+                                test_latency->has_tcs_samples ?
+                                test_latency->tcs_samples : 0);
     }
 
     /* Initialize operational part and callbacks. */
@@ -1553,15 +1371,20 @@ static int test_case_init_cb(uint16_t msgid, uint16_t lcore, void *msg)
                          test_callbacks[tc_type][l4_proto].sess_close,
                          &tc_info->tci_rate_timers);
 
-    /* Initialize stats. */
-    bzero(tc_info->tci_general_stats, sizeof(*tc_info->tci_general_stats));
-    bzero(tc_info->tci_rate_stats, sizeof(*tc_info->tci_rate_stats));
-    bzero(tc_info->tci_app_stats, sizeof(*tc_info->tci_app_stats));
-
     /* Let the application layer know that the test is starting. The application
      * will initialize its "global" per test case state.
      */
-    APP_CALL(tc_start, tc_type, app_id)(tc_info->tci_cfg);
+    APP_CALL(tc_start, app_id)(&tc_info->tci_cfg->tcim_test_case,
+                               &tc_info->tci_cfg->tcim_test_case.tc_app,
+                               &tc_info->tci_app_storage);
+
+    /* Initialize stats. */
+    bzero(tc_info->tci_gen_stats, sizeof(*tc_info->tci_gen_stats));
+    bzero(tc_info->tci_rate_stats, sizeof(*tc_info->tci_rate_stats));
+
+    /* Initialize app stats. */
+    APP_CALL(stats_init, app_id)(&tc_info->tci_cfg->tcim_test_case.tc_app,
+                                 tc_info->tci_app_stats);
 
     /* Initialize clients and servers. */
 
@@ -1623,12 +1446,12 @@ void test_case_latency_init(test_case_info_t *tc_info)
     /* We don't bzero "test_oper_latency_state_t" we choose to keep recent
      * stats updated here instead than mgmt core.
      */
-    bzero(&tc_info->tci_general_stats->tcs_latency_stats,
-          sizeof(tc_info->tci_general_stats->tcs_latency_stats));
-    tc_info->tci_general_stats->tcs_latency_stats.tcls_stats.ls_min_latency =
+    bzero(&tc_info->tci_gen_stats->gs_latency_stats,
+          sizeof(tc_info->tci_gen_stats->gs_latency_stats));
+    tc_info->tci_gen_stats->gs_latency_stats.gls_stats.ls_min_latency =
         UINT32_MAX;
-    tc_info->tci_general_stats->tcs_latency_stats.tcls_sample_stats
-        .ls_min_latency = UINT32_MAX;
+    tc_info->tci_gen_stats->gs_latency_stats.gls_sample_stats .ls_min_latency =
+        UINT32_MAX;
 }
 
 /*****************************************************************************
@@ -1663,7 +1486,7 @@ static int test_case_start_cb(uint16_t msgid, uint16_t lcore, void *msg)
     }
 
     /* Store the initial start timestamp. */
-    tc_info->tci_rate_stats->tcrs_start_time = rte_get_timer_cycles();
+    tc_info->tci_rate_stats->rs_start_time = rte_get_timer_cycles();
 
     /* Start the rate limiting engine. */
     test_case_rate_state_start(lcore, sm->tcsm_eth_port, sm->tcsm_test_case_id,
@@ -1750,11 +1573,11 @@ static int test_case_run_open_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 
         error = ts->tos_client_open_cb(l4_cb);
         if (unlikely(error)) {
-            TEST_NOTIF_CB(TEST_NOTIF_CLIENT_FAILED, l4_cb);
+            TEST_NOTIF(TEST_NOTIF_SESS_FAILED, l4_cb);
             /* Readd to the open list and try again later. */
             TEST_CBQ_ADD_TO_OPEN(ts, l4_cb);
         } else {
-            TEST_NOTIF_CB(TEST_NOTIF_CLIENT_UP, l4_cb);
+            TEST_NOTIF(TEST_NOTIF_SESS_UP, l4_cb);
         }
     }
 
@@ -1816,14 +1639,13 @@ static int test_case_run_close_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 static int test_case_run_send_cb(uint16_t msgid, uint16_t lcore __rte_unused,
                                  void *msg)
 {
-    test_case_run_msg_t  *rm;
-    test_case_info_t     *tc_info;
-    test_oper_state_t    *ts;
-    test_rate_state_t    *rate_state;
-    uint32_t              max_send;
-    uint32_t              send_cnt;
-    uint32_t              send_pkt_cnt;
-    tpg_test_case_type_t  tc_type;
+    test_case_run_msg_t *rm;
+    test_case_info_t    *tc_info;
+    test_oper_state_t   *ts;
+    test_rate_state_t   *rate_state;
+    uint32_t             max_send;
+    uint32_t             send_cnt;
+    uint32_t             send_pkt_cnt;
 
     if (MSG_INVALID(msgid, msg, MSG_TEST_CASE_RUN_SEND))
         return -EINVAL;
@@ -1833,7 +1655,6 @@ static int test_case_run_send_cb(uint16_t msgid, uint16_t lcore __rte_unused,
     tc_info = TEST_GET_INFO(rm->tcrm_eth_port, rm->tcrm_test_case_id);
     ts = &tc_info->tci_state;
     rate_state = &ts->tos_rates;
-    tc_type = tc_info->tci_cfg->tcim_type;
 
     /* Check how many sessions are allowed to send traffic. */
     max_send = rate_limit_available(&rate_state->trs_send);
@@ -1852,16 +1673,17 @@ static int test_case_run_send_cb(uint16_t msgid, uint16_t lcore __rte_unused,
         app_id = l4_cb->l4cb_app_data.ad_type;
         mtu = ts->tos_session_mtu_cb(l4_cb);
 
-        data_mbuf = APP_CALL(send, tc_type, app_id)(l4_cb,
-                                                    &l4_cb->l4cb_app_data,
-                                                    tc_info->tci_app_stats,
-                                                    mtu);
+        data_mbuf = APP_CALL(send, app_id)(l4_cb, &l4_cb->l4cb_app_data,
+                                           tc_info->tci_app_stats,
+                                           mtu);
         if (unlikely(data_mbuf == NULL)) {
-            TEST_NOTIF_CB(TEST_NOTIF_DATA_NULL, l4_cb);
+            TEST_NOTIF(TEST_NOTIF_DATA_NULL, l4_cb);
 
-            /* Move at the end to try again later. */
-            TEST_CBQ_REM_TO_SEND(ts, l4_cb);
-            TEST_CBQ_ADD_TO_SEND(ts, l4_cb);
+            if (test_sm_has_data_pending(l4_cb)) {
+                /* Move at the end to try again later. */
+                TEST_CBQ_REM_TO_SEND(ts, l4_cb);
+                TEST_CBQ_ADD_TO_SEND(ts, l4_cb);
+            }
             continue;
         }
 
@@ -1873,9 +1695,9 @@ static int test_case_run_send_cb(uint16_t msgid, uint16_t lcore __rte_unused,
          */
         error = ts->tos_session_send_cb(l4_cb, data_mbuf, &data_sent);
         if (unlikely(error)) {
-            TEST_NOTIF_CB(TEST_NOTIF_DATA_FAILED, l4_cb);
+            TEST_NOTIF(TEST_NOTIF_DATA_FAILED, l4_cb);
 
-            if (test_sm_has_data_pending(l4_cb, tc_info)) {
+            if (test_sm_has_data_pending(l4_cb)) {
                 /* Move at the end to try again later. */
                 TEST_CBQ_REM_TO_SEND(ts, l4_cb);
                 TEST_CBQ_ADD_TO_SEND(ts, l4_cb);
@@ -1884,10 +1706,9 @@ static int test_case_run_send_cb(uint16_t msgid, uint16_t lcore __rte_unused,
         }
 
         if (likely(data_sent != 0)) {
-            if (APP_CALL(data_sent,
-                         tc_type, app_id)(l4_cb, &l4_cb->l4cb_app_data,
-                                          tc_info->tci_app_stats,
-                                          data_sent)) {
+            if (APP_CALL(data_sent, app_id)(l4_cb, &l4_cb->l4cb_app_data,
+                                            tc_info->tci_app_stats,
+                                            data_sent)) {
                 /* We increment the sent count only if the application managed
                  * to transmit a complete message.
                  */
@@ -1899,7 +1720,7 @@ static int test_case_run_send_cb(uint16_t msgid, uint16_t lcore __rte_unused,
     TRACE_FMT(TST, DEBUG, "SEND data cnt %"PRIu32, send_cnt);
 
     /* Update the transaction send rate. */
-    tc_info->tci_rate_stats->tcrs_data_per_s += send_cnt;
+    tc_info->tci_rate_stats->rs_data_per_s += send_cnt;
 
     /* Update the rate limiter with the number of individual sent packets
      * (not transactions!) and check if we have to send more (later).
@@ -1922,7 +1743,6 @@ static int test_case_stop_cb(uint16_t msgid, uint16_t lcore,
     test_oper_state_t    *tc_state;
     test_rate_timers_t   *tc_rate_timers;
     bool                  all_purged;
-    tpg_test_case_type_t  tc_type;
     tpg_app_proto_t       app_id;
 
     if (MSG_INVALID(msgid, msg, MSG_TEST_CASE_STOP))
@@ -1956,7 +1776,7 @@ static int test_case_stop_cb(uint16_t msgid, uint16_t lcore,
         all_purged = false;
     } else {
         /* Walk the tcbs for this test and purge them. */
-        test_case_purge_cbs(tc_info, tc_info->tci_cfg);
+        test_case_purge_cbs(tc_info);
         all_purged = true;
     }
 
@@ -1981,9 +1801,10 @@ static int test_case_stop_cb(uint16_t msgid, uint16_t lcore,
                        port_get_rx_queue_id(lcore, sm->tcsm_eth_port));
     }
 
-    tc_type = tc_info->tci_cfg->tcim_type;
-    app_id = tc_info->tci_cfg->tcim_app_id;
-    APP_CALL(tc_stop, tc_type, app_id)(tc_info->tci_cfg);
+    app_id = tc_info->tci_cfg->tcim_test_case.tc_app.app_proto;
+    APP_CALL(tc_stop, app_id)(&tc_info->tci_cfg->tcim_test_case,
+                              &tc_info->tci_cfg->tcim_test_case.tc_app,
+                              &tc_info->tci_app_storage);
 
 done:
     /* Notify the sender that we're done. */
@@ -2000,6 +1821,7 @@ static int test_case_stats_req_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 {
     test_case_stats_req_msg_t *sm;
     test_case_info_t          *tc_info;
+    tpg_app_proto_t            app_id;
 
     if (MSG_INVALID(msgid, msg, MSG_TEST_CASE_STATS_REQ))
         return -EINVAL;
@@ -2008,20 +1830,27 @@ static int test_case_stats_req_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 
     tc_info = TEST_GET_INFO(sm->tcsrm_eth_port, sm->tcsrm_test_case_id);
 
+    app_id = tc_info->tci_cfg->tcim_test_case.tc_app.app_proto;
+
     /* Here we walk through the buffer in order to fill the recent stats */
     if (tc_info->tci_cfg->tcim_rx_tstamp) {
-        tpg_test_case_latency_stats_t *tc_latency_stats;
+        tpg_test_case_latency_t *tc_latency;
+        tpg_gen_latency_stats_t *tc_latency_stats;
 
-        tc_latency_stats = &tc_info->tci_general_stats->tcs_latency_stats;
+        tc_latency = &tc_info->tci_cfg->tcim_test_case.tc_latency;
+        tc_latency_stats = &tc_info->tci_gen_stats->gs_latency_stats;
 
-        test_update_recent_latency_stats(&tc_latency_stats->tcls_sample_stats,
+        test_update_recent_latency_stats(&tc_latency_stats->gls_sample_stats,
                                          tc_info->tci_latency_state,
-                                         &tc_info->tci_cfg->tcim_latency);
+                                         tc_latency);
     }
 
     /* Struct copy the stats! */
-    *sm->tcsrm_test_case_stats = *tc_info->tci_general_stats;
-    *sm->tcsrm_test_case_app_stats = *tc_info->tci_app_stats;
+    *sm->tcsrm_test_case_stats = *tc_info->tci_gen_stats;
+
+    /* Ask the APP implementation to copy the stats for us. */
+    APP_CALL(stats_copy, app_id)(sm->tcsrm_test_case_app_stats,
+                                 tc_info->tci_app_stats);
 
     /* Clear the runtime stats. They're aggregated by the test manager.
      * Don't clear the start and end time for the gen stats!
@@ -2029,24 +1858,16 @@ static int test_case_stats_req_cb(uint16_t msgid, uint16_t lcore __rte_unused,
     if (tc_info->tci_cfg->tcim_rx_tstamp)
         test_case_latency_init(tc_info);
 
-    switch (tc_info->tci_cfg->tcim_type) {
-    case TEST_CASE_TYPE__SERVER:
-        /* Clear the gen stats. */
-        bzero(&tc_info->tci_general_stats->tcs_server,
-              sizeof(tc_info->tci_general_stats->tcs_server));
-        break;
-    case TEST_CASE_TYPE__CLIENT:
-        /* Clear the gen stats. */
-        bzero(&tc_info->tci_general_stats->tcs_client,
-              sizeof(tc_info->tci_general_stats->tcs_client));
-        break;
-    default:
-        assert(false);
-        return -EINVAL;
-    }
+    tc_info->tci_gen_stats->gs_up = 0;
+    tc_info->tci_gen_stats->gs_estab = 0;
+    tc_info->tci_gen_stats->gs_down = 0;
+    tc_info->tci_gen_stats->gs_failed = 0;
+    tc_info->tci_gen_stats->gs_data_failed = 0;
+    tc_info->tci_gen_stats->gs_data_null = 0;
 
     /* Clear the app stats. */
-    bzero(tc_info->tci_app_stats, sizeof(*tc_info->tci_app_stats));
+    APP_CALL(stats_init, app_id)(&tc_info->tci_cfg->tcim_test_case.tc_app,
+                                 tc_info->tci_app_stats);
     return 0;
 }
 
@@ -2069,7 +1890,7 @@ static int test_case_rates_stats_req_cb(uint16_t msgid,
     tc_info = TEST_GET_INFO(sm->tcrrm_eth_port, sm->tcrrm_test_case_id);
 
     now = rte_get_timer_cycles();
-    tc_info->tci_rate_stats->tcrs_end_time = now;
+    tc_info->tci_rate_stats->rs_end_time = now;
 
     /* Struct copy the stats! */
     *sm->tcrrm_test_case_rate_stats = *tc_info->tci_rate_stats;
@@ -2078,7 +1899,7 @@ static int test_case_rates_stats_req_cb(uint16_t msgid,
     bzero(tc_info->tci_rate_stats, sizeof(*tc_info->tci_rate_stats));
 
     /* Store the new initial timestamp. */
-    tc_info->tci_rate_stats->tcrs_start_time = now;
+    tc_info->tci_rate_stats->rs_start_time = now;
 
     return 0;
 }
@@ -2157,10 +1978,6 @@ bool test_init(void)
         if (error)
             break;
 
-        tcp_notif_cb = test_tcp_udp_notif_handler;
-        udp_notif_cb = test_tcp_udp_notif_handler;
-        test_notif_cb = test_notif_handler;
-
         return true;
     }
 
@@ -2201,7 +2018,7 @@ static void test_lcore_init_test_case_info(void)
             test_case_info_t *tc_info = TEST_GET_INFO(eth_port, tcid);
 
             tc_info->tci_cfg = TEST_GET_CFG(eth_port, tcid);
-            tc_info->tci_general_stats = TEST_GET_GEN_STATS(eth_port, tcid);
+            tc_info->tci_gen_stats = TEST_GET_GEN_STATS(eth_port, tcid);
             tc_info->tci_rate_stats = TEST_GET_RATE_STATS(eth_port, tcid);
             tc_info->tci_app_stats = TEST_GET_APP_STATS(eth_port, tcid);
             tc_info->tci_latency_state = TEST_GET_LATENCY_STATE(eth_port, tcid);
@@ -2224,16 +2041,8 @@ void test_lcore_init(uint32_t lcore_id)
                          rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
 
-    test_lcore_init_pool(RTE_PER_LCORE(test_case_gen_stats),
-                         "per_lcore_test_case_gen_stats",
-                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
-                         lcore_id);
-    test_lcore_init_pool(RTE_PER_LCORE(test_case_rate_stats),
-                         "per_lcore_test_case_rate_stats",
-                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
-                         lcore_id);
-    test_lcore_init_pool(RTE_PER_LCORE(test_case_app_stats),
-                         "per_lcore_test_case_app_stats",
+    test_lcore_init_pool(RTE_PER_LCORE(test_case_stats),
+                         "per_lcore_test_stats",
                          rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
 
@@ -2269,5 +2078,82 @@ void test_lcore_init(uint32_t lcore_id)
                          lcore_id);
 
     test_lcore_init_test_case_info();
+}
+
+/****************************************************************************
+ * test_notification()
+ *
+ * NOTE:
+ *   This will be called from the packet processing core context.
+ ****************************************************************************/
+void test_notification(uint32_t notification, l4_control_block_t *l4_cb,
+                       uint32_t eth_port, uint32_t test_case_id)
+{
+    test_case_info_t *tc_info = TEST_GET_INFO(eth_port, test_case_id);
+
+    switch (notification) {
+
+    case TEST_NOTIF_SESS_UP:
+        tc_info->tci_gen_stats->gs_up++;
+        break;
+    case TEST_NOTIF_SESS_DOWN:
+        tc_info->tci_gen_stats->gs_down++;
+        break;
+    case TEST_NOTIF_SESS_FAILED:
+        tc_info->tci_gen_stats->gs_failed++;
+        break;
+    case TEST_NOTIF_DATA_FAILED:
+        tc_info->tci_gen_stats->gs_data_failed++;
+        break;
+    case TEST_NOTIF_DATA_NULL:
+        tc_info->tci_gen_stats->gs_data_null++;
+        break;
+
+    case TEST_NOTIF_TMR_FIRED:
+        test_sm_tmr_to(l4_cb, tc_info);
+        break;
+
+    case TEST_NOTIF_SESS_CONNECTING:
+        test_sess_connecting(l4_cb, tc_info);
+        break;
+    case TEST_NOTIF_SESS_CONNECTED:
+        test_sess_connected(l4_cb, tc_info);
+        break;
+    case TEST_NOTIF_SESS_CONNECTED_IMM:
+        test_sess_connected_imm(l4_cb, tc_info);
+        break;
+    case TEST_NOTIF_SESS_LISTEN:
+        test_sess_listen(l4_cb, tc_info);
+        break;
+    case TEST_NOTIF_SESS_SRV_CONNECTED:
+        test_sess_server_connected(l4_cb, tc_info);
+        break;
+    case TEST_NOTIF_SESS_CLOSING:
+        test_sess_closing(l4_cb, tc_info);
+        break;
+    case TEST_NOTIF_SESS_CLOSED:
+        test_sess_closed(l4_cb, tc_info);
+        break;
+    case TEST_NOTIF_SESS_WIN_AVAIL:
+        test_sess_win_available(l4_cb, tc_info);
+        break;
+    case TEST_NOTIF_SESS_WIN_UNAVAIL:
+        test_sess_win_unavailable(l4_cb, tc_info);
+        break;
+
+    case TEST_NOTIF_APP_SEND_START:
+        test_sm_app_send_start(l4_cb, tc_info);
+        break;
+    case TEST_NOTIF_APP_SEND_STOP:
+        test_sm_app_send_stop(l4_cb, tc_info);
+        break;
+    case TEST_NOTIF_APP_CLOSE:
+        tc_info->tci_state.tos_session_close_cb(l4_cb);
+        break;
+
+    default:
+        assert(false);
+        break;
+    }
 }
 

@@ -390,10 +390,7 @@ deliver_data:
     if (unlikely(LIST_EMPTY(&tcb->tcb_rcv_buf)))
         assert(false);
 
-    if (tcb->tcb_active)
-        app_deliver_cb = APP_CL_CALL(deliver, app_id);
-    else
-        app_deliver_cb = APP_SRV_CALL(deliver, app_id);
+    app_deliver_cb = APP_CALL(deliver, app_id);
 
     /* It's a bit ugly to use the test case here but this is the only
      * place where we need to look it up so it would be inneficient to avoid
@@ -414,7 +411,6 @@ deliver_data:
                                        seg->tbh_tstamp);
         delivered += seg_delivered;
         tcb->tcb_rcv.nxt += seg_delivered;
-        TCP_NOTIF(TCB_NOTIF_SEG_RECEIVED, tcb);
 
         if (seg_delivered == seg->tbh_mbuf->pkt_len) {
             LIST_REMOVE(seg, tbh_entry);

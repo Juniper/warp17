@@ -56,10 +56,8 @@
 
 import sys
 import time
-
-sys.path.append('../../python')
-sys.path.append('../../api/generated/py')
-sys.path.append('../../ut/lib')
+import os
+import argparse
 
 from warp17_api import *
 
@@ -71,6 +69,7 @@ from warp17_common_pb2    import *
 from warp17_l3_pb2        import *
 from warp17_server_pb2    import *
 from warp17_client_pb2    import *
+from warp17_app_pb2       import *
 from warp17_app_http_pb2  import *
 from warp17_test_case_pb2 import *
 from warp17_service_pb2   import *
@@ -79,7 +78,7 @@ def die(msg):
     sys.stderr.write(msg + ' Should cleanup but we just exit..\n')
     sys.exit(1)
 
-def init_test():
+def init_test(w17_binary):
     # Configure the WARP17 mandatory environment variables. These could also be
     # set outside the script (through normal env variables) but for this example
     # we do it here..
@@ -89,10 +88,10 @@ def init_test():
     global warp17_port
     global env
 
-    env = Warp17Env(path='./test_1_http_4M.ini')
+    env = Warp17Env(path=os.path.join(os.path.dirname(__file__),
+                                      './test_1_http_4M.ini'))
 
     # First start WARP17 on the local machine, default IP and port.
-    exec_bin = '../../build/warp17'
     warp17_host = env.get_host_name()
     warp17_port = env.get_rpc_port()
 
@@ -100,7 +99,7 @@ def init_test():
     # Returns the process id of WARP17.
     # This will throw an exception if the output file can't be created or if
     # WARP17 can't be started.
-    warp17_pid = warp17_start(env=env, exec_file=exec_bin,
+    warp17_pid = warp17_start(env=env, exec_file=w17_binary,
                               output_args=Warp17OutputArgs(out_file='/tmp/test_1_api_example.out'))
 
     # Now wait for WARP17 to finish initializing
@@ -141,16 +140,12 @@ def configure_client_port():
                            rc_close_rate=Rate(), # no rate limiting
                            rc_send_rate=Rate())  # no rate limiting
 
-    delay_ccfg = DelayClient(dc_init_delay=Delay(d_value=0),
-                             dc_uptime=Delay(d_value=40),   # clients stay up for 40s
-                             dc_downtime=Delay(d_value=10)) # clients reconnect after 10s
-
     # Prepare the HTTP Client config
-    http_ccfg = AppClient(ac_app_proto=HTTP,
-                          ac_http=HttpClient(hc_req_method=GET,
-                                             hc_req_object_name='/index.html',
-                                             hc_req_host_name='www.foobar.net',
-                                             hc_req_size=2048)) # configure HTTP requests of size 2K
+    http_ccfg = App(app_proto=HTTP_CLIENT,
+                    app_http_client=HttpClient(hc_req_method=GET,
+                                               hc_req_object_name='/index.html',
+                                               hc_req_host_name='www.foobar.net',
+                                               hc_req_size=2048)) # configure HTTP requests of size 2K
 
     # Prepare the Client test case criteria.
     # Let the test case run for one hour.
@@ -162,9 +157,8 @@ def configure_client_port():
                     tc_client=Client(cl_src_ips=b2b_sips(eth_port=0, ip_count=2),
                                      cl_dst_ips=b2b_dips(eth_port=0, ip_count=1),
                                      cl_l4=l4_ccfg,
-                                     cl_rates=rate_ccfg,
-                                     cl_delays=delay_ccfg,
-                                     cl_app=http_ccfg),
+                                     cl_rates=rate_ccfg),
+                    tc_app=http_ccfg,
                     tc_criteria=ccrit,
                     tc_async=True)
 
@@ -197,9 +191,9 @@ def configure_server_port():
                        l4s_tcp_udp=TcpUdpServer(tus_ports=port_range))
 
     # Prepare the HTTP Server config
-    http_scfg = AppServer(as_app_proto=HTTP,
-                          as_http=HttpServer(hs_resp_code=OK_200,
-                                             hs_resp_size=2048))
+    http_scfg = App(app_proto=HTTP_SERVER,
+                    app_http_server=HttpServer(hs_resp_code=OK_200,
+                                               hs_resp_size=2048))
 
     # The server test case criteria is to have all servers in listen state.
     # However, server test cases are special and keep running even after the
@@ -209,8 +203,8 @@ def configure_server_port():
     # Put the whole test case config together
     scfg = TestCase(tc_type=SERVER, tc_eth_port=1, tc_id=0,
                     tc_server=Server(srv_ips=b2b_sips(eth_port=1, ip_count=1),
-                                     srv_l4=l4_scfg,
-                                     srv_app=http_scfg),
+                                     srv_l4=l4_scfg),
+                    tc_app=http_scfg,
                     tc_criteria=scrit,
                     tc_async=False)
 
@@ -250,11 +244,11 @@ def check_stats():
 
         print 'Client test case state: ' + str(client_result.tsr_state) + '\n'
         print 'Global stats:'
-        print client_result.tsr_stats.tcs_client
+        print client_result.tsr_stats
         print 'Rate stats:'
         print client_result.tsr_rate_stats
         print 'HTTP Client stats:'
-        print client_result.tsr_app_stats.tcas_http
+        print client_result.tsr_app_stats.as_http
 
         time.sleep(1)
 
@@ -278,7 +272,13 @@ def run_test():
     ''' Assumes a back to back topology with two 40G ports. '''
     ''' Port 0 emulates clients and port 1 emulates servers. '''
 
-    warp17_pid = init_test()
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('-f', '--file', help='path to warp17 binary',
+                        required=True)
+    args = parser.parse_args()
+
+    warp17_pid = init_test(args.file)
     configure_client_port()
     configure_server_port()
 

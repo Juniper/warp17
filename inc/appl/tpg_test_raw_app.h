@@ -100,70 +100,116 @@ typedef struct raw_app_s {
 } raw_app_t;
 
 /*****************************************************************************
+ * RAW App flag definitions
+ ****************************************************************************/
+#define RAW_FLAG_TSTAMP_NONE 0x00000000
+#define RAW_FLAG_TSTAMP_RX   0x00000001
+#define RAW_FLAG_TSTAMP_TX   0x00000002
+#define RAW_FLAG_TSTAMP_RXTX (RAW_FLAG_TSTAMP_RX | RAW_FLAG_TSTAMP_TX)
+#define RAW_FLAG_TSTAMP_MASK \
+    (RAW_FLAG_TSTAMP_NONE | RAW_FLAG_TSTAMP_RX | RAW_FLAG_TSTAMP_TX)
+
+/* TODO: this should be done by the imix infrastructure but until then... */
+#define RAW_FLAG_IMIX        0x80000000
+
+typedef uint32_t         raw_flags_type_t;
+typedef raw_flags_type_t raw_tstamp_type_t;
+
+#define RAW_TSTAMP_SET(cfg, value) \
+    ((cfg) |= ((value) & RAW_FLAG_TSTAMP_MASK))
+
+#define RAW_TSTAMP_ISSET(cfg, value) \
+    ((cfg) & RAW_FLAG_TSTAMP_MASK & (value))
+
+#define RAW_IMIX_ISSET(cfg) \
+    ((cfg) & RAW_FLAG_IMIX)
+
+/*
+ * RAW test case shared storage (i.e., the timestamping configuration).
+ */
+typedef struct raw_storage_s {
+
+    raw_tstamp_type_t rst_tstamp;
+
+} raw_storage_t;
+
+/*****************************************************************************
  * "RAW" externals.
  ****************************************************************************/
 extern void raw_client_default_cfg(tpg_test_case_t *cfg);
 extern void raw_server_default_cfg(tpg_test_case_t *cfg);
 
 extern bool raw_client_validate_cfg(const tpg_test_case_t *cfg,
+                                    const tpg_app_t *app_cfg,
                                     printer_arg_t *printer_arg);
 extern bool raw_server_validate_cfg(const tpg_test_case_t *cfg,
+                                    const tpg_app_t *app_cfg,
                                     printer_arg_t *printer_arg);
 
-extern void raw_client_print_cfg(const tpg_test_case_t *cfg,
+extern void raw_client_print_cfg(const tpg_app_t *app_cfg,
                                  printer_arg_t *printer_arg);
-extern void raw_server_print_cfg(const tpg_test_case_t *cfg,
+extern void raw_server_print_cfg(const tpg_app_t *app_cfg,
                                  printer_arg_t *printer_arg);
 
-extern void raw_delete_cfg(const tpg_test_case_t *cfg);
+extern void raw_add_delete_cfg(const tpg_test_case_t *cfg,
+                               const tpg_app_t *app_cfg);
 
 extern uint32_t raw_client_pkts_per_send(const tpg_test_case_t *cfg,
+                                         const tpg_app_t *app_cfg,
                                          uint32_t max_pkt_size);
 extern uint32_t raw_server_pkts_per_send(const tpg_test_case_t *cfg,
+                                         const tpg_app_t *app_cfg,
                                          uint32_t max_pkt_size);
 
 
-extern void raw_client_init(app_data_t *app_data, test_case_init_msg_t *init_msg);
-extern void raw_server_init(app_data_t *app_data, test_case_init_msg_t *init_msg);
+extern void raw_client_init(app_data_t *app_data, const tpg_app_t *app_cfg);
+extern void raw_server_init(app_data_t *app_data, const tpg_app_t *app_cfg);
 
-extern void raw_client_tc_start(test_case_init_msg_t *init_msg);
-extern void raw_server_tc_start(test_case_init_msg_t *init_msg);
-extern void raw_tc_stop(test_case_init_msg_t *init_msg);
+extern void raw_client_tc_start(const tpg_test_case_t *cfg,
+                                const tpg_app_t *app_cfg,
+                                app_storage_t *app_storage);
+extern void raw_server_tc_start(const tpg_test_case_t *cfg,
+                                const tpg_app_t *app_cfg,
+                                app_storage_t *app_storage);
+extern void raw_tc_stop(const tpg_test_case_t *cfg,
+                        const tpg_app_t *app_cfg,
+                        app_storage_t *app_storage);
 
 extern void raw_client_conn_up(l4_control_block_t *l4, app_data_t *app_data,
-                               tpg_test_case_app_stats_t *stats);
+                               tpg_app_stats_t *stats);
 extern void raw_server_conn_up(l4_control_block_t *l4, app_data_t *app_data,
-                               tpg_test_case_app_stats_t *stats);
+                               tpg_app_stats_t *stats);
 
 extern void raw_conn_down(l4_control_block_t *l4, app_data_t *app_data,
-                          tpg_test_case_app_stats_t *stats);
+                          tpg_app_stats_t *stats);
 
 extern uint32_t raw_client_deliver_data(l4_control_block_t *l4,
                                         app_data_t *app_data,
-                                        tpg_test_case_app_stats_t *stats,
+                                        tpg_app_stats_t *stats,
                                         struct rte_mbuf *rx_data,
                                         uint64_t rx_tstamp);
 extern uint32_t raw_server_deliver_data(l4_control_block_t *l4,
                                         app_data_t *app_data,
-                                        tpg_test_case_app_stats_t *stats,
+                                        tpg_app_stats_t *stats,
                                         struct rte_mbuf *rx_data,
                                         uint64_t rx_tstamp);
 
 extern struct rte_mbuf *raw_send_data(l4_control_block_t *l4,
                                       app_data_t *app_data,
-                                      tpg_test_case_app_stats_t *stats,
+                                      tpg_app_stats_t *stats,
                                       uint32_t max_tx_size);
 
 extern bool raw_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
-                                 tpg_test_case_app_stats_t *stats,
+                                 tpg_app_stats_t *stats,
                                  uint32_t bytes_sent);
 extern bool raw_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
-                                 tpg_test_case_app_stats_t *stats,
+                                 tpg_app_stats_t *stats,
                                  uint32_t bytes_sent);
 
-extern void raw_stats_add(tpg_test_case_app_stats_t *total,
-                          const tpg_test_case_app_stats_t *elem);
-extern void raw_stats_print(const tpg_test_case_app_stats_t *stats,
+extern void raw_stats_init(const tpg_app_t *app_cfg, tpg_app_stats_t *stats);
+extern void raw_stats_copy(tpg_app_stats_t *dest, const tpg_app_stats_t *src);
+extern void raw_stats_add(tpg_app_stats_t *total, const tpg_app_stats_t *elem);
+extern void raw_stats_print(const tpg_app_stats_t *stats,
                             printer_arg_t *printer_arg);
 
 extern bool raw_init(void);

@@ -214,6 +214,8 @@ extern void                     port_lcore_init(uint32_t lcore_id);
 extern uint32_t                 port_get_socket(int port, int queue);
 extern void                     port_link_info_get(uint32_t port,
                                                    struct rte_eth_link *link_info);
+extern void                     port_link_info_get_nowait(uint32_t port,
+                                                          struct rte_eth_link *link);
 extern void                     port_link_stats_get(uint32_t port,
                                                     struct rte_eth_stats *total_link_stats);
 extern void                     port_link_rate_stats_get(uint32_t port,

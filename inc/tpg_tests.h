@@ -96,54 +96,36 @@ typedef enum {
  ****************************************************************************/
 enum {
 
-    TEST_NOTIF_SERVER_UP = NOTIFID_INITIALIZER(NOTIF_TEST_MODULE),
-    TEST_NOTIF_SERVER_DOWN,
-    TEST_NOTIF_SERVER_FAILED,
-
-    TEST_NOTIF_CLIENT_UP,
-    TEST_NOTIF_CLIENT_DOWN,
-    TEST_NOTIF_CLIENT_FAILED,
-
-    TEST_NOTIF_TMR_FIRED,
-
-    TEST_NOTIF_APP_CLIENT_SEND_START,
-    TEST_NOTIF_APP_CLIENT_SEND_STOP,
-    TEST_NOTIF_APP_CLIENT_CLOSE,
-
-    TEST_NOTIF_APP_SERVER_SEND_START,
-    TEST_NOTIF_APP_SERVER_SEND_STOP,
-    TEST_NOTIF_APP_SERVER_CLOSE,
-
+    TEST_NOTIF_SESS_UP,
+    TEST_NOTIF_SESS_DOWN,
+    TEST_NOTIF_SESS_FAILED,
     TEST_NOTIF_DATA_FAILED,
     TEST_NOTIF_DATA_NULL,
+    TEST_NOTIF_TMR_FIRED,
+
+    TEST_NOTIF_SESS_CONNECTING,
+    TEST_NOTIF_SESS_CONNECTED,
+    TEST_NOTIF_SESS_CONNECTED_IMM, /* When we skip connecting. */
+    TEST_NOTIF_SESS_LISTEN,
+    TEST_NOTIF_SESS_SRV_CONNECTED,
+    TEST_NOTIF_SESS_CLOSING,
+    TEST_NOTIF_SESS_CLOSED,
+    TEST_NOTIF_SESS_WIN_AVAIL,
+    TEST_NOTIF_SESS_WIN_UNAVAIL,
+
+    TEST_NOTIF_APP_SEND_START,
+    TEST_NOTIF_APP_SEND_STOP,
+    TEST_NOTIF_APP_CLOSE,
 
 };
 
-#define TEST_NOTIF(notif, cb, tcid, iface)                       \
-    do {                                                         \
-        notif_arg_t arg = TEST_NOTIF_ARG((tcid), (iface), (cb)); \
-        test_notif_cb((notif), &arg);                            \
-    } while (0)
-
-#define TEST_NOTIF_CB(notif, cb_arg)        \
-    TEST_NOTIF((notif), (cb_arg),           \
-               (cb_arg)->l4cb_test_case_id, \
-               (cb_arg)->l4cb_interface)
-
-#define TEST_NOTIF_TCB(notif, cb_arg) \
-    TEST_NOTIF_CB((notif), &(cb_arg)->tcb_l4)
-
-#define TEST_NOTIF_UCB(notif, cb_arg) \
-    TEST_NOTIF_CB((notif), &(cb_arg)->ucb_l4)
-
-/* Callback to be executed whenever an interesting event happens. */
-extern notif_cb_t test_notif_cb;
+#define TEST_NOTIF(notification, cb_arg)                                  \
+    test_notification((notification), (cb_arg), (cb_arg)->l4cb_interface, \
+                      (cb_arg)->l4cb_test_case_id)
 
 /*****************************************************************************
  * TCP/UDP test states list definitions
  ****************************************************************************/
-typedef TAILQ_HEAD(tcp_test_cb_list_s, l4_control_block_s) tlkp_test_cb_list_t;
-
 #define TEST_CBQ_INIT(list) TAILQ_INIT((list))
 
 #define TEST_CBQ_ADD(list, cb) \
@@ -218,20 +200,10 @@ typedef TAILQ_HEAD(tcp_test_cb_list_s, l4_control_block_s) tlkp_test_cb_list_t;
  ****************************************************************************/
 typedef struct test_case_init_msg_s {
 
-    uint32_t tcim_eth_port;
-    uint32_t tcim_test_case_id;
+    tpg_test_case_t tcim_test_case;
 
-    tpg_test_case_type_t tcim_type;
-    tpg_l4_proto_t       tcim_l4_type;
-    tpg_app_proto_t      tcim_app_id;
-
-    union {
-        tpg_client_t tcim_client;
-        tpg_server_t tcim_server;
-    };
-
-    sockopt_t               tcim_sockopt;
-    tpg_test_case_latency_t tcim_latency;
+    tpg_l4_proto_t tcim_l4_type;
+    sockopt_t      tcim_sockopt;
 
     uint32_t tcim_rx_tstamp : 1;
     uint32_t tcim_tx_tstamp : 1;
@@ -272,18 +244,18 @@ typedef struct test_case_stop_msg_s {
 
 typedef struct test_case_stats_req_msg_s {
 
-    uint32_t                   tcsrm_eth_port;
-    uint32_t                   tcsrm_test_case_id;
-    tpg_test_case_stats_t     *tcsrm_test_case_stats;
-    tpg_test_case_app_stats_t *tcsrm_test_case_app_stats;
+    uint32_t         tcsrm_eth_port;
+    uint32_t         tcsrm_test_case_id;
+    tpg_gen_stats_t *tcsrm_test_case_stats;
+    tpg_app_stats_t *tcsrm_test_case_app_stats;
 
 } __tpg_msg test_case_stats_req_msg_t;
 
 typedef struct test_case_rates_req_msg_s {
 
-    uint32_t                    tcrrm_eth_port;
-    uint32_t                    tcrrm_test_case_id;
-    tpg_test_case_rate_stats_t *tcrrm_test_case_rate_stats;
+    uint32_t          tcrrm_eth_port;
+    uint32_t          tcrrm_test_case_id;
+    tpg_rate_stats_t *tcrrm_test_case_rate_stats;
 
 } __tpg_msg test_case_rates_req_msg_t;
 
@@ -297,6 +269,10 @@ typedef int      (*test_case_session_send_cb_t)(l4_control_block_t *l4_cb,
                                                 struct rte_mbuf *data_mbuf,
                                                 uint32_t *data_sent);
 typedef void     (*test_case_session_close_cb_t)(l4_control_block_t *l4_cb);
+typedef void     (*test_case_session_purge_cb_t)(l4_control_block_t *l4_cb);
+typedef void     (*test_case_htable_walk_cb_t)(uint32_t eth_port,
+                                               tlkp_walk_v4_cb_t walk_callback,
+                                               void *arg);
 
 /*****************************************************************************
  * Test message (OPEN/CLOSE/SEND) pool definitions
@@ -373,12 +349,15 @@ typedef struct test_case_info_s {
     test_oper_state_t tci_state;
 
     /* Stats */
-    tpg_test_case_stats_t      *tci_general_stats;
-    tpg_test_case_rate_stats_t *tci_rate_stats;
-    tpg_test_case_app_stats_t  *tci_app_stats;
+    tpg_gen_stats_t  *tci_gen_stats;
+    tpg_rate_stats_t *tci_rate_stats;
+    tpg_app_stats_t  *tci_app_stats;
 
     /* A pointer to a copy of the message that configured this test. */
     test_case_init_msg_t *tci_cfg;
+
+    /* Shared application storage. */
+    app_storage_t tci_app_storage;
 
     test_oper_latency_state_t *tci_latency_state;
 
@@ -448,6 +427,11 @@ RTE_DECLARE_PER_LCORE(test_run_msgpool_t *, test_send_msgpool);
  ****************************************************************************/
 extern bool test_init(void);
 extern void test_lcore_init(uint32_t lcore_id);
+
+extern void test_notification(uint32_t notification,
+                              l4_control_block_t *l4_cb,
+                              uint32_t eth_port,
+                              uint32_t test_case_id);
 
 extern int test_case_run_msg(uint32_t lcore_id,
                              uint32_t eth_port, uint32_t test_case_id,

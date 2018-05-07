@@ -66,22 +66,22 @@
  * Globals
  ****************************************************************************/
 /* Array of port: will store the configuration per port. */
-test_env_t *test_env;
+static test_env_t *test_env;
 
 /* Array of port: will store the runtime stats per port + testcase. */
-tpg_test_case_stats_t *test_runtime_gen_stats;
+tpg_gen_stats_t *test_runtime_gen_stats;
 
 #define TEST_CASE_STATS_GET(port, tcid) \
     (test_runtime_gen_stats + (port) * TPG_TEST_MAX_ENTRIES + tcid)
 
 /* Array of port: will store the runtime rate stats per port + testcase. */
-tpg_test_case_rate_stats_t *test_runtime_rate_stats;
+tpg_rate_stats_t *test_runtime_rate_stats;
 
 #define TEST_CASE_RATE_STATS_GET(port, tcid) \
     (test_runtime_rate_stats + (port) * TPG_TEST_MAX_ENTRIES + tcid)
 
 /* Array of port: will store the runtime rate stats per port + testcase. */
-tpg_test_case_app_stats_t *test_runtime_app_stats;
+tpg_app_stats_t *test_runtime_app_stats;
 
 #define TEST_CASE_APP_STATS_GET(port, tcid)  \
     (test_runtime_app_stats + (port) * TPG_TEST_MAX_ENTRIES + tcid)
@@ -102,31 +102,31 @@ static void test_aggregate_latencies(tpg_latency_stats_t *dest,
  ****************************************************************************/
 static void test_update_status(tpg_test_case_t *test_case)
 {
-    tpg_test_case_stats_t       gen_stats;
-    tpg_test_case_stats_t      *pgen_stats;
-    tpg_test_case_app_stats_t   app_stats;
-    tpg_test_case_app_stats_t  *papp_stats;
-    int                         error = 0;
-    uint32_t                    core;
-    bool                        is_server;
-    uint32_t                    srv_up = 0;
+    tpg_gen_stats_t  gen_stats;
+    tpg_gen_stats_t *ptotal_gen_stats;
+    tpg_app_stats_t  app_stats;
+    tpg_app_stats_t *ptotal_app_stats;
+    int              error = 0;
+    uint32_t         core;
+    bool             is_server;
+    uint32_t         srv_up = 0;
     MSG_LOCAL_DEFINE(test_case_stats_req_msg_t, smsg);
 
     is_server = (test_case->tc_type == TEST_CASE_TYPE__SERVER);
 
-    pgen_stats = TEST_CASE_STATS_GET(test_case->tc_eth_port,
-                                     test_case->tc_id);
-    papp_stats = TEST_CASE_APP_STATS_GET(test_case->tc_eth_port,
-                                         test_case->tc_id);
+    ptotal_gen_stats = TEST_CASE_STATS_GET(test_case->tc_eth_port,
+                                           test_case->tc_id);
+    ptotal_app_stats = TEST_CASE_APP_STATS_GET(test_case->tc_eth_port,
+                                               test_case->tc_id);
 
-    bzero(&pgen_stats->tcs_latency_stats.tcls_sample_stats,
-          sizeof(pgen_stats->tcs_latency_stats.tcls_sample_stats));
-    pgen_stats->tcs_latency_stats.tcls_sample_stats.ls_min_latency = UINT32_MAX;
+    bzero(&ptotal_gen_stats->gs_latency_stats.gls_sample_stats,
+          sizeof(ptotal_gen_stats->gs_latency_stats.gls_sample_stats));
+    ptotal_gen_stats->gs_latency_stats.gls_sample_stats.ls_min_latency = UINT32_MAX;
 
-    pgen_stats->tcs_latency_stats.tcls_stats.ls_instant_jitter = 0;
+    ptotal_gen_stats->gs_latency_stats.gls_stats.ls_instant_jitter = 0;
 
     /* Initialize the start time. */
-    pgen_stats->tcs_start_time = UINT64_MAX;
+    ptotal_gen_stats->gs_start_time = UINT64_MAX;
     FOREACH_CORE_IN_PORT_START(core, test_case->tc_eth_port) {
         msg_t                     *msgp;
         test_case_stats_req_msg_t *stats_msg;
@@ -136,8 +136,15 @@ static void test_update_status(tpg_test_case_t *test_case)
         if (!cfg_is_pkt_core(core))
             continue;
 
+        app_id = test_case->tc_app.app_proto;
+
         bzero(&gen_stats, sizeof(gen_stats));
-        bzero(&app_stats, sizeof(app_stats));
+
+        /* Applications might need to initialize the stats storage in
+         * different ways (e.g., IMIX). Ask the app to initialize some
+         * global stats storage for our stats request.
+         */
+        APP_CALL(stats_init_req, app_id)(&test_case->tc_app, &app_stats);
 
         msgp = MSG_LOCAL(smsg);
         msg_init(msgp, MSG_TEST_CASE_STATS_REQ, core, 0);
@@ -156,50 +163,41 @@ static void test_update_status(tpg_test_case_t *test_case)
         }
 
         /* Aggregate all the latency stats */
-        pgen_stats->tcs_latency_stats.tcls_invalid_lat +=
-            gen_stats.tcs_latency_stats.tcls_invalid_lat;
-        test_aggregate_latencies(&pgen_stats->tcs_latency_stats.tcls_stats,
-                                 &gen_stats.tcs_latency_stats.tcls_stats);
+        ptotal_gen_stats->gs_latency_stats.gls_invalid_lat +=
+            gen_stats.gs_latency_stats.gls_invalid_lat;
+        test_aggregate_latencies(&ptotal_gen_stats->gs_latency_stats.gls_stats,
+                                 &gen_stats.gs_latency_stats.gls_stats);
 
-        test_aggregate_latencies(&pgen_stats->tcs_latency_stats.tcls_sample_stats,
-                                 &gen_stats.tcs_latency_stats.tcls_sample_stats);
+        test_aggregate_latencies(&ptotal_gen_stats->gs_latency_stats.gls_sample_stats,
+                                 &gen_stats.gs_latency_stats.gls_sample_stats);
 
         if (is_server) {
-            app_id = test_case->tc_server.srv_app.as_app_proto;
-
             /* LISTEN TCBs are duplicated on all cores. */
-            if (gen_stats.tcs_server.tcss_up > srv_up)
-                srv_up = gen_stats.tcs_server.tcss_up;
-
-            pgen_stats->tcs_server.tcss_estab  += gen_stats.tcs_server.tcss_estab;
-            pgen_stats->tcs_server.tcss_down   += gen_stats.tcs_server.tcss_down;
-            pgen_stats->tcs_server.tcss_failed += gen_stats.tcs_server.tcss_failed;
-
-            APP_SRV_CALL(stats_add, app_id)(papp_stats, &app_stats);
+            if (gen_stats.gs_up > srv_up)
+                srv_up = gen_stats.gs_up;
         } else {
-            app_id = test_case->tc_client.cl_app.ac_app_proto;
-
-            pgen_stats->tcs_client.tccs_up     += gen_stats.tcs_client.tccs_up;
-            pgen_stats->tcs_client.tccs_estab  += gen_stats.tcs_client.tccs_estab;
-            pgen_stats->tcs_client.tccs_down   += gen_stats.tcs_client.tccs_down;
-            pgen_stats->tcs_client.tccs_failed += gen_stats.tcs_client.tccs_failed;
-
-            pgen_stats->tcs_data_failed += gen_stats.tcs_data_failed;
-            pgen_stats->tcs_data_null   += gen_stats.tcs_data_null;
-
-            APP_CL_CALL(stats_add, app_id)(papp_stats, &app_stats);
+            ptotal_gen_stats->gs_up += gen_stats.gs_up;
         }
 
-        if (gen_stats.tcs_start_time < pgen_stats->tcs_start_time)
-            pgen_stats->tcs_start_time = gen_stats.tcs_start_time;
+        ptotal_gen_stats->gs_estab       += gen_stats.gs_estab;
+        ptotal_gen_stats->gs_down        += gen_stats.gs_down;
+        ptotal_gen_stats->gs_failed      += gen_stats.gs_failed;
+        ptotal_gen_stats->gs_data_failed += gen_stats.gs_data_failed;
+        ptotal_gen_stats->gs_data_null   += gen_stats.gs_data_null;
 
-        if (gen_stats.tcs_end_time > pgen_stats->tcs_end_time)
-            pgen_stats->tcs_end_time = gen_stats.tcs_end_time;
+
+        APP_CALL(stats_add, app_id)(ptotal_app_stats, &app_stats);
+
+        if (gen_stats.gs_start_time < ptotal_gen_stats->gs_start_time)
+            ptotal_gen_stats->gs_start_time = gen_stats.gs_start_time;
+
+        if (gen_stats.gs_end_time > ptotal_gen_stats->gs_end_time)
+            ptotal_gen_stats->gs_end_time = gen_stats.gs_end_time;
 
     } FOREACH_CORE_IN_PORT_END()
 
     if (is_server)
-        pgen_stats->tcs_server.tcss_up += srv_up;
+        ptotal_gen_stats->gs_up += srv_up;
 }
 
 /*****************************************************************************
@@ -207,10 +205,10 @@ static void test_update_status(tpg_test_case_t *test_case)
  ****************************************************************************/
 static void test_update_rates(tpg_test_case_t *test_case)
 {
-    tpg_test_case_rate_stats_t  rate_stats;
-    tpg_test_case_rate_stats_t *prate_stats;
-    int                         error = 0;
-    uint32_t                    core;
+    tpg_rate_stats_t  rate_stats;
+    tpg_rate_stats_t *prate_stats;
+    int               error = 0;
+    uint32_t          core;
     MSG_LOCAL_DEFINE(test_case_rates_req_msg_t, smsg);
 
     prate_stats = TEST_CASE_RATE_STATS_GET(test_case->tc_eth_port,
@@ -245,20 +243,20 @@ static void test_update_rates(tpg_test_case_t *test_case)
                             rte_strerror(-error), -error);
         }
 
-        prate_stats->tcrs_start_time = rate_stats.tcrs_start_time / cycles_per_us;
-        prate_stats->tcrs_end_time = rate_stats.tcrs_end_time / cycles_per_us;
-        duration = TPG_TIME_DIFF(prate_stats->tcrs_end_time,
-                                 prate_stats->tcrs_start_time);
+        prate_stats->rs_start_time = rate_stats.rs_start_time / cycles_per_us;
+        prate_stats->rs_end_time = rate_stats.rs_end_time / cycles_per_us;
+        duration = TPG_TIME_DIFF(prate_stats->rs_end_time,
+                                 prate_stats->rs_start_time);
 
         /* Compute the averages and aggregate. */
-        prate_stats->tcrs_estab_per_s +=
-            rate_stats.tcrs_estab_per_s * (uint64_t)TPG_SEC_TO_USEC /
+        prate_stats->rs_estab_per_s +=
+            rate_stats.rs_estab_per_s * (uint64_t)TPG_SEC_TO_USEC /
             duration;
-        prate_stats->tcrs_closed_per_s +=
-            rate_stats.tcrs_closed_per_s * (uint64_t)TPG_SEC_TO_USEC /
+        prate_stats->rs_closed_per_s +=
+            rate_stats.rs_closed_per_s * (uint64_t)TPG_SEC_TO_USEC /
             duration;
-        prate_stats->tcrs_data_per_s +=
-            rate_stats.tcrs_data_per_s * (uint64_t)TPG_SEC_TO_USEC /
+        prate_stats->rs_data_per_s +=
+            rate_stats.rs_data_per_s * (uint64_t)TPG_SEC_TO_USEC /
             duration;
     } FOREACH_CORE_IN_PORT_END()
 }
@@ -325,10 +323,11 @@ static void test_init_msg_client_rates(const tpg_test_case_t *entry,
         uint32_t        target_send_rate;
         uint32_t        pkts_per_send;
         uint32_t        mtu = test_max_pkt_size(entry, sockopt);
-        tpg_app_proto_t app_id = client_cfg->cl_app.ac_app_proto;
+        tpg_app_proto_t app_id = entry->tc_app.app_proto;
         uint32_t        min_rate_precision = GCFG_RATE_MIN_RATE_PRECISION;
 
-        pkts_per_send = APP_CL_CALL(pkts_per_send, app_id)(entry, mtu);
+        pkts_per_send = APP_CALL(pkts_per_send, app_id)(entry, &entry->tc_app,
+                                                        mtu);
         target_send_rate =
             pkts_per_send * TPG_RATE_VAL(&client_cfg->cl_rates.rc_send_rate);
 
@@ -369,27 +368,18 @@ static void test_init_msg(const tpg_test_case_t *entry,
                           const sockopt_t *sockopt,
                           test_case_init_msg_t *msg)
 {
-    msg->tcim_eth_port = entry->tc_eth_port;
-    msg->tcim_test_case_id = entry->tc_id;
-    msg->tcim_type = entry->tc_type;
+    msg->tcim_test_case = *entry;
 
     switch (entry->tc_type) {
     case TEST_CASE_TYPE__CLIENT:
-        /* Struct copy. */
-        msg->tcim_client = entry->tc_client;
         msg->tcim_l4_type = entry->tc_client.cl_l4.l4c_proto;
-        msg->tcim_app_id = entry->tc_client.cl_app.ac_app_proto;
 
         test_init_msg_client_rates(entry, sockopt, msg);
         break;
     case TEST_CASE_TYPE__SERVER:
-        /* Struct copy. */
-        msg->tcim_server = entry->tc_server;
         msg->tcim_l4_type = entry->tc_server.srv_l4.l4s_proto;
-        msg->tcim_app_id = entry->tc_server.srv_app.as_app_proto;
 
         test_init_msg_server_rates(entry, sockopt, msg);
-
         break;
     default:
         assert(false);
@@ -398,10 +388,6 @@ static void test_init_msg(const tpg_test_case_t *entry,
 
     /* Struct copy. */
     msg->tcim_sockopt = *sockopt;
-
-    /* Copy latency options if any */
-    if (entry->has_tc_latency)
-        msg->tcim_latency = entry->tc_latency;
 
     /* Determine if RX/TX timestamping should be enabled. */
     msg->tcim_rx_tstamp = test_mgmt_rx_tstamp_enabled(entry);
@@ -480,12 +466,12 @@ static bool test_check_srv_up_tc_status(tpg_test_case_t *test_case,
                                         test_env_oper_state_t *state,
                                         uint64_t now)
 {
-    tpg_test_case_stats_t *gen_stats;
+    tpg_gen_stats_t *gen_stats;
 
     gen_stats = TEST_CASE_STATS_GET(test_case->tc_eth_port,
                                     test_case->tc_id);
 
-    state->teos_result.tc_srv_up = gen_stats->tcs_server.tcss_up;
+    state->teos_result.tc_srv_up = gen_stats->gs_up;
 
     if (state->teos_result.tc_srv_up >= test_case->tc_criteria.tc_srv_up) {
         state->teos_stop_time = now;
@@ -502,12 +488,12 @@ static bool test_check_cl_up_tc_status(tpg_test_case_t *test_case,
                                        test_env_oper_state_t *state,
                                        uint64_t now)
 {
-    tpg_test_case_stats_t *gen_stats;
+    tpg_gen_stats_t *gen_stats;
 
     gen_stats = TEST_CASE_STATS_GET(test_case->tc_eth_port,
                                     test_case->tc_id);
 
-    state->teos_result.tc_cl_up = gen_stats->tcs_client.tccs_up;
+    state->teos_result.tc_cl_up = gen_stats->gs_up;
 
     if (state->teos_result.tc_cl_up >= test_case->tc_criteria.tc_cl_up) {
         state->teos_stop_time = now;
@@ -522,12 +508,12 @@ static bool test_check_cl_up_tc_status(tpg_test_case_t *test_case,
 static bool test_check_cl_estab_tc_status(tpg_test_case_t *test_case,
                                           test_env_oper_state_t *state)
 {
-    tpg_test_case_stats_t *gen_stats;
+    tpg_gen_stats_t *gen_stats;
 
     gen_stats = TEST_CASE_STATS_GET(test_case->tc_eth_port,
                                     test_case->tc_id);
 
-    state->teos_result.tc_cl_estab = gen_stats->tcs_client.tccs_estab;
+    state->teos_result.tc_cl_estab = gen_stats->gs_estab;
 
     if (state->teos_result.tc_cl_estab >= test_case->tc_criteria.tc_cl_estab) {
 
@@ -539,18 +525,18 @@ static bool test_check_cl_estab_tc_status(tpg_test_case_t *test_case,
                     __func__,
                     test_case->tc_eth_port,
                     test_case->tc_id,
-                    test_case->tc_criteria.tc_cl_estab,
-                    state->teos_result.tc_cl_estab);
+                    state->teos_result.tc_cl_estab,
+                    test_case->tc_criteria.tc_cl_estab);
         }
 
         /*
          * Update the start time if we have an updated version from the test
          * threads.
          */
-        if (gen_stats->tcs_start_time)
-            state->teos_start_time = gen_stats->tcs_start_time;
+        if (gen_stats->gs_start_time)
+            state->teos_start_time = gen_stats->gs_start_time;
 
-        state->teos_stop_time = gen_stats->tcs_end_time;
+        state->teos_stop_time = gen_stats->gs_end_time;
 
         assert(state->teos_stop_time > state->teos_start_time);
         return true;
@@ -819,8 +805,8 @@ static void test_stop_test_case(uint32_t eth_port, tpg_test_case_t *entry,
                                 test_env_oper_state_t *state,
                                 tpg_test_case_state_t new_tc_state)
 {
-    tpg_test_case_rate_stats_t *rate_stats;
-    uint32_t                    core;
+    tpg_rate_stats_t *rate_stats;
+    uint32_t          core;
 
     /* WARNING: we're actually trying to stop PASSED testcases too.
      * This has to be done as server testcases keep running until explicitly
@@ -939,23 +925,29 @@ static int test_start_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
     /* Send INIT for all test cases and wait for it to be processed. */
     TEST_CASE_FOREACH_START(tenv, i, entry, state) {
 
-        tpg_test_case_stats_t      *gen_stats;
-        tpg_test_case_rate_stats_t *rate_stats;
-        tpg_test_case_app_stats_t  *app_stats;
+        tpg_gen_stats_t  *gen_stats;
+        tpg_rate_stats_t *rate_stats;
+        tpg_app_stats_t  *app_stats;
+
+        tpg_gen_latency_stats_t *gen_latency_stats;
+
+        gen_stats = TEST_CASE_STATS_GET(start_msg->tssm_eth_port, i);
+        gen_latency_stats = &gen_stats->gs_latency_stats;
 
         /* Clear test stats. */
-        gen_stats = TEST_CASE_STATS_GET(start_msg->tssm_eth_port, i);
         bzero(gen_stats, sizeof(*gen_stats));
-        gen_stats->tcs_latency_stats.tcls_stats.ls_min_latency = UINT32_MAX;
-        gen_stats->tcs_latency_stats.tcls_sample_stats.ls_min_latency = UINT32_MAX;
+        gen_latency_stats->gls_stats.ls_min_latency = UINT32_MAX;
+        gen_latency_stats->gls_sample_stats.ls_min_latency = UINT32_MAX;
 
         rate_stats = TEST_CASE_RATE_STATS_GET(start_msg->tssm_eth_port, i);
         bzero(rate_stats, sizeof(*rate_stats));
 
+        /* Let the app know that global stats should be cleared. */
         app_stats = TEST_CASE_APP_STATS_GET(start_msg->tssm_eth_port, i);
-        bzero(app_stats, sizeof(*app_stats));
+        APP_CALL(stats_init_global,
+                 entry->tc_app.app_proto)(&entry->tc_app, app_stats);
 
-
+        /* Finally send the message to all cores. */
         test_init_test_case(entry, &tenv->te_test_cases[i].sockopt);
 
     } TEST_CASE_FOREACH_END()
@@ -1172,8 +1164,7 @@ test_env_t *test_mgmt_get_port_env(uint32_t eth_port)
 /*****************************************************************************
  * test_mgmt_get_stats()
  ****************************************************************************/
-tpg_test_case_stats_t *test_mgmt_get_stats(uint32_t eth_port,
-                                           uint32_t test_case_id)
+tpg_gen_stats_t *test_mgmt_get_stats(uint32_t eth_port, uint32_t test_case_id)
 {
     return TEST_CASE_STATS_GET(eth_port, test_case_id);
 }
@@ -1181,8 +1172,8 @@ tpg_test_case_stats_t *test_mgmt_get_stats(uint32_t eth_port,
 /*****************************************************************************
  * test_mgmt_get_rate_stats()
  ****************************************************************************/
-tpg_test_case_rate_stats_t *test_mgmt_get_rate_stats(uint32_t eth_port,
-                                                     uint32_t test_case_id)
+tpg_rate_stats_t *test_mgmt_get_rate_stats(uint32_t eth_port,
+                                           uint32_t test_case_id)
 {
     return TEST_CASE_RATE_STATS_GET(eth_port, test_case_id);
 }
@@ -1190,8 +1181,8 @@ tpg_test_case_rate_stats_t *test_mgmt_get_rate_stats(uint32_t eth_port,
 /*****************************************************************************
  * test_mgmt_get_app_stats()
  ****************************************************************************/
-tpg_test_case_app_stats_t *test_mgmt_get_app_stats(uint32_t eth_port,
-                                                   uint32_t test_case_id)
+tpg_app_stats_t *test_mgmt_get_app_stats(uint32_t eth_port,
+                                         uint32_t test_case_id)
 {
     return TEST_CASE_APP_STATS_GET(eth_port, test_case_id);
 }

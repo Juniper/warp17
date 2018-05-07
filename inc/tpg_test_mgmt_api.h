@@ -163,46 +163,60 @@ test_mgmt_get_test_case_cfg(uint32_t eth_port, uint32_t test_case_id,
  *  0 on success
  */
 extern __tpg_api_func int
-test_mgmt_get_test_case_app_client_cfg(uint32_t eth_port, uint32_t test_case_id,
-                                       tpg_app_client_t *out,
-                                       printer_arg_t *printer_arg);
+test_mgmt_get_test_case_app_cfg(uint32_t eth_port, uint32_t test_case_id,
+                                tpg_app_t *out,
+                                printer_arg_t *printer_arg);
 
 /*
  * Returns:
  *  -ENOENT: test_case_id not found.
- *  -EALREADY: tests already started on port.
- *  -EINVAL: when arguments are wrong.
+ *  -EALREADY: tests already started on port
+ *  -EINVAL when arguments are wrong.
+ *  0 on success.
+ */
+extern __tpg_api_func int
+test_mgmt_update_test_case_app(uint32_t eth_port, uint32_t test_case_id,
+                               const tpg_app_t *app_cfg,
+                               printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -ENOMEM: imix id >= TPG_IMIX_MAX_GROUPS
+ *  -EEXIST: trying to configure an existing imix id
+ *  -EINVAL when arguments are wrong.
+ *  0 on success.
+ */
+extern __tpg_api_func int
+test_mgmt_add_imix_group(uint32_t imix_id, const tpg_imix_group_t *imix_group,
+                         printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -ENOENT: imix id is not configured.
+ *  -EBUSY: imix group used in a test case.
+ *  -EINVAL when arguments are wrong.
+ *  0 on success.
+ */
+extern __tpg_api_func int
+test_mgmt_del_imix_group(uint32_t imix_id, printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -ENOENT: imix id not found.
  *  0 on success
  */
 extern __tpg_api_func int
-test_mgmt_get_test_case_app_server_cfg(uint32_t eth_port, uint32_t test_case_id,
-                                       tpg_app_server_t *out,
-                                       printer_arg_t *printer_arg);
+test_mgmt_get_imix_group(uint32_t imix_id, tpg_imix_group_t *out,
+                         printer_arg_t *printer_arg);
 
 /*
  * Returns:
- *  -ENOENT: test_case_id not found.
- *  -EALREADY: tests already started on port
+ *  -ENOENT: imix id not found.
  *  -EINVAL when arguments are wrong.
- *  0 on success.
+ *  0 on success
  */
-extern __tpg_api_func int
-test_mgmt_update_test_case_app_client(uint32_t eth_port, uint32_t test_case_id,
-                                      const tpg_app_client_t *app_cl_cfg,
-                                      printer_arg_t *printer_arg);
-
-/*
- * Returns:
- *  -ENOENT: test_case_id not found.
- *  -EALREADY: tests already started on port
- *  -EINVAL when arguments are wrong.
- *  0 on success.
- */
-extern __tpg_api_func int
-test_mgmt_update_test_case_app_server(uint32_t eth_port, uint32_t test_case_id,
-                                      const tpg_app_server_t *app_srv_cfg,
-                                      printer_arg_t *printer_arg);
-
+extern int test_mgmt_get_imix_stats(uint32_t imix_id, tpg_imix_app_stats_t *out,
+                                    printer_arg_t *printer_arg);
 /*
  * Returns:
  *  Number of configured testcases on the given port.
@@ -340,7 +354,7 @@ test_mgmt_stop_port(uint32_t eth_port, printer_arg_t *printer_arg);
  */
 extern __tpg_api_func int
 test_mgmt_get_test_case_stats(uint32_t eth_port, uint32_t test_case_id,
-                              tpg_test_case_stats_t *out,
+                              tpg_gen_stats_t *out,
                               printer_arg_t *printer_arg);
 
 /*
@@ -350,7 +364,7 @@ test_mgmt_get_test_case_stats(uint32_t eth_port, uint32_t test_case_id,
  */
 extern __tpg_api_func int
 test_mgmt_get_test_case_rate_stats(uint32_t eth_port, uint32_t test_case_id,
-                                   tpg_test_case_rate_stats_t *out,
+                                   tpg_rate_stats_t *out,
                                    printer_arg_t *printer_arg);
 
 /*
@@ -360,7 +374,7 @@ test_mgmt_get_test_case_rate_stats(uint32_t eth_port, uint32_t test_case_id,
  */
 extern __tpg_api_func int
 test_mgmt_get_test_case_app_stats(uint32_t eth_port, uint32_t test_case_id,
-                                  tpg_test_case_app_stats_t *out,
+                                  tpg_app_stats_t *out,
                                   printer_arg_t *printer_arg);
 
 /*
@@ -373,13 +387,23 @@ test_mgmt_get_port_stats(uint32_t eth_port, tpg_port_statistics_t *total_stats,
                          printer_arg_t *printer_arg);
 
 /*
-* Returns:
-*  -EINVAL: port not valid.
-*  0 on success
-*/
+ * Returns:
+ *  -EINVAL: port not valid.
+ *  0 on success
+ */
 extern __tpg_api_func int
 test_mgmt_get_phy_stats(uint32_t eth_port, tpg_phy_statistics_t *total_stats,
                         printer_arg_t *printer_arg);
+
+/*
+ * Returns:
+ *  -EINVAL: port not valid.
+ *  0 on success
+ */
+extern __tpg_api_func int
+test_mgmt_get_phy_rate_stats(uint32_t eth_port, tpg_phy_statistics_t *rate_stats,
+                             printer_arg_t *printer_arg);
+
 
 /*
  * Returns:

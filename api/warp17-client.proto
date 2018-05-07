@@ -55,8 +55,6 @@
 //
 
 import "warp17-common.proto";
-import "warp17-app-raw.proto";
-import "warp17-app-http.proto";
 
 message TcpUdpClient {
     required L4PortRange tuc_sports = 1;
@@ -76,30 +74,13 @@ message RateClient {
     required Rate rc_send_rate  = 3;
 }
 
-message DelayClient {
-    required Delay dc_init_delay = 1;
-    required Delay dc_uptime     = 2;
-    required Delay dc_downtime   = 3;
-}
-
-message AppClient {
-    required AppProto   ac_app_proto = 1;
-
-    /* Add different App configs below as optionals. */
-    optional RawClient  ac_raw  = 2 [(warp17_union_anon) = true];
-    optional HttpClient ac_http = 3 [(warp17_union_anon) = true];
-}
-
 message Client {
-    required IpRange     cl_src_ips   = 1;
-    required IpRange     cl_dst_ips   = 2;
+    required IpRange cl_src_ips   = 1;
+    required IpRange cl_dst_ips   = 2;
 
-    required L4Client    cl_l4        = 3;
-    required RateClient  cl_rates     = 4;
-    required DelayClient cl_delays    = 5;
+    required L4Client   cl_l4        = 3;
+    required RateClient cl_rates     = 4;
 
-    required AppClient   cl_app       = 6;
-
-    optional bool        cl_mcast_src = 7 [default = false];
+    optional bool cl_mcast_src = 5 [default = false];
 }
 

@@ -60,10 +60,12 @@ Q?=@
 
 WARP17_INI_FILE ?= ./ini/$(shell hostname).ini
 WARP17_UNIQ_STAMP ?= $(shell python ../python/uniq.py)
+TOPDIR = ..
+PY_RUNNER = $(TOPDIR)/py-runner.sh
 
 OBJS=*.pyc lib/*.pyc
 
-UT = python -m unittest
+UT = $(PY_RUNNER) python -m unittest
 UT_FLAGS = -v
 
 TEST_TARGETS=$(sort $(patsubst %.py,%,$(wildcard *.py)))

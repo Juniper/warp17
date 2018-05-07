@@ -79,17 +79,18 @@ static cmdline_parse_ctx_t cli_ctx[];
 /*****************************************************************************
  * Find out the index of the corresponding GW in the gw_per_port_per_vlan
  ****************************************************************************/
-int route_v4_find_gw_port_vlan(uint32_t port, uint32_t vlan_id)
+tpg_ip_t *route_v4_find_gw_port_vlan(uint32_t port, uint32_t vlan_id)
 {
-    int            i = 0;
+    int            i;
     gw_per_vlan_t *port_entries;
 
+    i = 0;
     port_entries = gw_per_port_per_vlan + (TPG_GW_PORT_VLAN_SIZE * port);
+    for (; i < TPG_GW_PORT_VLAN_SIZE; i++)
+        if (port_entries[i].vlan_id == vlan_id)
+            return &port_entries[i].gw;
 
-    while ((i < TPG_GW_PORT_VLAN_SIZE) && (port_entries[i].vlan_id != vlan_id))
-        i++;
-
-    return (i < TPG_GW_PORT_VLAN_SIZE) ? (i) : (-1);
+    return (tpg_ip_t *) NULL;
 }
 
 /*****************************************************************************
@@ -178,7 +179,8 @@ static int route_intf_add_cb(uint16_t msgid, uint16_t lcore, void *msg)
      * Instead of adding a directly connected route, we will just abuse the
      * ARP table..
      */
-    if (!arp_add_local(add_msg->rim_eth_port, add_msg->rim_ip.ip_v4)) {
+    if (!arp_add_local(add_msg->rim_eth_port, add_msg->rim_ip.ip_v4,
+                       add_msg->rim_vlan_id)) {
         INC_STATS(STATS_LOCAL(tpg_route_statistics_t, add_msg->rim_eth_port),
                   rs_intf_nomem);
         return -ENOMEM;
@@ -241,7 +243,8 @@ static int route_intf_del_cb(uint16_t msgid, uint16_t lcore __rte_unused,
     /*
      * Just abuse the ARP table..
      */
-    if (!arp_delete_local(del_msg->rim_eth_port, del_msg->rim_ip.ip_v4)) {
+    if (!arp_delete_local(del_msg->rim_eth_port, del_msg->rim_ip.ip_v4,
+                          del_msg->rim_vlan_id)) {
         INC_STATS(STATS_LOCAL(tpg_route_statistics_t, del_msg->rim_eth_port),
                   rs_intf_notfound);
         return -ENOENT;
@@ -554,17 +557,14 @@ int route_v4_gw_del(uint32_t port, tpg_ip_t gw)
  ****************************************************************************/
 uint64_t route_v4_nh_lookup(uint32_t port, uint32_t dest, uint16_t vlan_id)
 {
-    uint64_t       nh_mac;
-    int            index;
-    gw_per_vlan_t *port_entries;
-
-    port_entries = gw_per_port_per_vlan + (TPG_GW_PORT_VLAN_SIZE * port);
+    uint64_t  nh_mac;
+    tpg_ip_t *gw;
 
     /* TODO: lookup directly connected networks.
      * For now we use a hack and look for the ARP in case the destination
      * is directly connected.
      */
-    nh_mac = arp_lookup_mac(port, dest);
+    nh_mac = arp_lookup_mac(port, dest, vlan_id);
     if (nh_mac != TPG_ARP_MAC_NOT_FOUND)
         return nh_mac;
 
@@ -572,16 +572,16 @@ uint64_t route_v4_nh_lookup(uint32_t port, uint32_t dest, uint16_t vlan_id)
      * If there is a VLAN id is set for the testcase stream
      */
     if (vlan_id != 0) {
-        index = route_v4_find_gw_port_vlan(port, vlan_id);
-        if (index != -1) {
-            nh_mac = arp_lookup_mac(port, port_entries[index].gw.ip_v4);
+        gw = route_v4_find_gw_port_vlan(port, vlan_id);
+        if (gw) {
+            nh_mac = arp_lookup_mac(port, gw->ip_v4, vlan_id);
             if (nh_mac != TPG_ARP_MAC_NOT_FOUND)
                 return nh_mac;
         }
     }
 
     /* If no match then use the default gw configured */
-    nh_mac = arp_lookup_mac(port, default_gw_per_port[port].re_nh.ip_v4);
+    nh_mac = arp_lookup_mac(port, default_gw_per_port[port].re_nh.ip_v4, vlan_id);
     if (unlikely(nh_mac == TPG_ARP_MAC_NOT_FOUND))
         INC_STATS(STATS_LOCAL(tpg_route_statistics_t, port), rs_nh_not_found);
 

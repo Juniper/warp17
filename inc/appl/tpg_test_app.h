@@ -61,11 +61,34 @@
 #define _H_TPG_TEST_APP_
 
 /*****************************************************************************
+ * Application storage (to be shared by all sessions on a test case)
+ * WARNING: careful when sharing non-pointers. The data should be immutable
+ * then as applications will store a copy of it!
+ ****************************************************************************/
+typedef union app_storage_u {
+
+    raw_storage_t     ast_raw;
+    http_storage_t    ast_http;
+    generic_storage_t ast_generic;
+
+} app_storage_t;
+
+/*****************************************************************************
  * Application data
  ****************************************************************************/
 typedef struct app_data_s {
 
-    tpg_app_proto_t   ad_type;
+    tpg_app_proto_t ad_type;
+
+    /* In case this is an IMIX session we need to store the imix app index and
+     * imix group id here. We can't use the union because the "real" app is not
+     * imix.
+     */
+    uint16_t ad_imix_index;
+    uint16_t ad_imix_id;
+
+    /* Shared test cases application storage. */
+    app_storage_t ad_storage;
 
     union {
         raw_app_t     ad_raw;
@@ -88,37 +111,42 @@ typedef struct app_data_s {
  * - RX data available notification
  * - TX data possible notification
  * - TX data confirmation
- * - stats aggregation/printing
+ * - stats init/aggregation/printing
  ****************************************************************************/
 typedef void (*app_default_cfg_cb_t)(tpg_test_case_t *cfg);
 
 typedef bool (*app_validate_cfg_cb_t)(const tpg_test_case_t *cfg,
+                                      const tpg_app_t *app_cfg,
                                       printer_arg_t *printer_arg);
 
-typedef void (*app_print_cfg_cb_t)(const tpg_test_case_t *cfg,
+typedef void (*app_print_cfg_cb_t)(const tpg_app_t *app_cfg,
                                    printer_arg_t *printer_arg);
 
-typedef void (*app_delete_cfg_cb_t)(const tpg_test_case_t *cfg);
+typedef void (*app_add_delete_cfg_cb_t)(const tpg_test_case_t *cfg,
+                                        const tpg_app_t *app_cfg);
 
 typedef uint32_t (*app_pkts_per_send_cb_t)(const tpg_test_case_t *cfg,
+                                           const tpg_app_t *app_cfg,
                                            uint32_t max_pkt_size);
 
 typedef void (*app_init_cb_t)(app_data_t *app_data,
-                              test_case_init_msg_t *init_msg);
+                              const tpg_app_t *app_cfg);
 
-typedef void (*app_tc_start_stop_cb_t)(test_case_init_msg_t *init_msg);
+typedef void (*app_tc_start_stop_cb_t)(const tpg_test_case_t *cfg,
+                                       const tpg_app_t *app_cfg,
+                                       app_storage_t *app_storage);
 
 typedef void (*app_conn_up_cb_t)(l4_control_block_t *l4,
                                  app_data_t *app_data,
-                                 tpg_test_case_app_stats_t *stats);
+                                 tpg_app_stats_t *stats);
 
 typedef void (*app_conn_down_cb_t)(l4_control_block_t *l4,
                                    app_data_t *app_data,
-                                   tpg_test_case_app_stats_t *stats);
+                                   tpg_app_stats_t *stats);
 
 typedef uint32_t (*app_deliver_cb_t)(l4_control_block_t *l4,
                                      app_data_t *app_data,
-                                     tpg_test_case_app_stats_t *stats,
+                                     tpg_app_stats_t *stats,
                                      struct rte_mbuf *data,
                                      uint64_t rx_tstamp);
 
@@ -129,30 +157,43 @@ typedef uint32_t (*app_deliver_cb_t)(l4_control_block_t *l4,
  */
 typedef struct rte_mbuf *(*app_send_cb_t)(l4_control_block_t *l4,
                                           app_data_t *app_data,
-                                          tpg_test_case_app_stats_t *stats,
+                                          tpg_app_stats_t *stats,
                                           uint32_t max_tx_size);
 
 /* Returns true if the application sent a complete message, false otherwise. */
 typedef bool (*app_data_sent_cb_t)(l4_control_block_t *l4, app_data_t *app_data,
-                                   tpg_test_case_app_stats_t *stats,
+                                   tpg_app_stats_t *stats,
                                    uint32_t bytes_sent);
 
-typedef void (*app_stats_add_cb_t)(tpg_test_case_app_stats_t *total,
-                                   const tpg_test_case_app_stats_t *elem);
+typedef void (*app_stats_init_global_cb_t)(const tpg_app_t *app_cfg,
+                                           tpg_app_stats_t *stats);
 
-typedef void (*app_stats_print_cb_t)(const tpg_test_case_app_stats_t *stats,
+typedef void (*app_stats_init_cb_t)(const tpg_app_t *app_cfg,
+                                    tpg_app_stats_t *stats);
+
+typedef void (*app_stats_init_req_cb_t)(const tpg_app_t *app_cfg,
+                                        tpg_app_stats_t *stats);
+
+typedef void (*app_stats_copy_cb_t)(tpg_app_stats_t *dest,
+                                    const tpg_app_stats_t *src);
+
+typedef void (*app_stats_add_cb_t)(tpg_app_stats_t *total,
+                                   const tpg_app_stats_t *elem);
+
+typedef void (*app_stats_print_cb_t)(const tpg_app_stats_t *stats,
                                      printer_arg_t *printer);
 
 /*****************************************************************************
  * Helpers for initializing and using the callback arrays.
  ****************************************************************************/
 #define DECLARE_APP_CB_ARRAY(type, name) \
-    __typeof__(type) name[TEST_CASE_TYPE__MAX][APP_PROTO__APP_PROTO_MAX]
+    __typeof__(type) name[APP_PROTO__APP_PROTO_MAX]
 
 extern DECLARE_APP_CB_ARRAY(app_default_cfg_cb_t, app_default_cfg_handlers);
 extern DECLARE_APP_CB_ARRAY(app_validate_cfg_cb_t, app_validate_cfg_handlers);
 extern DECLARE_APP_CB_ARRAY(app_print_cfg_cb_t, app_print_cfg_handlers);
-extern DECLARE_APP_CB_ARRAY(app_delete_cfg_cb_t, app_delete_cfg_handlers);
+extern DECLARE_APP_CB_ARRAY(app_add_delete_cfg_cb_t, app_add_cfg_handlers);
+extern DECLARE_APP_CB_ARRAY(app_add_delete_cfg_cb_t, app_delete_cfg_handlers);
 extern DECLARE_APP_CB_ARRAY(app_pkts_per_send_cb_t, app_pkts_per_send_handlers);
 extern DECLARE_APP_CB_ARRAY(app_tc_start_stop_cb_t, app_tc_start_handlers);
 extern DECLARE_APP_CB_ARRAY(app_tc_start_stop_cb_t, app_tc_stop_handlers);
@@ -162,27 +203,20 @@ extern DECLARE_APP_CB_ARRAY(app_conn_down_cb_t, app_conn_down_handlers);
 extern DECLARE_APP_CB_ARRAY(app_deliver_cb_t, app_deliver_handlers);
 extern DECLARE_APP_CB_ARRAY(app_send_cb_t, app_send_handlers);
 extern DECLARE_APP_CB_ARRAY(app_data_sent_cb_t, app_data_sent_handlers);
+extern DECLARE_APP_CB_ARRAY(app_stats_init_global_cb_t,
+                            app_stats_init_global_handlers);
+extern DECLARE_APP_CB_ARRAY(app_stats_init_cb_t, app_stats_init_handlers);
+extern DECLARE_APP_CB_ARRAY(app_stats_init_req_cb_t,
+                            app_stats_init_req_handlers);
+extern DECLARE_APP_CB_ARRAY(app_stats_copy_cb_t, app_stats_copy_handlers);
 extern DECLARE_APP_CB_ARRAY(app_stats_add_cb_t, app_stats_add_handlers);
 extern DECLARE_APP_CB_ARRAY(app_stats_print_cb_t, app_stats_print_handlers);
 
-#define DEFINE_APP_CLIENT_CB(app, cb) \
-    [TEST_CASE_TYPE__CLIENT][app] = cb
+#define DEFINE_APP_CB(app, cb) \
+    [app] = cb
 
-#define DEFINE_APP_SERVER_CB(app, cb) \
-    [TEST_CASE_TYPE__SERVER][app] = cb
-
-#define DEFINE_APP_CB(app, client_cb, server_cb) \
-    DEFINE_APP_CLIENT_CB(app, client_cb),        \
-    DEFINE_APP_SERVER_CB(app, server_cb)
-
-#define APP_CALL(name, type, app_id) \
-    app_ ## name ## _handlers[type][app_id]
-
-#define APP_CL_CALL(name, app_id) \
-    APP_CALL(name, TEST_CASE_TYPE__CLIENT, app_id)
-
-#define APP_SRV_CALL(name, app_id) \
-    APP_CALL(name, TEST_CASE_TYPE__SERVER, app_id)
+#define APP_CALL(name, app_id) \
+    app_ ## name ## _handlers[app_id]
 
 #endif /* _H_TPG_TEST_APP_ */
 

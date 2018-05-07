@@ -181,7 +181,7 @@ static void cmd_tests_start_parsed(void *parsed_result,
      * Might be nice though if the user could specify a timeout and/or retry
      * count.
      */
-    rte_eth_link_get_nowait(pr->port, &link);
+    port_link_info_get_nowait(pr->port, &link);
     if (!link.link_status) {
         cmdline_printf(cl, "ERROR: Ehernet port %u: Link down!\n", pr->port);
         return;
@@ -360,7 +360,7 @@ static void cmd_show_tests_config_parsed(void *parsed_result, struct cmdline *cl
         if (test_mgmt_get_test_case_cfg(pr->port, tcid, &entry, NULL) != 0)
             continue;
 
-        cmdline_printf(cl, "%-16s : %"PRIu32"\n", "Test Case Id", tcid);
+        cmdline_printf(cl, "%-15s: %"PRIu32"\n", "Test Case Id", tcid);
         test_config_show_tc(&entry, &parg);
         cmdline_printf(cl, "\n\n");
     }

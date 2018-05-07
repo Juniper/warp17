@@ -97,6 +97,15 @@ typedef struct http_app_s {
 
 } http_app_t;
 
+/*
+ * HTTP test case shared storage (i.e., the mbuf holding the req/response).
+ */
+typedef struct http_storage_s {
+
+    struct rte_mbuf *http_mbuf;
+
+} http_storage_t;
+
 /*****************************************************************************
  * HTTP global stats
  ****************************************************************************/
@@ -108,77 +117,110 @@ typedef struct http_statistics_s {
 } http_statistics_t;
 
 /*****************************************************************************
+ * HTTP flag definitions
+ ****************************************************************************/
+#define HTTP_FLAG_NONE 0x00000000
+/* TODO: this should be done by the imix infrastructure but until then... */
+#define HTTP_FLAG_IMIX 0x80000000
+
+typedef uint32_t http_flags_type_t;
+
+#define HTTP_IMIX_ISSET(cfg) \
+    ((cfg) & HTTP_FLAG_IMIX)
+
+/*****************************************************************************
  * HTTP externals.
  ****************************************************************************/
 extern void http_client_default_cfg(tpg_test_case_t *cfg);
 extern void http_server_default_cfg(tpg_test_case_t *cfg);
 
 extern bool http_client_validate_cfg(const tpg_test_case_t *cfg,
+                                     const tpg_app_t *app_cfg,
                                      printer_arg_t *printer_arg);
 extern bool http_server_validate_cfg(const tpg_test_case_t *cfg,
+                                     const tpg_app_t *app_cfg,
                                      printer_arg_t *printer_arg);
 
-extern void http_client_print_cfg(const tpg_test_case_t *cfg,
+extern void http_client_print_cfg(const tpg_app_t *app_cfg,
                                   printer_arg_t *printer_arg);
-extern void http_server_print_cfg(const tpg_test_case_t *cfg,
+extern void http_server_print_cfg(const tpg_app_t *app_cfg,
                                   printer_arg_t *printer_arg);
 
-extern void http_client_delete_cfg(const tpg_test_case_t *cfg);
-extern void http_server_delete_cfg(const tpg_test_case_t *cfg);
+extern void http_client_add_cfg(const tpg_test_case_t *cfg,
+                                const tpg_app_t *app_cfg);
+extern void http_server_add_cfg(const tpg_test_case_t *cfg,
+                                const tpg_app_t *app_cfg);
+
+extern void http_client_delete_cfg(const tpg_test_case_t *cfg,
+                                   const tpg_app_t *app_cfg);
+extern void http_server_delete_cfg(const tpg_test_case_t *cfg,
+                                   const tpg_app_t *app_cfg);
 
 extern uint32_t http_client_pkts_per_send(const tpg_test_case_t *cfg,
+                                          const tpg_app_t *app_cfg,
                                           uint32_t max_pkt_size);
 extern uint32_t http_server_pkts_per_send(const tpg_test_case_t *cfg,
+                                          const tpg_app_t *app_cfg,
                                           uint32_t max_pkt_size);
 
 extern void http_client_server_init(app_data_t *app_data,
-                                    test_case_init_msg_t *init_msg);
+                                    const tpg_app_t *app_cfg);
 
-extern void http_client_tc_start(test_case_init_msg_t *init_msg);
-extern void http_server_tc_start(test_case_init_msg_t *init_msg);
+extern void http_client_tc_start(const tpg_test_case_t *cfg,
+                                 const tpg_app_t *app_cfg,
+                                 app_storage_t *app_storage);
+extern void http_server_tc_start(const tpg_test_case_t *cfg,
+                                 const tpg_app_t *app_cfg,
+                                 app_storage_t *app_storage);
 
-extern void http_client_tc_stop(test_case_init_msg_t *init_msg);
-extern void http_server_tc_stop(test_case_init_msg_t *init_msg);
+extern void http_client_tc_stop(const tpg_test_case_t *cfg,
+                                const tpg_app_t *app_cfg,
+                                app_storage_t *app_storage);
+extern void http_server_tc_stop(const tpg_test_case_t *cfg,
+                                const tpg_app_t *app_cfg,
+                                app_storage_t *app_storage);
 
 extern void http_client_conn_up(l4_control_block_t *l4, app_data_t *app_data,
-                                tpg_test_case_app_stats_t *stats);
+                                tpg_app_stats_t *stats);
 extern void http_server_conn_up(l4_control_block_t *l4, app_data_t *app_data,
-                                tpg_test_case_app_stats_t *stats);
+                                tpg_app_stats_t *stats);
 
 extern void http_client_server_conn_down(l4_control_block_t *l4,
                                          app_data_t *app_data,
-                                         tpg_test_case_app_stats_t *stats);
+                                         tpg_app_stats_t *stats);
 
 extern uint32_t http_client_deliver_data(l4_control_block_t *l4,
                                          app_data_t *app_data,
-                                         tpg_test_case_app_stats_t *stats,
+                                         tpg_app_stats_t *stats,
                                          struct rte_mbuf *rx_data,
                                          uint64_t rx_tstamp);
 extern uint32_t http_server_deliver_data(l4_control_block_t *l4,
                                          app_data_t *app_data,
-                                         tpg_test_case_app_stats_t *stats,
+                                         tpg_app_stats_t *stats,
                                          struct rte_mbuf *rx_data,
                                          uint64_t rx_tstamp);
 
 extern struct rte_mbuf *http_client_send_data(l4_control_block_t *l4,
                                               app_data_t *app_data,
-                                              tpg_test_case_app_stats_t *stats,
+                                              tpg_app_stats_t *stats,
                                               uint32_t max_tx_size);
 extern struct rte_mbuf *http_server_send_data(l4_control_block_t *l4,
                                               app_data_t *app_data,
-                                              tpg_test_case_app_stats_t *stats,
+                                              tpg_app_stats_t *stats,
                                               uint32_t max_tx_size);
 
 extern bool http_client_data_sent(l4_control_block_t *l4, app_data_t *app_data,
-                                  tpg_test_case_app_stats_t *stats,
+                                  tpg_app_stats_t *stats,
                                   uint32_t bytes_sent);
 extern bool http_server_data_sent(l4_control_block_t *l4, app_data_t *app_data,
-                                  tpg_test_case_app_stats_t *stats,
+                                  tpg_app_stats_t *stats,
                                   uint32_t bytes_sent);
 
-extern void http_stats_add(tpg_test_case_app_stats_t *total,
-                           const tpg_test_case_app_stats_t *elem);
-extern void http_stats_print(const tpg_test_case_app_stats_t *stats,
+extern void http_stats_init(const tpg_app_t *app_cfg, tpg_app_stats_t *stats);
+extern void http_stats_copy(tpg_app_stats_t *dest, const tpg_app_stats_t *src);
+extern void http_stats_add(tpg_app_stats_t *total,
+                           const tpg_app_stats_t *elem);
+extern void http_stats_print(const tpg_app_stats_t *stats,
                              printer_arg_t *printer_arg);
 
 extern bool http_init(void);

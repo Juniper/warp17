@@ -62,9 +62,6 @@ import time
 
 from functools import partial
 
-sys.path.append('../../python')
-sys.path.append('../../api/generated/py')
-
 from helpers    import LogHelper
 from b2b_setup  import *
 from warp17_api import *
@@ -72,6 +69,7 @@ from warp17_api import *
 from warp17_common_pb2    import *
 from warp17_l3_pb2        import *
 from warp17_app_raw_pb2   import *
+from warp17_app_pb2       import *
 from warp17_server_pb2    import *
 from warp17_client_pb2    import *
 from warp17_test_case_pb2 import *
@@ -168,7 +166,7 @@ class Warp17TrafficTestCase():
         """Override in child class if a specific value is needed."""
         return Rate()
 
-    def get_port_cfg(self, eth_port):
+    def get_port_cfg(self, eth_port, vlan_id=0):
         # No def gw
         no_def_gw = Ip(ip_version=IPV4, ip_v4=0)
 
@@ -190,8 +188,11 @@ class Warp17TrafficTestCase():
     def get_client_delay_cfg(self, eth_port, tc_id):
         """Override in child class if a specif client delay config is needed."""
 
-        return DelayClient(dc_init_delay=Delay(d_value=0), dc_uptime=Delay(),
-                           dc_downtime=Delay())
+        init_delay = Delay(d_value=0) # No initial delay
+        uptime_delay = Delay()        # Infinite uptime
+        downtime_delay = Delay()      # Infinite downtime
+
+        return (init_delay, uptime_delay, downtime_delay)
 
     def get_client_l4_proto(self, eth_port, tc_id):
         """Override in child class if a specific client L4 proto is needed."""
@@ -208,9 +209,9 @@ class Warp17TrafficTestCase():
     def get_client_app_cfg(self, eth_port, tc_id):
         """Override in child class if a specific client app config is needed."""
 
-        return AppClient(ac_app_proto=RAW,
-                         ac_raw=RawClient(rc_req_plen=10000,
-                                          rc_resp_plen=20000))
+        return App(app_proto=RAW_CLIENT,
+                   app_raw_client=RawClient(rc_req_plen=10000,
+                                            rc_resp_plen=20000))
 
     def get_client_criteria_cfg(self, eth_port, tc_id, l3_intf_count,
                                 l4_port_count):
@@ -235,9 +236,9 @@ class Warp17TrafficTestCase():
     def get_server_app_cfg(self, eth_port, tc_id):
         """Override in child class if a specific server app config is needed."""
 
-        return AppServer(as_app_proto=RAW,
-                         as_raw=RawServer(rs_req_plen=10000,
-                                          rs_resp_plen=20000))
+        return App(app_proto=RAW_SERVER,
+                   app_raw_server=RawServer(rs_req_plen=10000,
+                                            rs_resp_plen=20000))
 
     def get_server_criteria_cfg(self, eth_port, tc_id, l3_intf_count,
                                 l4_port_count):
@@ -254,7 +255,8 @@ class Warp17TrafficTestCase():
 
         l4_cfg = self.get_client_l4_cfg(eth_port, tc_id, l4_port_count)
         rate_cfg = self.get_client_rate_cfg(eth_port, tc_id)
-        delay_cfg = self.get_client_delay_cfg(eth_port, tc_id)
+        (init_delay, uptime, downtime) = self.get_client_delay_cfg(eth_port,
+                                                                   tc_id)
         app_cfg = self.get_client_app_cfg(eth_port, tc_id)
         criteria = self.get_client_criteria_cfg(eth_port, tc_id, l3_intf_count,
                                                 l4_port_count)
@@ -264,9 +266,11 @@ class Warp17TrafficTestCase():
                         tc_client=Client(cl_src_ips=b2b_sips(eth_port, l3_intf_count),
                                          cl_dst_ips=b2b_dips(eth_port, l3_intf_count),
                                          cl_l4=l4_cfg,
-                                         cl_rates=rate_cfg,
-                                         cl_delays=delay_cfg,
-                                         cl_app=app_cfg),
+                                         cl_rates=rate_cfg),
+                        tc_init_delay=init_delay,
+                        tc_uptime=uptime,
+                        tc_downtime=downtime,
+                        tc_app=app_cfg,
                         tc_criteria=criteria,
                         tc_async=False)
 
@@ -284,21 +288,21 @@ class Warp17TrafficTestCase():
 
         return TestCase(tc_type=SERVER, tc_eth_port=eth_port, tc_id=tc_id,
                         tc_server=Server(srv_ips=b2b_sips(eth_port, l3_intf_count),
-                                         srv_l4=l4_scfg,
-                                         srv_app=self.get_server_app_cfg(eth_port, tc_id)),
+                                         srv_l4=l4_scfg),
+                        tc_app=app_scfg,
                         tc_criteria=criteria,
                         tc_async=False)
 
     def verify_stats(self, cl_result, srv_result, cl_update, srv_update):
         """Override in child class if specific app stats should be verified."""
 
-        req_cnt = cl_result.tsr_app_stats.tcas_raw.rsts_req_cnt
-        resp_cnt = cl_result.tsr_app_stats.tcas_raw.rsts_resp_cnt
+        req_cnt = cl_result.tsr_app_stats.as_raw.rsts_req_cnt
+        resp_cnt = cl_result.tsr_app_stats.as_raw.rsts_resp_cnt
         self.assertTrue(req_cnt > 0, 'cl req_cnt: {}'.format(req_cnt))
         self.assertTrue(resp_cnt > 0, 'cl resp_cnt: {}'.format(resp_cnt))
 
-        req_cnt = srv_result.tsr_app_stats.tcas_raw.rsts_req_cnt
-        resp_cnt = srv_result.tsr_app_stats.tcas_raw.rsts_resp_cnt
+        req_cnt = srv_result.tsr_app_stats.as_raw.rsts_req_cnt
+        resp_cnt = srv_result.tsr_app_stats.as_raw.rsts_resp_cnt
         self.assertTrue(req_cnt > 0, 'srv req_cnt: {}'.format(req_cnt))
         self.assertTrue(resp_cnt > 0, 'srv resp_cnt: {}'.format(resp_cnt))
 

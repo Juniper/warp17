@@ -273,6 +273,17 @@ static inline void tpg_printf(printer_arg_t *pa, const char *fmt, ...)
     } while (0)
 
 /*****************************************************************************
+ * Macro for copying optional fields values.
+ ****************************************************************************/
+#define TPG_XLATE_OPTIONAL_COPY_FIELD(dest, src, field)                \
+    do {                                                               \
+        if ((src)->has_##field)                                        \
+            TPG_XLATE_OPTIONAL_SET_FIELD((dest), field, (src)->field); \
+        else                                                           \
+            (dest)->has_##field = false;                               \
+    } while (0)
+
+/*****************************************************************************
  * Macro for translating active union fields.
  ****************************************************************************/
 #define TPG_XLATE_UNION_SET_FIELD(out, in, field) \

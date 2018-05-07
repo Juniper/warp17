@@ -67,9 +67,6 @@
  */
 STATS_DEFINE(tpg_tsm_statistics_t);
 
-/* Callback to be executed whenever an interesting event happens. */
-notif_cb_t tcp_notif_cb;
-
 /*****************************************************************************
  * Forward References
  ****************************************************************************/
@@ -205,7 +202,7 @@ static int tsm_send_data(tcp_control_block_t *tcb, tsm_data_arg_t *data)
     tsm_schedule_retransmission(tcb);
 
     if (!win_was_full && tcp_snd_win_full(tcb)) {
-        TCP_NOTIF(TCB_NOTIF_SEG_WIN_UNAVAILABLE, tcb);
+        TCP_NOTIF(TEST_NOTIF_SESS_WIN_UNAVAIL, tcb);
 
         INC_STATS(STATS_LOCAL(tpg_tsm_statistics_t, tcb->tcb_l4.l4cb_interface),
                   tsms_snd_win_full);
@@ -230,7 +227,7 @@ static void tsm_retrans_data(tcp_control_block_t *tcb)
                   tsms_retrans_bytes,
                   retrans_bytes);
     if (!win_was_full && tcp_snd_win_full(tcb)) {
-        TCP_NOTIF(TCB_NOTIF_SEG_WIN_UNAVAILABLE, tcb);
+        TCP_NOTIF(TEST_NOTIF_SESS_WIN_UNAVAIL, tcb);
 
         INC_STATS(STATS_LOCAL(tpg_tsm_statistics_t, tcb->tcb_l4.l4cb_interface),
                   tsms_snd_win_full);
@@ -304,10 +301,8 @@ static void tsm_cleanup_retrans_queu(tcp_control_block_t *tcb, uint32_t seg_ack)
     /* The remote tcp endpoint is active so we can reset his retrans count. */
     tcb->tcb_retrans_cnt = 0;
 
-    TCP_NOTIF(TCB_NOTIF_SEG_DELIVERED, tcb);
-
     if (win_was_full && !tcp_snd_win_full(tcb)) {
-        TCP_NOTIF(TCB_NOTIF_SEG_WIN_AVAILABLE, tcb);
+        TCP_NOTIF(TEST_NOTIF_SESS_WIN_AVAIL, tcb);
 
         DEC_STATS(STATS_LOCAL(tpg_tsm_statistics_t, tcb->tcb_l4.l4cb_interface),
                   tsms_snd_win_full);
@@ -409,10 +404,7 @@ static bool tsm_need_ack(tcp_control_block_t *tcb)
     if (!tcp_opts->tcpo_ack_delay)
         return true;
 
-    if (tcb->tcb_active && test_client_sm_has_data_pending(&tcb->tcb_l4))
-        return false;
-
-    if (!tcb->tcb_active && test_server_sm_has_data_pending(&tcb->tcb_l4))
+    if (test_sm_has_data_pending(&tcb->tcb_l4))
         return false;
 
     return true;
@@ -538,7 +530,6 @@ static int tsm_enter_state(tcp_control_block_t *tcb, tcpState_t state,
             DEC_STATS(stats, tsms_tcb_states[tcb->tcb_state]);
 
         tcb->tcb_state = state;
-        TCP_NOTIF(TCB_NOTIF_STATE_CHANGE, tcb);
     }
     INC_STATS(stats, tsms_tcb_states[tcb->tcb_state]);
 
@@ -586,7 +577,6 @@ void tsm_initialize_statemachine(tcp_control_block_t *tcb, bool active)
 
     tcb->tcb_trace = false;
 
-    TCP_NOTIF(TCB_NOTIF_STATE_MACHINE_INIT, tcb);
     tsm_enter_state(tcb, TS_INIT, NULL);
 }
 
@@ -604,8 +594,6 @@ void tsm_terminate_statemachine(tcp_control_block_t *tcb)
         assert(stats->tsms_tcb_states[tcb->tcb_state] > 0);
         DEC_STATS(stats, tsms_tcb_states[tcb->tcb_state]);
     }
-
-    TCP_NOTIF(TCB_NOTIF_STATE_MACHINE_TERM, tcb);
 }
 
 /*****************************************************************************
@@ -668,6 +656,7 @@ static int tsm_SF_listen(tcp_control_block_t *tcb, tcpEvent_t event,
 {
     switch (event) {
     case TE_ENTER_STATE:
+        TCP_NOTIF(TEST_NOTIF_SESS_LISTEN, tcb);
         break;
 
     case TE_OPEN:
@@ -682,6 +671,7 @@ static int tsm_SF_listen(tcp_control_block_t *tcb, tcpEvent_t event,
          * No need to inform the user.
          * Buffers will be cleaned upon close.
          */
+        TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
         return tsm_enter_state(tcb, TS_CLOSED, NULL);
     case TE_ABORT:
     case TE_STATUS:
@@ -811,6 +801,7 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
 
     switch (event) {
     case TE_ENTER_STATE:
+        TCP_NOTIF(TEST_NOTIF_SESS_CONNECTING, tcb);
         /* Starting here on we need to do retrans. */
         tsm_schedule_retransmission(tcb);
         break;
@@ -825,6 +816,7 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_CLOSE:
         /* We're not established so we can safely do a close. */
         /* No need to inform the user in our case. */
+        TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
         return tsm_enter_state(tcb, TS_CLOSED, NULL);
     case TE_ABORT:
     case TE_STATUS:
@@ -887,6 +879,7 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
                  * delete TCB, and return.  Otherwise (no ACK) drop the segment
                  * and return.
                  */
+                TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
 
@@ -936,6 +929,11 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
                         tcb->tcb_snd.wnd = seg_wnd;
                         tcb->tcb_snd.wl1 = seg_seq;
                         tcb->tcb_snd.wl2 = seg_ack;
+
+                        /* We can already receive data on the session so
+                         * let's notify that the session is connected.
+                         */
+                        TCP_NOTIF(TEST_NOTIF_SESS_CONNECTED, tcb);
 
                         /*
                          * sixth, check the URG bit, [77]
@@ -988,6 +986,7 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * Buffers are cleaned up upon close.
              */
+            TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
             return tsm_enter_state(tcb, TS_CLOSED, NULL);
         }
         /* Resend the SYN that got us in this state and reschedule the retrans
@@ -1017,6 +1016,10 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
 
     switch (event) {
     case TE_ENTER_STATE:
+        /* We can already receive data on the session so
+         * let's notify that the session is connected.
+         */
+        TCP_NOTIF(TEST_NOTIF_SESS_SRV_CONNECTED, tcb);
         /* Starting here on we need to do retrans. */
         tsm_schedule_retransmission(tcb);
         break;
@@ -1029,6 +1032,7 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
         return -ENOTCONN;
 
     case TE_CLOSE:
+        TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
         return tsm_enter_state(tcb, TS_FIN_WAIT_I, NULL);
     case TE_ABORT:
     case TE_STATUS:
@@ -1074,6 +1078,7 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
                      *
                      * Buffers are cleaned up upon close.
                      */
+                    TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
                     return tsm_enter_state(tcb, TS_CLOSED, NULL);
                 }
 
@@ -1082,6 +1087,7 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
                  * notification.
                  * Buffers are cleaned up upon close.
                  */
+                TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
 
@@ -1099,6 +1105,7 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
                  * notification.
                  * Buffers are cleaned up upon close.
                  */
+                TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
 
@@ -1176,6 +1183,7 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
                  * but we do update the RCV.NXT here.
                  */
                 tcb->tcb_rcv.nxt++;
+                TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
                 return tsm_enter_state(tcb, TS_CLOSE_WAIT, NULL);
             }
 
@@ -1197,6 +1205,7 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
              * notification.
              * Buffers are cleaned up upon close.
              */
+            TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
             return tsm_enter_state(tcb, TS_CLOSED, NULL);
         }
 
@@ -1239,6 +1248,8 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_RECEIVE:
         break;
     case TE_CLOSE:
+        /* Starting to close the session so send out the notification. */
+        TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
         return tsm_enter_state(tcb, TS_FIN_WAIT_I, NULL);
     case TE_ABORT:
     case TE_STATUS:
@@ -1271,11 +1282,10 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
              * second check the RST bit, [70]
              */
             if (TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG)) {
-                /*
-                 * The user is informed of the state change through a
-                 * notification.
-                 * Buffers are cleaned up upon close.
+                /* Starting to close the session so send out the
+                 * notification. Buffers are cleaned up upon close.
                  */
+                TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
 
@@ -1288,11 +1298,10 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
              */
 
             if (TCP_IS_FLAG_SET(tcp, TCP_SYN_FLAG)) {
-                /*
-                 * The user is informed of the state change through a
-                 * notification.
-                 * Buffers are cleaned up upon close.
+                /* Starting to close the session so send out the
+                 * notification. Buffers are cleaned up upon close.
                  */
+                TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
 
@@ -1368,6 +1377,11 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
                  * but we do update the RCV.NXT here.
                  */
                 tcb->tcb_rcv.nxt++;
+
+                /* Starting to close the session so send out the
+                 * notification.
+                 */
+                TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
                 return tsm_enter_state(tcb, TS_CLOSE_WAIT, NULL);
             } else if (unlikely(tcb->tcb_fin_rcvd)) {
                 /* If we got the FIN before and we finally received all the data
@@ -1379,6 +1393,11 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
                      * but we do update the RCV.NXT here.
                      */
                     tcb->tcb_rcv.nxt++;
+
+                    /* Starting to close the session so send out the
+                     * notification.
+                     */
+                    TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
                     return tsm_enter_state(tcb, TS_CLOSE_WAIT, NULL);
                 }
                 return 0;
@@ -1393,11 +1412,10 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
         tcp_opts = tcp_get_sockopt(&tcb->tcb_l4.l4cb_sockopt);
         if (TCP_TOO_MANY_RETRIES(tcb, tcp_opts->tcpo_data_retry_cnt,
                                  tsms_retry_to)) {
-            /*
-             * The user is informed of the state change through a
-             * notification.
-             * Buffers are cleaned up upon close.
+            /* Starting to close the session so send out the
+             * notification. Buffers are cleaned up upon close.
              */
+            TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
             return tsm_enter_state(tcb, TS_CLOSED, NULL);
         }
 
@@ -2445,6 +2463,9 @@ static int tsm_SF_closed(tcp_control_block_t *tcb, tcpEvent_t event,
      */
     switch (event) {
     case TE_ENTER_STATE:
+        /* Send out the notification that the session has been closed. */
+        TCP_NOTIF(TEST_NOTIF_SESS_CLOSED, tcb);
+
         /* Here we need to cleanup everything about the tcb and also free
          * any memory we allocated for it. This is equivalent to a silent
          * close call.

@@ -70,9 +70,8 @@
  * Static per lcore globals.
  ****************************************************************************/
 
-/* TODO: improve this. we don't need so many entries */
-/* Buffered packets to send (per port). */
-static RTE_DEFINE_PER_LCORE(struct rte_mbuf **, pkt_tx_q);
+/* Buffered packets to send (array of tx mbuf pointers per port). */
+static RTE_DEFINE_PER_LCORE(struct rte_mbuf ***, pkt_tx_q);
 /* Number of packets buffered for TX (per port). */
 static RTE_DEFINE_PER_LCORE(uint32_t *, pkt_tx_q_len);
 
@@ -287,7 +286,7 @@ void pkt_flush_tx_q(uint32_t port, tpg_port_statistics_t *stats)
     for (i = 0; i < RTE_PER_LCORE(pkt_tx_q_len)[port]; i++) {
         struct rte_mbuf *tx_mbuf;
 
-        tx_mbuf = RTE_PER_LCORE(pkt_tx_q)[port * TPG_TX_BURST_SIZE + i];
+        tx_mbuf = RTE_PER_LCORE(pkt_tx_q)[port][i];
         sent_bytes += rte_pktmbuf_pkt_len(tx_mbuf);
 
         if (unlikely(DATA_IS_TX_TRACE(tx_mbuf))) {
@@ -298,11 +297,11 @@ void pkt_flush_tx_q(uint32_t port, tpg_port_statistics_t *stats)
 
     if (unlikely(tstamp_tx_is_running(port, tx_queue_id)))
         tstamp_pktloop_tx_pkt_burst(port, tx_queue_id,
-                                    &RTE_PER_LCORE(pkt_tx_q)[port * TPG_TX_BURST_SIZE],
+                                    RTE_PER_LCORE(pkt_tx_q)[port],
                                     RTE_PER_LCORE(pkt_tx_q_len)[port]);
 
     pkt_sent_cnt = rte_eth_tx_burst(port, tx_queue_id,
-                                    &RTE_PER_LCORE(pkt_tx_q)[port * TPG_TX_BURST_SIZE],
+                                    RTE_PER_LCORE(pkt_tx_q)[port],
                                     RTE_PER_LCORE(pkt_tx_q_len)[port]);
 
     /* We can't really notify the initial sender that we failed. Just increase
@@ -312,7 +311,7 @@ void pkt_flush_tx_q(uint32_t port, tpg_port_statistics_t *stats)
     for (i = pkt_sent_cnt; i < RTE_PER_LCORE(pkt_tx_q_len)[port]; i++) {
         struct rte_mbuf *tx_mbuf;
 
-        tx_mbuf = RTE_PER_LCORE(pkt_tx_q)[port * TPG_TX_BURST_SIZE + i];
+        tx_mbuf = RTE_PER_LCORE(pkt_tx_q)[port][i];
         sent_bytes -= rte_pktmbuf_pkt_len(tx_mbuf);
 
         if (unlikely(DATA_IS_TX_TRACE(tx_mbuf))) {
@@ -363,10 +362,9 @@ int pkt_send(uint32_t port, struct rte_mbuf *mbuf, bool trace)
     if (unlikely(trace))
         DATA_SET_TX_TRACE(mbuf);
 
-    last_tx_q_idx =
-        port * TPG_TX_BURST_SIZE + RTE_PER_LCORE(pkt_tx_q_len)[port];
+    last_tx_q_idx = RTE_PER_LCORE(pkt_tx_q_len)[port];
 
-    RTE_PER_LCORE(pkt_tx_q)[last_tx_q_idx] = mbuf;
+    RTE_PER_LCORE(pkt_tx_q)[port][last_tx_q_idx] = mbuf;
     RTE_PER_LCORE(pkt_tx_q_len)[port]++;
 
     return true;
@@ -481,12 +479,28 @@ int pkt_receive_loop(void *arg __rte_unused)
     RTE_PER_LCORE(pkt_tx_q) =
         rte_zmalloc_socket("local_pkt_tx_q",
                            sizeof(*RTE_PER_LCORE(pkt_tx_q)) *
-                                TPG_ETH_DEV_MAX * TPG_TX_BURST_SIZE,
+                                TPG_ETH_DEV_MAX,
                            RTE_CACHE_LINE_SIZE,
                            rte_lcore_to_socket_id(lcore_id));
     if (!RTE_PER_LCORE(pkt_tx_q)) {
         TPG_ERROR_ABORT("Failed to allocate local_pkt_tx_q lcore %d, core index %d\n",
                         lcore_id, lcore_index);
+    }
+
+    for (port = 0; port < TPG_ETH_DEV_MAX; port++) {
+        if (port_get_tx_queue_id(lcore_id, port) == CORE_PORT_QINVALID)
+            continue;
+
+        RTE_PER_LCORE(pkt_tx_q)[port] =
+            rte_zmalloc_socket("local_port_pkt_tx_q",
+                               sizeof(*RTE_PER_LCORE(pkt_tx_q)[port]) *
+                                    TPG_TX_BURST_SIZE,
+                               RTE_CACHE_LINE_SIZE,
+                               rte_lcore_to_socket_id(lcore_id));
+        if (!RTE_PER_LCORE(pkt_tx_q)[port]) {
+            TPG_ERROR_ABORT("Failed to allocate local_port_pkt_tx_q lcore %d, core index %d\n",
+                            lcore_id, lcore_index);
+        }
     }
 
     RTE_PER_LCORE(pkt_tx_q_len) =
@@ -533,6 +547,7 @@ int pkt_receive_loop(void *arg __rte_unused)
     route_lcore_init(lcore_id);
     raw_lcore_init(lcore_id);
     http_lcore_init(lcore_id);
+    imix_lcore_init(lcore_id);
 
     /*
      * Initialize local configuration. We will also potentially drop initial

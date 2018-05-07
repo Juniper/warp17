@@ -154,7 +154,7 @@ extern int            route_v4_gw_del(uint32_t port, tpg_ip_t gw);
 extern uint64_t       route_v4_nh_lookup(uint32_t port, uint32_t dest,
                                          uint16_t vlan_id);
 extern route_entry_t *route_v4_find_local(uint32_t port, uint32_t dest);
-extern int            route_v4_find_gw_port_vlan(uint32_t port,
+extern tpg_ip_t      *route_v4_find_gw_port_vlan(uint32_t port,
                                                  uint32_t vlan_id);
 #endif /* _H_TPG_ROUTE_ */
 

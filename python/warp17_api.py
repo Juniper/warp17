@@ -66,8 +66,6 @@ from subprocess   import PIPE
 from enum         import Enum
 from configparser import ConfigParser, DEFAULTSECT
 
-sys.path.append('../../api/generated/py')
-
 from helpers  import LogHelper
 from helpers  import Warp17Exception
 from uniq     import get_uniq_stamp
@@ -220,12 +218,16 @@ class Warp17OutputArgs():
         else:
             self.out_file = out_file
 
-def warp17_start(env, exec_file = None, output_args = None):
+def warp17_start(env, exec_file = None, optional_args = None,
+                 output_args = None):
 
     if exec_file is None: exec_file = env.get_bin_name()
     if output_args is None: output_args = Warp17OutputArgs()
 
     args = [exec_file] + string.split(env.get_exec_args().__str__())
+    if optional_args is not None:
+        for arg in optional_args:
+            args.append(arg)
 
     # Should we handle exceptions or let the callers do it for us?
     ofile = open(output_args.out_file, 'w')
@@ -257,7 +259,7 @@ def warp17_wait(env, logger = None):
                 return
         except Warp17RpcException, ex:
             print_stdout('WARP17 not up yet. Sleeping for a bit...\n')
-            time.sleep(1)
+            time.sleep(2)
 
     print_stderr('WARP17 seems to be down!! Dying..\n')
     sys.exit(1)

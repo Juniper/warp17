@@ -88,12 +88,16 @@ struct rte_mbuf *app_data_get_from_offset(struct rte_mbuf *mbuf,
                                           uint32_t offset,
                                           uint32_t *out_offset)
 {
-    if (likely(offset != mbuf->pkt_len)) {
-        while (offset >= mbuf->data_len) {
-            offset -= mbuf->data_len;
-            mbuf = mbuf->next;
-        }
+    if (unlikely(offset >= mbuf->pkt_len)) {
+        *out_offset = 0;
+        return NULL;
     }
+
+    while (offset >= mbuf->data_len) {
+        offset -= mbuf->data_len;
+        mbuf = mbuf->next;
+    }
+
     *out_offset = offset;
     return mbuf;
 }

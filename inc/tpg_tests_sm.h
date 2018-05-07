@@ -60,171 +60,167 @@
 #ifndef _H_TPG_TESTS_SM_
 #define _H_TPG_TESTS_SM_
 
-/*****************************************************************************
- * TCP Client Test state machine:
- * See tpg_test_client_sm.dot for the diagram. (xdot dot/tpg_test_client_sm.dot)
- *
- * In state TST_CLS_SENDING the control block is on the to-send list and the
- * test engine will try sending traffic on that connection.
- * Once the uptime timer fires the control block will change state (from
- * TST_CLS_OPEN/TST_CLS_SENDING/TST_CLS_NO_SND_WIN) to TST_CLS_TO_CLOSE and the
- * control block will be added on the to-close list. The to-close list is
- * walked by the test engine which will issue CLOSE on the control blocks on
- * that list.
- * In state TST_CLS_CLOSED the downtime timer might be running (based on config)
- * so if the timer fires then the control block moves to state TST_CLS_TO_OPEN
- * and is added to the to-open list which is walked by the test engine.
- ****************************************************************************/
-typedef enum {
-
-    TST_CLS_TO_INIT,
-    TST_CLS_TO_OPEN,
-    TST_CLS_OPENING,
-    TST_CLS_OPEN,
-    TST_CLS_SENDING,
-    TST_CLS_NO_SND_WIN,
-    TST_CLS_TO_CLOSE,
-    TST_CLS_CLOSING,
-    TST_CLS_CLOSED,
-    TST_CLS_MAX_STATE
-
-} test_client_sm_state_t;
-
-typedef enum {
-
-    TST_CLE_ENTER_STATE,
-
-    /* Timeouts */
-    TST_CLE_TMR_TO,
-
-    /* TCP/UDP events. */
-    TST_CLE_TCP_STATE_CHG,
-    TST_CLE_UDP_STATE_CHG,
-    TST_CLE_NO_SND_WIN,
-    TST_CLE_SND_WIN,
-
-    /* APP Events. */
-    TST_CLE_APP_SEND_START,
-    TST_CLE_APP_SEND_STOP,
-
-    TST_CLE_MAX_EVENT
-
-} test_client_sm_event_t;
-
-/*****************************************************************************
- * TCP Server Test state machine:
- * See tpg_test_server_sm.dot for the diagram. (xdot dot/tpg_test_server_sm.dot)
- *
- * The server state machine is similar to the client state machine but there are
- * no test timers running and TCP states > ESTABLISHED are not tracked.
- ****************************************************************************/
-typedef enum {
-
-    TST_SRVS_INIT,
-    TST_SRVS_OPEN,
-    TST_SRVS_SENDING,
-    TST_SRVS_NO_SND_WIN,
-    TST_SRVS_CLOSING,
-    TST_SRVS_MAX_STATE
-
-} test_server_sm_state_t;
-
-typedef enum {
-
-    TST_SRVE_ENTER_STATE,
-
-    /* TCP/UDP events. */
-    TST_SRVE_TCP_STATE_CHG,
-    TST_SRVE_UDP_STATE_CHG,
-    TST_SRVE_NO_SND_WIN,
-    TST_SRVE_SND_WIN,
-
-    /* APP Events. */
-    TST_SRVE_APP_SEND_START,
-    TST_SRVE_APP_SEND_STOP,
-
-    TST_SRVE_MAX_EVENT
-
-} test_server_sm_event_t;
-
-/*****************************************************************************
- * Unions for ease of use.
- ****************************************************************************/
-typedef union {
-    test_client_sm_state_t tts_client;
-    test_server_sm_state_t tts_server;
-} test_sm_state_t;
-
-typedef union {
-    test_client_sm_event_t tte_client;
-    test_server_sm_event_t tte_server;
-} test_sm_event_t;
-
 typedef void (*test_sm_function) (l4_control_block_t *l4_cb,
                                   test_sm_event_t event,
                                   test_case_info_t *ctx);
 
 /*****************************************************************************
- * Helper macros
+ * Externs for tpg_tests_sm.c
  ****************************************************************************/
-#define TEST_SRV_STATE(l4_cb) ((l4_cb)->l4cb_test_state.tts_server)
-
-#define TEST_CL_STATE(l4_cb) ((l4_cb)->l4cb_test_state.tts_client)
+test_sm_function test_sm_function_array[TSTS_MAX_STATE];
 
 /*****************************************************************************
- * Externals for tpg_tests_sm.c
- ****************************************************************************/
-extern void test_client_sm_initialize(l4_control_block_t *l4_cb,
-                                      test_case_info_t *ctx);
-
-extern void test_server_sm_initialize(l4_control_block_t *l4_cb,
-                                      test_case_info_t *ctx);
-
-/*****************************************************************************
- * UDP Client Test state machine: N/A
+ * Static inlines
  ****************************************************************************/
 
 /*****************************************************************************
- * Externals for APP and TEST implementations
+ * test_sm_dispatch_event()
  ****************************************************************************/
-extern void test_app_client_send_start(l4_control_block_t *l4_cb,
-                                       test_case_info_t *ctx);
-extern void test_app_client_send_stop(l4_control_block_t *l4_cb,
-                                      test_case_info_t *ctx);
+static inline void test_sm_dispatch_event(l4_control_block_t *l4_cb,
+                                          test_sm_event_t event,
+                                          test_case_info_t *ctx)
+{
+    L4_CB_CHECK(l4_cb);
+    test_sm_function_array[l4_cb->l4cb_test_state](l4_cb, event, ctx);
+}
 
-extern void test_app_server_send_start(l4_control_block_t *l4_cb,
-                                       test_case_info_t *ctx);
-extern void test_app_server_send_stop(l4_control_block_t *l4_cb,
-                                      test_case_info_t *ctx);
+/*****************************************************************************
+ * test_sm_enter_state()
+ ****************************************************************************/
+static inline void test_sm_enter_state(l4_control_block_t *l4_cb,
+                                       test_sm_state_t state,
+                                       test_case_info_t *ctx)
+{
+    l4_cb->l4cb_test_state = state;
 
+    test_sm_dispatch_event(l4_cb, TSTE_ENTER_STATE, ctx);
+}
 
-extern void test_client_sm_tcp_state_change(tcp_control_block_t *tcb,
-                                            test_case_info_t *ctx);
-extern void test_client_sm_tcp_snd_win_avail(tcp_control_block_t *tcb,
-                                            test_case_info_t *ctx);
-extern void test_client_sm_tcp_snd_win_unavail(tcp_control_block_t *tcb,
-                                               test_case_info_t *ctx);
-extern void test_client_sm_udp_state_change(udp_control_block_t *ucb,
-                                            test_case_info_t *ctx);
-extern void test_client_sm_tmr_to(l4_control_block_t *l4_cb,
-                                  test_case_info_t *ctx);
+/*****************************************************************************
+ * test_sm_client_initialize()
+ ****************************************************************************/
+static inline void test_sm_client_initialize(l4_control_block_t *l4_cb,
+                                             test_case_info_t *ctx)
+{
+    test_sm_enter_state(l4_cb, TSTS_CL_TO_INIT, ctx);
+}
 
+/*****************************************************************************
+ * test_sm_listen_initialize()
+ ****************************************************************************/
+static inline void test_sm_listen_initialize(l4_control_block_t *l4_cb,
+                                             test_case_info_t *ctx)
+{
+    test_sm_enter_state(l4_cb, TSTS_LISTEN, ctx);
+}
 
-extern void test_server_sm_tcp_state_change(tcp_control_block_t *tcb,
-                                            test_case_info_t *ctx);
-extern void test_server_sm_tcp_snd_win_avail(tcp_control_block_t *tcb,
-                                            test_case_info_t *ctx);
-extern void test_server_sm_tcp_snd_win_unavail(tcp_control_block_t *tcb,
-                                              test_case_info_t *ctx);
-extern void test_server_sm_udp_state_change(udp_control_block_t *ucb,
-                                            test_case_info_t *ctx);
+/*****************************************************************************
+ * test_sm_server_initialize()
+ ****************************************************************************/
+static inline void test_sm_server_initialize(l4_control_block_t *l4_cb,
+                                             test_case_info_t *ctx)
+{
+    test_sm_enter_state(l4_cb, TSTS_SRV_OPENING, ctx);
+}
 
-extern bool test_server_sm_has_data_pending(l4_control_block_t *l4_cb);
+/*****************************************************************************
+ * test_sm_sess_connecting()
+ ****************************************************************************/
+static inline void test_sm_sess_connecting(l4_control_block_t *l4_cb,
+                                           test_case_info_t *ctx)
+{
+    test_sm_dispatch_event(l4_cb, TSTE_CONNECTING, ctx);
+}
 
-extern bool test_client_sm_has_data_pending(l4_control_block_t *l4_cb);
+/*****************************************************************************
+ * test_sm_sess_connected()
+ ****************************************************************************/
+static inline void test_sm_sess_connected(l4_control_block_t *l4_cb,
+                                          test_case_info_t *ctx)
+{
+    test_sm_dispatch_event(l4_cb, TSTE_CONNECTED, ctx);
+}
 
-extern bool test_sm_has_data_pending(l4_control_block_t *l4_cb,
-                                     test_case_info_t *ctx);
+/*****************************************************************************
+ * test_sm_sess_closing()
+ ****************************************************************************/
+static inline void test_sm_sess_closing(l4_control_block_t *l4_cb,
+                                        test_case_info_t *ctx)
+{
+    test_sm_dispatch_event(l4_cb, TSTE_CLOSING, ctx);
+}
+
+/*****************************************************************************
+ * test_sm_sess_closed()
+ ****************************************************************************/
+static inline void test_sm_sess_closed(l4_control_block_t *l4_cb,
+                                       test_case_info_t *ctx)
+{
+    test_sm_dispatch_event(l4_cb, TSTE_CLOSED, ctx);
+}
+
+/*****************************************************************************
+ * test_sm_app_send_start()
+ ****************************************************************************/
+static inline void test_sm_app_send_start(l4_control_block_t *l4_cb,
+                                          test_case_info_t *ctx)
+{
+    test_sm_dispatch_event(l4_cb, TSTE_APP_SEND_START, ctx);
+}
+
+/*****************************************************************************
+ * test_sm_app_send_stop()
+ ****************************************************************************/
+static inline void test_sm_app_send_stop(l4_control_block_t *l4_cb,
+                                         test_case_info_t *ctx)
+{
+    test_sm_dispatch_event(l4_cb, TSTE_APP_SEND_STOP, ctx);
+}
+
+/*****************************************************************************
+ * test_sm_app_send_win_avail()
+ ****************************************************************************/
+static inline void test_sm_app_send_win_avail(l4_control_block_t *l4_cb,
+                                              test_case_info_t *ctx)
+{
+    test_sm_dispatch_event(l4_cb, TSTE_SND_WIN, ctx);
+}
+
+/*****************************************************************************
+ * test_sm_app_send_win_unavail()
+ ****************************************************************************/
+static inline void test_sm_app_send_win_unavail(l4_control_block_t *l4_cb,
+                                                test_case_info_t *ctx)
+{
+    test_sm_dispatch_event(l4_cb, TSTE_NO_SND_WIN, ctx);
+}
+
+/*****************************************************************************
+ * test_sm_tmr_to()
+ ****************************************************************************/
+static inline void test_sm_tmr_to(l4_control_block_t *l4_cb,
+                                  test_case_info_t *ctx)
+{
+    test_sm_dispatch_event(l4_cb, TSTE_TMR_TO, ctx);
+}
+
+/*****************************************************************************
+ * test_sm_purge()
+ ****************************************************************************/
+static inline void test_sm_purge(l4_control_block_t *l4_cb,
+                                 test_case_info_t *ctx)
+{
+    test_sm_dispatch_event(l4_cb, TSTE_PURGE, ctx);
+}
+
+/*****************************************************************************
+ * test_sm_has_data_pending()
+ ****************************************************************************/
+static inline bool test_sm_has_data_pending(l4_control_block_t *l4_cb)
+{
+    return l4_cb->l4cb_test_state == TSTS_CL_SENDING ||
+        l4_cb->l4cb_test_state == TSTS_SRV_SENDING;
+}
 
 #endif /* _H_TPG_TESTS_SM_ */
 

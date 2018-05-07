@@ -134,30 +134,35 @@ static void tpg_rpc__del_test_case(Warp17_Service *service,
                                    Error_Closure closure,
                                    void *closure_data);
 
+static void tpg_rpc__configure_imix_group(Warp17_Service *service,
+                                         const ImixGroup *input,
+                                         Error_Closure closure,
+                                         void *closure_data);
+
+static void tpg_rpc__get_imix_group(Warp17_Service *service,
+                                   const ImixArg *input,
+                                   ImixResult_Closure closure,
+                                   void *closure_data);
+
+static void tpg_rpc__del_imix_group(Warp17_Service *service,
+                                    const ImixArg *input,
+                                    Error_Closure closure,
+                                    void *closure_data);
+
 static void tpg_rpc__update_test_case(Warp17_Service *service,
                                       const UpdateArg *input,
                                       Error_Closure closure,
                                       void *closure_data);
 
-static void tpg_rpc__get_test_case_app_client(Warp17_Service *service,
-                                              const TestCaseArg *input,
-                                              TestCaseClientResult_Closure closure,
-                                              void *closure_data);
+static void tpg_rpc__get_test_case_app(Warp17_Service *service,
+                                       const TestCaseArg *input,
+                                       TestCaseAppResult_Closure closure,
+                                       void *closure_data);
 
-static void tpg_rpc__get_test_case_app_server(Warp17_Service *service,
-                                              const TestCaseArg *input,
-                                              TestCaseServerResult_Closure closure,
-                                              void *closure_data);
-
-static void tpg_rpc__update_test_case_app_client(Warp17_Service *service,
-                                                 const UpdClientArg *input,
-                                                 Error_Closure closure,
-                                                 void *closure_data);
-
-static void tpg_rpc__update_test_case_app_server(Warp17_Service *service,
-                                                 const UpdServerArg *input,
-                                                 Error_Closure closure,
-                                                 void *closure_data);
+static void tpg_rpc__update_test_case_app(Warp17_Service *service,
+                                          const UpdateAppArg *input,
+                                          Error_Closure closure,
+                                          void *closure_data);
 
 static void tpg_rpc__set_port_options(Warp17_Service *service,
                                       const PortOptionsArg *input,
@@ -223,6 +228,12 @@ static void tpg_rpc__get_test_status(Warp17_Service *service,
                                      const TestCaseArg *input,
                                      TestStatusResult_Closure closure,
                                      void *closure_data);
+
+static void tpg_rpc__get_imix_statistics(Warp17_Service *service,
+                                         const ImixArg *input,
+                                         ImixStatsResult_Closure closure,
+                                         void *closure_data);
+
 
 /*****************************************************************************
  * Globals
@@ -375,50 +386,49 @@ int tpg_xlate_tpg_union_TestCase(const tpg_test_case_t *in, TestCase *out)
 }
 
 /*****************************************************************************
- * tpg_xlate_tpg_union_AppClient()
+ * tpg_xlate_tpg_union_App()
  ****************************************************************************/
-int tpg_xlate_tpg_union_AppClient(const tpg_app_client_t *in, AppClient *out)
+int tpg_xlate_tpg_union_App(const tpg_app_t *in, App *out)
 {
-    switch (in->ac_app_proto) {
-    case APP_PROTO__RAW:
-        out->ac_raw = rte_zmalloc("TPG_RPC_GEN", sizeof(*out->ac_raw), 0);
-        if (!out->ac_raw)
+    switch (in->app_proto) {
+    case APP_PROTO__RAW_CLIENT:
+        out->app_raw_client =
+            rte_zmalloc("TPG_RPC_GEN", sizeof(*out->app_raw_client), 0);
+        if (!out->app_raw_client)
             return -ENOMEM;
 
-        tpg_xlate_tpg_RawClient(&in->ac_raw, out->ac_raw);
+        tpg_xlate_tpg_RawClient(&in->app_raw_client, out->app_raw_client);
         break;
-    case APP_PROTO__HTTP:
-        out->ac_http = rte_zmalloc("TPG_RPC_GEN", sizeof(*out->ac_http), 0);
-        if (!out->ac_http)
+    case APP_PROTO__RAW_SERVER:
+        out->app_raw_server =
+            rte_zmalloc("TPG_RPC_GEN", sizeof(*out->app_raw_server), 0);
+        if (!out->app_raw_server)
             return -ENOMEM;
 
-        tpg_xlate_tpg_HttpClient(&in->ac_http, out->ac_http);
+        tpg_xlate_tpg_RawServer(&in->app_raw_server, out->app_raw_server);
         break;
-    default:
-        return -EINVAL;
-    }
-    return 0;
-}
-
-/*****************************************************************************
- * tpg_xlate_tpg_union_AppServer()
- ****************************************************************************/
-int tpg_xlate_tpg_union_AppServer(const tpg_app_server_t *in, AppServer *out)
-{
-    switch (in->as_app_proto) {
-    case APP_PROTO__RAW:
-        out->as_raw = rte_zmalloc("TPG_RPC_GEN", sizeof(*out->as_raw), 0);
-        if (!out->as_raw)
+    case APP_PROTO__HTTP_CLIENT:
+        out->app_http_client =
+            rte_zmalloc("TPG_RPC_GEN", sizeof(*out->app_http_client), 0);
+        if (!out->app_http_client)
             return -ENOMEM;
 
-        tpg_xlate_tpg_RawServer(&in->as_raw, out->as_raw);
+        tpg_xlate_tpg_HttpClient(&in->app_http_client, out->app_http_client);
         break;
-    case APP_PROTO__HTTP:
-        out->as_http = rte_zmalloc("TPG_RPC_GEN", sizeof(*out->as_http), 0);
-        if (!out->as_http)
+    case APP_PROTO__HTTP_SERVER:
+        out->app_http_server =
+            rte_zmalloc("TPG_RPC_GEN", sizeof(*out->app_http_server), 0);
+        if (!out->app_http_server)
             return -ENOMEM;
 
-        tpg_xlate_tpg_HttpServer(&in->as_http, out->as_http);
+        tpg_xlate_tpg_HttpServer(&in->app_http_server, out->app_http_server);
+        break;
+    case APP_PROTO__IMIX:
+        out->app_imix = rte_zmalloc("TPG_RPC_GEN", sizeof(*out->app_imix), 0);
+        if (!out->app_imix)
+            return -ENOMEM;
+
+        tpg_xlate_tpg_Imix(&in->app_imix, out->app_imix);
         break;
     default:
         return -EINVAL;
@@ -452,6 +462,64 @@ int tpg_xlate_tpg_union_TestCriteria(const tpg_test_criteria_t *in,
         return -EINVAL;
     }
     return 0;
+}
+
+/*****************************************************************************
+ * tpg_xlate_tpgTestAppStats_by_proto()
+ ****************************************************************************/
+static int
+tpg_xlate_tpgTestAppStats_by_proto(const tpg_app_stats_t *in, AppStats *out,
+                                   tpg_app_proto_t app_proto)
+{
+    int err;
+
+    *out = (AppStats)APP_STATS__INIT;
+    switch (app_proto) {
+    case APP_PROTO__RAW_CLIENT:
+        /* Fallthrough */
+    case APP_PROTO__RAW_SERVER:
+        out->as_raw = rte_zmalloc("TPG_RPC_GEN", sizeof(*out->as_raw), 0);
+        if (!out->as_raw)
+            return -ENOMEM;
+
+        err = tpg_xlate_tpg_RawStats(&in->as_raw, out->as_raw);
+        if (err)
+            return err;
+        break;
+    case APP_PROTO__HTTP_CLIENT:
+        /* Fallthrough */
+    case APP_PROTO__HTTP_SERVER:
+        out->as_http = rte_zmalloc("TPG_RPC_GEN", sizeof(*out->as_http), 0);
+        if (!out->as_http)
+            return -ENOMEM;
+
+        err = tpg_xlate_tpg_HttpStats(&in->as_http, out->as_http);
+        if (err)
+            return err;
+        break;
+    case APP_PROTO__IMIX:
+        out->as_imix = rte_zmalloc("TPG_RPC_GEN", sizeof(*out->as_imix), 0);
+        if (!out->as_imix)
+            return -ENOMEM;
+        err = tpg_xlate_tpg_ImixStats(&in->as_imix, out->as_imix);
+        if (err)
+            return err;
+        break;
+    default:
+        return -EINVAL;
+    }
+
+    return 0;
+}
+
+/*****************************************************************************
+ * tpg_LatencyStats_adjust()
+ *  NOTE: zero out min latency if we have no samples
+ ****************************************************************************/
+static void tpg_LatencyStats_adjust(LatencyStats *stats)
+{
+    if (stats->ls_samples_count == 0)
+        stats->ls_min_latency = 0;
 }
 
 /*****************************************************************************
@@ -492,90 +560,93 @@ int tpg_xlate_tpg_TestStatusResult(const tpg_test_status_result_t *in,
     if (!out->tsr_stats || !out->tsr_rate_stats || !out->tsr_app_stats)
         return -ENOMEM;
 
-    /* Translate TestCaseStats manually. */
-    *out->tsr_stats = (TestCaseStats)TEST_CASE_STATS__INIT;
+    /* Translate GenStats manually. */
+    *out->tsr_stats = (GenStats)GEN_STATS__INIT;
 
-    out->tsr_stats->tcs_data_failed = in->tsr_stats.tcs_data_failed;
-    out->tsr_stats->tcs_data_null = in->tsr_stats.tcs_data_null;
+    out->tsr_stats->gs_up = in->tsr_stats.gs_up;
+    out->tsr_stats->gs_estab = in->tsr_stats.gs_estab;
+    out->tsr_stats->gs_down = in->tsr_stats.gs_down;
+    out->tsr_stats->gs_failed = in->tsr_stats.gs_failed;
+    out->tsr_stats->gs_data_failed = in->tsr_stats.gs_data_failed;
+    out->tsr_stats->gs_data_null = in->tsr_stats.gs_data_null;
+    out->tsr_stats->gs_data_failed = in->tsr_stats.gs_data_failed;
+    out->tsr_stats->gs_data_null = in->tsr_stats.gs_data_null;
 
-    out->tsr_stats->tcs_start_time = in->tsr_stats.tcs_start_time / cycles_per_us;
-    out->tsr_stats->tcs_end_time = in->tsr_stats.tcs_end_time / cycles_per_us;
+    out->tsr_stats->gs_start_time = in->tsr_stats.gs_start_time / cycles_per_us;
+    out->tsr_stats->gs_end_time = in->tsr_stats.gs_end_time / cycles_per_us;
 
-    switch (in->tsr_type) {
-    case TEST_CASE_TYPE__SERVER:
-        out->tsr_stats->tcs_server = rte_zmalloc("TPG_RPC_GEN",
-                                                 sizeof(*out->tsr_stats->tcs_server),
-                                                 0);
-        if (!out->tsr_stats->tcs_server)
-            return -ENOMEM;
-
-        err = tpg_xlate_tpg_TestCaseServerStats(&in->tsr_stats.tcs_server,
-                                                out->tsr_stats->tcs_server);
-        if (err)
-            return err;
-    break;
-    case TEST_CASE_TYPE__CLIENT:
-        out->tsr_stats->tcs_client = rte_zmalloc("TPG_RPC_GEN",
-                                                 sizeof(*out->tsr_stats->tcs_client),
-                                                 0);
-        if (!out->tsr_stats->tcs_client)
-            return -ENOMEM;
-
-        err = tpg_xlate_tpg_TestCaseClientStats(&in->tsr_stats.tcs_client,
-                                                out->tsr_stats->tcs_client);
-        if (err)
-            return err;
-    break;
-    default:
-        return -EINVAL;
-    }
-
-    out->tsr_stats->tcs_latency_stats =
-        rte_zmalloc("TPG_RPC_GEN", sizeof(*out->tsr_stats->tcs_latency_stats),
+    out->tsr_stats->gs_latency_stats =
+        rte_zmalloc("TPG_RPC_GEN", sizeof(*out->tsr_stats->gs_latency_stats),
                     0);
-    if (!out->tsr_stats->tcs_latency_stats)
+    if (!out->tsr_stats->gs_latency_stats)
         return -ENOMEM;
 
-    err = tpg_xlate_tpg_TestCaseLatencyStats(&in->tsr_stats.tcs_latency_stats,
-                                             out->tsr_stats->tcs_latency_stats);
+    err = tpg_xlate_tpg_GenLatencyStats(&in->tsr_stats.gs_latency_stats,
+                                        out->tsr_stats->gs_latency_stats);
     if (err)
         return err;
 
-    /* Translate TestCaseRateStats. */
-    err = tpg_xlate_tpg_TestCaseRateStats(&in->tsr_rate_stats,
-                                          out->tsr_rate_stats);
+    /* Zero out min latency stats if we don't have any samples. */
+    tpg_LatencyStats_adjust(out->tsr_stats->gs_latency_stats->gls_stats);
+
+    /* Zero out recent latency stats if we don't have any samples. */
+    tpg_LatencyStats_adjust(out->tsr_stats->gs_latency_stats->gls_sample_stats);
+
+    /* Translate RateStats. */
+    err = tpg_xlate_tpg_RateStats(&in->tsr_rate_stats, out->tsr_rate_stats);
     if (err)
         return err;
 
-    /* Translate TestCaseAppStats manually. */
-    *out->tsr_app_stats = (TestCaseAppStats)TEST_CASE_APP_STATS__INIT;
-    switch (in->tsr_app_proto) {
-    case APP_PROTO__RAW:
-        out->tsr_app_stats->tcas_raw = rte_zmalloc("TPG_RPC_GEN",
-                                                   sizeof(*out->tsr_app_stats->tcas_raw),
-                                                   0);
-        if (!out->tsr_app_stats->tcas_raw)
+    /* Translate AppStats manually. */
+    err = tpg_xlate_tpgTestAppStats_by_proto(&in->tsr_app_stats,
+                                             out->tsr_app_stats,
+                                             in->tsr_app_proto);
+    if (err)
+        return err;
+
+    return 0;
+}
+
+/*****************************************************************************
+ * tpg_xlate_tpg_ImixAppStats()
+ ****************************************************************************/
+int tpg_xlate_tpg_ImixAppStats(const tpg_imix_app_stats_t *in,
+                               ImixAppStats *out)
+{
+    uint32_t i;
+
+    *out = (ImixAppStats)IMIX_APP_STATS__INIT;
+
+    out->ias_imix_id = in->ias_imix_id;
+
+    out->ias_app_protos =
+        rte_zmalloc("TPG_RPC_GEN",
+                    sizeof(*out->ias_app_protos) * in->ias_app_protos_count,
+                    0);
+    out->ias_apps =
+        rte_zmalloc("TPG_RPC_GEN", sizeof(*out->ias_apps) * in->ias_apps_count,
+                    0);
+    if (!out->ias_app_protos || !out->ias_apps)
+        return -ENOMEM;
+
+    out->n_ias_app_protos = in->ias_app_protos_count;
+    out->n_ias_apps = in->ias_apps_count;
+
+    for (i = 0; i < in->ias_app_protos_count; i++) {
+        int err;
+
+        out->ias_app_protos[i] = in->ias_app_protos[i];
+
+        out->ias_apps[i] =
+            rte_zmalloc("TPG_RPC_GEN", sizeof(*out->ias_apps[i]), 0);
+        if (!out->ias_apps[i])
             return -ENOMEM;
 
-        err = tpg_xlate_tpg_RawStats(&in->tsr_app_stats.tcas_raw,
-                                     out->tsr_app_stats->tcas_raw);
+        err = tpg_xlate_tpgTestAppStats_by_proto(&in->ias_apps[i],
+                                                 out->ias_apps[i],
+                                                 in->ias_app_protos[i]);
         if (err)
             return err;
-        break;
-    case APP_PROTO__HTTP:
-        out->tsr_app_stats->tcas_http = rte_zmalloc("TPG_RPC_GEN",
-                                                    sizeof(*out->tsr_app_stats->tcas_http),
-                                                    0);
-        if (!out->tsr_app_stats->tcas_http)
-            return -ENOMEM;
-
-        err = tpg_xlate_tpg_HttpStats(&in->tsr_app_stats.tcas_http,
-                                      out->tsr_app_stats->tcas_http);
-        if (err)
-            return err;
-        break;
-    default:
-        return -EINVAL;
     }
 
     return 0;
@@ -740,119 +811,60 @@ static void tpg_rpc__update_test_case(Warp17_Service *service __rte_unused,
 }
 
 /*****************************************************************************
- * tpg_rpc__get_test_case_app_client()
+ * tpg_rpc__get_test_case_app()
  ****************************************************************************/
-static void tpg_rpc__get_test_case_app_client(Warp17_Service *service __rte_unused,
-                                              const TestCaseArg *input,
-                                              TestCaseClientResult_Closure closure,
-                                              void *closure_data)
+static void tpg_rpc__get_test_case_app(Warp17_Service *service __rte_unused,
+                                       const TestCaseArg *input,
+                                       TestCaseAppResult_Closure closure,
+                                       void *closure_data)
 {
-    tpg_test_case_arg_t           tc_arg;
-    tpg_test_case_client_result_t tpg_result;
-    TestCaseClientResult          protoc_result;
-    int                           err;
+    tpg_test_case_arg_t        tc_arg;
+    tpg_test_case_app_result_t tpg_result;
+    TestCaseAppResult          protoc_result;
+    int                        err;
 
-    RPC_INIT_DEFAULT(TestCaseClientResult, &tpg_result);
+    RPC_INIT_DEFAULT(TestCaseAppResult, &tpg_result);
     if (RPC_REQUEST_INIT(TestCaseArg, input, &tc_arg))
         return;
 
-    err = test_mgmt_get_test_case_app_client_cfg(tc_arg.tca_eth_port,
-                                                 tc_arg.tca_test_case_id,
-                                                 &tpg_result.tccr_cl_app,
-                                                 NULL);
+    err = test_mgmt_get_test_case_app_cfg(tc_arg.tca_eth_port,
+                                          tc_arg.tca_test_case_id,
+                                          &tpg_result.tcar_app,
+                                          NULL);
 
-    RPC_STORE_RETCODE(tpg_result.tccr_error, err);
+    RPC_STORE_RETCODE(tpg_result.tcar_error, err);
 
-    RPC_REPLY(TestCaseClientResult, protoc_result,
-              TEST_CASE_CLIENT_RESULT__INIT,
+    RPC_REPLY(TestCaseAppResult, protoc_result, TEST_CASE_APP_RESULT__INIT,
               tpg_result);
-    RPC_CLEANUP(TestCaseArg, tc_arg, TestCaseClientResult, protoc_result);
+    RPC_CLEANUP(TestCaseArg, tc_arg, TestCaseAppResult, protoc_result);
 }
 
 /*****************************************************************************
- * tpg_rpc__get_test_case_app_server()
+ * tpg_rpc__update_test_case_app()
  ****************************************************************************/
-static void tpg_rpc__get_test_case_app_server(Warp17_Service *service __rte_unused,
-                                              const TestCaseArg *input,
-                                              TestCaseServerResult_Closure closure,
-                                              void *closure_data)
+static void tpg_rpc__update_test_case_app(Warp17_Service *service __rte_unused,
+                                          const UpdateAppArg *input,
+                                          Error_Closure closure,
+                                          void *closure_data)
 {
-    tpg_test_case_arg_t           tc_arg;
-    tpg_test_case_server_result_t tpg_result;
-    TestCaseServerResult          protoc_result;
-    int                           err;
-
-    RPC_INIT_DEFAULT(TestCaseServerResult, &tpg_result);
-    if (RPC_REQUEST_INIT(TestCaseArg, input, &tc_arg))
-        return;
-
-    err = test_mgmt_get_test_case_app_server_cfg(tc_arg.tca_eth_port,
-                                                 tc_arg.tca_test_case_id,
-                                                 &tpg_result.tcsr_srv_app,
-                                                 NULL);
-
-    RPC_STORE_RETCODE(tpg_result.tcsr_error, err);
-
-    RPC_REPLY(TestCaseServerResult, protoc_result,
-              TEST_CASE_SERVER_RESULT__INIT,
-              tpg_result);
-    RPC_CLEANUP(TestCaseArg, tc_arg, TestCaseServerResult, protoc_result);
-}
-
-/*****************************************************************************
- * tpg_rpc__update_test_case_app_client()
- ****************************************************************************/
-static void tpg_rpc__update_test_case_app_client(Warp17_Service *service __rte_unused,
-                                                 const UpdClientArg *input,
-                                                 Error_Closure closure,
-                                                 void *closure_data)
-{
-    tpg_upd_client_arg_t client_arg;
+    tpg_update_app_arg_t update_arg;
     tpg_error_t          tpg_result;
     Error                protoc_result;
     int                  err;
 
     RPC_INIT_DEFAULT(Error, &tpg_result);
-    if (RPC_REQUEST_INIT(UpdClientArg, input, &client_arg))
+    if (RPC_REQUEST_INIT(UpdateAppArg, input, &update_arg))
         return;
 
-    err = test_mgmt_update_test_case_app_client(client_arg.uca_tc_arg.tca_eth_port,
-                                                client_arg.uca_tc_arg.tca_test_case_id,
-                                                &client_arg.uca_cl_app,
-                                                NULL);
+    err = test_mgmt_update_test_case_app(update_arg.uaa_tc_arg.tca_eth_port,
+                                         update_arg.uaa_tc_arg.tca_test_case_id,
+                                         &update_arg.uaa_app,
+                                         NULL);
 
     RPC_STORE_RETCODE(tpg_result, err);
 
     RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
-    RPC_CLEANUP(UpdClientArg, client_arg, Error, protoc_result);
-}
-
-/*****************************************************************************
- * tpg_rpc__update_test_case_app_server()
- ****************************************************************************/
-static void tpg_rpc__update_test_case_app_server(Warp17_Service *service __rte_unused,
-                                                 const UpdServerArg *input,
-                                                 Error_Closure closure,
-                                                 void *closure_data)
-{
-    tpg_upd_server_arg_t server_arg;
-    tpg_error_t          tpg_result;
-    Error                protoc_result;
-    int                  err;
-
-    RPC_INIT_DEFAULT(Error, &tpg_result);
-    if (RPC_REQUEST_INIT(UpdServerArg, input, &server_arg))
-        return;
-
-    err = test_mgmt_update_test_case_app_server(server_arg.usa_tc_arg.tca_eth_port,
-                                                server_arg.usa_tc_arg.tca_test_case_id,
-                                                &server_arg.usa_srv_app,
-                                                NULL);
-
-    RPC_STORE_RETCODE(tpg_result, err);
-
-    RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
-    RPC_CLEANUP(UpdServerArg, server_arg, Error, protoc_result);
+    RPC_CLEANUP(UpdateAppArg, update_arg, Error, protoc_result);
 }
 
 /*****************************************************************************
@@ -930,6 +942,78 @@ static void tpg_rpc__del_test_case(Warp17_Service *service __rte_unused,
                                               NULL));
     RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
     RPC_CLEANUP(TestCaseArg, msg, Error, protoc_result);
+}
+
+/*****************************************************************************
+ * tpg_rpc__configure_imix_group()
+ ****************************************************************************/
+static void tpg_rpc__configure_imix_group(Warp17_Service *service __rte_unused,
+                                         const ImixGroup *input,
+                                         Error_Closure closure,
+                                         void *closure_data)
+{
+    tpg_imix_group_t imix_group;
+    tpg_error_t      tpg_result;
+    Error            protoc_result;
+
+    RPC_INIT_DEFAULT(Error, &tpg_result);
+    if (RPC_REQUEST_INIT(ImixGroup, input, &imix_group))
+        return;
+
+    RPC_STORE_RETCODE(tpg_result,
+                      test_mgmt_add_imix_group(imix_group.imix_id, &imix_group,
+                                               NULL));
+    RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
+    RPC_CLEANUP(ImixGroup, imix_group, Error, protoc_result);
+}
+
+/*****************************************************************************
+ * tpg_rpc__get_imix_group()
+ ****************************************************************************/
+static void tpg_rpc__get_imix_group(Warp17_Service *service __rte_unused,
+                                   const ImixArg *input,
+                                   ImixResult_Closure closure,
+                                   void *closure_data)
+{
+    tpg_imix_arg_t    tc_imix_get;
+    tpg_imix_result_t tpg_result;
+    ImixResult        protoc_result;
+    int               err;
+
+    RPC_INIT_DEFAULT(ImixResult, &tpg_result);
+    if (RPC_REQUEST_INIT(ImixArg, input, &tc_imix_get))
+        return;
+
+    err = test_mgmt_get_imix_group(tc_imix_get.ia_imix_id,
+                                   &tpg_result.ir_imix_group,
+                                   NULL);
+
+    RPC_STORE_RETCODE(tpg_result.ir_error, err);
+
+    RPC_REPLY(ImixResult, protoc_result, IMIX_RESULT__INIT, tpg_result);
+    RPC_CLEANUP(ImixArg, tc_imix_get, ImixResult, protoc_result);
+}
+
+/*****************************************************************************
+ * tpg_rpc__del_imix_group()
+ ****************************************************************************/
+static void tpg_rpc__del_imix_group(Warp17_Service *service __rte_unused,
+                                    const ImixArg *input,
+                                    Error_Closure closure,
+                                    void *closure_data)
+{
+    tpg_imix_arg_t msg;
+    tpg_error_t    tpg_result;
+    Error          protoc_result;
+
+    RPC_INIT_DEFAULT(Error, &tpg_result);
+    if (RPC_REQUEST_INIT(ImixArg, input, &msg))
+        return;
+
+    RPC_STORE_RETCODE(tpg_result,
+                      test_mgmt_del_imix_group(msg.ia_imix_id, NULL));
+    RPC_REPLY(Error, protoc_result, ERROR__INIT, tpg_result);
+    RPC_CLEANUP(ImixArg, msg, Error, protoc_result);
 }
 
 /*****************************************************************************
@@ -1220,6 +1304,13 @@ static void tpg_rpc__get_statistics(Warp17_Service *service __rte_unused,
         goto done;
 
     RPC_STORE_RETCODE(tpg_result.sr_error,
+                      test_mgmt_get_phy_rate_stats(port_arg.pa_eth_port,
+                                                   &tpg_result.sr_phy_rate, NULL));
+
+    if (tpg_result.sr_error.e_code != 0)
+        goto done;
+
+    RPC_STORE_RETCODE(tpg_result.sr_error,
                       test_mgmt_get_eth_stats(port_arg.pa_eth_port,
                                               &tpg_result.sr_eth, NULL));
 
@@ -1348,16 +1439,16 @@ static void tpg_rpc__get_test_status(Warp17_Service *service __rte_unused,
     switch (tc_entry.tc_type) {
     case TEST_CASE_TYPE__SERVER:
         tpg_result.tsr_l4_proto = tc_entry.tc_server.srv_l4.l4s_proto;
-        tpg_result.tsr_app_proto = tc_entry.tc_server.srv_app.as_app_proto;
         break;
     case TEST_CASE_TYPE__CLIENT:
         tpg_result.tsr_l4_proto = tc_entry.tc_client.cl_l4.l4c_proto;
-        tpg_result.tsr_app_proto = tc_entry.tc_client.cl_app.ac_app_proto;
         break;
     default:
         err = -EINVAL;
         goto done;
     }
+
+    tpg_result.tsr_app_proto = tc_entry.tc_app.app_proto;
 
     err = test_mgmt_get_test_case_stats(test_case_arg.tca_eth_port,
                                         test_case_arg.tca_test_case_id,
@@ -1385,5 +1476,31 @@ done:
     RPC_REPLY(TestStatusResult, protoc_result, TEST_STATUS_RESULT__INIT,
               tpg_result);
     RPC_CLEANUP(TestCaseArg, test_case_arg, TestStatusResult, protoc_result);
+}
+
+/*****************************************************************************
+ * tpg_rpc__get_test_status()
+ ****************************************************************************/
+static void tpg_rpc__get_imix_statistics(Warp17_Service *service __rte_unused,
+                                         const ImixArg *input,
+                                         ImixStatsResult_Closure closure,
+                                         void *closure_data)
+{
+    tpg_imix_arg_t          imix_arg;
+    tpg_imix_stats_result_t tpg_result;
+    ImixStatsResult         protoc_result;
+    int                     err;
+
+    RPC_INIT_DEFAULT(ImixStatsResult, &tpg_result);
+    if (RPC_REQUEST_INIT(ImixArg, input, &imix_arg))
+        return;
+
+    err = test_mgmt_get_imix_stats(imix_arg.ia_imix_id, &tpg_result.isr_stats,
+                                   NULL);
+
+    RPC_STORE_RETCODE(tpg_result.isr_error, err);
+    RPC_REPLY(ImixStatsResult, protoc_result, IMIX_STATS_RESULT__INIT,
+              tpg_result);
+    RPC_CLEANUP(ImixArg, imix_arg, ImixStatsResult, protoc_result);
 }
 

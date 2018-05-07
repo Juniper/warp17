@@ -196,13 +196,14 @@ extern bool test_mgmt_cli_init(void);
 extern bool test_mgmt_init(void);
 extern int  test_mgmt_loop(void *arg);
 
-extern test_env_t                 *test_mgmt_get_port_env(uint32_t eth_port);
-extern tpg_test_case_stats_t      *test_mgmt_get_stats(uint32_t eth_port,
-                                                       uint32_t tc_id);
-extern tpg_test_case_rate_stats_t *test_mgmt_get_rate_stats(uint32_t eth_port,
-                                                            uint32_t tc_id);
-extern tpg_test_case_app_stats_t  *test_mgmt_get_app_stats(uint32_t eth_port,
-                                                           uint32_t tc_id);
+extern test_env_t *test_mgmt_get_port_env(uint32_t eth_port);
+
+extern tpg_gen_stats_t  *test_mgmt_get_stats(uint32_t eth_port,
+                                             uint32_t tc_id);
+extern tpg_rate_stats_t *test_mgmt_get_rate_stats(uint32_t eth_port,
+                                                  uint32_t tc_id);
+extern tpg_app_stats_t  *test_mgmt_get_app_stats(uint32_t eth_port,
+                                                 uint32_t tc_id);
 
 
 #endif /* _H_TPG_TEST_MGMT_ */

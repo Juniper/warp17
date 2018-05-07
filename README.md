@@ -29,7 +29,7 @@ WARP17 will be able to run on all the platforms that are supported by DPDK.
 ## Reference platform HW configuration
 The configuration of the server on which the WARP17 benchmarks were run is:
 
-* [Super X10DRX](www.supermicro.com/products/motherboard/Xeon/C600/X10DRX.cfm)
+* [Super X10DRX](http://www.supermicro.com/products/motherboard/Xeon/C600/X10DRX.cfm)
   dual socket motherboard
 * Two [Intel&reg; Xeon&reg; Processor E5-2660 v3](http://ark.intel.com/products/81706/Intel-Xeon-Processor-E5-2660-v3-25M-Cache-2_60-GHz)
 * 128GB RAM, using 16x 8G DDR4 2133Mhz to fill all the memory slots
@@ -265,25 +265,31 @@ RTE_SDK. For example:
    [libprotobuf-c-dev](http://packages.ubuntu.com/trusty/amd64/libprotobuf-c0-dev/download)
    from Ubuntu 14.04LTS:
 
-		```
-		sudo dpkg -i libprotobuf-c0_0.15-1build1_amd64.deb
-		sudo dpkg -i libprotobuf-c0-dev_0.15-1build1_amd64.deb
-		```
+    ```
+    sudo dpkg -i libprotobuf-c0_0.15-1build1_amd64.deb
+    sudo dpkg -i libprotobuf-c0-dev_0.15-1build1_amd64.deb
+    ```
 
  * Install [libprotobuf8](http://packages.ubuntu.com/trusty/amd64/libprotobuf8/download)
    from Ubuntu 14.04LTS:
 
-		sudo dpkg -i libprotobuf8_2.5.0-9ubuntu1_amd64.deb
+    ```
+    sudo dpkg -i libprotobuf8_2.5.0-9ubuntu1_amd64.deb
+    ```
 
  * Install [libprotoc8](http://packages.ubuntu.com/trusty/amd64/libprotoc8/download)
    from Ubuntu 14.04LTS:
 
-		sudo dpkg -i libprotoc8_2.5.0-9ubuntu1_amd64.deb
+    ```
+    sudo dpkg -i libprotoc8_2.5.0-9ubuntu1_amd64.deb
+    ```
 
  * Install [protobuf-c-compiler](http://packages.ubuntu.com/trusty/amd64/protobuf-c-compiler/download)
    from ubuntu 14.04LTS:
 
-		sudo dpkg -i protobuf-c-compiler_0.15-1build1_amd64.deb
+    ```
+    sudo dpkg -i protobuf-c-compiler_0.15-1build1_amd64.deb
+    ```
 
 ## Get WARP17
 Get the `warp17-<ver>.tgz` archive or clone the desired
@@ -1088,14 +1094,48 @@ defined the client or server test cases.
 	set tests server raw port <eth_port> test-case-id <tcid>data-req-plen <len> data-resp-plen <len> [rx-timestamp] [tx-timestamp]
 	```
 
-	Both CLI commands support additional RX/TX timestamping options. If
-	`rx-timestamp` is set, the Warp17 traffic engine will timestamp packets at
-	ingress and the RAW application will compute latency statistics when
-	incoming packets have TX timestamp information embedded in their payload. If
-	`tx-timestamp` is set RAW application clients will embed TX timestamps in the
-	first 16 bytes of the application payload. The RX/TX timestamps are both
-	computed early in the packet loop in order to be as precise as possible when
-	measuring latency.
+  Both CLI commands support additional RX/TX timestamping options. If
+  `rx-timestamp` is set, the Warp17 traffic engine will timestamp packets at
+  ingress and the RAW application will compute latency statistics when
+  incoming packets have TX timestamp information embedded in their payload. If
+  `tx-timestamp` is set RAW application clients will embed TX timestamps in the
+  first 16 bytes of the application payload. The RX/TX timestamps are both
+  computed early in the packet loop in order to be as precise as possible when
+  measuring latency.
+
+* __IMIX application traffic__: multiple application configurations can be
+  grouped in IMIX groups (i.e., Internet Mix traffic). Each application within
+  a group has an associated weight. When an IMIX test starts the weights of
+  each application are taken into account for determining how often the
+  application will be represented in the final traffic profile. Test case
+  rates (i.e., open, send, close) are also enforced according to the weights
+  of each application.
+
+	```
+	set tests imix app-index <app-index> <application-configuration>
+	```
+
+  The user can associate an application configuration to an IMIX application
+  index. Then the user should associate a weight with the given IMIX
+	application index:
+
+	```
+	set tests imix app-index <app-index> weight <weight>
+	```
+
+	Finally, multiple IMIX application indices can be used within an IMIX group:
+
+	```
+	add tests imix-id <imix-group-id> app <list-of-imix-app-indices>
+	```
+
+  The IMIX group can be used as an application configuration for a traffic
+  test case:
+
+	```
+	set tests imix port <eth-port> test-case-id <test-case-id> imix-id <imix-group-id>
+	```
+
 
 ## Displaying test information
 
@@ -1375,6 +1415,11 @@ WARP17 or executed directly in the CLI.
 * __examples/test\_13\_vlan\_udp.cfg__: example showing how to configure
   vlan information and per vlan gateways.
 
+* __examples/test\_14\_imix.cfg__: example showing how to combine multiple
+  L5 applications inside IMIX groups. Applications have different weights
+  which are used for computing how often the apps will be represented in
+  the traffic profile.
+
 # Python scripting API
 WARP17 offers an RPC-based API which allows users to write scripts and automate
 the tests that WARP17 would run. WARP17 listens to incoming RPC connections on TCP
@@ -1420,42 +1465,35 @@ In general, an application called `foo` should implement the following:
   the application configuration definitions (for clients and servers) and
   preferably application specific statistics definitions.
 
-  	- `warp17-app-foo.proto` should be included in both
-      `warp17-client.proto` and `warp17-server.proto` and the application
-      definitions should be added to the `TcpUdpClient` and `TcpUdpServer`
-      structures.:
+  	- `warp17-app-foo.proto` should be included in `warp17-app.proto` and
+		  the application the `App` structure:
 
 	```
-    message TcpUdpClient {
-		[...]
+	message App {
+	  required AppProto app_proto = 1;
+
 	    /* Add different App configs below as optionals. */
-	    optional RawClient  ac_raw        = 8  [(warp17_union_anon) = true];
-	    optional HttpClient ac_http       = 9  [(warp17_union_anon) = true];
-	    optional FooClient  ac_foo	      = 10 [(warp17_union_anon) = true];
-	}
-
-	[...]
-
-	message TcpUdpServer {
-		[...]
-		/* Add different App configs below as optionals. */
-		optional RawServer  as_raw       = 2 [(warp17_union_anon) = true];
-		optional HttpServer as_http      = 3 [(warp17_union_anon) = true];
-		optional FooServer  as_foo       = 4 [(warp17_union_anon) = true];
+	  optional RawClient  app_raw_client  = 2 [(warp17_union_anon) = true];
+	  optional RawServer  app_raw_server  = 3 [(warp17_union_anon) = true];
+	  optional HttpClient app_http_client = 4 [(warp17_union_anon) = true];
+	  optional HttpServer app_http_server = 5 [(warp17_union_anon) = true];
+	  optional Imix       app_imix        = 6 [(warp17_union_anon) = true];
+		optional Foo		    app_foo					= 7 [(warp17_union_anon) = true];
 	}
 	```
 
-    - `warp17-app-foo.proto` should also be included in
-      `warp17-test-case.proto` and the application specific statistics should
-      be added to the `TestCaseAppStats` definition:
+    - the application specific statistics should also be added to the
+    `AppStats` definition:
 
 	```
-    message TestCaseAppStats {
-		[...]
+	message AppStats {
+	  /* The user will do the translation. */
+	  option (warp17_xlate_tpg) = false;
 
-		optional RawStats  tcas_raw  = 1 [(warp17_union_anon) = true];
-		optional HttpStats tcas_http = 2 [(warp17_union_anon) = true];
-		optional FooStats  tcas_foo  = 3 [(warp17_union_anon) = true];
+	  optional RawStats  as_raw  = 1 [(warp17_union_anon) = true];
+	  optional HttpStats as_http = 2 [(warp17_union_anon) = true];
+	  optional ImixStats as_imix = 3 [(warp17_union_anon) = true];
+		optional FooStats  as_foo  = 4 [(warp17_union_anon) = true];
 	}
 	```
 
@@ -1464,15 +1502,27 @@ In general, an application called `foo` should implement the following:
 
 	```
 	enum AppProto {
-		RAW           = 0;
-		HTTP          = 1;
-		FOO		      = 2;
-		APP_PROTO_MAX = 3;
+	    RAW_CLIENT    = 0;
+	    RAW_SERVER    = 1;
+	    HTTP_CLIENT   = 2;
+	    HTTP_SERVER   = 3;
+	    IMIX          = 4;
+			FOO           = 5;
+	    APP_PROTO_MAX = 6;
 	}
 	```
 
     - the new protocol buffer file (`warp17-app-foo.proto`) should also
       be added to `api/Makefile.api`:
+
+	```
+	PROTO-SRCS += warp17-app-raw.proto
+	PROTO-SRCS += warp17-app-http.proto
+	PROTO-SRCS += warp17-app-foo.proto
+	```
+
+    - the file `Makefile.dpdk` should also be updated to include the new
+      application implementation:
 
 	```
 	SRCS-y += tpg_test_app.c
@@ -1481,7 +1531,7 @@ In general, an application called `foo` should implement the following:
 	SRCS-y += tpg_test_foo_app.c
 	```
 
-	- include `warp17-app-foo.proto` in `tcp_generator.h`:
+    - include `warp17-app-foo.proto` in `tcp_generator.h`:
 
 	```
 	#include "warp17-app-raw.proto.xlate.h"
@@ -1491,74 +1541,49 @@ In general, an application called `foo` should implement the following:
 
 * RPC WARP17 to protobuf translation code:
 
-	- a new case entry in `tpg_xlate_tpg_union_AppClient` where the client
+	- a new case entry in `tpg_xlate_tpg_union_App` where the application
 	  translation function should be called:
 
 	```
-	case APP_PROTO__HTTP:
-	    out->ac_http = rte_zmalloc("TPG_RPC_GEN", sizeof(*out->ac_http), 0);
-	    if (!out->ac_http)
-	        return -ENOMEM;
+  case APP_PROTO__HTTP_SERVER:
+      out->app_http_server =
+          rte_zmalloc("TPG_RPC_GEN", sizeof(*out->app_http_server), 0);
+      if (!out->app_http_server)
+          return -ENOMEM;
 
-	    tpg_xlate_tpg_HttpClient(&in->ac_http, out->ac_http);
-	    break;
+      tpg_xlate_tpg_HttpServer(&in->app_http_server, out->app_http_server);
+      break;
 	case APP_PROTO__FOO:
-	    out->ac_foo = rte_zmalloc("TPG_RPC_GEN", sizeof(*out->ac_foo), 0);
-	    if (!out->ac_foo)
+	    out->app_foo = rte_zmalloc("TPG_RPC_GEN", sizeof(*out->app_foo), 0);
+	    if (!out->app_foo)
 	        return -ENOMEM;
 
-	    tpg_xlate_tpg_FooClient(&in->ac_foo, out->ac_foo);
+	    tpg_xlate_tpg_Foo(&in->app_foo, out->app_foo);
 	    break;
 	```
 
-	- a new case entry in `tpg_xlate_tpg_union_AppServer` where the server
-	  translation function should be called:
-
-	```
-	case APP_PROTO__HTTP:
-	    out->as_http = rte_zmalloc("TPG_RPC_GEN", sizeof(*out->as_http), 0);
-	    if (!out->as_http)
-	        return -ENOMEM;
-
-	    tpg_xlate_tpg_HttpServer(&in->as_http, out->as_http);
-	    break;
-	case APP_PROTO__FOO:
-	    out->as_foo = rte_zmalloc("TPG_RPC_GEN", sizeof(*out->as_foo), 0);
-	    if (!out->as_foo)
-	        return -ENOMEM;
-
-	    tpg_xlate_tpg_FooServer(&in->as_foo, out->as_foo);
-	    break;
-	```
-
-	- a new case entry in `tpg_xlate_tpg_TestStatusResult` when translating
+	- a new case entry in `tpg_xlate_tpgTestAppStats_by_proto` when translating
 	  application statistics:
 
 	```
-	case APP_PROTO__HTTP:
-	    out->tsr_app_stats->tcas_http = rte_zmalloc("TPG_RPC_GEN",
-	                                                sizeof(*out->tsr_app_stats->tcas_http),
-	                                                0);
-	    if (!out->tsr_app_stats->tcas_http)
-	        return -ENOMEM;
+	case APP_PROTO__HTTP_SERVER:
+      out->as_http = rte_zmalloc("TPG_RPC_GEN", sizeof(*out->as_http), 0);
+      if (!out->as_http)
+         return -ENOMEM;
 
-	    err = tpg_xlate_tpg_HttpStats(&in->tsr_app_stats.tcas_http,
-	                                  out->tsr_app_stats->tcas_http);
-	    if (err)
-	        return err;
-	    break;
+      err = tpg_xlate_tpg_HttpStats(&in->as_http, out->as_http);
+      if (err)
+          return err;
+      break;
 	case APP_PROTO__FOO:
-	    out->tsr_app_stats->tcas_foo = rte_zmalloc("TPG_RPC_GEN",
-	                                               sizeof(*out->tsr_app_stats->tcas_foo),
-	                                               0);
-	    if (!out->tsr_app_stats->tcas_foo)
-	        return -ENOMEM;
+      out->as_foo = rte_zmalloc("TPG_RPC_GEN", sizeof(*out->as_foo), 0);
+      if (!out->as_foo)
+          return -ENOMEM;
 
-	    err = tpg_xlate_tpg_FooStats(&in->tsr_app_stats.tcas_foo,
-	                                 out->tsr_app_stats->tcas_foo);
-	    if (err)
-	        return err;
-	    break;
+      err = tpg_xlate_tpg_FooStats(&in->as_foo, out->as_foo);
+      if (err)
+          return err;
+      break;
 	```
 
 * `appl/tpg_test_app.h` interface implementation:
@@ -1572,7 +1597,7 @@ In general, an application called `foo` should implement the following:
 	```
 	typedef struct app_data_s {
 
-	    tpg_app_proto_t   ad_type;
+	    [...]
 
 	    union {
 	        raw_app_t     ad_raw;
@@ -1599,8 +1624,15 @@ In general, an application called `foo` should implement the following:
 		- `app_print_cfg_cb_t`: should display the part of the configuration
 		  corresponding to the `foo` application by using the supplied printer
 
+		- `app_add_cfg_cb_t`: will be called whenever a test case is added
+		  so `foo` initialize everything needed for the test case.
+
 		- `app_delete_cfg_cb_t`: will be called whenever a test case is deleted
-		  so `foo` can cleanup anything it initialized for that test case.
+		  so `foo` can cleanup anything it initialized for the test case.
+
+		- `app_pkts_per_send_cb_t`: will be called when the test case is started
+		  to determine how many packets (on average) will `foo` be sending for
+		  a single data message
 
 		- `app_init_cb_t`: will be called whenever a session is initialized
 		  and should initialize the application state.

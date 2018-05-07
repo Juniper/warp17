@@ -67,9 +67,6 @@
  */
 STATS_DEFINE(tpg_udp_statistics_t);
 
-/* Callback to be executed whenever an interesting event happens. */
-notif_cb_t udp_notif_cb;
-
 /*****************************************************************************
  * Forward declarations
  ****************************************************************************/
@@ -126,11 +123,7 @@ static int udp_process_incoming(udp_control_block_t *ucb,
     UCB_CHECK(ucb);
 
     app_id = ucb->ucb_l4.l4cb_app_data.ad_type;
-
-    if (ucb->ucb_active)
-        app_deliver_cb = APP_CL_CALL(deliver, app_id);
-    else
-        app_deliver_cb = APP_SRV_CALL(deliver, app_id);
+    app_deliver_cb = APP_CALL(deliver, app_id);
 
     /* It's a bit ugly to use the test case here but this is the only
      * place where we need to look it up so it would be inneficient to avoid
@@ -334,7 +327,7 @@ struct rte_mbuf *udp_receive_pkt(packet_control_block_t *pcb,
             ucb = new_ucb;
 
             /* Notify that the connection is UP. */
-            UDP_NOTIF_UCB(UCB_NOTIF_STATE_CHANGE, ucb);
+            UDP_NOTIF(TEST_NOTIF_SESS_SRV_CONNECTED, ucb);
         }
     }
 
@@ -575,12 +568,14 @@ int udp_open_v4_connection(udp_control_block_t **ucb, uint32_t eth_port,
     if (active) {
         ucb_p->ucb_active = true;
         ucb_p->ucb_state = US_OPEN;
-        /* UDP Clients are considered UP immediately. */
-        UDP_NOTIF_UCB(UCB_NOTIF_STATE_CHANGE, ucb_p);
+
+        /* Udp skips some states so let's batch some notifications. */
+        UDP_NOTIF(TEST_NOTIF_SESS_CONNECTED_IMM, ucb_p);
     } else {
         ucb_p->ucb_active = false;
         ucb_p->ucb_state = US_LISTEN;
-        /* UDP Servers are considered UP once they receive data. */
+
+        UDP_NOTIF(TEST_NOTIF_SESS_LISTEN, ucb_p);
     }
 
     rc = tlkp_add_ucb(ucb_p);
@@ -637,8 +632,10 @@ int udp_close_v4(udp_control_block_t *ucb)
     UCB_CHECK(ucb);
 
     ucb->ucb_state = US_CLOSED;
+
     /* Notify that the connection is DOWN. */
-    UDP_NOTIF_UCB(UCB_NOTIF_STATE_CHANGE, ucb);
+    UDP_NOTIF(TEST_NOTIF_SESS_CLOSING, ucb);
+    UDP_NOTIF(TEST_NOTIF_SESS_CLOSED, ucb);
 
     /*
      * Remove from the lookup table.

@@ -177,6 +177,7 @@ static inline uint32_t port_get_pre_init_port_count(void)
      */
     return rte_eth_dev_count() + ring_if_get_count() + kni_if_get_count();
 }
+
 /*****************************************************************************
  * port_is_kni_port()
  ****************************************************************************/
@@ -460,6 +461,10 @@ static bool port_setup_port(uint8_t port)
 {
     int                 rc;
     int                 queue;
+#if !defined(TPG_SW_CHECKSUMMING)
+    int                 expected_rx_flags;
+    int                 expected_tx_flags;
+#endif /* !defined(TPG_SW_CHECKSUMMING) */
     uint16_t            number_of_rings;
     global_config_t    *cfg;
     struct ether_addr   mac_addr;
@@ -468,7 +473,7 @@ static bool port_setup_port(uint8_t port)
     struct rte_eth_conf default_port_config = {
         .rxmode = {
             .mq_mode        = ETH_MQ_RX_RSS,
-            .max_rx_pkt_len = PORT_MAX_MTU,
+            .max_rx_pkt_len = port_dev_info[port].pi_dev_info.max_rx_pktlen,
             .split_hdr_size = 0,
             .header_split   = 0, /**< Header Split disabled */
             .hw_ip_checksum = 1, /**< IP checksum offload enabled */
@@ -511,6 +516,35 @@ static bool port_setup_port(uint8_t port)
         .tx_free_thresh = 64,
         .tx_rs_thresh = 32,
     };
+
+    if (!port_dev_info[port].pi_dev_info.max_rx_pktlen)
+        TPG_ERROR_EXIT(EXIT_FAILURE,
+                       "ERROR: We don't support %s since it has no \"Maximum configurable length of RX pkt\"!\n",
+                       port_dev_info[port].pi_dev_info.driver_name);
+
+#if !defined(TPG_SW_CHECKSUMMING)
+    expected_rx_flags = (DEV_RX_OFFLOAD_VLAN_STRIP |
+                         DEV_RX_OFFLOAD_IPV4_CKSUM |
+                         DEV_RX_OFFLOAD_UDP_CKSUM |
+                         DEV_RX_OFFLOAD_TCP_CKSUM);
+
+    if (!(port_dev_info[port].pi_dev_info.rx_offload_capa & expected_rx_flags))
+        TPG_ERROR_EXIT(EXIT_FAILURE,
+                       "ERROR: %s doesn't support vlan/ipv4/udp/tcp rx capabilities!\n",
+                       port_dev_info[port].pi_dev_info.driver_name);
+#endif /* !defined(TPG_SW_CHECKSUMMING) */
+
+#if !defined(TPG_SW_CHECKSUMMING)
+    expected_tx_flags = (DEV_RX_OFFLOAD_VLAN_STRIP |
+                         DEV_RX_OFFLOAD_IPV4_CKSUM |
+                         DEV_RX_OFFLOAD_UDP_CKSUM |
+                         DEV_RX_OFFLOAD_TCP_CKSUM);
+
+    if (!(port_dev_info[port].pi_dev_info.tx_offload_capa & expected_tx_flags))
+        TPG_ERROR_EXIT(EXIT_FAILURE,
+                       "ERROR: %s doesn't support vlan/ipv4/udp/tcp tx capabilities!\n",
+                       port_dev_info[port].pi_dev_info.driver_name);
+#endif /* !defined(TPG_SW_CHECKSUMMING) */
 
     RTE_LOG(INFO, USER1, "[%s()] Initializing Ethernet port %u.\n", __func__,
             port);
@@ -592,11 +626,21 @@ static bool port_setup_port(uint8_t port)
      * however as we exit the application it should be fine for now.
      */
     for (queue = 0; queue < number_of_rings; queue++) {
+        uint16_t nb_max = 0; /**< Max allowed number of descriptors. */
 
-        rc = rte_eth_rx_queue_setup(port, queue, TPG_ETH_DEV_RX_QUEUE_SIZE,
-                                    port_get_socket(port, queue),
-                                    &rx_conf,
+        if (port_dev_info[port].pi_dev_info.rx_desc_lim.nb_max <
+                TPG_ETH_DEV_RX_QUEUE_SIZE) {
+            RTE_LOG(WARNING, USER1,
+                    "WARNING: Port %u RX descriptors limit is lower than our default!\n",
+                    port);
+            nb_max = port_dev_info[port].pi_dev_info.rx_desc_lim.nb_max;
+        } else {
+            nb_max = TPG_ETH_DEV_RX_QUEUE_SIZE;
+        }
+        rc = rte_eth_rx_queue_setup(port, queue, nb_max,
+                                    port_get_socket(port, queue), &rx_conf,
                                     mem_get_mbuf_pool(port, queue));
+
         if (rc < 0) {
             RTE_LOG(ERR, USER1,
                     "ERROR: Failed rte_eth_rx_queue_setup(%u, %u, ...), returned %s(%d)!\n",
@@ -604,7 +648,16 @@ static bool port_setup_port(uint8_t port)
             return false;
         }
 
-        rc = rte_eth_tx_queue_setup(port, queue, TPG_ETH_DEV_TX_QUEUE_SIZE,
+        if (port_dev_info[port].pi_dev_info.tx_desc_lim.nb_max <
+                TPG_ETH_DEV_TX_QUEUE_SIZE) {
+            RTE_LOG(WARNING, USER1,
+                    "WARNING: Port %u TX descriptors limit is lower than our default!\n",
+                    port);
+            nb_max = port_dev_info[port].pi_dev_info.tx_desc_lim.nb_max;
+        } else {
+            nb_max = TPG_ETH_DEV_TX_QUEUE_SIZE;
+        }
+        rc = rte_eth_tx_queue_setup(port, queue, nb_max,
                                     port_get_socket(port, queue),
                                     &tx_conf);
 
@@ -637,7 +690,7 @@ static bool port_setup_port(uint8_t port)
     rte_eth_dev_set_mtu(port,
                         port_is_kni_port(port) ?
                         cfg->gcfg_mbuf_size - RTE_PKTMBUF_HEADROOM :
-                        PORT_MAX_MTU);
+                        port_dev_info[port].pi_dev_info.max_rx_pktlen);
 
     rc = port_dev_hw_start(port);
     if (rc < 0) {
@@ -951,6 +1004,14 @@ uint32_t port_get_socket(int port, int queue)
 void port_link_info_get(uint32_t port, struct rte_eth_link *link_info)
 {
     rte_eth_link_get(port, link_info);
+}
+
+/*****************************************************************************
+ * port_link_info_get_nowait()
+ *****************************************************************************/
+void port_link_info_get_nowait(uint32_t port, struct rte_eth_link *link)
+{
+    rte_eth_link_get_nowait(port, link);
 }
 
 /*****************************************************************************

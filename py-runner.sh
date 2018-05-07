@@ -1,7 +1,8 @@
+#!/bin/sh
 #
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
 #
-# Copyright (c) 2016, Juniper Networks, Inc. All rights reserved.
+# Copyright (c) 2018, Juniper Networks, Inc. All rights reserved.
 #
 #
 # The contents of this file are subject to the terms of the BSD 3 clause
@@ -39,45 +40,21 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # File name:
-#     tpg_test_server_sm.dot
+#     py-runner.sh
 #
 # Description:
-#     Server state machine diagram.
+#     Simple wrapper script to setup the proper python paths.
 #
 # Author:
-#     Dumitru Ceara, Eelco Chaudron
+#     Dumitru Ceara
 #
 # Initial Created:
-#     04/18/2016
+#     04/04/2018
 #
 # Notes:
 #
-#
 
-digraph {
-    splines=true;
-    sep="+50,50";
-    overlap=scalexy;
-    nodesep=0.9;
+topdir=`dirname $0`
 
-    init[label="init(S=LISTEN)"]
-    open[label="open(S=ESTAB)"]
-    sending[label="sending*(S=ESTAB)"]
-    no_snd_win[label="no_snd_win(S=ESTAB)"]
-    closing[label="closing(S>ESTAB)"]
-
-    init -> open[label="TCP State ESTAB, \n A: NotifyApp(ESTAB)"]
-
-    open    -> sending[label="APP SEND START, \n A: add TO_SEND_LST"]
-    sending -> open[label="APP SEND_STOP, \n A: rem TO_SEND_LST"]
-
-    open -> closing[label="TCP State CHG, \n A: NotifyApp(CONN_DOWN)"]
-
-    sending -> no_snd_win[label="TCP NO SND WIN, \n A: rem TO_SEND_LST"]
-    sending -> closing[label="TCP State CHG, \n A: rem TO_SEND_LST & \n NotifyApp(CONN_DOWN)"]
-
-    no_snd_win -> sending[label="TCP SND WIN, \n A: add TO_SEND_LST"]
-    no_snd_win -> closing[label="TCP State CHG, \n A: NotifyApp(CONN_DOWN)"]
-    no_snd_win -> open[label="APP SEND_STOP, \n A: None"]
-}
+PYTHONPATH=$topdir/python:$topdir/api/generated/py:$topdir/ut/lib:$PYTHONPATH $@
 
