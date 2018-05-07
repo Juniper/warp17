@@ -461,8 +461,10 @@ static bool port_setup_port(uint8_t port)
 {
     int                 rc;
     int                 queue;
+#if !defined(TPG_SW_CHECKSUMMING)
     int                 expected_rx_flags;
     int                 expected_tx_flags;
+#endif /* !defined(TPG_SW_CHECKSUMMING) */
     uint16_t            number_of_rings;
     global_config_t    *cfg;
     struct ether_addr   mac_addr;
@@ -520,6 +522,7 @@ static bool port_setup_port(uint8_t port)
                        "ERROR: We don't support %s since it has no \"Maximum configurable length of RX pkt\"!\n",
                        port_dev_info[port].pi_dev_info.driver_name);
 
+#if !defined(TPG_SW_CHECKSUMMING)
     expected_rx_flags = (DEV_RX_OFFLOAD_VLAN_STRIP |
                          DEV_RX_OFFLOAD_IPV4_CKSUM |
                          DEV_RX_OFFLOAD_UDP_CKSUM |
@@ -529,7 +532,9 @@ static bool port_setup_port(uint8_t port)
         TPG_ERROR_EXIT(EXIT_FAILURE,
                        "ERROR: %s doesn't support vlan/ipv4/udp/tcp rx capabilities!\n",
                        port_dev_info[port].pi_dev_info.driver_name);
+#endif /* !defined(TPG_SW_CHECKSUMMING) */
 
+#if !defined(TPG_SW_CHECKSUMMING)
     expected_tx_flags = (DEV_RX_OFFLOAD_VLAN_STRIP |
                          DEV_RX_OFFLOAD_IPV4_CKSUM |
                          DEV_RX_OFFLOAD_UDP_CKSUM |
@@ -539,6 +544,7 @@ static bool port_setup_port(uint8_t port)
         TPG_ERROR_EXIT(EXIT_FAILURE,
                        "ERROR: %s doesn't support vlan/ipv4/udp/tcp tx capabilities!\n",
                        port_dev_info[port].pi_dev_info.driver_name);
+#endif /* !defined(TPG_SW_CHECKSUMMING) */
 
     RTE_LOG(INFO, USER1, "[%s()] Initializing Ethernet port %u.\n", __func__,
             port);

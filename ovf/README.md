@@ -25,6 +25,9 @@ in a back2back configuration. If you do want to test it with a router in
 between you could force IP checksum generating in ipv4_build_ipv4_hdr(), and
 change the “if (true)” to “if (false)”.
 
+**NOTE:** If you want to use VMware virtual e1000 driver you've to compile
+warp17 with `TPG_SW_CHECKSUMMING` enabled.
+
 **NOTE:** The following patch was applied to get DPDK working in combination
 with the VMware virtual e1000 driver,
 [http://dpdk.org/dev/patchwork/patch/945/](http://dpdk.org/dev/patchwork/patch/945/).
