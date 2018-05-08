@@ -716,7 +716,7 @@ static bool port_setup_port(uint8_t port)
  ****************************************************************************/
 void port_fix_pktlen(uint8_t port)
 {
-    char *driver_name;
+    const char *driver_name;
 
     driver_name = port_dev_info[port].pi_dev_info.driver_name;
     if (strncmp(driver_name, "net_mlx5",
