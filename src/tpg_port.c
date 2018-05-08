@@ -470,6 +470,8 @@ static bool port_setup_port(uint8_t port)
     struct ether_addr   mac_addr;
     tpg_port_options_t  default_port_options;
 
+    port_fix_pktlen(port);
+
     struct rte_eth_conf default_port_config = {
         .rxmode = {
             .mq_mode        = ETH_MQ_RX_RSS,
@@ -707,6 +709,20 @@ static bool port_setup_port(uint8_t port)
         return false;
 
     return true;
+}
+
+/*****************************************************************************
+ * port_fix_pktlen
+ ****************************************************************************/
+void port_fix_pktlen(uint8_t port)
+{
+    char *driver_name;
+
+    driver_name = port_dev_info[port].pi_dev_info.driver_name;
+    if (strncmp(driver_name, "net_mlx5",
+                strlen("net_mlx5") + 1) == 0) {
+        port_dev_info[port].pi_dev_info.max_rx_pktlen = 0;
+    }
 }
 
 /*****************************************************************************
