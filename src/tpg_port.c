@@ -420,6 +420,11 @@ static bool port_adjust_info(uint32_t port)
 {
     struct ether_addr mac_addr;
 
+    /* Adjust max_rx_pktlen. Max pktlen size may be 2 * PORT_MAX_MTU.
+     */
+    if (port_dev_info[port].pi_dev_info.max_rx_pktlen > 2 * PORT_MAX_MTU)
+        port_dev_info[port].pi_dev_info.max_rx_pktlen = 2 * PORT_MAX_MTU;
+    
     /* Adjust reta_size. RETA size may be 0 in case we're running on a VF.
      * e.g: for Intel 82599 10G.
      */
@@ -469,8 +474,6 @@ static bool port_setup_port(uint8_t port)
     global_config_t    *cfg;
     struct ether_addr   mac_addr;
     tpg_port_options_t  default_port_options;
-
-    port_fix_pktlen(port);
 
     struct rte_eth_conf default_port_config = {
         .rxmode = {
@@ -709,20 +712,6 @@ static bool port_setup_port(uint8_t port)
         return false;
 
     return true;
-}
-
-/*****************************************************************************
- * port_fix_pktlen
- ****************************************************************************/
-void port_fix_pktlen(uint8_t port)
-{
-    const char *driver_name;
-
-    driver_name = port_dev_info[port].pi_dev_info.driver_name;
-    if (strncmp(driver_name, "net_mlx5",
-                strlen("net_mlx5") + 1) == 0) {
-        port_dev_info[port].pi_dev_info.max_rx_pktlen = 0;
-    }
 }
 
 /*****************************************************************************
