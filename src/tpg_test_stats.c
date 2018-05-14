@@ -354,18 +354,13 @@ static void test_config_show_tc_app(const tpg_test_case_t *te,
                               "s/s",
                               printer_arg);
 
-        test_config_duration_show(&te->tc_client.cl_delays.dc_init_delay,
-                                  "Init",
-                                  "ms",
+        test_config_duration_show(&te->tc_init_delay, "Init", "s",
                                   printer_arg);
 
-        test_config_duration_show(&te->tc_client.cl_delays.dc_uptime, "Uptime",
-                                  "ms",
+        test_config_duration_show(&te->tc_uptime, "Uptime", "s",
                                   printer_arg);
 
-        test_config_duration_show(&te->tc_client.cl_delays.dc_downtime,
-                                  "Downtime",
-                                  "ms",
+        test_config_duration_show(&te->tc_downtime, "Downtime", "s",
                                   printer_arg);
 
         tpg_printf(printer_arg, "\n");

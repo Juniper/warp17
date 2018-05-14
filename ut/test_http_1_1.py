@@ -69,7 +69,7 @@ from warp17_service_pb2   import *
 class TestHttpCfg(Warp17TrafficTestCase, Warp17UnitTestCase):
 
     # Allow test cases to run for a while so we actually see requests/responses
-    RUN_TIME_S = Delay(d_value=3)
+    RUN_TIME_S = 3
 
     def _http_client_cfg(self, method=GET, req_size=42,
                          fields='Content-Type: plain/text'):
@@ -110,7 +110,8 @@ class TestHttpCfg(Warp17TrafficTestCase, Warp17UnitTestCase):
 
     def get_client_criteria_cfg(self, eth_port, tc_id, l3_intf_count,
                                 l4_port_count):
-        return TestCriteria(tc_crit_type=RUN_TIME, tc_run_time=self.RUN_TIME_S)
+        return TestCriteria(tc_crit_type=RUN_TIME,
+                            tc_run_time=Delay(d_value=self.RUN_TIME_S))
 
     def get_server_app_cfg(self, eth_port, tc_id):
         return self._http_server_cfg()
@@ -245,7 +246,8 @@ class TestHttpRaw(Warp17TrafficTestCase, Warp17UnitTestCase):
 
     def get_client_criteria_cfg(self, eth_port, tc_id, l3_intf_count,
                                 l4_port_count):
-        return TestCriteria(tc_crit_type=RUN_TIME, tc_run_time=self.RUN_TIME_S)
+        return TestCriteria(tc_crit_type=RUN_TIME,
+                            tc_run_time=Delay(d_value=self.RUN_TIME_S))
 
     def get_server_app_cfg(self, eth_port, tc_id):
         return self._http_server_cfg()
