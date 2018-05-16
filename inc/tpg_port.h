@@ -231,8 +231,6 @@ extern cmdline_arg_parser_res_t port_handle_cmdline_opt(const char *opt_name,
                                                         char *opt_arg);
 extern bool                     port_handle_cmdline(void);
 
-extern void                     port_fix_pktlen(uint8_t port);
-
 /*****************************************************************************
  * Static inlines.
  ****************************************************************************/
