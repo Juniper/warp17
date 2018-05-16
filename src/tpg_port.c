@@ -420,6 +420,12 @@ static bool port_adjust_info(uint32_t port)
 {
     struct ether_addr mac_addr;
 
+    /* Adjust max_rx_pktlen. Max pktlen size may be 2 * PORT_MAX_MTU.
+     */
+    if (!port_dev_info[port].pi_dev_info.max_rx_pktlen ||
+            port_dev_info[port].pi_dev_info.max_rx_pktlen > PORT_MAX_MTU)
+        port_dev_info[port].pi_dev_info.max_rx_pktlen = PORT_MAX_MTU;
+
     /* Adjust reta_size. RETA size may be 0 in case we're running on a VF.
      * e.g: for Intel 82599 10G.
      */
