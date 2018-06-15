@@ -236,7 +236,7 @@ struct rte_mbuf *udp_receive_pkt(packet_control_block_t *pcb,
          */
         if (unlikely(udp_hdr->dgram_cksum != 0) &&
             ipv4_general_l4_cksum(mbuf, pcb->pcb_ipv4, 0,
-                                  rte_be_to_cpu_16(udp_hdr->dgram_len)) != 0xffff) {
+                                  rte_be_to_cpu_16(udp_hdr->dgram_len)) != 0xFFFF) {
 
             RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Invalid UDP checksum!\n",
                     pcb->pcb_core_index, __func__);
@@ -457,6 +457,14 @@ udp_send_pkt(udp_control_block_t *ucb, struct rte_mbuf *hdr_mbuf,
     /* Perform TX timestamp propagation if needed. */
     tstamp_data_append(hdr_mbuf, data_mbuf);
 
+#if defined(TPG_SW_CHECKSUMMING)
+    if (data_mbuf != NULL) {
+        if (unlikely(DATA_IS_TSTAMP(data_mbuf))) {
+            tstamp_write_cksum_offset(hdr_mbuf,
+                                RTE_PTR_DIFF(&udp_hdr->dgram_cksum, udp_hdr));
+        }
+    }
+#endif /*defined(TPG_SW_CHECKSUMMING)*/
     /* Append the data part too. */
     hdr_mbuf->next = data_mbuf;
     hdr_mbuf->pkt_len += data_mbuf->pkt_len;
@@ -481,7 +489,7 @@ udp_send_pkt(udp_control_block_t *ucb, struct rte_mbuf *hdr_mbuf,
     }
 #else
     RTE_SET_USED(udp_hdr);
-#endif
+#endif /*defined(TPG_SW_CHECKSUMMING)*/
 
     /*
      * Send the packet!!

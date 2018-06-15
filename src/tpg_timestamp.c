@@ -134,6 +134,17 @@ bool tstamp_rx_is_running(uint32_t port, uint32_t rss_queue __rte_unused)
 }
 
 /*****************************************************************************
+ * tstamp_write_cksum_offset()
+ ****************************************************************************/
+void tstamp_write_cksum_offset(struct rte_mbuf *mbuf, uint32_t chksum_offset)
+{
+    if (chksum_offset != 0) {
+        chksum_offset += DATA_GET_CKSUM_OFFSET(mbuf);
+        DATA_SET_CKSUM_OFFSET(mbuf, chksum_offset);
+    }
+}
+
+/*****************************************************************************
  * tstamp_tx_pkt()
  ****************************************************************************/
 void tstamp_tx_pkt(struct rte_mbuf *mbuf, uint32_t offset, uint32_t size)

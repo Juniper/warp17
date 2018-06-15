@@ -506,6 +506,11 @@ static struct ipv4_hdr *ipv4_build_hdr(l4_control_block_t *l4_cb,
         ip_opt->hdr.ipt_flg_oflow = IPOPT_TS_TSONLY;
 
         tstamp_tx_pkt(mbuf, offset, sizeof(ip_opt->data));
+#if defined(TPG_SW_CHECKSUMMING)
+        tstamp_write_cksum_offset(mbuf, mbuf->pkt_len - ip_hdr_len +
+                                  RTE_PTR_DIFF(&ref_ip_hdr->hdr_checksum,
+                                               ref_ip_hdr));
+#endif /* defined(TPG_SW_CHECKSUMMING) */
     }
 
     ip_hdr->version_ihl = (4 << 4) | (ip_hdr_len >> 2);
@@ -517,22 +522,19 @@ static struct ipv4_hdr *ipv4_build_hdr(l4_control_block_t *l4_cb,
     ip_hdr->next_proto_id = protocol;
     ip_hdr->src_addr = rte_cpu_to_be_32(l4_cb->l4cb_src_addr.ip_v4);
     ip_hdr->dst_addr = rte_cpu_to_be_32(l4_cb->l4cb_dst_addr.ip_v4);
+    ip_hdr->hdr_checksum = 0;
 
 #if !defined(TPG_SW_CHECKSUMMING)
     if (true) {
 #else
     if (sockopt->so_eth.ethso_tx_offload_ipv4_cksum) {
-#endif
-        /*
-         * We assume hardware checksum calculation
-         */
+#endif /* !defined(TPG_SW_CHECKSUMMING) */
         mbuf->l3_len = ip_hdr_len;
         mbuf->ol_flags |= PKT_TX_IP_CKSUM;
-        ip_hdr->hdr_checksum = 0;
     } else {
-        ip_hdr->hdr_checksum = 0;
-        /* TODO: This call does not work if options are present!! */
-        ip_hdr->hdr_checksum = rte_ipv4_cksum(ip_hdr);
+        ip_hdr->hdr_checksum = rte_raw_cksum(ip_hdr, ip_hdr_len);
+        ip_hdr->hdr_checksum = (ip_hdr->hdr_checksum == 0xFFFF)
+                               ? ip_hdr->hdr_checksum : ~ip_hdr->hdr_checksum;
     }
 
     return ip_hdr;
@@ -737,11 +739,7 @@ struct rte_mbuf *ipv4_receive_pkt(packet_control_block_t *pcb,
             return mbuf;
         }
     } else {
-        /*
-         * No HW checksum support do it manually...
-         *
-         * NOTE: rte_ipv4_cksum() has a bug as it ignores options if present.
-         */
+        /* No HW checksum support do it manually */
         uint16_t checksum;
 
         checksum = rte_raw_cksum(ip_hdr, ip_hdr_len);
@@ -866,13 +864,3 @@ static void ipv4_latency_check(packet_control_block_t *pcb, uint64_t tstamp)
         test_update_latency(l4cb, tstamp, pcb->pcb_tstamp);
     }
 }
-
-/*****************************************************************************
- * ipv4_recalc_tstamp_cksum()
- ****************************************************************************/
-/*static void ipv4_recalc_tstamp_cksum(struct rte_mbuf *mbuf, uint32_t offset,
- *                                     uint32_t size)
- *{
- *      TODO: support this functionality
- *}
- */

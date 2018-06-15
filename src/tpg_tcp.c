@@ -489,7 +489,7 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
          */
 
         if (unlikely(ipv4_general_l4_cksum(mbuf, pcb->pcb_ipv4, 0,
-                                           pcb->pcb_l4_len) != 0xffff)) {
+                                           pcb->pcb_l4_len) != 0xFFFF)) {
             RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Invalid TCP checksum!\n",
                     pcb->pcb_core_index, __func__);
 
@@ -737,6 +737,16 @@ static bool tcp_send_pkt(tcp_control_block_t *tcb, uint32_t sseq,
     if (data_pkt_len)
         tstamp_data_append(hdr, data_mbuf);
 
+#if defined(TPG_SW_CHECKSUMMING)
+    if (data_mbuf != NULL) {
+        if ((DATA_IS_TSTAMP(data_mbuf))) {
+            tstamp_write_cksum_offset(hdr,
+                                      hdr->pkt_len - sizeof(struct tcp_hdr) +
+                                      RTE_PTR_DIFF(&tcp_hdr->cksum, tcp_hdr));
+        }
+    }
+#endif /*defined(TPG_SW_CHECKSUMMING)*/
+
     /* Append the data part too. */
     hdr->next = data_mbuf;
     hdr->pkt_len += data_pkt_len;
@@ -756,7 +766,7 @@ static bool tcp_send_pkt(tcp_control_block_t *tcb, uint32_t sseq,
         tcp_hdr->cksum = ipv4_update_general_l4_cksum(tcp_hdr->cksum,
                                                       data_mbuf);
     }
-#endif
+#endif /*defined(TPG_SW_CHECKSUMMING)*/
 
     /*
      * Send the packet!!

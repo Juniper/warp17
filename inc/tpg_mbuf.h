@@ -75,10 +75,13 @@
 #define TPG_APP_UINT64_MBUF_TSTAMP_OFFSET_MASK_LEN 16
 /* Reserve 16 bits for timestamp size. */
 #define TPG_APP_UINT64_MBUF_TSTAMP_SIZE_MASK_LEN   16
+/* Reserve 16 bits for timestamp offset. */
+#define TPG_APP_UINT64_MBUF_CKSUM_OFFSET_MASK_LEN 16
 
-#define TPG_APP_UINT64_MBUF_TSTAMP_MASK_LEN       \
-    (TPG_APP_UINT64_MBUF_TSTAMP_OFFSET_MASK_LEN + \
-        TPG_APP_UINT64_MBUF_TSTAMP_SIZE_MASK_LEN)
+#define TPG_APP_UINT64_MBUF_TSTAMP_MASK_LEN        \
+    (TPG_APP_UINT64_MBUF_TSTAMP_OFFSET_MASK_LEN +  \
+        TPG_APP_UINT64_MBUF_TSTAMP_SIZE_MASK_LEN + \
+        TPG_APP_UINT64_MBUF_CKSUM_OFFSET_MASK_LEN)
 
 static_assert(TPG_APP_UINT64_MBUF_FLAG_MAX >
               (((uint64_t) 1 << TPG_APP_UINT64_MBUF_TSTAMP_MASK_LEN) - 1),
@@ -90,12 +93,20 @@ static_assert(TPG_APP_UINT64_MBUF_FLAG_MAX >
 #define TPG_APP_UINT64_MBUF_TSTAMP_SIZE_MASK \
     (uint64_t)((1 << TPG_APP_UINT64_MBUF_TSTAMP_SIZE_MASK_LEN) - 1)
 
+#define TPG_APP_UINT64_MBUF_CKSUM_OFFSET_MASK \
+    (uint64_t)((1 << TPG_APP_UINT64_MBUF_CKSUM_OFFSET_MASK_LEN) - 1)
+
 /* Use the lowest 16 bits for timestamp offset and the next 16 bits for
  * timestamp size (length).
  */
 #define TPG_APP_UINT64_MBUF_TSTAMP_OFFSET_POS 0
+
 #define TPG_APP_UINT64_MBUF_TSTAMP_SIZE_POS \
             TPG_APP_UINT64_MBUF_TSTAMP_OFFSET_MASK_LEN
+
+#define TPG_APP_UINT64_MBUF_CKSUM_OFFSET_POS          \
+            (TPG_APP_UINT64_MBUF_TSTAMP_SIZE_POS +    \
+             TPG_APP_UINT64_MBUF_TSTAMP_SIZE_MASK_LEN)
 
 #define DATA_SET_TSTAMP_OFFSET(mbuf, offset)                   \
     ((mbuf)->udata64 |= (                                      \
@@ -106,6 +117,11 @@ static_assert(TPG_APP_UINT64_MBUF_FLAG_MAX >
     ((mbuf)->udata64 |= (((size) & TPG_APP_UINT64_MBUF_TSTAMP_SIZE_MASK) << \
         TPG_APP_UINT64_MBUF_TSTAMP_SIZE_POS))
 
+#define DATA_SET_CKSUM_OFFSET(mbuf, offset)                   \
+    ((mbuf)->udata64 |= (                                      \
+        ((offset) & TPG_APP_UINT64_MBUF_CKSUM_OFFSET_MASK) << \
+         TPG_APP_UINT64_MBUF_CKSUM_OFFSET_POS))
+
 #define DATA_GET_TSTAMP_OFFSET(mbuf)                              \
     (((mbuf)->udata64 >> TPG_APP_UINT64_MBUF_TSTAMP_OFFSET_POS) & \
         TPG_APP_UINT64_MBUF_TSTAMP_OFFSET_MASK)
@@ -113,6 +129,10 @@ static_assert(TPG_APP_UINT64_MBUF_FLAG_MAX >
 #define DATA_GET_TSTAMP_SIZE(mbuf)                              \
     (((mbuf)->udata64 >> TPG_APP_UINT64_MBUF_TSTAMP_SIZE_POS) & \
         TPG_APP_UINT64_MBUF_TSTAMP_SIZE_MASK)
+
+#define DATA_GET_CKSUM_OFFSET(mbuf)                              \
+    (((mbuf)->udata64 >> TPG_APP_UINT64_MBUF_CKSUM_OFFSET_POS) & \
+        TPG_APP_UINT64_MBUF_CKSUM_OFFSET_MASK)
 
 /*****************************************************************************
  * DATA_SET_TSTAMP()

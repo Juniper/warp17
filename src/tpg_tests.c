@@ -215,6 +215,38 @@ static void test_update_recent_latency_stats(tpg_latency_stats_t *stats,
 static void test_case_latency_init(test_case_info_t *tc_info);
 
 /*****************************************************************************
+ * test_update_cksum_tstamp()
+ *      this function uses incremental checksum from RFC1624 in order to update
+ *      the checksum (Ipv4/TCP/UDP) after the timstamp is added
+ *      https://tools.ietf.org/html/rfc1624
+ ****************************************************************************/
+static void test_update_cksum_tstamp(struct rte_mbuf *mbuf __rte_unused,
+                                     struct rte_mbuf *mbuf_seg,
+                                     uint32_t offset, uint32_t size)
+{
+    uint16_t        *tstamp;
+    uint16_t        *cksum_ptr;
+    uint16_t         cksum;
+    uint32_t         cksum_32;
+    uint32_t         offset_ck;
+
+    offset_ck = DATA_GET_CKSUM_OFFSET(mbuf);
+    cksum_ptr = rte_pktmbuf_mtod_offset(mbuf_seg, uint16_t *, offset_ck);
+
+    tstamp = rte_pktmbuf_mtod_offset(mbuf_seg, uint16_t *, offset);
+
+    if (!(*cksum_ptr))
+        TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: The checksum shouldn't be 0 here!");
+
+    /* This is needed otherwise the checksum calc won't work */
+    cksum = ~(*cksum_ptr) & 0xFFFF;
+    cksum_32 = __rte_raw_cksum(tstamp, size, cksum);
+    cksum = __rte_raw_cksum_reduce(cksum_32);
+    cksum = (cksum == 0xFFFF) ? cksum : ~cksum;
+    *cksum_ptr = cksum;
+}
+
+/*****************************************************************************
  * Client and server config control block walk functions
  ****************************************************************************/
 
@@ -1343,12 +1375,14 @@ static int test_case_init_cb(uint16_t msgid, uint16_t lcore, void *msg)
     test_latency = &tc_info->tci_cfg->tcim_test_case.tc_latency;
 
     if (tc_info->tci_cfg->tcim_tx_tstamp) {
-        tstamp_tx_post_cb_t cb = NULL;
+        tstamp_tx_post_cb_t cb;
 
-        /* TODO: set callback ipv4 recalc if defined(TPG_SW_CHECKSUMMING) or
-         * when the NIC doesn't support checksum offload.
-         * cb = ipv4_recalc_tstamp_cksum(mbuf, offset, size);
-         */
+        cb = NULL;
+#if defined(TPG_SW_CHECKSUMMING)
+        if (sockopt->so_eth.ethso_tx_offload_ipv4_cksum)
+            cb = test_update_cksum_tstamp;
+#endif /* !defined(TPG_SW_CHECKSUMMING) */
+
         tstamp_start_tx(eth_port, port_get_tx_queue_id(lcore, eth_port), cb);
     }
 
