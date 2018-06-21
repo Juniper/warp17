@@ -458,10 +458,14 @@ udp_send_pkt(udp_control_block_t *ucb, struct rte_mbuf *hdr_mbuf,
     tstamp_data_append(hdr_mbuf, data_mbuf);
 
 #if defined(TPG_SW_CHECKSUMMING)
-    if (data_mbuf != NULL) {
+    if (data_mbuf != NULL &&
+            !ucb->ucb_l4.l4cb_sockopt.so_eth.ethso_tx_offload_udp_cksum) {
         if (unlikely(DATA_IS_TSTAMP(data_mbuf))) {
             tstamp_write_cksum_offset(hdr_mbuf,
-                                RTE_PTR_DIFF(&udp_hdr->dgram_cksum, udp_hdr));
+                                      hdr_mbuf->pkt_len -
+                                      sizeof(struct udp_hdr) +
+                                      RTE_PTR_DIFF(&udp_hdr->dgram_cksum,
+                                                   udp_hdr));
         }
     }
 #endif /*defined(TPG_SW_CHECKSUMMING)*/

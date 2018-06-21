@@ -231,15 +231,20 @@ static void test_update_cksum_tstamp(struct rte_mbuf *mbuf __rte_unused,
     uint32_t         offset_ck;
 
     offset_ck = DATA_GET_CKSUM_OFFSET(mbuf);
-    cksum_ptr = rte_pktmbuf_mtod_offset(mbuf_seg, uint16_t *, offset_ck);
 
-    tstamp = rte_pktmbuf_mtod_offset(mbuf_seg, uint16_t *, offset);
+    /* Offset checksum works only with TPG_SW_CHECKSUMMING enabled! */
+    if (!offset_ck)
+        return;
 
-    if (!(*cksum_ptr))
-        TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: The checksum shouldn't be 0 here!");
+    cksum_ptr = (uint16_t *) data_mbuf_mtod_offset(mbuf, offset_ck);
+    tstamp = (uint16_t *) data_mbuf_mtod_offset(mbuf_seg, offset);
 
     /* This is needed otherwise the checksum calc won't work */
     cksum = ~(*cksum_ptr) & 0xFFFF;
+    /* WARNING: those functions are private functions from dpdk library, they
+     * may change in future!!!
+     */
+
     cksum_32 = __rte_raw_cksum(tstamp, size, cksum);
     cksum = __rte_raw_cksum_reduce(cksum_32);
     cksum = (cksum == 0xFFFF) ? cksum : ~cksum;
@@ -1375,15 +1380,19 @@ static int test_case_init_cb(uint16_t msgid, uint16_t lcore, void *msg)
     test_latency = &tc_info->tci_cfg->tcim_test_case.tc_latency;
 
     if (tc_info->tci_cfg->tcim_tx_tstamp) {
-        tstamp_tx_post_cb_t cb;
+        tstamp_tx_post_cb_t  cb;
+        sockopt_t           *sockopt;
 
-        cb = NULL;
-#if defined(TPG_SW_CHECKSUMMING)
-        if (sockopt->so_eth.ethso_tx_offload_ipv4_cksum)
+        sockopt = &tc_info->tci_cfg->tcim_sockopt;
+        if (!sockopt->so_eth.ethso_tx_offload_ipv4_cksum ||
+                !sockopt->so_eth.ethso_tx_offload_tcp_cksum ||
+                !sockopt->so_eth.ethso_tx_offload_udp_cksum)
             cb = test_update_cksum_tstamp;
-#endif /* !defined(TPG_SW_CHECKSUMMING) */
+        else
+            cb = NULL;
 
-        tstamp_start_tx(eth_port, port_get_tx_queue_id(lcore, eth_port), cb);
+        tstamp_start_tx(eth_port, port_get_tx_queue_id(lcore, eth_port),
+                        cb);
     }
 
     if (tc_info->tci_cfg->tcim_rx_tstamp) {

@@ -504,12 +504,15 @@ static struct ipv4_hdr *ipv4_build_hdr(l4_control_block_t *l4_cb,
         ip_opt->hdr.ipt_ptr = ip_opt_len + 1;
         ip_opt->hdr.ipt_code = IPOPT_TS;
         ip_opt->hdr.ipt_flg_oflow = IPOPT_TS_TSONLY;
+        bzero(&ip_opt->data[0], sizeof(ip_opt->data));
 
         tstamp_tx_pkt(mbuf, offset, sizeof(ip_opt->data));
 #if defined(TPG_SW_CHECKSUMMING)
-        tstamp_write_cksum_offset(mbuf, mbuf->pkt_len - ip_hdr_len +
-                                  RTE_PTR_DIFF(&ref_ip_hdr->hdr_checksum,
-                                               ref_ip_hdr));
+        if (!sockopt->so_eth.ethso_tx_offload_ipv4_cksum) {
+            tstamp_write_cksum_offset(mbuf, mbuf->pkt_len - ip_hdr_len +
+                                      RTE_PTR_DIFF(&ip_hdr->hdr_checksum,
+                                                   ip_hdr));
+        }
 #endif /* defined(TPG_SW_CHECKSUMMING) */
     }
 

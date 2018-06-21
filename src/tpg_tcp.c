@@ -738,7 +738,8 @@ static bool tcp_send_pkt(tcp_control_block_t *tcb, uint32_t sseq,
         tstamp_data_append(hdr, data_mbuf);
 
 #if defined(TPG_SW_CHECKSUMMING)
-    if (data_mbuf != NULL) {
+    if (data_mbuf &&
+            !tcb->tcb_l4.l4cb_sockopt.so_eth.ethso_tx_offload_tcp_cksum) {
         if ((DATA_IS_TSTAMP(data_mbuf))) {
             tstamp_write_cksum_offset(hdr,
                                       hdr->pkt_len - sizeof(struct tcp_hdr) +
