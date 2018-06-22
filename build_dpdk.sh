@@ -53,22 +53,38 @@
 # Notes:
 #     Intake dpdk version as argument "xx.xx.x"
 
-ver="$1"
+# Parse args
+while getopts "v:n" opt; do
+    case $opt in
+    v)
+        ver=$OPTARG
+        ;;
+    n)
+        dry_run=1
+        ;;
+    \?)
+        usage $0
+        ;;
+    esac
+done
+
+usage="$1 wtf"
 dest="/opt"
 tmp="/tmp"
 name="dpdk-$ver"
 file="$name.tar.xz"
 url="http://fast.dpdk.org/rel/$file"
 kernel=`uname -r`
-
+set -e
+source common/common.sh
 # Getting dpdk from the repo
 # $1 destination folder
 # $2 temporary folder
 function get {
     cd $2
-    wget $url
+    exec_cmd "Downloading the package" wget $url
     mkdir $name
-    tar -xaf $file -C $name --strip-components=1
+    exec_cmd "Extracting the package" tar -xaf $file -C $name --strip-components=1
     mv -f $name $1
 }
 

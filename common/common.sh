@@ -39,10 +39,10 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # File name:
-#     .travis.yml
+#     common.sh
 #
 # Description:
-#     Travis Continuous Integration config file
+#     Library for common bash functions
 #
 # Author:
 #     Matteo Triggiani
@@ -51,37 +51,32 @@
 #     06/22/2018
 #
 # Notes:
-#     For now we are skipping the uts
+#
 
-language: c
-dist: trusty
-os: linux
-sudo: required
-compiler: gcc
-env:
-    - RTE_SDK='/opt/dpdk-16.11.4' WARP17_INI_FILE='./ini/travis.ini'
-cache:
-  directories:
-    - ./build
-    - /opt/dpdk-16.11.4/*
-    - $HOME/.cache/pip
+# This function takes a comment to print as first argument and than eval the
+#   other arguments
+function exec_cmd {
+    echo
+    echo "$1"; shift
+    echo "$@"
+    if [[ -z $dry_run ]]; then
+        eval "$@"
+        if [[ $? != 0 ]]; then
+            die "Exit code:_ $?"
+        else
+            return 0
+        fi
+    fi
+}
 
-before_install:
-    - sudo apt install linux-headers-$(uname -r) ncurses-dev protobuf-compiler libprotobuf-dev python-protobuf libprotobuf-c0 libprotobuf-c0-dev libprotobuf8 libprotoc8 protobuf-c-compiler -y
-    - sudo ./build_dpdk.sh -v 16.11.4
-    - sudo pip install -r python/requirements.txt
-    - sudo sysctl -w vm.nr_hugepages=1024
-    - sudo mkdir -p /mnt/huge
-    - sudo mount -t hugetlbfs nodev /mnt/huge
-install:
-    - make clean && make
-script:
-    - make clean && make all-kni-if
-    - make clean && make all-ring-if
-#    - chmod +x ./tap_interfaces.sh
-#    - sudo ./tap_interfaces.sh
-#    - sudo make travisut
-after_script:
-#    - sudo cat /tmp/warp17*/*.log
-notifications:
-    slack: warp17:4NA10mDvXakkJ8I4PGMOxlLg
+# This function prints an exit message in stderr and exit
+function die {
+    echo $@ >&2
+    exit 1
+}
+
+# This function prints the usage message and exit
+function usage {
+    die ${usage}
+    exit 1
+}
