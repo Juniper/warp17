@@ -203,9 +203,9 @@ esac
 exec_cmd "Updating version to: $ver" echo $ver > $vfile
 
 # Generate the .png charts to be used by the release documentation.
-exec_cmd "Generating .png perf charts" gnuplot -e filename='$bmark_file' -e \
-    'tcp=$bmark_tcp_cnt' -e udp=$bmark_udp_cnt -e http=$bmark_http_cnt \
-    -e out_dir='$bmark_out' $bmark_plot_gp
+exec_cmd "Generating .png perf charts" gnuplot -e filename=$bmark_file -e \
+    tcp=$bmark_tcp_cnt -e udp=$bmark_udp_cnt -e http=$bmark_http_cnt \
+    -e out_dir=$bmark_out $bmark_plot_gp
 
 # Now commit everything and tag the release
 exec_cmd "Add the generated .png perf charts" git add $bmark_out/*.png
