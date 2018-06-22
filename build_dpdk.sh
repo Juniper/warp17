@@ -1,7 +1,7 @@
 #
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
 #
-# Copyright (c) 2016, Juniper Networks, Inc. All rights reserved.
+# Copyright (c) 2018, Juniper Networks, Inc. All rights reserved.
 #
 #
 # The contents of this file are subject to the terms of the BSD 3 clause
@@ -39,59 +39,71 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # File name:
-#     Makefile
+#     build_dpdk.sh
 #
 # Description:
-#     Main WARP17 makefile.
+#     Dpdk builder and configuration
 #
 # Author:
-#     Dumitru Ceara, Eelco Chaudron
+#     Matteo Triggiani
 #
 # Initial Created:
-#     01/07/2016
+#     06/22/2018
 #
 # Notes:
-#
-#
+#     Intake dpdk version as argument "xx.xx.x"
 
-.PHONY: all clean pyclean unittest
+ver="$1"
+dest="/opt"
+tmp="/tmp"
+name="dpdk-$ver"
+file="$name.tar.xz"
+url="http://fast.dpdk.org/rel/$file"
+kernel=`uname -r`
 
-APIDIR = api
-UTDIR  = ut
-MKAPI  = Makefile.api
-MKDPDK = Makefile.dpdk
-MKUT   = Makefile.ut
+# Getting dpdk from the repo
+# $1 destination folder
+# $2 temporary folder
+function get {
+    cd $2
+    wget $url
+    mkdir $name
+    tar -xaf $file -C $name --strip-components=1
+    mv -f $name $1
+}
 
-Q ?= @
+# Build dpdk
+# $1 dpdk folder
+# $2 compiler version
+function build {
+    cd $1
+    make T=$2 install
+}
 
-PYOBJS     = python/*.pyc
-UNIQ_STAMP = $(shell python python/uniq.py)
-UT_ARGS    = WARP17_UNIQ_STAMP=$(UNIQ_STAMP)
+# Install dpdk in the local machine
+# $1 dpdk folder
+function install {
+    cp $1/x86_64-native-linuxapp-gcc/kmod/igb_uio.ko /lib/modules/$kernel/kernel/drivers/uio/
+    if [ -d "/lib/modules/$kernel/kernel/drivers/uio/igb_uio.ko" ]; then
+        return 2
+    fi
+    depmod -a
+    modprobe uio
+    modprobe igb_uio
+}
 
-all:
-	$(Q)$(MAKE) -C $(APIDIR) -f $(MKAPI) -j1 all Q=$(Q)
-	$(Q)+$(MAKE) -f $(MKDPDK) M=$(MKDPDK)
+# Skipping in case dpdk is already there
+if [[ -d "$dest/$name/build" ]]; then
 
-all-ring-if:
-	$(Q)$(MAKE) -C $(APIDIR) -f $(MKAPI) -j1 all Q=$(Q)
-	$(Q)+$(MAKE) -f $(MKDPDK) M=$(MKDPDK) WARP17_RING_IF=1
+    echo dpdk-$ver is already there
+    exit
 
-all-kni-if:
-	$(Q)$(MAKE) -C $(APIDIR) -f $(MKAPI) -j1 all Q=$(Q)
-	$(Q)+$(MAKE) -f $(MKDPDK) M=$(MKDPDK) WARP17_KNI_IF=1
+else
 
-all-ring-kni-if:
-	$(Q)$(MAKE) -C $(APIDIR) -f $(MKAPI) -j1 all Q=$(Q)
-	$(Q)+$(MAKE) -f $(MKDPDK) M=$(MKDPDK) WARP17_RING_IF=1 WARP17_KNI_IF=1
+    rm -rf $dest/$name
+    get $dest $tmp
+    build "$dest/$name" x86_64-native-linuxapp-gcc
+    install "$dest/$name"
+    exit
 
-clean: pyclean
-	$(Q)+$(MAKE) -C $(APIDIR) -f $(MKAPI) clean Q=$(Q)
-	$(Q)+$(MAKE) -C $(UTDIR) -f $(MKUT) clean Q=$(Q)
-	$(Q)+$(MAKE) -f $(MKDPDK) clean M=$(MKDPDK) Q=$(Q)
-
-pyclean:
-	$(Q)$(RM) -rf $(PYOBJS)
-
-unittest:
-	$(Q)$(MAKE) -C $(UTDIR) -f $(MKUT) -j1 all Q=$(Q) $(UT_ARGS)
-
+fi

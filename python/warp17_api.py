@@ -86,7 +86,9 @@ class Warp17Env():
     INIT_RETRY       = 'WARP17_INIT_RETRY'
 
     COREMASK         = 'coremask'
+    LCORES           = 'lcores'
     NCHAN            = 'nchan'
+    NO_HUGE          = 'no-huge'
     MEMORY           = 'memory'
     PORTS            = 'ports'
     QMAP_DEFAULT     = 'qmap-default'
@@ -96,6 +98,8 @@ class Warp17Env():
     MBUF_HDR_POOL_SZ = 'mbuf-hdr-pool-sz'
     TCB_POOL_SZ      = 'tcb-pool-sz'
     UCB_POOL_SZ      = 'ucb-pool-sz'
+    RING_PAIR        = 'ring-if-pairs'
+    KNI_IF           = 'kni-ifs'
 
     def __init__(self, path=None):
         if path is None:
@@ -131,28 +135,46 @@ class Warp17Env():
         self._config.set(section, key, str(value))
 
     def get_coremask(self):
-        return self.get_value(Warp17Env.COREMASK, mandatory=True)
+        return self.get_value(Warp17Env.COREMASK, mandatory=False)
+
+    def get_lcores(self):
+        return self.get_value(Warp17Env.LCORES, mandatory=False)
 
     def get_nchan(self):
         return int(self.get_value(Warp17Env.NCHAN, mandatory=True))
+
+    def get_nohuge(self):
+        try:
+            if int(self.get_value(Warp17Env.NO_HUGE, mandatory=False)) is 1:
+                return True
+            else:
+                return False
+        except:
+            return False
 
     def get_memory(self):
         return int(self.get_value(Warp17Env.MEMORY, mandatory=True))
 
     def get_ports(self):
-        return string.split(self.get_value(Warp17Env.PORTS, mandatory=True))
+        return self.get_value(Warp17Env.PORTS, mandatory=False)
+
+    def get_ring_ports(self):
+        return self.get_value(Warp17Env.RING_PAIR, mandatory=False)
+    
+    def get_kni_ports(self):
+        return self.get_value(Warp17Env.KNI_IF, mandatory=False)
 
     def get_qmap(self):
         qmap_default = self.get_value(Warp17Env.QMAP_DEFAULT)
 
-        if not qmap_default is None:
+        if qmap_default is not None:
             return '--qmap-default ' + qmap_default
         ports = self.get_ports()
 
         return ' '.join(['--qmap ' + \
                             str(idx) + '.' + \
                             self.get_value(Warp17Env.QMAP, section=port) for
-                            idx, port in enumerate(ports)])
+                            idx, port in enumerate(string.split(ports))])
 
     def get_mbuf_sz(self):
         return self.get_value(Warp17Env.MBUF_SZ)
@@ -185,27 +207,46 @@ class Warp17Env():
         return int(self._init_retry)
 
     def get_exec_args(self):
-        args = '-c ' + self.get_coremask()                           + ' ' + \
-               '-n ' + str(self.get_nchan())                         + ' ' + \
-               '-m ' + str(self.get_memory())                        + ' ' + \
-               ' '.join(['-w ' + port for port in self.get_ports()]) + ' ' + \
-               '--'                                                  + ' ' + \
-               self.get_qmap()
+        # dpdk args
+        cores = self.get_coremask()
+        if cores is not None:
+            args = '-c ' + cores + ' '
+        else:
+            cores = self.get_lcores()
+            if cores is not None:
+                args = '--lcores ' + cores + ' '
+            else:
+                return
+        args += '-n ' + str(self.get_nchan()) + ' '
+        if self.get_nohuge():
+            args += '--no-huge '
+        args += '-m ' + str(self.get_memory()) + ' '
+        ports = self.get_ports()
+        if ports is not None:
+            args += ' '.join(['-w ' + port for port in string.split(self.get_ports())]) + ' '
+        # warp17 args
+        args += '--' + ' ' + self.get_qmap()
         mbuf_sz = self.get_mbuf_sz()
-        if not mbuf_sz is None:
+        if mbuf_sz is not None:
             args += ' --mbuf-sz ' + str(mbuf_sz)
         tcb_pool_sz = self.get_tcb_pool_sz()
-        if not tcb_pool_sz is None:
+        if tcb_pool_sz is not None:
             args += ' --tcb-pool-sz ' + str(tcb_pool_sz)
         ucb_pool_sz = self.get_ucb_pool_sz()
-        if not ucb_pool_sz is None:
+        if ucb_pool_sz is not None:
             args += ' --ucb-pool-sz ' + str(ucb_pool_sz)
         mbuf_pool_sz = self.get_mbuf_pool_sz()
-        if not mbuf_pool_sz is None:
+        if mbuf_pool_sz is not None:
             args += ' --mbuf-pool-sz ' + str(mbuf_pool_sz)
         mbuf_hdr_pool_sz = self.get_mbuf_hdr_pool_sz()
-        if not mbuf_hdr_pool_sz is None:
+        if mbuf_hdr_pool_sz is not None:
             args += ' --mbuf-hdr-pool-sz ' + str(mbuf_hdr_pool_sz)
+        ring_if_pairs = self.get_ring_ports()
+        if ring_if_pairs is not None:
+            args += ' --ring-if-pairs ' + str(ring_if_pairs)
+        kni_if = self.get_kni_ports()
+        if kni_if is not None:
+            args += ' --kni-ifs ' + str(kni_if)
         return args
 
 class Warp17OutputArgs():

@@ -1,7 +1,7 @@
 #
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
 #
-# Copyright (c) 2016, Juniper Networks, Inc. All rights reserved.
+# Copyright (c) 2018, Juniper Networks, Inc. All rights reserved.
 #
 #
 # The contents of this file are subject to the terms of the BSD 3 clause
@@ -39,59 +39,28 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # File name:
-#     Makefile
+#     tap_interfaces.sh
 #
 # Description:
-#     Main WARP17 makefile.
+#     Raise up 2 tap interfaces
 #
 # Author:
-#     Dumitru Ceara, Eelco Chaudron
+#     Matteo Triggiani
 #
 # Initial Created:
-#     01/07/2016
+#     06/22/2018
 #
 # Notes:
-#
-#
+#     This script create two different tap interfaces with a bridge
 
-.PHONY: all clean pyclean unittest
+iface1="tap0"
+iface2="tap1"
 
-APIDIR = api
-UTDIR  = ut
-MKAPI  = Makefile.api
-MKDPDK = Makefile.dpdk
-MKUT   = Makefile.ut
-
-Q ?= @
-
-PYOBJS     = python/*.pyc
-UNIQ_STAMP = $(shell python python/uniq.py)
-UT_ARGS    = WARP17_UNIQ_STAMP=$(UNIQ_STAMP)
-
-all:
-	$(Q)$(MAKE) -C $(APIDIR) -f $(MKAPI) -j1 all Q=$(Q)
-	$(Q)+$(MAKE) -f $(MKDPDK) M=$(MKDPDK)
-
-all-ring-if:
-	$(Q)$(MAKE) -C $(APIDIR) -f $(MKAPI) -j1 all Q=$(Q)
-	$(Q)+$(MAKE) -f $(MKDPDK) M=$(MKDPDK) WARP17_RING_IF=1
-
-all-kni-if:
-	$(Q)$(MAKE) -C $(APIDIR) -f $(MKAPI) -j1 all Q=$(Q)
-	$(Q)+$(MAKE) -f $(MKDPDK) M=$(MKDPDK) WARP17_KNI_IF=1
-
-all-ring-kni-if:
-	$(Q)$(MAKE) -C $(APIDIR) -f $(MKAPI) -j1 all Q=$(Q)
-	$(Q)+$(MAKE) -f $(MKDPDK) M=$(MKDPDK) WARP17_RING_IF=1 WARP17_KNI_IF=1
-
-clean: pyclean
-	$(Q)+$(MAKE) -C $(APIDIR) -f $(MKAPI) clean Q=$(Q)
-	$(Q)+$(MAKE) -C $(UTDIR) -f $(MKUT) clean Q=$(Q)
-	$(Q)+$(MAKE) -f $(MKDPDK) clean M=$(MKDPDK) Q=$(Q)
-
-pyclean:
-	$(Q)$(RM) -rf $(PYOBJS)
-
-unittest:
-	$(Q)$(MAKE) -C $(UTDIR) -f $(MKUT) -j1 all Q=$(Q) $(UT_ARGS)
-
+ip link add warp_bridge type bridge
+ip tuntap add $iface1 mode tap user root
+ip tuntap add $iface2 mode tap user root
+ip link set $iface1 up
+ip link set $iface2 up
+ip link set $iface1 master warp_bridge
+ip link set $iface2 master warp_bridge
+ip link set warp_bridge up
