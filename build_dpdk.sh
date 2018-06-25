@@ -112,10 +112,10 @@ function install {
         ask_for "Installing the dpdk lib"
     fi
     check_root
-    exec_cmd cp $1/x86_64-native-linuxapp-gcc/kmod/igb_uio.ko /lib/modules/$kernel/kernel/drivers/uio/
-    exec_cmd depmod -a
-    exec_cmd modprobe uio
-    exec_cmd modprobe igb_uio
+    exec_cmd "Copying igb_uio in $kernel folder" cp $1/x86_64-native-linuxapp-gcc/kmod/igb_uio.ko /lib/modules/$kernel/kernel/drivers/uio/
+    exec_cmd "Generating modules and map files." depmod -a
+    exec_cmd "Add uio mod" modprobe uio
+    exec_cmd "Add igb_uio mod" modprobe igb_uio
 }
 
 # Skipping in case dpdk is already there
