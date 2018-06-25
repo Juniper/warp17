@@ -54,13 +54,27 @@
 #     Intake dpdk version as argument "xx.xx.x"
 
 # Parse args
-while getopts "v:n" opt; do
+source common/common.sh
+set -e
+
+usage="$0 -v dpdk version you want to install -i Non-interactive"
+dest="/opt"
+tmp="/tmp"
+kernel=`uname -r`
+
+while getopts "v:n:i" opt; do
     case $opt in
     v)
         ver=$OPTARG
+        name="dpdk-$ver"
+        file="$name.tar.xz"
+        url="http://fast.dpdk.org/rel/$file"
         ;;
     n)
         dry_run=1
+        ;;
+    i)
+        interactive=1
         ;;
     \?)
         usage $0
@@ -68,15 +82,9 @@ while getopts "v:n" opt; do
     esac
 done
 
-usage="$1 wtf"
-dest="/opt"
-tmp="/tmp"
-name="dpdk-$ver"
-file="$name.tar.xz"
-url="http://fast.dpdk.org/rel/$file"
-kernel=`uname -r`
-set -e
-source common/common.sh
+([[ -z $ver ]]) &&
+usage $0
+
 # Getting dpdk from the repo
 # $1 destination folder
 # $2 temporary folder
@@ -93,19 +101,20 @@ function get {
 # $2 compiler version
 function build {
     cd $1
-    make T=$2 install
+    exec_cmd "Compiling dpdk for $2 arch" make T=$2 install
 }
 
 # Install dpdk in the local machine
 # $1 dpdk folder
 function install {
-    cp $1/x86_64-native-linuxapp-gcc/kmod/igb_uio.ko /lib/modules/$kernel/kernel/drivers/uio/
-    if [ -d "/lib/modules/$kernel/kernel/drivers/uio/igb_uio.ko" ]; then
-        return 2
+    if [[ -z $interactive ]]; then
+        ask_for "Installing the dpdk lib"
     fi
-    depmod -a
-    modprobe uio
-    modprobe igb_uio
+    check_root
+    exec_cmd cp $1/x86_64-native-linuxapp-gcc/kmod/igb_uio.ko /lib/modules/$kernel/kernel/drivers/uio/
+    exec_cmd depmod -a
+    exec_cmd modprobe uio
+    exec_cmd modprobe igb_uio
 }
 
 # Skipping in case dpdk is already there

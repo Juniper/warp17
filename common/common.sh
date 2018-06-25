@@ -53,6 +53,27 @@
 # Notes:
 #
 
+# Check for root permissions
+function check_root {
+    if [ "$EUID" -ne 0 ]
+      then echo "Please run as root"
+      exit
+    fi
+}
+
+# This function ask for confirmation
+function ask_for {
+    echo
+    echo "$1"
+    echo "do you want to run this command? [y/N]"
+    read ans
+    if [[ $ans == "y" ]]; then
+        return 0
+    else
+        die "Leaving"
+    fi
+}
+
 # This function takes a comment to print as first argument and than eval the
 #   other arguments
 function exec_cmd {
