@@ -53,6 +53,7 @@
 #
 # Notes:
 #
+#!/usr/bin/env bash
 
 topdir=`dirname $0`
 

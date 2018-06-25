@@ -52,6 +52,7 @@
 #
 # Notes:
 #     This script create two different tap interfaces with a bridge
+#!/usr/bin/env bash
 
 iface1="tap0"
 iface2="tap1"
