@@ -160,7 +160,7 @@ class Warp17Env():
 
     def get_ring_ports(self):
         return self.get_value(Warp17Env.RING_PAIR, mandatory=False)
-    
+
     def get_kni_ports(self):
         return self.get_value(Warp17Env.KNI_IF, mandatory=False)
 
