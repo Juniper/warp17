@@ -67,9 +67,8 @@ cache:
     - $HOME/.cache/pip
 
 before_install:
-    - sudo chsh -s /bin/bash
     - sudo apt install linux-headers-$(uname -r) ncurses-dev protobuf-compiler libprotobuf-dev python-protobuf libprotobuf-c0 libprotobuf-c0-dev libprotobuf8 libprotoc8 protobuf-c-compiler -y
-    - sudo ./build_dpdk.sh -v 16.11.4 -i
+    - sudo bash ./build_dpdk.sh -v 16.11.4 -i
     - sudo pip install -r python/requirements.txt
     - sudo sysctl -w vm.nr_hugepages=1024
     - sudo mkdir -p /mnt/huge
