@@ -63,7 +63,7 @@ function check_root {
 }
 
 # This function ask for confirmation
-function ask_for {
+function confirm {
     echo
     echo "$1"
     echo "do you want to run this command? [y/N]"

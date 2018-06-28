@@ -51,7 +51,7 @@
 #     06/22/2018
 #
 # Notes:
-#     Intake dpdk version as argument "xx.xx.x"
+#     Receives dpdk version as argument "xx.xx.x"
 #!/usr/bin/env bash
 
 # Parse args
@@ -109,7 +109,7 @@ function build {
 # $1 dpdk folder
 function install {
     if [[ -z $interactive ]]; then
-        ask_for "Installing the dpdk lib"
+        confirm "Installing the dpdk lib"
     fi
     check_root
     exec_cmd "Copying igb_uio in $kernel folder" cp $1/x86_64-native-linuxapp-gcc/kmod/igb_uio.ko /lib/modules/$kernel/kernel/drivers/uio/

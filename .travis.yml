@@ -78,10 +78,5 @@ install:
 script:
     - make clean && make all-kni-if
     - make clean && make all-ring-if
-#    - chmod +x ./tap_interfaces.sh
-#    - sudo ./tap_interfaces.sh
-#    - sudo make travisut
-after_script:
-#    - sudo cat /tmp/warp17*/*.log
 notifications:
     slack: warp17:4NA10mDvXakkJ8I4PGMOxlLg
