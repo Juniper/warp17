@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 #
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
 #
@@ -53,7 +53,6 @@
 #
 # Notes:
 #
-#!/usr/bin/env bash
 
 topdir=`dirname $0`
 

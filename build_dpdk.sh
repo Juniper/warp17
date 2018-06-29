@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 #
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
 #
@@ -52,7 +53,6 @@
 #
 # Notes:
 #     Receives dpdk version as argument "xx.xx.x"
-#!/usr/bin/env bash
 
 # Parse args
 source common/common.sh

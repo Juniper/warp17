@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 #
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
 #
@@ -53,7 +54,6 @@
 # Notes:
 #     Poor man's solution for now..
 #
-#!/usr/bin/env bash
 
 vfile=VERSION
 usage="$1 -t major|minor -o <remote_name> -d \"<version_description>\" -p <perf_result_log_path>"

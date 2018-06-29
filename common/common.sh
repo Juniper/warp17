@@ -52,7 +52,6 @@
 #
 # Notes:
 #
-#!/usr/bin/env bash
 
 # Check for root permissions
 function check_root {
