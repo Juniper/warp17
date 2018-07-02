@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 #
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
 #
@@ -40,21 +39,65 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # File name:
-#     py-runner.sh
+#     common.sh
 #
 # Description:
-#     Simple wrapper script to setup the proper python paths.
+#     Library for common bash functions
 #
 # Author:
-#     Dumitru Ceara
+#     Matteo Triggiani
 #
 # Initial Created:
-#     04/04/2018
+#     06/22/2018
 #
 # Notes:
 #
 
-topdir=`dirname $0`
+# Check for root permissions
+function check_root {
+    if [ "$EUID" -ne 0 ]
+      then echo "Please run as root"
+      exit
+    fi
+}
 
-PYTHONPATH=$topdir/python:$topdir/api/generated/py:$topdir/ut/lib:$PYTHONPATH $@
+# This function ask for confirmation
+function confirm {
+    echo
+    echo "$1"
+    echo "do you want to run this command? [y/N]"
+    read ans
+    if [[ $ans == "y" ]]; then
+        return 0
+    else
+        die "Leaving"
+    fi
+}
 
+# This function takes a comment to print as first argument and than eval the
+#   other arguments
+function exec_cmd {
+    echo
+    echo "$1"; shift
+    echo "$@"
+    if [[ -z $dry_run ]]; then
+        eval "$@"
+        if [[ $? != 0 ]]; then
+            die "Exit code:_ $?"
+        else
+            return 0
+        fi
+    fi
+}
+
+# This function prints an exit message in stderr and exit
+function die {
+    echo $@ >&2
+    exit 1
+}
+
+# This function prints the usage message and exit
+function usage {
+    die ${usage}
+    exit 1
+}

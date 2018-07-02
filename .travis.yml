@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 #
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
 #
@@ -40,21 +39,44 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # File name:
-#     py-runner.sh
+#     .travis.yml
 #
 # Description:
-#     Simple wrapper script to setup the proper python paths.
+#     Travis Continuous Integration config file
 #
 # Author:
-#     Dumitru Ceara
+#     Matteo Triggiani
 #
 # Initial Created:
-#     04/04/2018
+#     06/22/2018
 #
 # Notes:
-#
+#     For now we are skipping the uts
 
-topdir=`dirname $0`
+language: c
+dist: trusty
+os: linux
+sudo: required
+compiler: gcc
+env:
+    - RTE_SDK='/opt/dpdk-16.11.4' WARP17_INI_FILE='./ini/travis.ini'
+cache:
+  directories:
+    - ./build
+    - /opt/dpdk-16.11.4/*
+    - $HOME/.cache/pip
 
-PYTHONPATH=$topdir/python:$topdir/api/generated/py:$topdir/ut/lib:$PYTHONPATH $@
-
+before_install:
+    - sudo apt install linux-headers-$(uname -r) ncurses-dev protobuf-compiler libprotobuf-dev python-protobuf libprotobuf-c0 libprotobuf-c0-dev libprotobuf8 libprotoc8 protobuf-c-compiler -y
+    - sudo bash ./build_dpdk.sh -v 16.11.4 -i
+    - sudo pip install -r python/requirements.txt
+    - sudo sysctl -w vm.nr_hugepages=1024
+    - sudo mkdir -p /mnt/huge
+    - sudo mount -t hugetlbfs nodev /mnt/huge
+install:
+    - make clean && make
+script:
+    - make clean && make all-kni-if
+    - make clean && make all-ring-if
+notifications:
+    slack: warp17:4NA10mDvXakkJ8I4PGMOxlLg

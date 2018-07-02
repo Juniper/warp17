@@ -93,5 +93,5 @@ pyclean:
 	$(Q)$(RM) -rf $(PYOBJS)
 
 unittest:
-	$(Q)$(MAKE) -C $(UTDIR) -f $(MKUT) -i -j1 all Q=$(Q) $(UT_ARGS)
+	$(Q)$(MAKE) -C $(UTDIR) -f $(MKUT) -j1 -i all Q=$(Q) $(UT_ARGS)
 

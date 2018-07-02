@@ -40,21 +40,96 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # File name:
-#     py-runner.sh
+#     build_dpdk.sh
 #
 # Description:
-#     Simple wrapper script to setup the proper python paths.
+#     Dpdk builder and configuration
 #
 # Author:
-#     Dumitru Ceara
+#     Matteo Triggiani
 #
 # Initial Created:
-#     04/04/2018
+#     06/22/2018
 #
 # Notes:
-#
+#     Receives dpdk version as argument "xx.xx.x"
 
-topdir=`dirname $0`
+# Parse args
+source common/common.sh
+set -e
 
-PYTHONPATH=$topdir/python:$topdir/api/generated/py:$topdir/ut/lib:$PYTHONPATH $@
+usage="$0 -v dpdk version you want to install -i Non-interactive"
+dest="/opt"
+tmp="/tmp"
+kernel=`uname -r`
 
+while getopts "v:n:i" opt; do
+    case $opt in
+    v)
+        ver=$OPTARG
+        name="dpdk-$ver"
+        file="$name.tar.xz"
+        url="http://fast.dpdk.org/rel/$file"
+        ;;
+    n)
+        dry_run=1
+        ;;
+    i)
+        interactive=1
+        ;;
+    \?)
+        usage $0
+        ;;
+    esac
+done
+
+([[ -z $ver ]]) &&
+usage $0
+
+# Getting dpdk from the repo
+# $1 destination folder
+# $2 temporary folder
+function get {
+    cd $2
+    exec_cmd "Downloading the package" wget $url
+    mkdir $name
+    exec_cmd "Extracting the package" tar -xaf $file -C $name --strip-components=1
+    mv -f $name $1
+}
+
+# Build dpdk
+# $1 dpdk folder
+# $2 compiler version
+function build {
+    cd $1
+    exec_cmd "Compiling dpdk for $2 arch" make T=$2 install
+}
+
+# Install dpdk in the local machine
+# $1 dpdk folder
+function install {
+    if [[ -z $interactive ]]; then
+        confirm "Installing the dpdk lib"
+    fi
+    check_root
+    exec_cmd "Copying igb_uio in $kernel folder" cp $1/x86_64-native-linuxapp-gcc/kmod/igb_uio.ko /lib/modules/$kernel/kernel/drivers/uio/
+    exec_cmd "Generating modules and map files." depmod -a
+    exec_cmd "Add uio mod" modprobe uio
+    exec_cmd "Add igb_uio mod" modprobe igb_uio
+}
+
+# Skipping in case dpdk is already there
+if [[ -d "$dest/$name/build" ]]; then
+
+    echo dpdk-$ver is already there
+    exit
+
+else
+
+    rm -rf $dest/$name
+    get $dest $tmp
+    build "$dest/$name" x86_64-native-linuxapp-gcc
+    install "$dest/$name"
+    exit
+
+fi
