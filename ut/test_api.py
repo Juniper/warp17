@@ -75,6 +75,16 @@ from warp17_sockopt_pb2   import *
 
 UINT32MAX = 0xFFFFFFFF
 
+class conditionalDecorator(object):
+    def __init__(self, dec, cond):
+        self.decorator = dec
+        self.condition = cond
+
+    def __call__(self, func):
+        if not self.condition:
+            return func
+        return self.decorator(func)
+
 class TestApi(Warp17UnitTestCase):
     """Tests the functionality of the API."""
     """Assumes a B2B setup with two ports."""

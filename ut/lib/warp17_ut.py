@@ -113,6 +113,7 @@ class Warp17BaseUnitTestCase(unittest.TestCase):
 
 class Warp17UnitTestCase(Warp17BaseUnitTestCase):
     """WARP17 Unit Test base class. Sets up the common variables."""
+    env = Warp17Env()
 
     @classmethod
     def setUpClass(cls):
