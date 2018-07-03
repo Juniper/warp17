@@ -536,20 +536,21 @@ class TestApi(Warp17UnitTestCase):
                 server_result = self.warp17_call('GetStatistics',
                                                  PortArg(pa_eth_port=i))
 
-                self.assertGreater(server_result.sr_phy.pys_rx_pkts, 0,
-                                   'Phy pys_rx_pkts has to be greater than 0')
-                self.assertGreater(server_result.sr_phy.pys_rx_bytes, 0,
-                                   'Phy pys_rx_bytes has to be greater than 0')
-                self.assertGreater(server_result.sr_phy.pys_tx_pkts, 0,
-                                   'Phy pys_tx_pkts has to be greater than 0')
-                self.assertGreater(server_result.sr_phy.pys_tx_bytes, 0,
-                                   'Phy pys_tx_bytes has to be greater than 0')
-                self.assertEqual(server_result.sr_phy.pys_rx_errors, 0,
-                                 'Phy pys_rx_errors has to be 0')
-                self.assertEqual(server_result.sr_phy.pys_tx_errors, 0,
-                                 'Phy pys_tx_errors has to be 0')
-                self.assertGreater(server_result.sr_phy.pys_link_speed, 0,
-                                   'Phy pys_link_speed has to be greater than 0')
+                if Warp17UnitTestCase.env.RING_PAIR == 0:
+                    self.assertGreater(server_result.sr_phy.pys_rx_pkts, 0,
+                                       'Phy pys_rx_pkts has to be greater than 0')
+                    self.assertGreater(server_result.sr_phy.pys_rx_bytes, 0,
+                                       'Phy pys_rx_bytes has to be greater than 0')
+                    self.assertGreater(server_result.sr_phy.pys_tx_pkts, 0,
+                                       'Phy pys_tx_pkts has to be greater than 0')
+                    self.assertGreater(server_result.sr_phy.pys_tx_bytes, 0,
+                                       'Phy pys_tx_bytes has to be greater than 0')
+                    self.assertEqual(server_result.sr_phy.pys_rx_errors, 0,
+                                     'Phy pys_rx_errors has to be 0')
+                    self.assertEqual(server_result.sr_phy.pys_tx_errors, 0,
+                                     'Phy pys_tx_errors has to be 0')
+                    self.assertGreater(server_result.sr_phy.pys_link_speed, 0,
+                                       'Phy pys_link_speed has to be greater than 0')
 
                 self.assertGreater(server_result.sr_port.ps_received_pkts, 0,
                                    'Port ps_received_pkts has to be greater than 0')

@@ -81,5 +81,7 @@ script:
     - sudo make unittest
 after_script:
     - sudo cat /tmp/warp17*/*.*
+after_failure:
+    - sudo cat /tmp/warp17*/*.*
 notifications:
     slack: warp17:4NA10mDvXakkJ8I4PGMOxlLg
