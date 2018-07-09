@@ -410,6 +410,9 @@ class TestPerf(Warp17UnitTestCase):
         """Tests setting up 4M TCP sessions (no traffic)."""
         """Port 0 is the client, Port 1 is the server"""
 
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 0
+
         self.lh.info('Test test_01_4M_tcp_sess_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
                                        dport_cnt=100, l4_proto=TCP,
@@ -420,6 +423,9 @@ class TestPerf(Warp17UnitTestCase):
 
     def test_02_8M_tcp_sess_setup_rate(self):
         """Tests setting up 8M TCP sessions (no traffic)."""
+
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 0
 
         self.lh.info('Test test_02_8M_tcp_sess_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=4, dip_cnt=1, sport_cnt=20000,
@@ -432,6 +438,9 @@ class TestPerf(Warp17UnitTestCase):
     def test_03_10M_tcp_sess_setup_rate(self):
         """Tests setting up 10M TCP sessions (no traffic)."""
 
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 0
+
         self.lh.info('Test test_03_10M_tcp_sess_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=5, dip_cnt=1, sport_cnt=20000,
                                        dport_cnt=100, l4_proto=TCP,
@@ -443,6 +452,9 @@ class TestPerf(Warp17UnitTestCase):
     def test_04_4M_tcp_sess_data_10b_setup_rate(self):
         """Tests setting up 4M TCP sessions + 10 bytes packet data."""
 
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 0
+
         self.lh.info('Test test_04_4M_tcp_sess_data_10b_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
                                        dport_cnt=100, l4_proto=TCP,
@@ -453,6 +465,9 @@ class TestPerf(Warp17UnitTestCase):
 
     def test_05_4M_tcp_sess_data_1024b_setup_rate(self):
         """Tests setting up 4M TCP sessions + 1024 byte packet data."""
+
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 0
 
         if self._get_skip_big_data():
             self.skipTest('Big packet data tests skipped')
@@ -468,6 +483,9 @@ class TestPerf(Warp17UnitTestCase):
     def test_06_4M_tcp_sess_data_1300b_setup_rate(self):
         """Tests setting up 4M TCP sessions + 1300 bytes packet data."""
 
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 0
+
         if self._get_skip_big_data():
             self.skipTest('Big packet data tests skipped')
 
@@ -482,6 +500,9 @@ class TestPerf(Warp17UnitTestCase):
     def test_07_4M_udp_sess_data_10b_setup_rate(self):
         """Tests setting up 4M UDP sessions + 10 byte packet data."""
 
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 0
+
         self.lh.info('Test test_07_4M_udp_sess_data_10b_setup_rate')
         # No rate limiting for UDP!
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
@@ -494,6 +515,9 @@ class TestPerf(Warp17UnitTestCase):
 
     def test_08_4M_http_sess_data_10b_setup_rate(self):
         """Tests setting up 4M HTTP GET/200OK sessions + 10 byte packet data."""
+
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 0
 
         self.lh.info('Test test_08_4M_http_sess_data_10b_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
@@ -508,6 +532,9 @@ class TestPerf(Warp17UnitTestCase):
     def test_09_4M_udp_mcast_flows_data_10b_setup_rate(self):
         """Tests setting up 4M UDP mcast sessions + 10 byte packet data."""
 
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 0
+
         self.lh.info('Test test_09_4M_udp_mcast_flows_data_10b_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
                                        dport_cnt=100, l4_proto=UDP,
@@ -520,6 +547,9 @@ class TestPerf(Warp17UnitTestCase):
         """Tests setting up 4M TCP sessions (no traffic)."""
         """Port 0 is the client, Port 1 is the server"""
 
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 0
+
         self.lh.info('Test test_10_timestamp_4M_tcp_sess_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
                                        dport_cnt=100, l4_proto=TCP,
@@ -527,10 +557,13 @@ class TestPerf(Warp17UnitTestCase):
                                        app_ccfg=self._get_raw_app_client(0),
                                        app_scfg=self._get_raw_app_server(0),
                                        expected_rate=self._get_expected_tcp_tstamp(),
-                                       tstamp=True)
+                                       tstamp=Warp17UnitTestCase.env.get_ring_ports() > 0)
 
     def test_11_timestamp_4M_udp_sess_data_10b_setup_rate(self):
         """Tests setting up 4M UDP sessions + 10 byte packet data."""
+
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 0
 
         self.lh.info('Test test_11_timestamp_4M_udp_sess_data_10b_setup_rate')
         # No rate limiting for UDP!
@@ -541,11 +574,14 @@ class TestPerf(Warp17UnitTestCase):
                                        app_ccfg=self._get_raw_app_client(10),
                                        app_scfg=self._get_raw_app_server(10),
                                        expected_rate=self._get_expected_udp_tstamp(),
-                                       tstamp=True)
+                                       tstamp=Warp17UnitTestCase.env.get_ring_ports() > 0)
 
     def test_12_recent_timestamp_4M_tcp_sess_setup_rate(self):
         """Tests setting up 4M TCP sessions (no traffic)."""
         """Port 0 is the client, Port 1 is the server"""
+
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 0
 
         self.lh.info('Test test_12_recent_timestamp_4M_tcp_sess_setup_rate')
         self._sess_setup_rate_averaged(sip_cnt=2, dip_cnt=1, sport_cnt=20000,
@@ -554,10 +590,13 @@ class TestPerf(Warp17UnitTestCase):
                                        app_ccfg=self._get_raw_app_client(0),
                                        app_scfg=self._get_raw_app_server(0),
                                        expected_rate=self._get_expected_tcp_tstamp(),
-                                       tstamp=True, recent_stats=True)
+                                       tstamp=Warp17UnitTestCase.env.get_ring_ports() > 0, recent_stats=True)
 
     def test_13_recent_timestamp_4M_udp_sess_data_10b_setup_rate(self):
         """Tests setting up 4M UDP sessions + 10 byte packet data."""
+
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 0
 
         self.lh.info('Test test_13_recent_timestamp_4M_udp_sess_data_10b_setup_rate')
         # No rate limiting for UDP!
@@ -574,6 +613,9 @@ class TestPerf(Warp17UnitTestCase):
         """Tests setting up 4M TCP sessions + 1024 bytes packet data."""
         """Port 0 is the client, Port 1 is the server"""
 
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 0
+
         if self._get_skip_big_data():
             self.skipTest('Big packet data tests skipped')
 
@@ -587,6 +629,9 @@ class TestPerf(Warp17UnitTestCase):
 
     def test_15_timestamp_raw_4M_udp_sess_data_1024b_setup_rate(self):
         """Tests setting up 4M UDP sessions + 1024 byte packet data."""
+
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 0
 
         self.lh.info('Test test_15_timestamp_raw_4M_udp_sess_data_1024b_setup_rate')
         # No rate limiting for UDP!
@@ -602,6 +647,9 @@ class TestPerf(Warp17UnitTestCase):
         """Tests setting up 4M TCP sessions + 1024 bytes packet data."""
         """Port 0 is the client, Port 1 is the server"""
 
+        if Warp17UnitTestCase.env.RING_PAIR > 0:
+            return 0
+
         if self._get_skip_big_data():
             self.skipTest('Big packet data tests skipped')
 
@@ -616,6 +664,9 @@ class TestPerf(Warp17UnitTestCase):
 
     def test_17_recent_timestamp_raw_4M_udp_sess_data_1024b_setup_rate(self):
         """Tests setting up 4M UDP sessions + 1024 byte packet data."""
+
+        if Warp17UnitTestCase.env.RING_PAIR > 0:
+            return 0
 
         self.lh.info('Test test_17_recent_timestamp_raw_4M_udp_sess_data_1024b_setup_rate')
         # No rate limiting for UDP!
