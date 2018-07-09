@@ -643,6 +643,8 @@ static struct tcp_hdr *tcp_build_hdr(tcp_control_block_t *tcb,
     tcp_hdr->tcp_flags = flags & TCP_BUILD_FLAG_MASK;
     tcp_hdr->rx_win = rte_cpu_to_be_16(tcb->tcb_rcv.wnd);
     tcp_hdr->tcp_urp = rte_cpu_to_be_16(0); /* TODO: set correctly if urgen flag is set */
+    mbuf->l4_len = tcp_hdr_len;
+    ip_hdr_len = ((ipv4_hdr->version_ihl & 0x0F) << 2);
 
     /*
      * TODO: Do we want TCP segmentation offload, if so do it before
@@ -655,9 +657,6 @@ static struct tcp_hdr *tcp_build_hdr(tcp_control_block_t *tcb,
     if (tcb->tcb_l4.l4cb_sockopt.so_eth.ethso_tx_offload_tcp_cksum) {
 #endif
         mbuf->ol_flags |= PKT_TX_TCP_CKSUM | PKT_TX_IPV4;
-        mbuf->l4_len = tcp_hdr_len;
-
-        ip_hdr_len = ((ipv4_hdr->version_ihl & 0x0F) << 2);
 
         tcp_hdr->cksum =
             ipv4_udptcp_phdr_cksum(ipv4_hdr,
