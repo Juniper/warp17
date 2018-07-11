@@ -70,10 +70,14 @@ class TestPortSockOpt(Warp17PortTestCase, Warp17UnitTestCase):
 
     def get_l4_port_count(self):
         """Lower the session count (especially due to big MTU tests)"""
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 1
         return 10
 
     def get_l3_intf_count(self):
         """Lower the session count (especially due to big MTU tests)"""
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 1
         return 4
 
     def get_updates(self):
