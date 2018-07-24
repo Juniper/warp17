@@ -165,6 +165,38 @@ static void port_setup_reta_table(uint8_t port, int nr_of_queus)
     rte_free(reta_data);
 }
 
+/*****************************************************************************
+ * port_init_tx_conf()
+ ****************************************************************************/
+static void port_init_tx_conf(uint16_t port)
+{
+#if !defined(TPG_SW_CHECKSUMMING)
+    struct rte_eth_txconf *tx_conf;
+
+    /* We need to enable UDP/TCP hw checksum because software checksum would
+     * take too many cpu cycles, SCTP checksum offload is not supported!
+     */
+    tx_conf = &port_dev_info[port].pi_dev_info.default_txconf;
+
+    if ((tx_conf->txq_flags & ETH_TXQ_FLAGS_NOXSUMUDP) ==
+        ETH_TXQ_FLAGS_NOXSUMUDP)
+        tx_conf->txq_flags &= ~ETH_TXQ_FLAGS_NOXSUMUDP;
+    if ((tx_conf->txq_flags & ETH_TXQ_FLAGS_NOXSUMTCP) ==
+        ETH_TXQ_FLAGS_NOXSUMTCP)
+        tx_conf->txq_flags &= ~ETH_TXQ_FLAGS_NOXSUMTCP;
+#else /* !defined(TPG_SW_CHECKSUMMING) */
+    RTE_SET_USED(port);
+#endif /* !defined(TPG_SW_CHECKSUMMING) */
+}
+
+/*****************************************************************************
+ * port_init_rx_conf()
+ ****************************************************************************/
+static void port_init_rx_conf(uint16_t port __rte_unused)
+{
+
+}
+
 
 /*****************************************************************************
  * port_get_pre_init_port_count()
@@ -468,13 +500,15 @@ static bool port_setup_port(uint8_t port)
     int                 rc;
     int                 queue;
 #if !defined(TPG_SW_CHECKSUMMING)
-    int                 expected_rx_flags;
-    int                 expected_tx_flags;
+    uint64_t            expected_rx_flags;
+    uint64_t            expected_tx_flags;
 #endif /* !defined(TPG_SW_CHECKSUMMING) */
     uint16_t            number_of_rings;
     global_config_t    *cfg;
     struct ether_addr   mac_addr;
     tpg_port_options_t  default_port_options;
+    struct rte_eth_rxconf rx_conf;
+    struct rte_eth_txconf tx_conf;
 
     struct rte_eth_conf default_port_config = {
         .rxmode = {
@@ -500,28 +534,12 @@ static bool port_setup_port(uint8_t port)
         }
     };
 
-    /* TODO: investigate what values we actually need? Can we make rx_conf and
-     * tx_conf device independent?
-     */
-    struct rte_eth_rxconf rx_conf = {
-        .rx_thresh = {
-            .pthresh = 8,
-            .hthresh = 8,
-            .wthresh = 4,
-        },
-        .rx_free_thresh = 64,
-        .rx_drop_en = 0
-    };
+    /* Initialise configurations for rx and tx*/
+    port_init_rx_conf(port);
+    port_init_tx_conf(port);
 
-    struct rte_eth_txconf tx_conf = {
-        .tx_thresh = {
-            .pthresh = 36,
-            .hthresh = 0,
-            .wthresh = 0,
-        },
-        .tx_free_thresh = 64,
-        .tx_rs_thresh = 32,
-    };
+    rx_conf = port_dev_info[port].pi_dev_info.default_rxconf;
+    tx_conf = port_dev_info[port].pi_dev_info.default_txconf;
 
     if (!port_dev_info[port].pi_dev_info.max_rx_pktlen)
         TPG_ERROR_EXIT(EXIT_FAILURE,
@@ -534,7 +552,8 @@ static bool port_setup_port(uint8_t port)
                          DEV_RX_OFFLOAD_UDP_CKSUM |
                          DEV_RX_OFFLOAD_TCP_CKSUM);
 
-    if (!(port_dev_info[port].pi_dev_info.rx_offload_capa & expected_rx_flags))
+    if ((port_dev_info[port].pi_dev_info.rx_offload_capa &
+          expected_rx_flags) != expected_rx_flags)
         TPG_ERROR_EXIT(EXIT_FAILURE,
                        "ERROR: %s doesn't support vlan/ipv4/udp/tcp rx capabilities!\n",
                        port_dev_info[port].pi_dev_info.driver_name);
@@ -546,7 +565,8 @@ static bool port_setup_port(uint8_t port)
                          DEV_RX_OFFLOAD_UDP_CKSUM |
                          DEV_RX_OFFLOAD_TCP_CKSUM);
 
-    if (!(port_dev_info[port].pi_dev_info.tx_offload_capa & expected_tx_flags))
+    if ((port_dev_info[port].pi_dev_info.tx_offload_capa & expected_tx_flags)
+        != expected_tx_flags)
         TPG_ERROR_EXIT(EXIT_FAILURE,
                        "ERROR: %s doesn't support vlan/ipv4/udp/tcp tx capabilities!\n",
                        port_dev_info[port].pi_dev_info.driver_name);

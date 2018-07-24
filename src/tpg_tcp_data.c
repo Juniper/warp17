@@ -447,3 +447,59 @@ uint32_t tcp_data_retrans(tcp_control_block_t *tcb)
     return retrans_bytes;
 }
 
+
+/*****************************************************************************
+ * tcp_data_walk_segs()
+ *      this function walks segments checking for data consistency
+ ****************************************************************************/
+void tcp_data_walk_segs(tcp_control_block_t *tcb)
+{
+    uint32_t         pkt_len, count;
+    bool             enable_prints;
+    struct rte_mbuf *seg_mbuf;
+
+    enable_prints = FALSE;
+
+    /* In order to not compromise speediness we print just if I'm already sure
+     * to fail
+     */
+again:
+
+    count   = 0;
+    pkt_len = tcb->tcb_retrans.tr_total_size;
+
+    if (!pkt_len) {
+        assert(tcb->tcb_retrans.tr_data_mbufs == NULL);
+        return;
+    }
+
+    if (enable_prints)
+        RTE_LOG(DEBUG, USER1,
+                "Init packet len:_\t%d\n", pkt_len);
+
+    for (seg_mbuf = tcb->tcb_retrans.tr_data_mbufs;
+         seg_mbuf; seg_mbuf = seg_mbuf->next) {
+        count++;
+
+        assert(pkt_len >= seg_mbuf->data_len);
+        pkt_len -= seg_mbuf->data_len;
+        if (enable_prints)
+            RTE_LOG(DEBUG, USER1,
+                    "At cycle %d packet len:_\t%d\n", count, pkt_len);
+    }
+
+    if (enable_prints)
+        RTE_LOG(DEBUG, USER1,
+                "End packet len:_\t%d\n", pkt_len);
+
+    if (pkt_len > 0 && !enable_prints) {
+        /* Now that I know for sure that I'm going to fail I print out all
+         * the segments length
+         */
+        enable_prints = TRUE;
+
+        goto again;
+    }
+
+    assert(pkt_len == 0);
+}

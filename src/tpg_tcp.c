@@ -288,16 +288,19 @@ int tcp_close_connection(tcp_control_block_t *tcb, uint32_t flags)
         /* Cleanup retrans queue. */
         if (tcb->tcb_retrans.tr_data_mbufs) {
             /* This will free the whole chain! */
-            rte_pktmbuf_free(tcb->tcb_retrans.tr_data_mbufs);
+            pkt_mbuf_free(tcb->tcb_retrans.tr_data_mbufs);
         }
 
         /* Cleanup recv buf. */
         while (!LIST_EMPTY(&tcb->tcb_rcv_buf)) {
             tcb_buf_hdr_t *recvbuf = tcb->tcb_rcv_buf.lh_first;
 
-            rte_pktmbuf_free(recvbuf->tbh_mbuf);
+            pkt_mbuf_free(recvbuf->tbh_mbuf);
             LIST_REMOVE(recvbuf, tbh_entry);
         }
+
+        tcb->tcb_retrans.tr_data_mbufs = NULL;
+        tcb->tcb_retrans.tr_total_size = 0;
 
         tsm_terminate_statemachine(tcb);
 
@@ -703,7 +706,7 @@ static struct rte_mbuf *tcp_build_hdr_mbuf(tcp_control_block_t *tcb,
 
     *tcp_hdr_p = tcp_build_hdr(tcb, mbuf, ip_hdr, sseq, flags);
     if (unlikely(!(*tcp_hdr_p))) {
-        rte_pktmbuf_free(mbuf);
+        pkt_mbuf_free(mbuf);
         return NULL;
     }
 
@@ -729,7 +732,7 @@ static bool tcp_send_pkt(tcp_control_block_t *tcb, uint32_t sseq,
     if (unlikely(!hdr)) {
         INC_STATS(STATS_LOCAL(tpg_tcp_statistics_t, tcb->tcb_l4.l4cb_interface),
                   ts_failed_data_pkts);
-        rte_pktmbuf_free(data_mbuf);
+        pkt_mbuf_free(data_mbuf);
         return false;
     }
 

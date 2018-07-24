@@ -147,18 +147,18 @@ Any 64 bit Linux distribution will do, however we have been testing this with
 Ubuntu Server 14.04 LTS. In addition we have made an OVF virtual machine image
 available, details can be found in the respective [documentation](ovf/README.md).
 
-### Install build essential, python and ncurses
+### Install build essential, lib Numa, python and ncurses
 ```
-sudo apt-get install build-essential python ncurses-dev
+sudo apt-get install build-essential libnuma-dev python ncurses-dev
 ```
 
-### Install DPDK 16.11.2
+### Install DPDK 17.11.3
 
-* Download [DPDK 16.11.2](http://dpdk.org/rel/)
+* Download [DPDK 17.11.3](http://fast.dpdk.org/rel/dpdk-17.11.3.tar.xz)
 
 	```
-	tar xf dpdk-16.11.2.tar.xz
-	cd dpdk-stable-16.11.2
+	tar xf dpdk-17.11.3.tar.xz
+	cd dpdk-stable-17.11.3
 	```
 
 * Install DPDK:
@@ -170,8 +170,8 @@ sudo apt-get install build-essential python ncurses-dev
 	```
 
 * Load the `igb_uio` DPDK module, either as shown below or by running the
-  `$RTE_SDK/tools/dpdk-setup.sh` script and selecting option
-  `[2] Insert IGB UIO module`:
+  `$RTE_SDK/usertools/dpdk-setup.sh` script and selecting option
+  `Insert IGB UIO module`:
 
 	- add the following modules to `/etc/modules`:
 
@@ -329,9 +329,9 @@ deactivate
 
 ## Configure DPDK ports
 
-Use the `$RTE_SDK/tools/dpdk-setup.sh` script (as described in the
+Use the `$RTE_SDK/usertools/dpdk-setup.sh` script (as described in the
 [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/quick_start.html)). Select
-which ports to be controlled by the IGB UIO module: option `[8] Bind
+which ports to be controlled by the IGB UIO module: option `Bind
 Ethernet/Crypto device to IGB UIO module`.
 
 # How to run
@@ -580,8 +580,8 @@ are configured, if you have them make sure you increase all the referenced
 ports:
 
 * Load the `rte_kni` DPDK module (if needed), either as shown below or by
-  running the `$RTE_SDK/tools/dpdk-setup.sh` script and selecting option
-  `[4] Insert KNI module`:
+  running the `$RTE_SDK/usertools/dpdk-setup.sh` script and selecting option
+  `Insert KNI module`:
 
 ```
 sudo modprobe rte_kni
@@ -952,7 +952,8 @@ __NOTE: Only IPv4 is supported for now!__
       all the received samples (not only the most recent ones).
 
 	```
-	set latency port <eth_port> test-case-id <tcid> max <value> max-avg <value> samples <value>
+	set tests latency port <eth_port> test-case-id <tcid> max <value> max-avg
+	 <value> samples <value>
 	```
 
 	__NOTE: Latency configs make sense only if RX timestamping is enabled for the

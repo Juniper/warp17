@@ -64,16 +64,17 @@
  * Definitions
  ****************************************************************************/
 /*
- * TODO: The pools aren't shared so making it single consumer/producer should
- * improve performance but it doesn't! It's probably because of the
- * pipeline flushing.. Keep flags 0 for now.
- * MEM_MBUF_POOL_FLAGS = MEMPOOL_F_SP_PUT | MEMPOOL_F_SC_GET;
- * MEM_TCB_POOL_FLAGS = MEMPOOL_F_SP_PUT | MEMPOOL_F_SC_GET;
- * MEM_UCB_POOL_FLAGS = MEMPOOL_F_SP_PUT | MEMPOOL_F_SC_GET;
+ * The pools aren't shared so making it single consumer/producer improve
+ * performance
  */
+#if defined(TPG_RING_IF)
 #define MEM_MBUF_POOL_FLAGS 0
-#define MEM_TCB_POOL_FLAGS  0
-#define MEM_UCB_POOL_FLAGS  0
+#else
+#define MEM_MBUF_POOL_FLAGS (MEMPOOL_F_SP_PUT | MEMPOOL_F_SC_GET)
+#endif
+
+#define MEM_TCB_POOL_FLAGS (MEMPOOL_F_SP_PUT | MEMPOOL_F_SC_GET)
+#define MEM_UCB_POOL_FLAGS (MEMPOOL_F_SP_PUT | MEMPOOL_F_SC_GET)
 
 #define MEM_CMDLINE_OPTIONS()                  \
     CMDLINE_OPT_ARG("tcb-pool-sz", true),      \

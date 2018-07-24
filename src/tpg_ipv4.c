@@ -527,12 +527,17 @@ static struct ipv4_hdr *ipv4_build_hdr(l4_control_block_t *l4_cb,
     ip_hdr->dst_addr = rte_cpu_to_be_32(l4_cb->l4cb_dst_addr.ip_v4);
     ip_hdr->hdr_checksum = 0;
 
+    /*
+     * Since mbuf->l3_len is used for checksum offload for ipv4 but even for
+     * layer 4 checksum, we have to set it even if we don't compute ipv4 checksum
+     */
+    mbuf->l3_len = ip_hdr_len;
+
 #if !defined(TPG_SW_CHECKSUMMING)
     if (true) {
 #else
     if (sockopt->so_eth.ethso_tx_offload_ipv4_cksum) {
 #endif /* !defined(TPG_SW_CHECKSUMMING) */
-        mbuf->l3_len = ip_hdr_len;
         mbuf->ol_flags |= PKT_TX_IP_CKSUM;
     } else {
         ip_hdr->hdr_checksum = rte_raw_cksum(ip_hdr, ip_hdr_len);

@@ -75,6 +75,7 @@
 #include <rte_errno.h>
 #include <rte_kni.h>
 #include <rte_cycles.h>
+#include <rte_bus_pci.h>
 
 #include <termios.h>
 #include <cmdline_parse.h>
@@ -101,12 +102,6 @@
 #ifndef static_assert
 #define static_assert _Static_assert
 #endif
-
-/*****************************************************************************
- * container_of()
- ****************************************************************************/
-#define container_of(ptr, type, member) \
-    ((type *)((char *)(ptr) - offsetof(type, member)))
 
 /*****************************************************************************
  * Remove debug message is requested

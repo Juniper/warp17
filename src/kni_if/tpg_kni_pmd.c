@@ -71,8 +71,6 @@
 /*****************************************************************************
  * Static variables
  ****************************************************************************/
-static const  char         *kni_pmd_driver_name = "WARP KNI PMD";
-
 static struct rte_eth_link  kni_pmd_link = {
     .link_speed   = ETH_SPEED_NUM_10G,
     .link_duplex  = ETH_LINK_FULL_DUPLEX,
@@ -565,7 +563,7 @@ static void kni_eth_mac_addr_remove(struct rte_eth_dev *dev,
 /*****************************************************************************
  * kni_eth_mac_addr_add()
  ****************************************************************************/
-static void kni_eth_mac_addr_add(struct rte_eth_dev *dev,
+static int kni_eth_mac_addr_add(struct rte_eth_dev *dev,
                                  struct ether_addr *mac,
                                  uint32_t index,
                                  uint32_t vmdq __rte_unused)
@@ -580,12 +578,13 @@ static void kni_eth_mac_addr_add(struct rte_eth_dev *dev,
             mac->addr_bytes[3],
             mac->addr_bytes[4],
             mac->addr_bytes[5]);
+    return 0;
 }
 
 /*****************************************************************************
  * kni_eth_stats_get()
  ****************************************************************************/
-static void kni_eth_stats_get(struct rte_eth_dev *dev,
+static int kni_eth_stats_get(struct rte_eth_dev *dev,
                               struct rte_eth_stats *stats)
 {
     struct rtnl_link_stats64 nl_stats;
@@ -607,6 +606,7 @@ static void kni_eth_stats_get(struct rte_eth_dev *dev,
     stats->ierrors = nl_stats.tx_errors;
     stats->oerrors = nl_stats.rx_errors;
     stats->rx_nombuf = 0;
+    return 0;
 }
 
 /*****************************************************************************
@@ -784,13 +784,11 @@ bool kni_eth_from_kni(const char *kni_name, struct rte_kni *kni,
 
     eth_data->dev_link = kni_pmd_link;
     eth_data->mac_addrs = mac_address;
-    eth_data->dev_flags = RTE_ETH_DEV_DETACHABLE;
     eth_data->kdrv = RTE_KDRV_NONE;
-    eth_data->drv_name = kni_pmd_driver_name;
     eth_data->numa_node = numa_node;
 
     eth_dev->data = eth_data;
-    eth_dev->driver = NULL;
+    eth_dev->device = NULL;
     eth_dev->dev_ops = &kni_pmd_ops;
     eth_dev->rx_pkt_burst = kni_rx_pkt_burst;
     eth_dev->tx_pkt_burst = kni_tx_pkt_burst;

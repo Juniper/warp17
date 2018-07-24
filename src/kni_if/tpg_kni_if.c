@@ -64,8 +64,8 @@
 /*****************************************************************************
  * Definitions
  ****************************************************************************/
-static int kni_change_mtu(uint8_t port, unsigned mtu);
-static int kni_config_network_if(uint8_t port, uint8_t if_state);
+static int kni_change_mtu(uint16_t port, unsigned mtu);
+static int kni_config_network_if(uint16_t port, uint8_t if_state);
 
 /*****************************************************************************
  * Globals
@@ -275,7 +275,7 @@ bool kni_if_init(void)
 /*****************************************************************************
  * kni_change_mtu()
  ****************************************************************************/
-static int kni_change_mtu(uint8_t port, unsigned mtu)
+static int kni_change_mtu(uint16_t port, unsigned mtu)
 {
     global_config_t *cfg;
 
@@ -325,7 +325,7 @@ static int kni_change_mtu(uint8_t port, unsigned mtu)
 /*****************************************************************************
  * kni_config_network_if()
  ****************************************************************************/
-static int kni_config_network_if(uint8_t port, uint8_t if_state)
+static int kni_config_network_if(uint16_t port, uint8_t if_state)
 {
     RTE_LOG(DEBUG, USER1, "KNI: Configure network interface of %d %s\n",
             port, if_state ? "up" : "down");

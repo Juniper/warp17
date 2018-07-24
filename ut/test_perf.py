@@ -85,6 +85,7 @@ class TestPerfNames:
 
     TCP_SETUP_RATE      = 'tcp-setup-rate'
     TCP_DATA_SETUP_RATE = 'tcp-data-setup-rate'
+    TCP_DATA_SETUP_RATE1024 = 'tcp-data-setup-rate-1024'
 
     UDP_DATA_SETUP_RATE       = 'udp-data-setup-rate'
     UDP_MCAST_DATA_SETUP_RATE = 'udp-mcast-data-setup-rate'
@@ -147,6 +148,11 @@ class TestPerf(Warp17UnitTestCase):
 
     def _get_expected_tcp_data_setup(self):
         return Warp17UnitTestCase.env.get_value(TestPerfNames.TCP_DATA_SETUP_RATE,
+                                                section=self.CFG_SEC_UNIT_TEST,
+                                                cast=int)
+
+    def _get_expected_tcp_data_1024b_setup(self):
+        return Warp17UnitTestCase.env.get_value(TestPerfNames.TCP_DATA_SETUP_RATE1024,
                                                 section=self.CFG_SEC_UNIT_TEST,
                                                 cast=int)
 
@@ -445,7 +451,6 @@ class TestPerf(Warp17UnitTestCase):
                                        app_scfg=self._get_raw_app_server(10),
                                        expected_rate=self._get_expected_tcp_data_setup())
 
-    @unittest.expectedFailure
     def test_05_4M_tcp_sess_data_1024b_setup_rate(self):
         """Tests setting up 4M TCP sessions + 1024 byte packet data."""
 
@@ -458,7 +463,7 @@ class TestPerf(Warp17UnitTestCase):
                                        rate_ccfg=self._get_rates_client(),
                                        app_ccfg=self._get_raw_app_client(1024),
                                        app_scfg=self._get_raw_app_server(1024),
-                                       expected_rate=self._get_expected_tcp_data_setup())
+                                       expected_rate=self._get_expected_tcp_data_1024b_setup())
 
     def test_06_4M_tcp_sess_data_1300b_setup_rate(self):
         """Tests setting up 4M TCP sessions + 1300 bytes packet data."""

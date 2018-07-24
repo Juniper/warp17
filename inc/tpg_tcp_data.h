@@ -126,5 +126,16 @@ extern uint32_t tcp_data_handle(tcp_control_block_t *tcb,
 
 extern uint32_t tcp_data_retrans(tcp_control_block_t *tcb);
 
+extern void tcp_data_walk_segs(tcp_control_block_t *tcb);
+
+#if defined(TPG_L4_CB_DEBUG)
+#define TCB_SEG_CHECK(tcb) \
+    tcp_data_walk_segs(tcb)
+
+#else /* defined(TPG_L4_CB_DEBUG) */
+#define TCB_SEG_CHECK(cb) (void)0
+
+#endif /* defined(TPG_L4_CB_DEBUG) */
+
 #endif /* _H_TPG_TCP_DATA_ */
 

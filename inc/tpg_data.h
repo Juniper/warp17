@@ -262,7 +262,7 @@ struct rte_mbuf *data_adj_chain(struct rte_mbuf *mbuf, uint32_t len)
     } while (0)
 
 /*****************************************************************************
- * data_chain_from_template()
+ * data_chain_from_static_template()
  *      NOTE: duplicates the template as many times needed to fill the
  *            requested data len. Already marks all the mbufs in the chain as
  *            STATIC.
@@ -287,6 +287,7 @@ struct rte_mbuf *data_chain_from_static_template(uint32_t data_len,
     if (unlikely(!data_mbuf))
         goto done;
 
+    /* If data length is less than the mbuf len */
     if (data_len <= template_len) {
         DATA_SET_STATIC(data_mbuf);
         DATA_MBUF_FROM_TEMPLATE(data_mbuf, template, template_physaddr,
@@ -297,9 +298,8 @@ struct rte_mbuf *data_chain_from_static_template(uint32_t data_len,
     }
 
 
-    pkt_len = data_len;
-    data_mbufs = data_mbuf;
-    prev_mbuf = &data_mbuf->next;
+    pkt_len   = data_len;
+    prev_mbuf = &data_mbufs;
 
     do {
         DATA_SET_STATIC(data_mbuf);
@@ -310,6 +310,8 @@ struct rte_mbuf *data_chain_from_static_template(uint32_t data_len,
         prev_mbuf = &data_mbuf->next;
         data_len -= data_mbuf->data_len;
     } while (data_len >= template_len && (data_mbuf = pkt_mbuf_alloc(mpool)));
+
+    *prev_mbuf = NULL;
 
     if (!data_mbuf)
         goto done;
@@ -326,8 +328,6 @@ struct rte_mbuf *data_chain_from_static_template(uint32_t data_len,
         nb_segs++;
         *prev_mbuf = data_mbuf;
         data_mbuf->next = NULL;
-    } else {
-        *prev_mbuf = NULL;
     }
 
     data_mbufs->nb_segs = nb_segs;
@@ -367,9 +367,8 @@ struct rte_mbuf *data_chain_from_static_chain(struct rte_mbuf *static_chain,
     if (unlikely(!data_mbuf))
         goto done;
 
-    data_mbufs = data_mbuf;
-    data_mbufs->pkt_len = data_len;
-    prev_mbuf = &data_mbuf->next;
+    data_mbuf->pkt_len = data_len;
+    prev_mbuf          = &data_mbufs;
 
     do {
         DATA_SET_STATIC(data_mbuf);

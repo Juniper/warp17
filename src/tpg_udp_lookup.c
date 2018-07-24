@@ -57,6 +57,7 @@
 /*****************************************************************************
  * Include files
  ****************************************************************************/
+#include <stddef.h>
 #include "tcp_generator.h"
 
 /*****************************************************************************
@@ -108,7 +109,7 @@ bool tlkp_udp_init(void)
  ****************************************************************************/
 void tlkp_udp_lcore_init(uint32_t lcore_id)
 {
-    unsigned int i;
+    uint32_t i;
 
     RTE_PER_LCORE(tlkp_ucb_hash_table) =
         rte_zmalloc_socket("udp_hash_table", rte_eth_dev_count() *
@@ -121,7 +122,7 @@ void tlkp_udp_lcore_init(uint32_t lcore_id)
                         rte_lcore_index(lcore_id));
     }
 
-    for (i = 0; i < (rte_eth_dev_count() * TPG_HASH_BUCKET_SIZE); i++) {
+    for (i = 0; i < (uint32_t)(rte_eth_dev_count() * TPG_HASH_BUCKET_SIZE); i++) {
         /*
          * Initialize all list headers.
          */
@@ -136,14 +137,11 @@ udp_control_block_t *tlkp_alloc_ucb(void)
 {
     udp_control_block_t *ucb;
 
-    if (rte_mempool_generic_get(mem_get_ucb_local_pool(), (void *)&ucb, 1, NULL,
-                                MEMPOOL_F_SC_GET))
+    if (rte_mempool_generic_get(mem_get_ucb_local_pool(), (void *)&ucb, 1, NULL))
         return NULL;
 
     tlkp_alloc_cb_init(ucb, &ucb->ucb_l4, offsetof(udp_control_block_t, ucb_l4),
-                       mem_get_ucb_local_pool(),
-                       tlkp_ucb_mpool_alloc_in_use,
-                       ucb_l4cb_max_id);
+                       tlkp_ucb_mpool_alloc_in_use, ucb_l4cb_max_id);
 
     return ucb;
 }
@@ -211,8 +209,7 @@ void tlkp_free_ucb(udp_control_block_t *ucb)
     L4_CB_FREE_DEINIT(&ucb->ucb_l4, tlkp_ucb_mpool_alloc_in_use,
                       ucb_l4cb_max_id);
 
-    rte_mempool_generic_put(mem_get_ucb_local_pool(), &ucb_p, 1, NULL,
-                            MEMPOOL_F_SP_PUT);
+    rte_mempool_generic_put(mem_get_ucb_local_pool(), &ucb_p, 1, NULL);
 }
 
 /*****************************************************************************

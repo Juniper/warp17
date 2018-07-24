@@ -57,6 +57,7 @@
 /*****************************************************************************
  * Include files
  ****************************************************************************/
+#include <stddef.h>
 #include "tcp_generator.h"
 
 /*****************************************************************************
@@ -110,7 +111,7 @@ bool tlkp_tcp_init(void)
  ****************************************************************************/
 void tlkp_tcp_lcore_init(uint32_t lcore_id)
 {
-    unsigned int i;
+    uint32_t i;
 
     RTE_PER_LCORE(tlkp_tcb_hash_table) =
         rte_zmalloc_socket("tcp_hash_table", rte_eth_dev_count() *
@@ -123,7 +124,8 @@ void tlkp_tcp_lcore_init(uint32_t lcore_id)
                         rte_lcore_index(lcore_id));
     }
 
-    for (i = 0; i < (rte_eth_dev_count() * TPG_HASH_BUCKET_SIZE); i++) {
+    for (i = 0; i < (uint32_t)(rte_eth_dev_count() * TPG_HASH_BUCKET_SIZE);
+         i++) {
         /*
          * Initialize all list headers.
          */
@@ -153,14 +155,11 @@ tcp_control_block_t *tlkp_alloc_tcb(void)
 {
     tcp_control_block_t *tcb;
 
-    if (rte_mempool_generic_get(mem_get_tcb_local_pool(), (void *)&tcb, 1, NULL,
-                                MEMPOOL_F_SC_GET))
+    if (rte_mempool_generic_get(mem_get_tcb_local_pool(), (void *)&tcb, 1, NULL))
         return NULL;
 
     tlkp_alloc_cb_init(tcb, &tcb->tcb_l4, offsetof(tcp_control_block_t, tcb_l4),
-                       mem_get_tcb_local_pool(),
-                       tlkp_tcb_mpool_alloc_in_use,
-                       tcb_l4cb_max_id);
+                       tlkp_tcb_mpool_alloc_in_use, tcb_l4cb_max_id);
 
     return tcb;
 }
@@ -237,8 +236,7 @@ void tlkp_free_tcb(tcp_control_block_t *tcb)
     L4_CB_FREE_DEINIT(&tcb->tcb_l4,
                       tlkp_tcb_mpool_alloc_in_use,
                       tcb_l4cb_max_id);
-    rte_mempool_generic_put(mem_get_tcb_local_pool(), &tcb_p, 1, NULL,
-                            MEMPOOL_F_SP_PUT);
+    rte_mempool_generic_put(mem_get_tcb_local_pool(), &tcb_p, 1, NULL);
 }
 
 

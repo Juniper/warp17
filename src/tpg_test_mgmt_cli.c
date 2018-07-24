@@ -2444,8 +2444,8 @@ static void cmd_syslog_parsed(void *parsed_result __rte_unused,
     if (pos == level_count)
         return;
 
-    rte_set_log_level(pos);
-    log_level = rte_get_log_level();
+    rte_log_set_global_level(pos);
+    log_level = rte_log_get_global_level();
     cmdline_printf(cl, "Syslog set to %s\n", levels[log_level]);
 }
 

@@ -1355,7 +1355,7 @@ static void test_stats_quit_screen(void)
     test_stats_destroy_windows();
     rte_free(stats_win);
     win_changed = false;
-    rte_set_log_level(stats_old_rte_log_level);
+    rte_log_set_global_level(stats_old_rte_log_level);
 }
 
 /*****************************************************************************
@@ -1379,8 +1379,8 @@ void test_init_stats_screen(void)
 
     sigaction(SIGWINCH, &sigact, &win_chg_old_sigact);
     win_changed = true;
-    stats_old_rte_log_level = rte_get_log_level();
-    rte_set_log_level(0);
+    stats_old_rte_log_level = rte_log_get_global_level();
+    rte_log_set_global_level(0);
     test_stats_init_detail_tc();
 
     rte_timer_init(&display_tmr);

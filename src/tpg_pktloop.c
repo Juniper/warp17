@@ -468,13 +468,14 @@ static void pkt_loop_rem_port(uint32_t port_id, int32_t queue_id __rte_unused)
  ****************************************************************************/
 int pkt_receive_loop(void *arg __rte_unused)
 {
-    int                     lcore_id    = rte_lcore_id();
-    int                     lcore_index = rte_lcore_index(lcore_id);
-    int32_t                 queue_id;
-    global_config_t        *cfg;
-    tpg_port_statistics_t  *port_stats;
-    packet_control_block_t *pcbs;
-    uint32_t                port;
+    int                      lcore_id    = rte_lcore_id();
+    int                      lcore_index = rte_lcore_index(lcore_id);
+    int32_t                  queue_id;
+    global_config_t         *cfg;
+    tpg_port_statistics_t   *port_stats;
+    packet_control_block_t  *pcbs;
+    uint32_t                 port;
+    struct rte_mbuf        **buf;
 
     RTE_PER_LCORE(pkt_tx_q) =
         rte_zmalloc_socket("local_pkt_tx_q",
@@ -593,6 +594,10 @@ int pkt_receive_loop(void *arg __rte_unused)
         }
     }
 
+    buf = rte_zmalloc_socket("rx_mbuf_array", TPG_RX_BURST_SIZE * sizeof(*buf),
+                             RTE_CACHE_LINE_SIZE,
+                             rte_lcore_to_socket_id(lcore_id));
+
     /*
      * Main processing loop...
      */
@@ -603,7 +608,6 @@ int pkt_receive_loop(void *arg __rte_unused)
         uint32_t         qidx;
         int              error;
         int              no_rx_buffers;
-        struct rte_mbuf *buf[TPG_RX_BURST_SIZE];
         struct rte_mbuf *ret_mbuf;
 
         /* Check for the RTE timers too. There shouldn't be too many of them. */

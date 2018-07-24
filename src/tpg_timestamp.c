@@ -70,7 +70,7 @@
 RTE_DEFINE_PER_LCORE(tstamp_info_t, tstamp_tc_per_port_t)[TPG_ETH_DEV_MAX];
 
 /*****************************************************************************
- * tstamp_start()
+ * tstamp_start_tx()
  ****************************************************************************/
 void tstamp_start_tx(uint32_t port, uint32_t rss_queue __rte_unused,
                      tstamp_tx_post_cb_t cb)
@@ -86,7 +86,7 @@ void tstamp_start_tx(uint32_t port, uint32_t rss_queue __rte_unused,
 }
 
 /*****************************************************************************
- * tstamp_stop()
+ * tstamp_stop_tx()
  ****************************************************************************/
 void tstamp_stop_tx(uint32_t port, uint32_t rss_queue __rte_unused)
 {
@@ -95,7 +95,7 @@ void tstamp_stop_tx(uint32_t port, uint32_t rss_queue __rte_unused)
 }
 
 /*****************************************************************************
- * tstamp_start()
+ * tstamp_start_rx()
  ****************************************************************************/
 void tstamp_start_rx(uint32_t port, uint32_t rss_queue __rte_unused)
 {
@@ -109,7 +109,7 @@ void tstamp_start_rx(uint32_t port, uint32_t rss_queue __rte_unused)
 }
 
 /*****************************************************************************
- * tstamp_stop()
+ * tstamp_stop_rx()
  ****************************************************************************/
 void tstamp_stop_rx(uint32_t port, uint32_t rss_queue __rte_unused)
 {
