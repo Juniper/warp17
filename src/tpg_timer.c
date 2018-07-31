@@ -380,9 +380,8 @@ void tpg_timer_reset(struct rte_timer *tim, uint64_t ticks,
                      enum rte_timer_type type, unsigned tim_lcore,
                      rte_timer_cb_t fct, void *arg)
 {
-    int state = rte_timer_reset(tim, ticks, type, tim_lcore,
-                                fct, arg);
-    if (state != 0)
+
+    if (rte_timer_reset(tim, ticks, type, tim_lcore, fct, arg) != 0)
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s\n",
                        "Timer failed to reset!");
 }
@@ -392,29 +391,21 @@ void tpg_timer_reset(struct rte_timer *tim, uint64_t ticks,
  ****************************************************************************/
 void tpg_timer_stop(struct rte_timer *tim)
 {
-    int state;
-
-    if(tim->status.state == RTE_TIMER_STOP ){
-        RTE_LOG(ERR, USER1, "ERROR: %s\n",
-                "RTE_TIMER_STOP");
+    if(tim->status.state == RTE_TIMER_STOP ) {
+        RTE_LOG(ERR, USER1, "WARNING: %s\n",
+                "Trying to stop a timer in RTE_TIMER_STOP state!");
 
         return;
     }
-    if(tim->status.state == RTE_TIMER_CONFIG ){
-        RTE_LOG(ERR, USER1, "ERROR: %s\n",
-                "RTE_TIMER_CONFIG");
+    if(tim->status.state == RTE_TIMER_CONFIG ) {
+        RTE_LOG(ERR, USER1, "WARNING: %s\n",
+                "Trying to stop a timer in RTE_TIMER_CONFIG state!");
 
         return;
     }
-    state = rte_timer_stop(tim);
-    if (state == -1) {
-        printf("ok fine\n");
-        return;
-    }
-    if (state != 0) {
+    if (rte_timer_stop(tim) != 0)
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s\n",
                        "Timer failed to stop!");
-    }
 }
 
 /*****************************************************************************
