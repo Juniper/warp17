@@ -678,8 +678,9 @@ static void test_entry_tmr_cb(struct rte_timer *tmr __rte_unused, void *arg)
          * test cases must be explicitly stopped!
          */
         if (entry->tc_type != TEST_CASE_TYPE__SERVER) {
-            rte_timer_stop(&state->teos_timer);
-            rte_timer_stop(&state->teos_rates_timer);
+            if (state->teos_timer.status.state != RTE_TIMER_STOP)
+                tpg_timer_stop(&state->teos_timer);
+            tpg_timer_stop(&state->teos_rates_timer);
             test_stop_test_case(eth_port, entry, state,
                                 state->teos_test_case_state);
         }
@@ -775,12 +776,12 @@ static void test_start_test_case(uint32_t eth_port, test_env_t *tenv)
     state->teos_stop_time = 0;
 
     state->teos_test_case_state = TEST_CASE_STATE__RUNNING;
-    rte_timer_reset(&state->teos_timer, GCFG_TEST_MGMT_TMR_TO * cycles_per_us,
+    tpg_timer_reset(&state->teos_timer, GCFG_TEST_MGMT_TMR_TO * cycles_per_us,
                     PERIODICAL,
                     rte_lcore_id(),
                     test_entry_tmr_cb,
                     &state->teos_timer_arg);
-    rte_timer_reset(&state->teos_rates_timer,
+    tpg_timer_reset(&state->teos_rates_timer,
                     GCFG_TEST_MGMT_RATES_TMR_TO * cycles_per_us,
                     PERIODICAL,
                     rte_lcore_id(),
@@ -992,8 +993,8 @@ static int test_stop_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
     /* Stop test cases. */
     TEST_CASE_FOREACH_START(tenv, i, entry, state) {
         /* Cancel test case timers. */
-        rte_timer_stop(&state->teos_timer);
-        rte_timer_stop(&state->teos_rates_timer);
+        tpg_timer_stop(&state->teos_timer);
+        tpg_timer_stop(&state->teos_rates_timer);
 
         test_stop_test_case(stop_msg->tssm_eth_port, entry, state,
                             TEST_CASE_STATE__STOPPED);

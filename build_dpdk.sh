@@ -62,9 +62,8 @@ usage="$0 -v dpdk version you want to install -i Non-interactive"
 dest="/opt"
 tmp="/tmp"
 kernel=`uname -r`
-jobs=1
 
-while getopts "v:n:j:i" opt; do
+while getopts "v:n:i" opt; do
     case $opt in
     v)
         ver=$OPTARG
@@ -123,18 +122,14 @@ function install {
 }
 
 # Skipping in case dpdk is already there
-if [[ -d "$dest/$name/build" ]]; then
-
+if [[ -d "$dest/$name/x86_64-native-linuxapp-gcc/build" ]]; then
     echo dpdk-$ver is already there
-    exit
-
 else
-
     rm -rf $dest/$name
     get $dest $tmp
     build "$dest/$name" x86_64-native-linuxapp-gcc $jobs
-    install "$dest/$name"
-    exit
 
 fi
 
+install "$dest/$name"
+exit
