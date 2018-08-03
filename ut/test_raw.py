@@ -93,6 +93,16 @@ class TestRaw(Warp17TrafficTestCase, Warp17UnitTestCase):
     #####################################################
     # Overrides of Warp17TrafficTestCase specific to RAW
     #####################################################
+    def get_l3_intf_count(self):
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 1
+        return super(Warp17TrafficTestCase, self).get_l3_intf_count()
+
+    def get_l4_port_count(self):
+        if Warp17UnitTestCase.env.get_ring_ports() > 0:
+            return 1
+        return super(Warp17TrafficTestCase, self).get_l4_port_count()
+
     def get_updates(self):
         for (req_size, resp_size, rx_ts, tx_ts) in \
             [   # small payload + no timestmap
