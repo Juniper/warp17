@@ -374,41 +374,6 @@ static void l4cb_handle_test_to(void *entry)
 }
 
 /*****************************************************************************
- * tpg_timer_reset_()
- ****************************************************************************/
-void tpg_timer_reset(struct rte_timer *tim, uint64_t ticks,
-                     enum rte_timer_type type, unsigned tim_lcore,
-                     rte_timer_cb_t fct, void *arg)
-{
-
-    if (rte_timer_reset(tim, ticks, type, tim_lcore, fct, arg) != 0)
-        TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s\n",
-                       "Timer failed to reset!");
-}
-
-/*****************************************************************************
- * tpg_timer_stop()
- ****************************************************************************/
-void tpg_timer_stop(struct rte_timer *tim)
-{
-    if(tim->status.state == RTE_TIMER_STOP ) {
-        RTE_LOG(ERR, USER1, "WARNING: %s\n",
-                "Trying to stop a timer in RTE_TIMER_STOP state!");
-
-        return;
-    }
-    if(tim->status.state == RTE_TIMER_CONFIG ) {
-        RTE_LOG(ERR, USER1, "WARNING: %s\n",
-                "Trying to stop a timer in RTE_TIMER_CONFIG state!");
-
-        return;
-    }
-    if (rte_timer_stop(tim) != 0)
-        TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s\n",
-                       "Timer failed to stop!");
-}
-
-/*****************************************************************************
  * tcp_timer_get_wheel_bucket()
  *   - check that timeout doesn't overflow tmr_wheel_current
  *   - return correct bucket where timer would go

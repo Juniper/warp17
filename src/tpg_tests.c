@@ -740,7 +740,7 @@ static void test_case_rate_start_timer(struct rte_timer *tmr,
     if (!rate_limit_interval_us(rl))
         return;
 
-    tpg_timer_reset(tmr, rate_limit_interval_us(rl) * cycles_per_us, PERIODICAL,
+    rte_timer_reset(tmr, rate_limit_interval_us(rl) * cycles_per_us, PERIODICAL,
                     lcore_id,
                     test_case_tmr_cb,
                     tmr_arg);
@@ -881,9 +881,9 @@ test_case_rate_state_stop(uint32_t lcore, uint32_t eth_port,
     /* Change the target rates to 0 so we don't open/close/anymore.
      * Cancel the open/close/send timers.
      */
-    tpg_timer_stop(&rate_timers->trt_open_timer);
-    tpg_timer_stop(&rate_timers->trt_close_timer);
-    tpg_timer_stop(&rate_timers->trt_send_timer);
+    rte_timer_stop(&rate_timers->trt_open_timer);
+    rte_timer_stop(&rate_timers->trt_close_timer);
+    rte_timer_stop(&rate_timers->trt_send_timer);
 
     test_case_rate_zero("open-zero", &rate_state->trs_open, lcore, eth_port);
     test_case_rate_zero("close-zero", &rate_state->trs_close, lcore, eth_port);

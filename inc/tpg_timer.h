@@ -135,9 +135,5 @@ extern int  tcp_timer_slow_cancel(l4_control_block_t *l4_cb);
 
 extern int  l4cb_timer_test_set(l4_control_block_t *l4_cb, uint32_t timeout_us);
 extern int  l4cb_timer_test_cancel(l4_control_block_t *l4_cb);
-extern void tpg_timer_reset(struct rte_timer *tim, uint64_t ticks,
-                            enum rte_timer_type type, unsigned tim_lcore,
-                            rte_timer_cb_t fct, void *arg);
-extern void tpg_timer_stop(struct rte_timer *tim);
 #endif /* _H_TPG_TIMER_ */
 

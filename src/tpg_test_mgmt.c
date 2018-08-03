@@ -678,9 +678,9 @@ static void test_entry_tmr_cb(struct rte_timer *tmr __rte_unused, void *arg)
          * test cases must be explicitly stopped!
          */
         if (entry->tc_type != TEST_CASE_TYPE__SERVER) {
-            if (state->teos_timer.status.state != RTE_TIMER_STOP)
-                tpg_timer_stop(&state->teos_timer);
-            tpg_timer_stop(&state->teos_rates_timer);
+            rte_timer_stop(&state->teos_timer);
+            // TODO: temporar fix (see comment in test_entry_rates_tmr_cb)!!!
+            // rte_timer_stop(&state->teos_rates_timer);
             test_stop_test_case(eth_port, entry, state,
                                 state->teos_test_case_state);
         }
@@ -716,6 +716,26 @@ static void test_entry_rates_tmr_cb(struct rte_timer *tmr __rte_unused,
     test_env_tmr_arg_t *tmr_arg  = arg;
     test_env_t         *tenv     = tmr_arg->teta_test_env;
     uint32_t            tcid     = tmr_arg->teta_test_case_id;
+
+    test_env_oper_state_t *state    = &tenv->te_test_cases[tcid].state;
+
+    // TODO: normally we should stop the rates timer immediately when we stop
+    // a test case. This means in two cases:
+    // 1. "tests stop port <port>" command is issued
+    // 2. a client test case reaches its criteria and automatically stops.
+    //
+    // Case 2 happens on a timer callback (test_entry_tmr_cb for teos_timer)
+    // but unfortunatelly the DPDK timer infra doesn't allow us to stop other
+    // timers than the current one from within a timer callback. We should
+    // report this to DPDK and have it fixed.
+    //
+    // A hacky fix is to stop the rates timer (teos_rates_timer) from within
+    // its own callback whenever teos_timer is stopped.
+    // This is just for now and should never be merged in dev/common!!!
+    if (state->teos_timer.status.state == RTE_TIMER_STOP) {
+        rte_timer_stop(tmr);
+        return;
+    }
 
     test_update_rates(&tenv->te_test_cases[tcid].cfg);
 }
@@ -776,12 +796,12 @@ static void test_start_test_case(uint32_t eth_port, test_env_t *tenv)
     state->teos_stop_time = 0;
 
     state->teos_test_case_state = TEST_CASE_STATE__RUNNING;
-    tpg_timer_reset(&state->teos_timer, GCFG_TEST_MGMT_TMR_TO * cycles_per_us,
+    rte_timer_reset(&state->teos_timer, GCFG_TEST_MGMT_TMR_TO * cycles_per_us,
                     PERIODICAL,
                     rte_lcore_id(),
                     test_entry_tmr_cb,
                     &state->teos_timer_arg);
-    tpg_timer_reset(&state->teos_rates_timer,
+    rte_timer_reset(&state->teos_rates_timer,
                     GCFG_TEST_MGMT_RATES_TMR_TO * cycles_per_us,
                     PERIODICAL,
                     rte_lcore_id(),
@@ -993,8 +1013,8 @@ static int test_stop_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
     /* Stop test cases. */
     TEST_CASE_FOREACH_START(tenv, i, entry, state) {
         /* Cancel test case timers. */
-        tpg_timer_stop(&state->teos_timer);
-        tpg_timer_stop(&state->teos_rates_timer);
+        rte_timer_stop(&state->teos_timer);
+        rte_timer_stop(&state->teos_rates_timer);
 
         test_stop_test_case(stop_msg->tssm_eth_port, entry, state,
                             TEST_CASE_STATE__STOPPED);

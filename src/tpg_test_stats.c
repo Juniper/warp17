@@ -1348,10 +1348,10 @@ static void test_stats_quit_screen(void)
 {
     cli_unset_override();
     sigaction(SIGWINCH, &win_chg_old_sigact, NULL);
-    tpg_timer_stop(&display_tmr);
-    tpg_timer_stop(&stats_tmr);
-    tpg_timer_stop(&state_tmr);
-    tpg_timer_stop(&tc_detail_tmr);
+    rte_timer_stop(&display_tmr);
+    rte_timer_stop(&stats_tmr);
+    rte_timer_stop(&state_tmr);
+    rte_timer_stop(&tc_detail_tmr);
     test_stats_destroy_windows();
     rte_free(stats_win);
     win_changed = false;
@@ -1384,28 +1384,28 @@ void test_init_stats_screen(void)
     test_stats_init_detail_tc();
 
     rte_timer_init(&display_tmr);
-    tpg_timer_reset(&display_tmr, TEST_DISPLAY_TMR_TO * cycles_per_us,
+    rte_timer_reset(&display_tmr, TEST_DISPLAY_TMR_TO * cycles_per_us,
                     PERIODICAL,
                     rte_lcore_id(),
                     test_display_tmr_cb,
                     NULL);
 
     rte_timer_init(&stats_tmr);
-    tpg_timer_reset(&stats_tmr, TEST_STATS_TMR_TO * cycles_per_us,
+    rte_timer_reset(&stats_tmr, TEST_STATS_TMR_TO * cycles_per_us,
                     PERIODICAL,
                     rte_lcore_id(),
                     test_stats_tmr_cb,
                     NULL);
 
     rte_timer_init(&state_tmr);
-    tpg_timer_reset(&state_tmr, TEST_STATE_TMR_TO * cycles_per_us,
+    rte_timer_reset(&state_tmr, TEST_STATE_TMR_TO * cycles_per_us,
                     PERIODICAL,
                     rte_lcore_id(),
                     test_state_tmr_cb,
                     NULL);
 
     rte_timer_init(&tc_detail_tmr);
-    tpg_timer_reset(&tc_detail_tmr, TEST_TC_DETAIL_TMR_TO * cycles_per_us,
+    rte_timer_reset(&tc_detail_tmr, TEST_TC_DETAIL_TMR_TO * cycles_per_us,
                     PERIODICAL,
                     rte_lcore_id(),
                     test_tc_detail_tmr_cb,
