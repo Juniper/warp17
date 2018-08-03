@@ -483,15 +483,24 @@ raw_deliver_data(l4_control_block_t *l4, raw_app_t *raw_app_data,
     if (unlikely(pkt_len > raw_app_data->ra_remaining_count))
         pkt_len = raw_app_data->ra_remaining_count;
 
+    // TODO: a bit hacky...
+    while (unlikely(rx_data->data_len == 0 && rx_data->nb_segs > 0)) {
+        rx_data->next->pkt_len = rx_data->pkt_len;
+        rx_data->next->nb_segs = rx_data->nb_segs - 1;
+        rx_data = rx_data->next;
+    }
+
     /* If we need to do RX timestamping and this is the beginning of an
      * incoming packet then check for latency info.
      */
     if (unlikely(raw_app_data->ra_rx_tstamp_size &&
             raw_app_data->ra_remaining_count == raw_app_data->ra_resp_size)) {
 
-        if (likely(pkt_len >= raw_app_data->ra_rx_tstamp_size)) {
+        if (likely(pkt_len >= raw_app_data->ra_rx_tstamp_size &&
+                   rx_data->data_len >= raw_app_data->ra_rx_tstamp_size)) {
             raw_latency_data_t *latency_data;
 
+            //TODO rx_data->nb_segs = 2, rx_data->data_len = 0!!
             latency_data = rte_pktmbuf_mtod(rx_data, raw_latency_data_t *);
 
             /* If the latency magic is present then update latency stats. */
