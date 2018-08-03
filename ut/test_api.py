@@ -500,8 +500,6 @@ class TestApi(Warp17UnitTestCase):
                              'ConfigureTestCase')
 
             run_time = 5
-            if Warp17UnitTestCase.env.get_ring_ports() > 0:
-                run_time = 10
 
             self.Start(run_t=run_time)
 
@@ -667,15 +665,8 @@ class TestApi(Warp17UnitTestCase):
         """Check recent latency behaviour for TCP/UDP"""
 
         run_t = 2                       # run time
-        if Warp17UnitTestCase.env.get_ring_ports() > 0:
-            run_t = 10
-            return
         ip_cnt = TPG_TEST_MAX_L3_INTF   # ip count
         port_cnt = 100                  # port count
-
-        # On travis we are not able to run all those sessions
-        if Warp17UnitTestCase.env.get_ring_ports() > 0:
-            port_cnt = 1
 
         n_sess = (port_cnt * ip_cnt)    # n of sessions
         self.lh.info('Check recent latency behaviour for TCP/UDP with sessions {}'.format(n_sess))
@@ -780,10 +771,6 @@ class TestApi(Warp17UnitTestCase):
                     c_result = self.warp17_call('GetTestStatus', c_tc)
                     status = c_result.tsr_state
                     self.assertEqual(c_result.tsr_error.e_code, 0, 'GetTestStatus')
-
-                    if Warp17UnitTestCase.env.get_ring_ports() > 0 and status == 1:
-                        self.Stop()
-                        stopped = True
 
                 if stopped:
                     self.assertEqual(c_result.tsr_state, STOPPED,

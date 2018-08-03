@@ -139,9 +139,6 @@ class Warp17TrafficTestCase():
 
     L4_PORT_COUNT = 100
     L3_INTF_COUNT = 4
-    if Warp17UnitTestCase.env.get_ring_ports() > 0:
-        L4_PORT_COUNT = 1
-        L3_INTF_COUNT = 1
 
     def get_tc_retry_count(self):
         """Override in child class if a specific value is needed."""
