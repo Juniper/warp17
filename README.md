@@ -2,6 +2,12 @@
   <img src="images/logo.png" width="40%" alt="WARP17, The Stateful Traffic Generator">
 </div>
 
+<p>
+<div align="center">
+  <img src="https://travis-ci.org/Juniper/warp17.svg?branch=dev%2Fcommon" alt="Build status">
+</div>
+</p>
+
 _WARP17, The Stateful Traffic Generator for L1-L7_ is a lightweight solution
 for generating high volumes of session based traffic with very high setup
 rates. WARP17 currently focuses on L5-L7 application traffic (e.g., _HTTP_)
