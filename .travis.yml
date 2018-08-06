@@ -68,15 +68,15 @@ cache:
 
 before_install:
     - sudo apt install linux-headers-$(uname -r) libnuma-dev ncurses-dev protobuf-compiler libprotobuf-dev python-protobuf libprotobuf-c0 libprotobuf-c0-dev libprotobuf8 libprotoc8 protobuf-c-compiler -y
-    - sudo bash ./build_dpdk.sh -v 17.11.3 -i
+    - sudo bash ./build_dpdk.sh -v 17.11.3 -j 2 -i
     - sudo pip install -r python/requirements.txt
     - sudo sysctl -w vm.nr_hugepages=1024
     - sudo mkdir -p /mnt/huge
     - sudo mount -t hugetlbfs nodev /mnt/huge
 install:
-    - make clean && make
+    - make clean && make -j 2
 script:
-    - make clean && make all-kni-if
-    - make clean && make all-ring-if
+    - make clean && make all-kni-if -j 2
+    - make clean && make all-ring-if -j 2
 notifications:
     slack: warp17:4NA10mDvXakkJ8I4PGMOxlLg

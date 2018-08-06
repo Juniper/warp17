@@ -62,8 +62,9 @@ usage="$0 -v dpdk version you want to install -i Non-interactive"
 dest="/opt"
 tmp="/tmp"
 kernel=`uname -r`
+jobs=1
 
-while getopts "v:n:i" opt; do
+while getopts "v:n:j:i" opt; do
     case $opt in
     v)
         ver=$OPTARG
@@ -76,6 +77,9 @@ while getopts "v:n:i" opt; do
         ;;
     i)
         interactive=1
+        ;;
+    j)
+        jobs=$OPTARG
         ;;
     \?)
         usage $0
@@ -102,7 +106,7 @@ function get {
 # $2 compiler version
 function build {
     cd $1
-    exec_cmd "Compiling dpdk for $2 arch" make T=$2 install
+    exec_cmd "Compiling dpdk for $2 arch" make T=$2 -j $3 install
 }
 
 # Install dpdk in the local machine
@@ -128,8 +132,9 @@ else
 
     rm -rf $dest/$name
     get $dest $tmp
-    build "$dest/$name" x86_64-native-linuxapp-gcc
+    build "$dest/$name" x86_64-native-linuxapp-gcc $jobs
     install "$dest/$name"
     exit
 
 fi
+
