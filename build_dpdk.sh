@@ -123,14 +123,18 @@ function install {
 }
 
 # Skipping in case dpdk is already there
-if [[ -d "$dest/$name/x86_64-native-linuxapp-gcc/build" ]]; then
+if [[ -d "$dest/$name/build" ]]; then
+
     echo dpdk-$ver is already there
+    exit
+
 else
+
     rm -rf $dest/$name
     get $dest $tmp
     build "$dest/$name" x86_64-native-linuxapp-gcc $jobs
-fi
+    install "$dest/$name"
+    exit
 
-install "$dest/$name"
-exit
+fi
 
