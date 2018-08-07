@@ -206,7 +206,7 @@ static int route_intf_add_cb(uint16_t msgid, uint16_t lcore, void *msg)
                               add_msg->rim_vlan_id);
 
     /* No need to send ARP for interfaces without VLAN/gw config.
-     *  Default GW will be used in such cases.
+     * Default GW will be used in such cases.
      */
     if (add_msg->rim_gw.ip_v4 != nh_zero.ip_v4)
         arp_send_arp_request(add_msg->rim_eth_port, add_msg->rim_ip.ip_v4,
@@ -472,7 +472,8 @@ int route_v4_intf_add(uint32_t port, tpg_ip_t ip, tpg_ip_t mask,
 /*****************************************************************************
  * route_v4_intf_del()
  ****************************************************************************/
-int route_v4_intf_del(uint32_t port, tpg_ip_t ip, tpg_ip_t mask)
+int route_v4_intf_del(uint32_t port, tpg_ip_t ip, tpg_ip_t mask,
+                      uint16_t vlan_id, tpg_ip_t gw)
 {
     MSG_LOCAL_DEFINE(route_intf_del_msg_t, msg);
     route_intf_del_msg_t *del_msg;
@@ -487,6 +488,8 @@ int route_v4_intf_del(uint32_t port, tpg_ip_t ip, tpg_ip_t mask)
     del_msg->rim_eth_port = port;
     del_msg->rim_ip = ip;
     del_msg->rim_mask = mask;
+    del_msg->rim_vlan_id = vlan_id;
+    del_msg->rim_gw = gw;
 
     /* BLOCK waiting for msg to be processed */
     error = msg_send(msgp, 0);
