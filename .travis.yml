@@ -79,10 +79,12 @@ install:
 script:
     - make clean && make all-kni-if -j 2
     - make clean && make all-ring-if -j 2
-    - sudo make unittest
+    - sudo make travis-ut
 after_script:
-    - sudo cat /tmp/warp17*/*.*
+    - sudo cat /tmp/warp17*/*.out
+    - sudo cat /tmp/warp17*/*.log
 after_failure:
-    - sudo cat /tmp/warp17*/*.*
+    - sudo cat /tmp/warp17*/*.out
+    - sudo cat /tmp/warp17*/*.log
 notifications:
     slack: warp17:4NA10mDvXakkJ8I4PGMOxlLg

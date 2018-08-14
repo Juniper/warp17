@@ -98,8 +98,6 @@ class TestPerfNames:
     TIMESTAMP_TCP_DATA_RATE = 'timestamp-tcp-data-rate'
     TIMESTAMP_UDP_DATA_RATE = 'timestamp-udp-data-rate'
 
-@unittest.skipIf(Warp17UnitTestCase.env.get_ring_ports() > 0,
-                 'Skip perf tests for RING interfaces')
 class TestPerf(Warp17UnitTestCase):
     """Tests the WARP17 performance."""
     """Assumes a B2B setup with two ports."""

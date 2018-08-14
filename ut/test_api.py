@@ -75,16 +75,6 @@ from warp17_sockopt_pb2   import *
 
 UINT32MAX = 0xFFFFFFFF
 
-class conditionalDecorator(object):
-    def __init__(self, dec, cond):
-        self.decorator = dec
-        self.condition = cond
-
-    def __call__(self, func):
-        if not self.condition:
-            return func
-        return self.decorator(func)
-
 class TestApi(Warp17UnitTestCase):
     """Tests the functionality of the API."""
     """Assumes a B2B setup with two ports."""
@@ -766,7 +756,7 @@ class TestApi(Warp17UnitTestCase):
                 # Check client test to be passed
                 status = RUNNING
                 stopped = False
-
+                # TODO: check why this still doesn't stop
                 while status == RUNNING:
                     c_result = self.warp17_call('GetTestStatus', c_tc)
                     status = c_result.tsr_state
