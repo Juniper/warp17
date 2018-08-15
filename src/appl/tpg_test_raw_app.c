@@ -482,14 +482,13 @@ raw_deliver_data(l4_control_block_t *l4, raw_app_t *raw_app_data,
 
     if (unlikely(pkt_len > raw_app_data->ra_remaining_count))
         pkt_len = raw_app_data->ra_remaining_count;
-
-    // TODO: a bit hacky...
+#if defined(TPG_RING_IF)
     while (unlikely(rx_data->data_len == 0 && rx_data->nb_segs > 0)) {
         rx_data->next->pkt_len = rx_data->pkt_len;
         rx_data->next->nb_segs = rx_data->nb_segs - 1;
         rx_data = rx_data->next;
     }
-
+#endif /*defined(TPG_RING_IF)*/
     /* If we need to do RX timestamping and this is the beginning of an
      * incoming packet then check for latency info.
      */
