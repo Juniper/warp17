@@ -62,8 +62,9 @@ usage="$0 -v dpdk version you want to install -i Non-interactive"
 dest="/opt"
 tmp="/tmp"
 kernel=`uname -r`
+jobs=1
 
-while getopts "v:n:i" opt; do
+while getopts "v:n:j:i" opt; do
     case $opt in
     v)
         ver=$OPTARG
