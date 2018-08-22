@@ -753,21 +753,15 @@ class TestApi(Warp17UnitTestCase):
                 #               CLIENT                  #
                 #########################################
 
-                # Check client test to be passed
-                status = RUNNING
-                stopped = False
-                # TODO: check why this still doesn't stop
-                while status == RUNNING:
-                    c_result = self.warp17_call('GetTestStatus', c_tc)
-                    status = c_result.tsr_state
-                    self.assertEqual(c_result.tsr_error.e_code, 0, 'GetTestStatus')
+                # Ring ifs are really slow
+                if Warp17UnitTestCase.env.get_ring_ports() != 0:
+                    sleep(2)
 
-                if stopped:
-                    self.assertEqual(c_result.tsr_state, STOPPED,
-                                     'PortStatus PASSED')
-                else:
-                    self.assertEqual(c_result.tsr_state, PASSED,
-                                     'PortStatus PASSED')
+                # Check client test to be passed
+                c_result = self.warp17_call('GetTestStatus', c_tc)
+                self.assertEqual(c_result.tsr_error.e_code, 0, 'GetTestStatus')
+                self.assertEqual(c_result.tsr_state, PASSED,
+                                 'PortStatus PASSED')
 
                 self.assertEqual(c_result.tsr_type, CLIENT,
                                  'PortStatus CLIENT')
@@ -868,8 +862,8 @@ class TestApi(Warp17UnitTestCase):
                                      gls_sample_stats.ls_samples_count, 0,
                                      'ls_samples_count')
 
-                if not stopped:
-                    self.Stop()
+
+                self.Stop()
                 self.TearDown()
 
     def test_negative_latency(self):
