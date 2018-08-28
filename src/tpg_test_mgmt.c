@@ -77,6 +77,11 @@ tpg_gen_stats_t *test_runtime_gen_stats;
 /* Array of port: will store the runtime rate stats per port + testcase. */
 tpg_rate_stats_t *test_runtime_rate_stats;
 
+/* Counter needed in order to call the rates updater each seconds instead of
+ * each 500 ms
+ */
+static uint8_t test_update_rates_cicle = 0;
+
 #define TEST_CASE_RATE_STATS_GET(port, tcid) \
     (test_runtime_rate_stats + (port) * TPG_TEST_MAX_ENTRIES + tcid)
 
@@ -701,8 +706,12 @@ static void test_entry_tmr_cb(struct rte_timer *tmr __rte_unused, void *arg)
 
         tenv->te_test_running = false;
     }
-
-    test_update_rates(&tenv->te_test_cases[tcid].cfg);
+    if(test_update_rates_cicle == 1) {
+        test_update_rates(&tenv->te_test_cases[tcid].cfg);
+        test_update_rates_cicle = 0;
+    } else {
+        test_update_rates_cicle++;
+    }
 }
 
 /*****************************************************************************
