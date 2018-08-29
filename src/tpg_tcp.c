@@ -525,7 +525,7 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
 
     pcb->pcb_tcp = tcp_hdr;
     pcb->pcb_l5_len = pcb->pcb_l4_len - tcp_hdr_len;
-    rte_pktmbuf_adj(mbuf, tcp_hdr_len);
+    mbuf = data_adj_chain(mbuf, tcp_hdr_len);
 
     /*
      * First try known session lookup

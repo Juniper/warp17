@@ -278,7 +278,8 @@ static void tsm_cleanup_retrans_queu(tcp_control_block_t *tcb, uint32_t seg_ack)
     if (acked_bytes) {
         TCB_TRACE(tcb, TSM, DEBUG, "RetransQ cleanup: ADJ bytes=%"PRIu32,
                   acked_bytes);
-        rte_pktmbuf_adj(retrans->tr_data_mbufs, acked_bytes);
+        retrans->tr_data_mbufs = data_adj_chain(retrans->tr_data_mbufs,
+                                                acked_bytes);
     }
 
     if (retrans->tr_data_mbufs && retrans->tr_data_mbufs->data_len == 0) {

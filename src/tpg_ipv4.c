@@ -766,7 +766,7 @@ struct rte_mbuf *ipv4_receive_pkt(packet_control_block_t *pcb,
 
     pcb->pcb_ipv4 = ip_hdr;
     pcb->pcb_l4_len = rte_be_to_cpu_16(ip_hdr->total_length) - ip_hdr_len;
-    rte_pktmbuf_adj(mbuf, ip_hdr_len);
+    mbuf = data_adj_chain(mbuf, ip_hdr_len);
 
     /* "Remove" packet padding (e.g. Ethernet). Applications might store the
      * mbuf (e.g. TCP) and it would be nice to be able to use pkt_len as the

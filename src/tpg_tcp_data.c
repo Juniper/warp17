@@ -288,8 +288,9 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
     /* The first part of the data might be a retransmission so just skip it. */
     if (unlikely(SEG_LT(seg_seq, tcb->tcb_rcv.nxt) &&
                     SEG_GT(seg_seq + seg_len, tcb->tcb_rcv.nxt))) {
-        if (unlikely(!data_mbuf_adj(pcb->pcb_mbuf,
-                                    SEG_DIFF(tcb->tcb_rcv.nxt, seg_seq)))) {
+        pcb->pcb_mbuf = data_adj_chain(pcb->pcb_mbuf,
+                                      SEG_DIFF(tcb->tcb_rcv.nxt, seg_seq));
+        if (unlikely(!pcb->pcb_mbuf)) {
             assert(false);
         }
         seg_len -= SEG_DIFF(tcb->tcb_rcv.nxt, seg_seq);
@@ -333,9 +334,11 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
         } else if (SEG_LE(cur->tbh_seg_seq, new_hdr.tbh_seg_seq) &&
                         SEG_LT(new_hdr.tbh_seg_seq,
                                cur->tbh_seg_seq + cur->tbh_mbuf->pkt_len)) {
-            if (unlikely(!data_mbuf_adj(new_hdr.tbh_mbuf,
-                                        SEG_DIFF(cur->tbh_seg_seq + cur->tbh_mbuf->pkt_len,
-                                                 new_hdr.tbh_seg_seq)))) {
+            new_hdr.tbh_mbuf = data_adj_chain(new_hdr.tbh_mbuf,
+                                              SEG_DIFF(cur->tbh_seg_seq +
+                                                       cur->tbh_mbuf->pkt_len,
+                                                       new_hdr.tbh_seg_seq));
+            if (unlikely(!new_hdr.tbh_mbuf)) {
                 assert(false);
             }
             data_mbuf_merge(cur->tbh_mbuf, new_hdr.tbh_mbuf);
@@ -367,9 +370,10 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
 
             /* If there's still something useful in the old seg then adj it. */
             if (SEG_LT(seg_end, old_seg->tbh_seg_seq + old_seg->tbh_mbuf->pkt_len)) {
-                if (unlikely(!data_mbuf_adj(old_seg->tbh_mbuf,
-                                            SEG_DIFF(seg_end,
-                                                     old_seg->tbh_seg_seq)))) {
+                old_seg->tbh_mbuf =
+                    data_adj_chain(old_seg->tbh_mbuf,
+                                   SEG_DIFF(seg_end, old_seg->tbh_seg_seq));
+                if (unlikely(!old_seg->tbh_mbuf)) {
                     assert(false);
                 }
                 break;
