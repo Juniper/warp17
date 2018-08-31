@@ -54,6 +54,7 @@
 #
 #
 
+
 from warp17_common_pb2 import *
 from warp17_l3_pb2 import *
 from warp17_service_pb2 import *
@@ -116,3 +117,21 @@ def b2b_configure_port(eth_port, def_gw, l3_intf_count = 0, vlan_enable=False):
 
     b2b_port_add_intfs(pcfg, intf_cfg_list, vlan_enable)
     return pcfg
+
+def iprange(start_ip, end_ip):
+    start = list(map(int,start_ip.split('.')))
+    end = list(map(int,end_ip.split('.')))
+    iprange=[]
+    iprange.append('.'.join(map(str,start)))
+
+    while start!=list(map(int,end_ip.split('.'))):
+        for i in range(len(start)-1,-1,-1):
+            if start[i]<255:
+                start[i]+=1
+                break
+            else:
+                start[i]=0
+        iprange.append('.'.join(map(str,start)))
+    return iprange
+
+
