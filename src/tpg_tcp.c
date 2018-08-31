@@ -373,8 +373,11 @@ void tcp_load_sockopt(tpg_tcp_sockopt_t *dest, const tcp_sockopt_t *options)
 /*****************************************************************************
  * tcp_receive_pkt()
  *
- * Return the mbuf only if it needs to be free'ed back to the pool, if it was
- * consumed, or needed later (ip refrag), return NULL.
+ *  Return the mbuf only if it needs to be free'ed back to the pool, if it was
+ *  consumed, or needed later (ip refrag), return NULL.
+ *
+ *  `mbuf`          = the remaining mbuf to be processed by following layers
+ *  `pcb->pcb_mbuf` = the remaining unprocessed data in the original mbuf
  ****************************************************************************/
 struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
                                  struct rte_mbuf *mbuf)
@@ -523,9 +526,15 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
      * Update mbuf/pcb and send packet of to the client handler
      */
 
+    /* Since we are going to adjust mbuf and then fix it in pcb_mbuf, I'm
+     * enforcing here that they are the same even before
+     */
+    assert(pcb->pcb_mbuf == mbuf);
+
     pcb->pcb_tcp = tcp_hdr;
     pcb->pcb_l5_len = pcb->pcb_l4_len - tcp_hdr_len;
     mbuf = data_adj_chain(mbuf, tcp_hdr_len);
+    pcb->pcb_mbuf = mbuf;
 
     /*
      * First try known session lookup

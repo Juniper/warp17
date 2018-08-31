@@ -266,7 +266,9 @@ struct rte_mbuf *udp_receive_pkt(packet_control_block_t *pcb,
      */
     pcb->pcb_udp = udp_hdr;
     pcb->pcb_l5_len = pcb->pcb_l4_len - sizeof(struct udp_hdr);
+    assert(pcb->pcb_mbuf == mbuf);
     mbuf = data_adj_chain(mbuf, sizeof(struct udp_hdr));
+    pcb->pcb_mbuf = mbuf;
 
     /*
      * First try known session lookup

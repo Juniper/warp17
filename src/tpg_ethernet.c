@@ -348,7 +348,9 @@ struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
         INC_STATS(STATS_LOCAL(tpg_eth_statistics_t, pcb->pcb_port),
                   es_etype_vlan);
 
+        assert(pcb->pcb_mbuf == mbuf);
         mbuf = data_adj_chain(mbuf, sizeof(struct ether_hdr));
+        pcb->pcb_mbuf = mbuf;
 
         do {
             struct vlan_hdr *tag_hdr;
@@ -370,12 +372,16 @@ struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
             PKT_TRACE(pcb, ETH, DEBUG, "VLAN pop: vlan_tci=%4.4X, etype=%4.4X",
                       vlan_tci, etype);
 
+            assert(pcb->pcb_mbuf == mbuf);
             mbuf = data_adj_chain(mbuf, sizeof(struct vlan_hdr));
+            pcb->pcb_mbuf = mbuf;
 
         } while (etype == ETHER_TYPE_VLAN);
 
     } else {
+        assert(pcb->pcb_mbuf == mbuf);
         mbuf = data_adj_chain(mbuf, sizeof(struct ether_hdr));
+        pcb->pcb_mbuf = mbuf;
     }
 
     eth_hdr = NULL; /* so if we ever decide to use it will quickly core */
