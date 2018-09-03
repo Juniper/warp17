@@ -93,12 +93,12 @@ class TestHttpCfg(Warp17TrafficTestCase, Warp17UnitTestCase):
     def get_l3_intf_count(self):
         if Warp17UnitTestCase.env.get_ring_ports() > 0:
             return 1
-        return super(Warp17TrafficTestCase, self).get_l3_intf_count()
+        return super(TestHttpCfg, self).get_l3_intf_count()
 
     def get_l4_port_count(self):
         if Warp17UnitTestCase.env.get_ring_ports() > 0:
             return 1
-        return super(Warp17TrafficTestCase, self).get_l4_port_count()
+        return super(TestHttpCfg, self).get_l4_port_count()
 
     def get_tc_retry_count(self):
         """Allow the test to actually finish. Don't be too aggressive with"""
