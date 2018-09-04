@@ -233,6 +233,11 @@ struct rte_mbuf *data_adj_chain(struct rte_mbuf *mbuf, uint32_t len)
 {
     struct rte_mbuf *prev;
     uint32_t         new_pkt_len = mbuf->pkt_len - len;
+    void            *ret;
+
+    ret = rte_pktmbuf_adj(mbuf, len);
+    if (ret != NULL)
+        return mbuf;
 
     while (len > 0 && len >= mbuf->data_len) {
         prev = mbuf;
