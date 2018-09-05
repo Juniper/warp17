@@ -232,12 +232,24 @@ static inline
 struct rte_mbuf *data_adj_chain(struct rte_mbuf *mbuf, uint32_t len)
 {
     struct rte_mbuf *prev;
+    struct rte_mbuf *next;
     uint32_t         new_pkt_len = mbuf->pkt_len - len;
     void            *ret;
 
     ret = rte_pktmbuf_adj(mbuf, len);
-    if (ret != NULL)
+    /* if len is bigger than mbuf->data_len rte_pktmbuf_adj return NULL */
+    if (likely(ret != NULL)) {
+        if (unlikely(mbuf->data_len != 0))
+            return mbuf;
+
+        /* if we move exactly at the end of the very first mbuf in the chain */
+        next = mbuf->next;
+        if (next) {
+            pkt_mbuf_free_seg(mbuf);
+            return next;
+        }
         return mbuf;
+    }
 
     while (len > 0 && len >= mbuf->data_len) {
         prev = mbuf;
