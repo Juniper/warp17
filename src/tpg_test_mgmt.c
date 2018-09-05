@@ -80,7 +80,6 @@ tpg_rate_stats_t *test_runtime_rate_stats;
 /* Counter needed in order to call the rates updater each seconds instead of
  * each 500 ms
  */
-static RTE_DEFINE_PER_LCORE(int, test_update_rates_cicle);
 #define TEST_CASE_RATE_STATS_GET(port, tcid) \
     (test_runtime_rate_stats + (port) * TPG_TEST_MAX_ENTRIES + tcid)
 
@@ -705,11 +704,11 @@ static void test_entry_tmr_cb(struct rte_timer *tmr __rte_unused, void *arg)
 
         tenv->te_test_running = false;
     }
-    if(RTE_PER_LCORE(test_update_rates_cicle) == 1) {
+    if(state->teos_update_rates_cicle == true) {
         test_update_rates(&tenv->te_test_cases[tcid].cfg);
-        RTE_PER_LCORE(test_update_rates_cicle) = 0;
+        state->teos_update_rates_cicle = false;
     } else {
-        RTE_PER_LCORE(test_update_rates_cicle)++;
+        state->teos_update_rates_cicle = true;
     }
 }
 
