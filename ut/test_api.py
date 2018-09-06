@@ -489,7 +489,9 @@ class TestApi(Warp17UnitTestCase):
                              0,
                              'ConfigureTestCase')
 
-            self.Start()
+            run_time = 5
+
+            self.Start(run_t=run_time)
 
             # Check client test to be passed
             client_result = self.warp17_call('GetTestStatus',
@@ -526,20 +528,21 @@ class TestApi(Warp17UnitTestCase):
                 server_result = self.warp17_call('GetStatistics',
                                                  PortArg(pa_eth_port=i))
 
-                self.assertGreater(server_result.sr_phy.pys_rx_pkts, 0,
-                                   'Phy pys_rx_pkts has to be greater than 0')
-                self.assertGreater(server_result.sr_phy.pys_rx_bytes, 0,
-                                   'Phy pys_rx_bytes has to be greater than 0')
-                self.assertGreater(server_result.sr_phy.pys_tx_pkts, 0,
-                                   'Phy pys_tx_pkts has to be greater than 0')
-                self.assertGreater(server_result.sr_phy.pys_tx_bytes, 0,
-                                   'Phy pys_tx_bytes has to be greater than 0')
-                self.assertEqual(server_result.sr_phy.pys_rx_errors, 0,
-                                 'Phy pys_rx_errors has to be 0')
-                self.assertEqual(server_result.sr_phy.pys_tx_errors, 0,
-                                 'Phy pys_tx_errors has to be 0')
-                self.assertGreater(server_result.sr_phy.pys_link_speed, 0,
-                                   'Phy pys_link_speed has to be greater than 0')
+                if Warp17UnitTestCase.env.get_ring_ports() == 0:
+                    self.assertGreater(server_result.sr_phy.pys_rx_pkts, 0,
+                                       'Phy pys_rx_pkts has to be greater than 0')
+                    self.assertGreater(server_result.sr_phy.pys_rx_bytes, 0,
+                                       'Phy pys_rx_bytes has to be greater than 0')
+                    self.assertGreater(server_result.sr_phy.pys_tx_pkts, 0,
+                                       'Phy pys_tx_pkts has to be greater than 0')
+                    self.assertGreater(server_result.sr_phy.pys_tx_bytes, 0,
+                                       'Phy pys_tx_bytes has to be greater than 0')
+                    self.assertEqual(server_result.sr_phy.pys_rx_errors, 0,
+                                     'Phy pys_rx_errors has to be 0')
+                    self.assertEqual(server_result.sr_phy.pys_tx_errors, 0,
+                                     'Phy pys_tx_errors has to be 0')
+                    self.assertGreater(server_result.sr_phy.pys_link_speed, 0,
+                                       'Phy pys_link_speed has to be greater than 0')
 
                 self.assertGreater(server_result.sr_port.ps_received_pkts, 0,
                                    'Port ps_received_pkts has to be greater than 0')
@@ -654,6 +657,7 @@ class TestApi(Warp17UnitTestCase):
         run_t = 2                       # run time
         ip_cnt = TPG_TEST_MAX_L3_INTF   # ip count
         port_cnt = 100                  # port count
+
         n_sess = (port_cnt * ip_cnt)    # n of sessions
         self.lh.info('Check recent latency behaviour for TCP/UDP with sessions {}'.format(n_sess))
 
@@ -743,18 +747,22 @@ class TestApi(Warp17UnitTestCase):
                     self.warp17_call('SetIpv4Sockopt', ip4_opt_arg).e_code,
                     0, 'SetIpv4Sockopt')
 
-                self.Start()
-                sleep(run_t)  # to be sure to collect all the data
+                self.Start(run_t)
 
                 #########################################
                 #               CLIENT                  #
                 #########################################
+
+                # Ring ifs are really slow
+                if Warp17UnitTestCase.env.get_ring_ports() != 0:
+                    sleep(2)
 
                 # Check client test to be passed
                 c_result = self.warp17_call('GetTestStatus', c_tc)
                 self.assertEqual(c_result.tsr_error.e_code, 0, 'GetTestStatus')
                 self.assertEqual(c_result.tsr_state, PASSED,
                                  'PortStatus PASSED')
+
                 self.assertEqual(c_result.tsr_type, CLIENT,
                                  'PortStatus CLIENT')
                 self.assertEqual(c_result.tsr_l4_proto, l4_proto,
@@ -835,8 +843,9 @@ class TestApi(Warp17UnitTestCase):
                     if tcs_max is not None and tcs_max_avg is not None:
                         self.assertGreater(stat.ls_max_exceeded, 0,
                                            'ls_max_exceeded')
-                        self.assertGreater(stat.ls_max_average_exceeded, 0,
-                                           'ls_max_average_exceeded')
+                        if Warp17UnitTestCase.env.get_ring_ports() == 0:
+                            self.assertGreater(stat.ls_max_average_exceeded, 0,
+                                               'ls_max_average_exceeded')
                     else:
                         self.assertEqual(stat.ls_max_exceeded, 0,
                                          'ls_max_exceeded')
@@ -932,7 +941,7 @@ class TestApi(Warp17UnitTestCase):
                                                 rs_resp_plen=10))
         return app_ccfg, app_scfg, rate_ccfg
 
-    def Start(self):
+    def Start(self, run_t=5):
         # Start server test
         self.assertEqual(self.warp17_call('PortStart',
                                           PortArg(pa_eth_port=1)).e_code,
@@ -944,7 +953,7 @@ class TestApi(Warp17UnitTestCase):
                          0,
                          'PortStart')
         # should be done in way less than 5 seconds!
-        sleep(5)
+        sleep(run_t)
 
     def Stop(self):
         # Stop server test

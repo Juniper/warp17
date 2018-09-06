@@ -67,6 +67,7 @@ cache:
     - $HOME/.cache/pip
 
 before_install:
+    - sudo apt update
     - sudo apt install linux-headers-$(uname -r) libnuma-dev ncurses-dev protobuf-compiler libprotobuf-dev python-protobuf libprotobuf-c0 libprotobuf-c0-dev libprotobuf8 libprotoc8 protobuf-c-compiler -y
     - sudo bash ./build_dpdk.sh -v 17.11.3 -j 2 -i
     - sudo pip install -r python/requirements.txt
@@ -78,5 +79,12 @@ install:
 script:
     - make clean && make all-kni-if -j 2
     - make clean && make all-ring-if -j 2
+    - sudo make travis-ut
+after_script:
+    - sudo cat /tmp/warp17*/*.out
+    - sudo cat /tmp/warp17*/*.log
+after_failure:
+    - sudo cat /tmp/warp17*/*.out
+    - sudo cat /tmp/warp17*/*.log
 notifications:
     slack: warp17:4NA10mDvXakkJ8I4PGMOxlLg

@@ -661,8 +661,7 @@ static void test_entry_tmr_cb(struct rte_timer *tmr __rte_unused, void *arg)
         state->teos_test_case_state = TEST_CASE_STATE__PASSED;
         RTE_LOG(INFO, USER1,
                 "Port %"PRIu32", Test Case %"PRIu32" \"PASSED\"!\n",
-                eth_port,
-                tcid);
+                eth_port, tcid);
     }
 
     if (done) {
@@ -670,16 +669,14 @@ static void test_entry_tmr_cb(struct rte_timer *tmr __rte_unused, void *arg)
             state->teos_test_case_state = TEST_CASE_STATE__FAILED;
             RTE_LOG(INFO, USER1,
                     "Port %"PRIu32", Test Case %"PRIu32" \"FAILED\"!\n",
-                    eth_port,
-                    tcid);
+                    eth_port, tcid);
         }
 
         /* Servers UP doesn't mean we're done with the server test case. Server
          * test cases must be explicitly stopped!
          */
         if (entry->tc_type != TEST_CASE_TYPE__SERVER) {
-            rte_timer_stop(&state->teos_timer);
-            rte_timer_stop(&state->teos_rates_timer);
+            rte_timer_stop(tmr);
             test_stop_test_case(eth_port, entry, state,
                                 state->teos_test_case_state);
         }
@@ -704,19 +701,12 @@ static void test_entry_tmr_cb(struct rte_timer *tmr __rte_unused, void *arg)
 
         tenv->te_test_running = false;
     }
-}
-
-/*****************************************************************************
- * test_entry_rates_tmr_cb()
- ****************************************************************************/
-static void test_entry_rates_tmr_cb(struct rte_timer *tmr __rte_unused,
-                                    void *arg)
-{
-    test_env_tmr_arg_t *tmr_arg  = arg;
-    test_env_t         *tenv     = tmr_arg->teta_test_env;
-    uint32_t            tcid     = tmr_arg->teta_test_case_id;
-
-    test_update_rates(&tenv->te_test_cases[tcid].cfg);
+    if (state->teos_update_rates == true) {
+        test_update_rates(&tenv->te_test_cases[tcid].cfg);
+        state->teos_update_rates = false;
+    } else {
+        state->teos_update_rates = true;
+    }
 }
 
 /*****************************************************************************
@@ -775,16 +765,11 @@ static void test_start_test_case(uint32_t eth_port, test_env_t *tenv)
     state->teos_stop_time = 0;
 
     state->teos_test_case_state = TEST_CASE_STATE__RUNNING;
-    rte_timer_reset(&state->teos_timer, GCFG_TEST_MGMT_TMR_TO * cycles_per_us,
+    rte_timer_reset(&state->teos_timer,
+                    GCFG_TEST_MGMT_TMR_TO * cycles_per_us,
                     PERIODICAL,
                     rte_lcore_id(),
                     test_entry_tmr_cb,
-                    &state->teos_timer_arg);
-    rte_timer_reset(&state->teos_rates_timer,
-                    GCFG_TEST_MGMT_RATES_TMR_TO * cycles_per_us,
-                    PERIODICAL,
-                    rte_lcore_id(),
-                    test_entry_rates_tmr_cb,
                     &state->teos_timer_arg);
 
     /* Mark if we need to start more tests later. */
@@ -916,7 +901,6 @@ static int test_start_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
     for (i = 0; i < TPG_TEST_MAX_ENTRIES; i++) {
         state = &tenv->te_test_cases[i].state;
         rte_timer_init(&state->teos_timer);
-        rte_timer_init(&state->teos_rates_timer);
         state->teos_timer_arg.teta_eth_port = start_msg->tssm_eth_port;
         state->teos_timer_arg.teta_test_case_id = i;
         state->teos_timer_arg.teta_test_env = tenv;
@@ -993,7 +977,6 @@ static int test_stop_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
     TEST_CASE_FOREACH_START(tenv, i, entry, state) {
         /* Cancel test case timers. */
         rte_timer_stop(&state->teos_timer);
-        rte_timer_stop(&state->teos_rates_timer);
 
         test_stop_test_case(stop_msg->tssm_eth_port, entry, state,
                             TEST_CASE_STATE__STOPPED);
@@ -1006,8 +989,11 @@ static int test_stop_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
 
     /* Delete L3 interfaces. */
     for (i = 0; i < pcfg->pc_l3_intfs_count; i++) {
-        route_v4_intf_del(stop_msg->tssm_eth_port, pcfg->pc_l3_intfs[i].l3i_ip,
-                          pcfg->pc_l3_intfs[i].l3i_mask);
+        route_v4_intf_del(stop_msg->tssm_eth_port,
+                          pcfg->pc_l3_intfs[i].l3i_ip,
+                          pcfg->pc_l3_intfs[i].l3i_mask,
+                          pcfg->pc_l3_intfs[i].l3i_vlan_id,
+                          pcfg->pc_l3_intfs[i].l3i_gw);
     }
 
     /* Mark test as not running.*/

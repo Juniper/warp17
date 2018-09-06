@@ -54,7 +54,7 @@
 #
 #
 
-.PHONY: all clean
+.PHONY: all all-travis clean
 
 Q?=@
 
@@ -69,12 +69,14 @@ UT = $(PY_RUNNER) python -m unittest
 UT_FLAGS = -v
 
 TEST_TARGETS=$(sort $(patsubst %.py,%,$(wildcard *.py)))
-
+TEST_TARGETS_PERF=$(filter-out test_perf, $(sort $(patsubst %.py,%,$(wildcard *.py))))
 PARAMS  = WARP17_INI_FILE="$(WARP17_INI_FILE)"
 # Unique stamp to be used for creating output dir
 PARAMS += WARP17_UNIQ_STAMP="$(WARP17_UNIQ_STAMP)"
 
 all: $(TEST_TARGETS)
+
+all-travis: $(TEST_TARGETS_PERF)
 
 clean:
 	$(Q)$(RM) -rf $(OBJS)

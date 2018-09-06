@@ -266,7 +266,9 @@ struct rte_mbuf *udp_receive_pkt(packet_control_block_t *pcb,
      */
     pcb->pcb_udp = udp_hdr;
     pcb->pcb_l5_len = pcb->pcb_l4_len - sizeof(struct udp_hdr);
-    rte_pktmbuf_adj(mbuf, sizeof(struct udp_hdr));
+    assert(pcb->pcb_mbuf == mbuf);
+    mbuf = data_adj_chain(mbuf, sizeof(struct udp_hdr));
+    pcb->pcb_mbuf = mbuf;
 
     /*
      * First try known session lookup
@@ -379,6 +381,8 @@ static struct udp_hdr *udp_build_hdr(udp_control_block_t *ucb,
     udp_hdr->dst_port = rte_cpu_to_be_16(ucb->ucb_l4.l4cb_dst_port);
 
     udp_hdr->dgram_len = rte_cpu_to_be_16(dgram_len + udp_hdr_len);
+    mbuf->l4_len = udp_hdr_len;
+    ip_hdr_len = ((ipv4_hdr->version_ihl & 0x0F) << 2);
 
 #if !defined(TPG_SW_CHECKSUMMING)
     if (true) {
@@ -386,9 +390,7 @@ static struct udp_hdr *udp_build_hdr(udp_control_block_t *ucb,
     if (ucb->ucb_l4.l4cb_sockopt.so_eth.ethso_tx_offload_udp_cksum) {
 #endif
         mbuf->ol_flags |= PKT_TX_UDP_CKSUM | PKT_TX_IPV4;
-        mbuf->l4_len = udp_hdr_len;
 
-        ip_hdr_len = ((ipv4_hdr->version_ihl & 0x0F) << 2);
         udp_hdr->dgram_cksum =
             ipv4_udptcp_phdr_cksum(ipv4_hdr,
                                    rte_cpu_to_be_16(ipv4_hdr->total_length) -

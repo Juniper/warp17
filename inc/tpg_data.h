@@ -223,15 +223,35 @@ done:
 }
 
 /*****************************************************************************
- * data_adj_chain
+ * data_adj_chain()
+ *  In some specific situation (for instance ring interfaces) the mbuf chain
+ *  is fragmented or it has len 0 (mbufs?). Here we try to fix the whole data
+ *  into a consistent chain
  ****************************************************************************/
 static inline
 struct rte_mbuf *data_adj_chain(struct rte_mbuf *mbuf, uint32_t len)
 {
     struct rte_mbuf *prev;
+    struct rte_mbuf *next;
     uint32_t         new_pkt_len = mbuf->pkt_len - len;
+    void            *ret;
 
-    while (len >= mbuf->data_len) {
+    ret = rte_pktmbuf_adj(mbuf, len);
+    /* if len is bigger than mbuf->data_len rte_pktmbuf_adj return NULL */
+    if (likely(ret != NULL)) {
+        if (unlikely(mbuf->data_len != 0))
+            return mbuf;
+
+        /* if we move exactly at the end of the very first mbuf in the chain */
+        next = mbuf->next;
+        if (next) {
+            pkt_mbuf_free_seg(mbuf);
+            return next;
+        }
+        return mbuf;
+    }
+
+    while (len > 0 && len >= mbuf->data_len) {
         prev = mbuf;
         len -= mbuf->data_len;
         mbuf = mbuf->next;
@@ -508,36 +528,6 @@ static inline void data_mbuf_merge(struct rte_mbuf *dest, struct rte_mbuf *src)
     rte_pktmbuf_lastseg(dest)->next = src;
     dest->nb_segs += src->nb_segs;
     dest->pkt_len += src->pkt_len;
-}
-
-/*****************************************************************************
- * data_mbuf_adj()
- ****************************************************************************/
-static inline char *data_mbuf_adj(struct rte_mbuf *mbuf, uint32_t len)
-{
-    struct rte_mbuf *frag;
-    uint32_t         tmp_len;
-
-    if (unlikely(len > mbuf->pkt_len))
-        return NULL;
-
-    if (len == 0)
-        return (char *)mbuf->buf_addr + mbuf->data_off;
-
-    for (frag = mbuf, tmp_len = len; tmp_len > 0; frag = frag->next) {
-        uint32_t to_add = TPG_MIN(frag->data_len, tmp_len);
-
-        if (unlikely(to_add > frag->data_len))
-            return NULL;
-
-        frag->data_len = (uint16_t)(frag->data_len - to_add);
-        frag->data_off += to_add;
-
-        tmp_len -= to_add;
-    }
-
-    mbuf->pkt_len -= len;
-    return (char *)mbuf->buf_addr + mbuf->data_off;
 }
 
 /*****************************************************************************

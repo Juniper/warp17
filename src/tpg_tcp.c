@@ -373,8 +373,11 @@ void tcp_load_sockopt(tpg_tcp_sockopt_t *dest, const tcp_sockopt_t *options)
 /*****************************************************************************
  * tcp_receive_pkt()
  *
- * Return the mbuf only if it needs to be free'ed back to the pool, if it was
- * consumed, or needed later (ip refrag), return NULL.
+ *  Return the mbuf only if it needs to be free'ed back to the pool, if it was
+ *  consumed, or needed later (ip refrag), return NULL.
+ *
+ *  `mbuf`          = the remaining mbuf to be processed by following layers
+ *  `pcb->pcb_mbuf` = the remaining unprocessed data in the original mbuf
  ****************************************************************************/
 struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
                                  struct rte_mbuf *mbuf)
@@ -523,9 +526,15 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
      * Update mbuf/pcb and send packet of to the client handler
      */
 
+    /* Since we are going to adjust mbuf and then fix it in pcb_mbuf, I'm
+     * enforcing here that they are the same even before
+     */
+    assert(pcb->pcb_mbuf == mbuf);
+
     pcb->pcb_tcp = tcp_hdr;
     pcb->pcb_l5_len = pcb->pcb_l4_len - tcp_hdr_len;
-    rte_pktmbuf_adj(mbuf, tcp_hdr_len);
+    mbuf = data_adj_chain(mbuf, tcp_hdr_len);
+    pcb->pcb_mbuf = mbuf;
 
     /*
      * First try known session lookup
@@ -643,6 +652,7 @@ static struct tcp_hdr *tcp_build_hdr(tcp_control_block_t *tcb,
     tcp_hdr->tcp_flags = flags & TCP_BUILD_FLAG_MASK;
     tcp_hdr->rx_win = rte_cpu_to_be_16(tcb->tcb_rcv.wnd);
     tcp_hdr->tcp_urp = rte_cpu_to_be_16(0); /* TODO: set correctly if urgen flag is set */
+    mbuf->l4_len = tcp_hdr_len;
 
     /*
      * TODO: Do we want TCP segmentation offload, if so do it before
@@ -655,10 +665,7 @@ static struct tcp_hdr *tcp_build_hdr(tcp_control_block_t *tcb,
     if (tcb->tcb_l4.l4cb_sockopt.so_eth.ethso_tx_offload_tcp_cksum) {
 #endif
         mbuf->ol_flags |= PKT_TX_TCP_CKSUM | PKT_TX_IPV4;
-        mbuf->l4_len = tcp_hdr_len;
-
         ip_hdr_len = ((ipv4_hdr->version_ihl & 0x0F) << 2);
-
         tcp_hdr->cksum =
             ipv4_udptcp_phdr_cksum(ipv4_hdr,
                                    rte_cpu_to_be_16(ipv4_hdr->total_length) -

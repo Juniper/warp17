@@ -229,7 +229,6 @@ enum {
 #define GCFG_UDP_CLIENT_BURST_MAX      16
 
 #define GCFG_TEST_MGMT_TMR_TO          500000    /* 500ms */
-#define GCFG_TEST_MGMT_RATES_TMR_TO    1000000   /* 1s */
 #define GCFG_TEST_MAX_TC_RUNTIME       600000000 /* 10min */
 
 /*

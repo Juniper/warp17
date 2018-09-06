@@ -375,7 +375,7 @@ int pkt_send(uint32_t port, struct rte_mbuf *mbuf, bool trace)
  ****************************************************************************/
 static uint16_t pkt_rx_burst(uint8_t port_id, uint16_t queue_id,
                              struct rte_mbuf **rx_pkts,
-                             const uint16_t nb_pkts,
+                             uint16_t nb_pkts,
                              port_info_t *port_info,
                              tpg_port_statistics_t *stats)
 {
