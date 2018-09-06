@@ -136,9 +136,9 @@ typedef struct test_env_oper_state_s {
     uint64_t              teos_start_time;
     uint64_t              teos_stop_time;
 
-    uint32_t              teos_configured : 1;
-    uint32_t              teos_update_rates_cicle : 1;
-    /* uint32_t           teos_unused     : 30; */
+    uint32_t              teos_configured   : 1;
+    uint32_t              teos_update_rates : 1;
+    /* uint32_t           teos_unused       : 30; */
 
 } test_env_oper_state_t;
 

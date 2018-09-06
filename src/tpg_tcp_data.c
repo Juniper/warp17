@@ -287,7 +287,7 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
 
     /* The first part of the data might be a retransmission so just skip it. */
     if (unlikely(SEG_LT(seg_seq, tcb->tcb_rcv.nxt) &&
-                    SEG_GT(seg_seq + seg_len, tcb->tcb_rcv.nxt))) {
+                 SEG_GT(seg_seq + seg_len, tcb->tcb_rcv.nxt))) {
         pcb->pcb_mbuf = data_adj_chain(pcb->pcb_mbuf,
                                       SEG_DIFF(tcb->tcb_rcv.nxt, seg_seq));
         if (unlikely(!pcb->pcb_mbuf)) {
