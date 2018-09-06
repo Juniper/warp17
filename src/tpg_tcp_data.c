@@ -289,10 +289,11 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
     if (unlikely(SEG_LT(seg_seq, tcb->tcb_rcv.nxt) &&
                  SEG_GT(seg_seq + seg_len, tcb->tcb_rcv.nxt))) {
         pcb->pcb_mbuf = data_adj_chain(pcb->pcb_mbuf,
-                                      SEG_DIFF(tcb->tcb_rcv.nxt, seg_seq));
-        if (unlikely(!pcb->pcb_mbuf)) {
+                                       SEG_DIFF(tcb->tcb_rcv.nxt, seg_seq));
+
+        if (unlikely(!pcb->pcb_mbuf))
             assert(false);
-        }
+
         seg_len -= SEG_DIFF(tcb->tcb_rcv.nxt, seg_seq);
         seg_seq = tcb->tcb_rcv.nxt;
     }
@@ -338,9 +339,9 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
                                               SEG_DIFF(cur->tbh_seg_seq +
                                                        cur->tbh_mbuf->pkt_len,
                                                        new_hdr.tbh_seg_seq));
-            if (unlikely(!new_hdr.tbh_mbuf)) {
+            if (unlikely(!new_hdr.tbh_mbuf))
                 assert(false);
-            }
+
             data_mbuf_merge(cur->tbh_mbuf, new_hdr.tbh_mbuf);
             seg = cur;
             break;
@@ -373,9 +374,8 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
                 old_seg->tbh_mbuf =
                     data_adj_chain(old_seg->tbh_mbuf,
                                    SEG_DIFF(seg_end, old_seg->tbh_seg_seq));
-                if (unlikely(!old_seg->tbh_mbuf)) {
+                if (unlikely(!old_seg->tbh_mbuf))
                     assert(false);
-                }
                 break;
             }
 

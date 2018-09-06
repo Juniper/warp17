@@ -701,7 +701,7 @@ static void test_entry_tmr_cb(struct rte_timer *tmr __rte_unused, void *arg)
 
         tenv->te_test_running = false;
     }
-    if(state->teos_update_rates == true) {
+    if (state->teos_update_rates == true) {
         test_update_rates(&tenv->te_test_cases[tcid].cfg);
         state->teos_update_rates = false;
     } else {
