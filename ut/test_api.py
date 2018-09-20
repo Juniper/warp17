@@ -632,7 +632,7 @@ class TestApi(Warp17UnitTestCase):
                              0,
                              'GetPortCfg')
 
-            self.Stop(0)
+            self.Stop()
             self.TearDown()
 
     def test_rate(self):
@@ -725,9 +725,7 @@ class TestApi(Warp17UnitTestCase):
             self.assertGreater(rate.rs_start_time, 0, 'rs_start_time')
             self.assertGreater(rate.rs_end_time, 0, 'rs_end_time')
 
-            self.Stop(0)
-            self.Stop(1)
-
+            self.Stop()
             self.TearDown()
 
     def test_get_statistics(self):
@@ -955,7 +953,6 @@ class TestApi(Warp17UnitTestCase):
                                      gls_sample_stats.ls_samples_count, 0,
                                      'ls_samples_count')
 
-
                 self.Stop()
                 self.TearDown()
 
@@ -1048,19 +1045,22 @@ class TestApi(Warp17UnitTestCase):
         # should be done in way less than 5 seconds!
         sleep(sleep_t)
 
-    def Stop(self, port=1):
+    def Stop(self):
         # Stop server test
         self.assertEqual(self.warp17_call('PortStop',
-                                          PortArg(pa_eth_port=port)).e_code,
+                                          PortArg(pa_eth_port=1)).e_code,
                          0,
                          'PortStop')
         # Fail to stop client test (already passed)
         self.assertEqual(self.warp17_call('PortStop',
-                                          PortArg(pa_eth_port=port)).e_code,
+                                          PortArg(pa_eth_port=1)).e_code,
                          -errno.ENOENT,
                          'PortStop')
 
     def TearDown(self):
+        # Stop testcases left
+        self.warp17_call('PortStop',PortArg(pa_eth_port=0))
+        self.warp17_call('PortStop',PortArg(pa_eth_port=1))
         # Delete client test
         self.assertEqual(self.warp17_call('DelTestCase',
                                           TestCaseArg(tca_eth_port=0,
