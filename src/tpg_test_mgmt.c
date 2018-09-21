@@ -694,6 +694,7 @@ static void test_entry_tmr_cb(struct rte_timer *tmr __rte_unused, void *arg)
     } else {
         state->teos_update_rates = true;
     }
+
     /* Check if all test cases have stopped running.
      * If so then mark the tests as not running on this port.
      */

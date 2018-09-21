@@ -638,9 +638,9 @@ class TestApi(Warp17UnitTestCase):
     def test_rate(self):
         """Setup a single UDP/TCP session and check that the test passed"""
 
-        # n_sessions = n_ip * n_ip * n_ports_c * n_ports_c
-        n_ip = 4
-        n_ports = 500
+        # n_sessions = n_ip * n_ip * n_ports_c
+        n_ip = 1
+        n_ports = 50000
         run_time = 20
 
 
@@ -650,13 +650,13 @@ class TestApi(Warp17UnitTestCase):
                 L4Client(l4c_proto=l4_proto,
                          l4c_tcp_udp=TcpUdpClient(
                              tuc_sports=b2b_ports(n_ports),
-                             tuc_dports=b2b_ports(n_ports)))
+                             tuc_dports=b2b_ports(1)))
 
-            uptime_delay = Delay(d_value=1)
+            uptime_delay = Delay(d_value=2)
 
-            rate_ccfg = RateClient(rc_open_rate=Rate(r_value=20),
-                                   rc_close_rate=Rate(r_value=20),
-                                   rc_send_rate=Rate(r_value=20))
+            rate_ccfg = RateClient(rc_open_rate=Rate(r_value=10000),
+                                   rc_close_rate=Rate(r_value=10000),
+                                   rc_send_rate=Rate(r_value=10000))
 
             ccfg = TestCase(tc_type=CLIENT, tc_eth_port=0, tc_id=0,
                             tc_client=Client(cl_src_ips=b2b_sips(0, 1),
@@ -683,44 +683,78 @@ class TestApi(Warp17UnitTestCase):
                              0,
                              'ConfigureTestCase')
 
-            self.Start(sleep_t=2)
+            self.Start(sleep_t=5)
 
-            # check for the rate
+            # Check for the Client rate
             client_result = self.warp17_call('GetTestStatus',
                                              TestCaseArg(tca_eth_port=0,
                                                          tca_test_case_id=0))
             self.assertEqual(client_result.tsr_error.e_code, 0, 'GetTestStatus')
 
             rate = client_result.tsr_rate_stats
-            self.assertGreater(rate.rs_estab_per_s, 0, 'rs_estab_per_s')
-            self.assertLessEqual(rate.rs_estab_per_s,
-                                 rate_ccfg.rc_open_rate.r_value,
-                                 'rs_estab_per_s')
-            self.assertGreater(rate.rs_data_per_s, 0, 'rs_data_per_s')
-            self.assertLessEqual(rate.rs_data_per_s,
-                                 rate_ccfg.rc_send_rate.r_value,
+            d_value = rate_ccfg.rc_open_rate.r_value - \
+                      rate_ccfg.rc_open_rate.r_value * 0.05
+            self.assertGreaterEqual(rate.rs_estab_per_s, d_value,
+                                    'rs_estab_per_s')
+            u_value = rate_ccfg.rc_open_rate.r_value + \
+                      rate_ccfg.rc_open_rate.r_value * 0.05
+            self.assertLessEqual(rate.rs_estab_per_s, u_value, 'rs_estab_per_s')
+
+            d_value = rate_ccfg.rc_send_rate.r_value - \
+                      rate_ccfg.rc_send_rate.r_value * 0.05
+            self.assertGreaterEqual(rate.rs_data_per_s, d_value,
+                                    'rs_data_per_s')
+            u_value = rate_ccfg.rc_send_rate.r_value + \
+                      rate_ccfg.rc_send_rate.r_value * 0.05
+            self.assertLessEqual(rate.rs_data_per_s, u_value,
                                  'rs_data_per_s')
-            self.assertGreater(rate.rs_closed_per_s, 0, 'rs_closed_per_s')
-            self.assertLessEqual(rate.rs_data_per_s,
-                                 rate_ccfg.rc_close_rate.r_value,
+
+            d_value = rate_ccfg.rc_close_rate.r_value - \
+                      rate_ccfg.rc_close_rate.r_value * 0.05
+            self.assertGreaterEqual(rate.rs_closed_per_s, d_value,
+                                    'rs_closed_per_s')
+            u_value = rate_ccfg.rc_close_rate.r_value + \
+                      rate_ccfg.rc_close_rate.r_value * 0.05
+            self.assertLessEqual(rate.rs_closed_per_s, u_value,
                                  'rs_closed_per_s')
 
-            self.assertGreater(rate.rs_start_time, 0, 'rs_start_time')
-            self.assertGreater(rate.rs_end_time, 0, 'rs_end_time')
-
-            # check for the rate
+            # check for the Server rate
             server_result = self.warp17_call('GetTestStatus',
                                              TestCaseArg(tca_eth_port=1,
                                                          tca_test_case_id=0))
             self.assertEqual(server_result.tsr_error.e_code, 0, 'GetTestStatus')
 
             rate = server_result.tsr_rate_stats
-            self.assertGreater(rate.rs_estab_per_s, 0, 'rs_estab_per_s')
-            self.assertGreater(rate.rs_data_per_s, 0, 'rs_data_per_s')
+            rate = client_result.tsr_rate_stats
+            d_value = rate_ccfg.rc_open_rate.r_value - \
+                      rate_ccfg.rc_open_rate.r_value * 0.05
+            self.assertGreaterEqual(rate.rs_estab_per_s, d_value,
+                                    'rs_estab_per_s')
+            u_value = rate_ccfg.rc_open_rate.r_value + \
+                      rate_ccfg.rc_open_rate.r_value * 0.05
+            self.assertLessEqual(rate.rs_estab_per_s, u_value, 'rs_estab_per_s')
+
+            d_value = rate_ccfg.rc_send_rate.r_value - \
+                      rate_ccfg.rc_send_rate.r_value * 0.05
+            self.assertGreaterEqual(rate.rs_data_per_s, d_value,
+                                    'rs_data_per_s')
+            u_value = rate_ccfg.rc_send_rate.r_value + \
+                      rate_ccfg.rc_send_rate.r_value * 0.05
+            self.assertLessEqual(rate.rs_data_per_s, u_value,
+                                 'rs_data_per_s')
+
             # we can't actually set uptime for server, this means that with UDP
             # server we won't see any closed_per_s rate
             if l4_proto is TCP:
-                self.assertGreater(rate.rs_closed_per_s, 0, 'rs_closed_per_s')
+
+                d_value = rate_ccfg.rc_close_rate.r_value - \
+                          rate_ccfg.rc_close_rate.r_value * 0.05
+                self.assertGreaterEqual(rate.rs_closed_per_s, d_value,
+                                        'rs_closed_per_s')
+                u_value = rate_ccfg.rc_close_rate.r_value + \
+                          rate_ccfg.rc_close_rate.r_value * 0.05
+                self.assertLessEqual(rate.rs_closed_per_s, u_value,
+                                     'rs_closed_per_s')
 
             self.assertGreater(rate.rs_start_time, 0, 'rs_start_time')
             self.assertGreater(rate.rs_end_time, 0, 'rs_end_time')
