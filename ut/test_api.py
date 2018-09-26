@@ -696,17 +696,17 @@ class TestApi(Warp17UnitTestCase):
             self.assertEqual(client_result.tsr_error.e_code, 0, 'GetTestStatus')
 
             rate = client_result.tsr_rate_stats
-            self.test_check_rate_window(rate.rs_estab_per_s,
-                                        rate_ccfg.rc_open_rate.r_value,
-                                        precision_window, 'rc_open_rate')
+            self.check_rate_window(rate.rs_estab_per_s,
+                                   rate_ccfg.rc_open_rate.r_value,
+                                   precision_window, 'rc_open_rate')
 
-            self.test_check_rate_window(rate.rs_data_per_s,
-                                        rate_ccfg.rc_send_rate.r_value,
-                                        precision_window, 'rc_send_rate')
+            self.check_rate_window(rate.rs_data_per_s,
+                                   rate_ccfg.rc_send_rate.r_value,
+                                   precision_window, 'rc_send_rate')
 
-            self.test_check_rate_window(rate.rs_closed_per_s,
-                                        rate_ccfg.rc_close_rate.r_value,
-                                        precision_window, 'rc_close_rate')
+            self.check_rate_window(rate.rs_closed_per_s,
+                                   rate_ccfg.rc_close_rate.r_value,
+                                   precision_window, 'rc_close_rate')
 
             # check for the Server rate
             server_result = self.warp17_call('GetTestStatus',
@@ -715,21 +715,21 @@ class TestApi(Warp17UnitTestCase):
             self.assertEqual(server_result.tsr_error.e_code, 0, 'GetTestStatus')
 
             rate = server_result.tsr_rate_stats
-            self.test_check_rate_window(rate.rs_estab_per_s,
-                                        rate_ccfg.rc_open_rate.r_value,
-                                        precision_window, 'rc_open_rate')
+            self.check_rate_window(rate.rs_estab_per_s,
+                                   rate_ccfg.rc_open_rate.r_value,
+                                   precision_window, 'rc_open_rate')
 
-            self.test_check_rate_window(rate.rs_data_per_s,
-                                        rate_ccfg.rc_send_rate.r_value,
-                                        precision_window, 'rc_send_rate')
+            self.check_rate_window(rate.rs_data_per_s,
+                                   rate_ccfg.rc_send_rate.r_value,
+                                   precision_window, 'rc_send_rate')
 
 
             # we can't actually set uptime for server, this means that with UDP
             # server we won't see any closed_per_s rate
             if l4_proto is TCP:
-                self.test_check_rate_window(rate.rs_closed_per_s,
-                                            rate_ccfg.rc_close_rate.r_value,
-                                            precision_window, 'rc_close_rate')
+                self.check_rate_window(rate.rs_closed_per_s,
+                                       rate_ccfg.rc_close_rate.r_value,
+                                       precision_window, 'rc_close_rate')
 
 
             self.assertGreater(rate.rs_start_time, 0, 'rs_start_time')
@@ -738,7 +738,7 @@ class TestApi(Warp17UnitTestCase):
             self.Stop()
             self.TearDown()
 
-    def test_check_rate_window(self, rate, expected_rate, window, var_name):
+    def check_rate_window(self, rate, expected_rate, window, var_name):
         self.assertTrue(abs(expected_rate - rate) < window * expected_rate,
                         "{} value {} instead of {} +-{}%".format(var_name, rate,
                                                          expected_rate, window))
