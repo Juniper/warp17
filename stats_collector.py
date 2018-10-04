@@ -42,10 +42,10 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # File name:
-#    tpg_tls.c
+#    stats_collector.py
 #
 # Description:
-#    TLS protocol implementation.
+#    Memory stats aggregator.
 #
 # Author:
 #    Matteo Triggiani
@@ -62,21 +62,22 @@
 # ****************************************************************************
 import os
 import warp17_api
+
 from rpc_impl import *
 from functools import partial
-
+from time import sleep
+from datetime import datetime
 from b2b_setup import *
 
-from warp17_common_pb2    import *
-from warp17_l3_pb2        import *
-from warp17_app_raw_pb2   import *
-from warp17_app_pb2       import *
-from warp17_server_pb2    import *
-from warp17_client_pb2    import *
+from warp17_common_pb2 import *
+from warp17_l3_pb2 import *
+from warp17_app_raw_pb2 import *
+from warp17_app_pb2 import *
+from warp17_server_pb2 import *
+from warp17_client_pb2 import *
 from warp17_test_case_pb2 import *
-from warp17_service_pb2   import *
-from warp17_sockopt_pb2   import *
-import pdb
+from warp17_service_pb2 import *
+from warp17_sockopt_pb2 import *
 
 debug = True
 local_dir = os.getcwd()
@@ -87,23 +88,28 @@ start_memory = int(env.get_memory())
 tcb_pool_sz = 20000
 test = "/home/mtriggiani/10m.cfg"
 res_file = "/home/mtriggiani/10m-res-test.txt"
-
 warp17_call = partial(warp17_method_call, env.get_host_name(),
                       env.get_rpc_port(), Warp17_Stub)
+precision = 1000
+
 
 def passed(results):
+    """Check if the tests has passed"""
     client_result, server_result = results
-    if (server_result.tsr_state == FAILED or
-            client_result.tsr_state == FAILED):
+    if (server_result.tsr_state != PASSED or
+            client_result.tsr_state != PASSED):
         return False
     return True
 
-def collect_info(memory):
-    print("Running warp17 on {}Mb memory".format(memory))
 
-    env.set_value(env.MEMORY, memory)
+def collect_info(pivot, R):
+    """Binary search the minimum memory needed to run the test"""
+    if R < precision:
+        return
+    print("Running warp17 on {}Mb memory".format(pivot))
+    not_started = False
+    env.set_value(env.MEMORY, pivot)
     bin = "{}/build/warp17".format(local_dir)
-
 
     try:
         proc = warp17_api.warp17_start(env, bin)
@@ -114,37 +120,32 @@ def collect_info(memory):
 
     try:
         warp17_api.warp17_wait(env)
-        # pdb.set_trace()
-
         results = config_test()
         warp17_api.warp17_stop(env, proc)
-        if (passed(results)):
-            message = "Success run with {}Mb memory\n".format(memory)
-            log_res(message)
-            next = memory / 2
-            if next > 0:
-                collect_info(memory / 2)
-            exit(0)
+
     except:
-        message = "Failed run with {}Mb memory\n".format(memory)
-        log_res(message)
-        next = (memory / 3) * 4
-        if (next < start_memory):
-            collect_info()
-        exit(0)
+        not_started = True
+        pass
+
+    if not not_started:
+        if passed(results):
+            message = "Success run with {}Mb memory\n".format(pivot)
+            log_res(message)
+            collect_info(pivot - R / 2, R / 2)
+            return
+    message = "Failed run with {}Mb memory\n".format(pivot)
+    log_res(message)
+    collect_info(pivot + R / 2, R / 2)
+    return
 
 
 def log_res(message):
-    log = open(res_file, "a")
-    print("Writing message in {}".format(res_file))
+    """Log the results on a file"""
     log.write(message)
-    log.close()
 
 
 def config_test():
-    """Port 0 is the client, Port 1 is the server
-    :param 200: how many sessions
-    """
+    """Configures a test to run 10 million sessions"""
     # No def gw
     no_def_gw = Ip(ip_version=IPV4, ip_v4=0)
     # Setup interfaces on port 0
@@ -172,7 +173,7 @@ def config_test():
     l4_ccfg = L4Client(l4c_proto=TCP,
                        l4c_tcp_udp=TcpUdpClient(tuc_sports=b2b_ports(50000),
                                                 tuc_dports=b2b_ports(1)))
-    
+
     ccfg = TestCase(tc_type=CLIENT, tc_eth_port=0,
                     tc_id=0,
                     tc_client=Client(cl_src_ips=b2b_sips(0, 1),
@@ -180,10 +181,10 @@ def config_test():
                                      cl_l4=l4_ccfg,
                                      cl_rates=rate_ccfg),
                     tc_app=app_ccfg,
-                    tc_criteria=TestCriteria(tc_crit_type=RUN_TIME,
-                                             tc_run_time_s=1))
+                    tc_criteria=TestCriteria(tc_crit_type=CL_ESTAB,
+                                             tc_cl_estab=10000000))
     warp17_call('ConfigureTestCase', ccfg)
-    
+
     l4_scfg = L4Server(l4s_proto=TCP,
                        l4s_tcp_udp=TcpUdpServer(tus_ports=b2b_ports(1)))
     scfg = TestCase(tc_type=SERVER, tc_eth_port=1, tc_id=0,
@@ -196,18 +197,31 @@ def config_test():
 
     warp17_call('PortStart', PortArg(pa_eth_port=1))
     warp17_call('PortStart', PortArg(pa_eth_port=0))
+    sleep(10)
     # Check client test to be passed
-    client_result = warp17_call('GetTestStatus',
-                                     TestCaseArg(tca_eth_port=0,
-                                                 tca_test_case_id=0))
+    wait = True
+    while wait:
+        client_result = warp17_call('GetTestStatus',
+                                    TestCaseArg(tca_eth_port=0,
+                                                tca_test_case_id=0))
 
+        server_result = warp17_call('GetTestStatus',
+                                    TestCaseArg(tca_eth_port=1,
+                                                tca_test_case_id=0))
 
-    server_result = warp17_call('GetTestStatus',
-                                     TestCaseArg(tca_eth_port=1,
-                                                 tca_test_case_id=0))
+        if (client_result.tsr_state == RUNNING):
+            sleep(1)
+        else:
+            wait = False
 
     warp17_call('PortStop', PortArg(pa_eth_port=0))
     warp17_call('PortStop', PortArg(pa_eth_port=1))
     return client_result, server_result
 
-collect_info(start_memory)
+
+log = open(res_file, "a")
+log.write("Start binary search {}\n".format(datetime))
+collect_info(start_memory / 2, start_memory / 2)
+log.write("Finish\n")
+log.close()
+exit(0)
