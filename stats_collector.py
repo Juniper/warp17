@@ -86,8 +86,7 @@ env = warp17_api.Warp17Env('ut/ini/jspg3.ini')
 start_memory = int(env.get_memory())
 
 tcb_pool_sz = 20000
-test = "/home/mtriggiani/10m.cfg"
-res_file = "/home/mtriggiani/10m-res-test.txt"
+output_file = "/tmp/10m-res-test.txt"
 warp17_call = partial(warp17_method_call, env.get_host_name(),
                       env.get_rpc_port(), Warp17_Stub)
 precision = 1000
@@ -146,19 +145,17 @@ def log_res(message):
 
 def config_test():
     """Configures a test to run 10 million sessions"""
-    # No def gw
-    no_def_gw = Ip(ip_version=IPV4, ip_v4=0)
     # Setup interfaces on port 0
-    pcfg = b2b_port_add(0, def_gw=no_def_gw)
+    pcfg = b2b_port_add(0, def_gw=Ip(ip_version=IPV4, ip_v4=167837697))
     b2b_port_add_intfs(pcfg, [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(0, i)),
                                Ip(ip_version=IPV4, ip_v4=b2b_mask(0, i)),
                                b2b_count(0, i)) for i in range(0, 200)])
     warp17_call('ConfigurePort', pcfg)
     # Setup interfaces on port 1
-    pcfg = b2b_port_add(1, def_gw=no_def_gw)
+    pcfg = b2b_port_add(1, def_gw=Ip(ip_version=IPV4, ip_v4=167772161))
     b2b_port_add_intfs(pcfg, [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(1, i)),
                                Ip(ip_version=IPV4, ip_v4=b2b_mask(1, i)),
-                               b2b_count(1, i)) for i in range(0, 200)])
+                               b2b_count(1, i)) for i in range(0, 1)])
     warp17_call('ConfigurePort', pcfg)
     rate_ccfg = RateClient(rc_open_rate=Rate(),
                            rc_close_rate=Rate(),
@@ -176,7 +173,7 @@ def config_test():
 
     ccfg = TestCase(tc_type=CLIENT, tc_eth_port=0,
                     tc_id=0,
-                    tc_client=Client(cl_src_ips=b2b_sips(0, 1),
+                    tc_client=Client(cl_src_ips=b2b_sips(0, 200),
                                      cl_dst_ips=b2b_dips(0, 1),
                                      cl_l4=l4_ccfg,
                                      cl_rates=rate_ccfg),
@@ -197,10 +194,9 @@ def config_test():
 
     warp17_call('PortStart', PortArg(pa_eth_port=1))
     warp17_call('PortStart', PortArg(pa_eth_port=0))
-    sleep(10)
+    sleep(2)
     # Check client test to be passed
-    wait = True
-    while wait:
+    while True:
         client_result = warp17_call('GetTestStatus',
                                     TestCaseArg(tca_eth_port=0,
                                                 tca_test_case_id=0))
@@ -210,17 +206,19 @@ def config_test():
                                                 tca_test_case_id=0))
 
         if (client_result.tsr_state == RUNNING):
+            print("Waiting, client status is still {}".format(
+                client_result.tsr_state))
             sleep(1)
         else:
-            wait = False
+            break
 
     warp17_call('PortStop', PortArg(pa_eth_port=0))
     warp17_call('PortStop', PortArg(pa_eth_port=1))
     return client_result, server_result
 
 
-log = open(res_file, "a")
-log.write("Start binary search {}\n".format(datetime))
+log = open(output_file, "w")
+log.write("Start binary search {}\n".format(datetime.today()))
 collect_info(start_memory / 2, start_memory / 2)
 log.write("Finish\n")
 log.close()
