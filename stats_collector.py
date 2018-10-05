@@ -61,7 +61,8 @@
 # Include files
 # ****************************************************************************
 import os
-import warp17_api
+from warp17_api import *
+import socket
 
 from rpc_impl import *
 from functools import partial
@@ -79,147 +80,226 @@ from warp17_test_case_pb2 import *
 from warp17_service_pb2 import *
 from warp17_sockopt_pb2 import *
 
-debug = True
 local_dir = os.getcwd()
 
-env = warp17_api.Warp17Env('ut/ini/jspg3.ini')
-start_memory = int(env.get_memory())
-
-tcb_pool_sz = 20000
-output_file = "/tmp/10m-res-test.txt"
+env = Warp17Env('ut/ini/{}.ini'.format(socket.gethostname()))
 warp17_call = partial(warp17_method_call, env.get_host_name(),
                       env.get_rpc_port(), Warp17_Stub)
-precision = 1000
+bin = "{}/build/warp17".format(local_dir)
+oargs = Warp17OutputArgs('/tmp/wtf.out')
 
 
-def passed(results):
-    """Check if the tests has passed"""
-    client_result, server_result = results
-    if (server_result.tsr_state != PASSED or
-            client_result.tsr_state != PASSED):
-        return False
-    return True
+class Test():
+
+    def __init__(self):
+        # l3_config = {
+        #     port : [
+        #         def_gw,
+        #         n_ip]
+        # }
+        self.l3_config = {
+            0: [0,
+                1],
+            1: [0,
+                1]
+        }
+        # self.l4_config = {
+        #     port: n_ports
+        # }
+        self.l4_config = {
+            0: 1,
+            1: 1,
+        }
+        self.rate_ccfg = RateClient(rc_open_rate=Rate(),
+                                    rc_close_rate=Rate(),
+                                    rc_send_rate=Rate())
+        self.app_ccfg = App()
+
+        self.l4_ccfg = L4Client()
+
+        self.ccfg = TestCase()
+        self.sr_test_criteria = TestCriteria(tc_crit_type=SRV_UP, tc_srv_up=1)
+
+        self.l4_scfg = L4Server()
+        self.scfg = TestCase()
+        self.cl_port = 0
+        self.sr_port = 1
+        self.tc_id = 0
+
+    def add_l3(self, port, def_gw, n_ip):
+        self.l3_config[port] = [def_gw, n_ip]
+
+    def add_config(self):
+        for port in self.l3_config:
+            def_gw, n_ip = self.l3_config[port]
+            pcfg = b2b_port_add(port, def_gw=Ip(ip_version=IPV4, ip_v4=def_gw))
+            b2b_port_add_intfs(pcfg,
+                               [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(port, i)),
+                                 Ip(ip_version=IPV4, ip_v4=b2b_mask(port, i)),
+                                 b2b_count(port, i)) for i in range(0, n_ip)])
+            warp17_call('ConfigurePort', pcfg)
+
+        cl_src_ips = b2b_sips(self.cl_port, self.l3_config[self.cl_port][1])
+        cl_dst_ips = b2b_sips(self.sr_port, self.l3_config[self.sr_port][1])
+
+        # todo: enable multiple server/client tests
+        self.l4_ccfg = L4Client(l4c_proto=self.proto,
+                                l4c_tcp_udp=TcpUdpClient(
+                                    tuc_sports=b2b_ports(self.l4_config[0]),
+                                    tuc_dports=b2b_ports(self.l4_config[1])))
+
+        self.ccfg = TestCase(tc_type=CLIENT, tc_eth_port=self.cl_port,
+                             tc_id=self.tc_id,
+                             tc_client=Client(cl_src_ips=cl_src_ips,
+                                              cl_dst_ips=cl_dst_ips,
+                                              cl_l4=self.l4_ccfg,
+                                              cl_rates=self.rate_ccfg),
+                             tc_app=self.app_ccfg,
+                             tc_criteria=self.cl_test_criteria)
+        warp17_call('ConfigureTestCase', self.ccfg)
+
+        self.l4_scfg = L4Server(l4s_proto=self.proto,
+                                l4s_tcp_udp=TcpUdpServer(
+                                    tus_ports=b2b_ports(1)))
+        srv_ips = b2b_sips(self.sr_port, self.l3_config[self.sr_port][1])
+        self.scfg = TestCase(tc_type=SERVER, tc_eth_port=self.sr_port,
+                             tc_id=self.tc_id,
+                             tc_server=Server(srv_ips=srv_ips,
+                                              srv_l4=self.l4_scfg),
+                             tc_app=self.app_scfg,
+                             tc_criteria=self.sr_test_criteria)
+        warp17_call('ConfigureTestCase', self.scfg)
+
+    def run(self):
+        self.add_config()
+        self.start()
+        results = self.check_results()
+        self.stop()
+        return results
+
+    def push_config(self):
+        """Configures a test to run 10 million sessions"""
+        for port in self.l3_config:
+            def_gw, n_ip = self.l3_config[port]
+            self.pcfg = b2b_port_add(port,
+                                     def_gw=Ip(ip_version=IPV4, ip_v4=def_gw))
+            b2b_port_add_intfs(self.pcfg,
+                               [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(0, i)),
+                                 Ip(ip_version=IPV4, ip_v4=b2b_mask(0, i)),
+                                 b2b_count(0, i)) for i in range(0, n_ip)])
+            warp17_call('ConfigurePort', self.pcfg)
+
+        warp17_call('ConfigureTestCase', self.ccfg)
+
+        warp17_call('ConfigureTestCase', scfg)
+
+        return self.run(port)
+
+    def check_results(self):
+        results = {}
+        sleep(5)
+        for port in self.l3_config:
+            results[port] = warp17_call('GetTestStatus',
+                                        TestCaseArg(tca_eth_port=port,
+                                                    tca_test_case_id=self.tc_id))
+
+        return results
+
+    def stop(self):
+        for port in self.l3_config:
+            warp17_call('PortStop', PortArg(pa_eth_port=port))
+
+    def start(self):
+        for port in self.l3_config:
+            warp17_call('PortStart', PortArg(pa_eth_port=port))
+        # wait for the test to start running
+        sleep(2)
+
+    @staticmethod
+    def passed(results):
+        """Check if the tests has passed"""
+        client_result = results[0]
+        server_result = results[1]
+        if (server_result.tsr_state != PASSED or
+                client_result.tsr_state != PASSED):
+            return False
+        return True
 
 
-def collect_info(pivot, R):
+def search_mimimum_memory(pivot, R):
     """Binary search the minimum memory needed to run the test"""
     if R < precision:
         return
     print("Running warp17 on {}Mb memory".format(pivot))
     not_started = False
     env.set_value(env.MEMORY, pivot)
-    bin = "{}/build/warp17".format(local_dir)
 
     try:
-        proc = warp17_api.warp17_start(env, bin)
+        proc = warp17_start(env=env, exec_file=bin, output_args=oargs)
 
     except BaseException as E:
-        print(E)
+        print("Error occurred: {}".format(E))
         exit(-1)
 
     try:
-        warp17_api.warp17_wait(env)
-        results = config_test()
-        warp17_api.warp17_stop(env, proc)
+        warp17_wait(env)
 
-    except:
+        results = test.run()
+
+    except BaseException as E:
+        print("Error occurred: {}".format(E))
         not_started = True
         pass
 
+    warp17_stop(env, proc)
+
     if not not_started:
-        if passed(results):
+        if test.passed(results):
             message = "Success run with {}Mb memory\n".format(pivot)
-            log_res(message)
-            collect_info(pivot - R / 2, R / 2)
+            log.write(message)
+            search_mimimum_memory(pivot - R / 2, R / 2)
             return
     message = "Failed run with {}Mb memory\n".format(pivot)
-    log_res(message)
-    collect_info(pivot + R / 2, R / 2)
+    log.write(message)
+    search_mimimum_memory(pivot + R / 2, R / 2)
     return
 
 
-def log_res(message):
-    """Log the results on a file"""
-    log.write(message)
-
-
-def config_test():
+def test_10m_sessions():
     """Configures a test to run 10 million sessions"""
-    # Setup interfaces on port 0
-    pcfg = b2b_port_add(0, def_gw=Ip(ip_version=IPV4, ip_v4=167837697))
-    b2b_port_add_intfs(pcfg, [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(0, i)),
-                               Ip(ip_version=IPV4, ip_v4=b2b_mask(0, i)),
-                               b2b_count(0, i)) for i in range(0, 200)])
-    warp17_call('ConfigurePort', pcfg)
-    # Setup interfaces on port 1
-    pcfg = b2b_port_add(1, def_gw=Ip(ip_version=IPV4, ip_v4=167772161))
-    b2b_port_add_intfs(pcfg, [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(1, i)),
-                               Ip(ip_version=IPV4, ip_v4=b2b_mask(1, i)),
-                               b2b_count(1, i)) for i in range(0, 1)])
-    warp17_call('ConfigurePort', pcfg)
-    rate_ccfg = RateClient(rc_open_rate=Rate(),
-                           rc_close_rate=Rate(),
-                           rc_send_rate=Rate())
-    app_ccfg = App(app_proto=RAW_CLIENT,
-                   app_raw_client=RawClient(rc_req_plen=10,
-                                            rc_resp_plen=10))
-    app_scfg = App(app_proto=RAW_SERVER,
-                   app_raw_server=RawServer(rs_req_plen=10,
-                                            rs_resp_plen=10))
+    test_10m = Test()
+    test_10m.add_l3(0, 167837697, 200)  # 10.1.0.1
+    test_10m.add_l3(1, 167772161, 1)  # 10.0.0.1
+    test_10m.l4_config[0] = 50000
+    test_10m.l4_config[1] = 1  # not really needed
+    test_10m.proto = TCP
+    test_10m.cl_port = 0
+    test_10m.sr_port = 1
 
-    l4_ccfg = L4Client(l4c_proto=TCP,
-                       l4c_tcp_udp=TcpUdpClient(tuc_sports=b2b_ports(50000),
-                                                tuc_dports=b2b_ports(1)))
+    test_10m.cl_test_criteria = TestCriteria(tc_crit_type=CL_ESTAB,
+                                             tc_cl_estab=10000000)
 
-    ccfg = TestCase(tc_type=CLIENT, tc_eth_port=0,
-                    tc_id=0,
-                    tc_client=Client(cl_src_ips=b2b_sips(0, 200),
-                                     cl_dst_ips=b2b_dips(0, 1),
-                                     cl_l4=l4_ccfg,
-                                     cl_rates=rate_ccfg),
-                    tc_app=app_ccfg,
-                    tc_criteria=TestCriteria(tc_crit_type=CL_ESTAB,
-                                             tc_cl_estab=10000000))
-    warp17_call('ConfigureTestCase', ccfg)
+    test_10m.app_ccfg = App(app_proto=RAW_CLIENT,
+                            app_raw_client=RawClient(rc_req_plen=10,
+                                                     rc_resp_plen=10))
+    test_10m.app_scfg = App(app_proto=RAW_SERVER,
+                            app_raw_server=RawServer(rs_req_plen=10,
+                                                     rs_resp_plen=10))
 
-    l4_scfg = L4Server(l4s_proto=TCP,
-                       l4s_tcp_udp=TcpUdpServer(tus_ports=b2b_ports(1)))
-    scfg = TestCase(tc_type=SERVER, tc_eth_port=1, tc_id=0,
-                    tc_server=Server(srv_ips=b2b_sips(1, 1),
-                                     srv_l4=l4_scfg),
-                    tc_app=app_scfg,
-                    tc_criteria=TestCriteria(tc_crit_type=SRV_UP,
-                                             tc_srv_up=1))
-    warp17_call('ConfigureTestCase', scfg)
+    start_memory = int(env.get_memory())
 
-    warp17_call('PortStart', PortArg(pa_eth_port=1))
-    warp17_call('PortStart', PortArg(pa_eth_port=0))
-    sleep(2)
-    # Check client test to be passed
-    while True:
-        client_result = warp17_call('GetTestStatus',
-                                    TestCaseArg(tca_eth_port=0,
-                                                tca_test_case_id=0))
+    env.set_value(env.TCB_POOL_SZ, 20000)
+    env.set_value(env.UCB_POOL_SZ, 0)
 
-        server_result = warp17_call('GetTestStatus',
-                                    TestCaseArg(tca_eth_port=1,
-                                                tca_test_case_id=0))
+    output_file = "/tmp/10m-res-test.txt"
 
-        if (client_result.tsr_state == RUNNING):
-            print("Waiting, client status is still {}".format(
-                client_result.tsr_state))
-            sleep(1)
-        else:
-            break
-
-    warp17_call('PortStop', PortArg(pa_eth_port=0))
-    warp17_call('PortStop', PortArg(pa_eth_port=1))
-    return client_result, server_result
+    return test_10m, start_memory, output_file
 
 
+test, start_memory, output_file = test_10m_sessions()  # set your test here
 log = open(output_file, "w")
 log.write("Start binary search {}\n".format(datetime.today()))
-collect_info(start_memory / 2, start_memory / 2)
+precision = 1000
+search_mimimum_memory(start_memory / 2, start_memory / 2)
 log.write("Finish\n")
 log.close()
-exit(0)
