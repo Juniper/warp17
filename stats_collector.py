@@ -86,7 +86,6 @@ env = Warp17Env('ut/ini/{}.ini'.format(socket.gethostname()))
 warp17_call = partial(warp17_method_call, env.get_host_name(),
                       env.get_rpc_port(), Warp17_Stub)
 bin = "{}/build/warp17".format(local_dir)
-oargs = Warp17OutputArgs('/tmp/wtf.out')
 
 
 class Test():
@@ -148,6 +147,8 @@ class Test():
                                     tuc_sports=b2b_ports(self.l4_config[0]),
                                     tuc_dports=b2b_ports(self.l4_config[1])))
 
+        uptime_delay = Delay(d_value=120)
+        downtime_delay = Delay(d_value=0)
         self.ccfg = TestCase(tc_type=CLIENT, tc_eth_port=self.cl_port,
                              tc_id=self.tc_id,
                              tc_client=Client(cl_src_ips=cl_src_ips,
@@ -155,6 +156,8 @@ class Test():
                                               cl_l4=self.l4_ccfg,
                                               cl_rates=self.rate_ccfg),
                              tc_app=self.app_ccfg,
+                             tc_uptime=uptime_delay,
+                             tc_downtime=downtime_delay,
                              tc_criteria=self.cl_test_criteria)
         warp17_call('ConfigureTestCase', self.ccfg)
 
@@ -176,24 +179,6 @@ class Test():
         results = self.check_results()
         self.stop()
         return results
-
-    def push_config(self):
-        """Configures a test to run 10 million sessions"""
-        for port in self.l3_config:
-            def_gw, n_ip = self.l3_config[port]
-            self.pcfg = b2b_port_add(port,
-                                     def_gw=Ip(ip_version=IPV4, ip_v4=def_gw))
-            b2b_port_add_intfs(self.pcfg,
-                               [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(0, i)),
-                                 Ip(ip_version=IPV4, ip_v4=b2b_mask(0, i)),
-                                 b2b_count(0, i)) for i in range(0, n_ip)])
-            warp17_call('ConfigurePort', self.pcfg)
-
-        warp17_call('ConfigureTestCase', self.ccfg)
-
-        warp17_call('ConfigureTestCase', scfg)
-
-        return self.run(port)
 
     def check_results(self):
         results = {}
@@ -235,7 +220,7 @@ def search_mimimum_memory(pivot, R):
     env.set_value(env.MEMORY, pivot)
 
     try:
-        proc = warp17_start(env=env, exec_file=bin, output_args=oargs)
+        proc = warp17_start(env=env, exec_file=bin)
 
     except BaseException as E:
         print("Error occurred: {}".format(E))
