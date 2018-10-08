@@ -159,11 +159,11 @@ Those two tests listed below will give an idea.
 ### 10 Million sessions
 
 In order to run 10 million TCP sessions test on our setup we need a tcb-pool-sz of 20000 at least
-and 26624Mb MB of memory.
+and 18432 MB of memory.
 
 This is the commandline needed to run this test:
 ```
-./warp17-private/build/warp17 -c 0xFF3FCFF3FF -n 4 -m 26624Mb -- --qmap-default max-q --tcb-pool-sz 20000 --ucb-pool-sz 0
+./warp17-private/build/warp17 -c 0xFF3FCFF3FF -n 4 -m 18432 -- --qmap-default max-q --tcb-pool-sz 20000 --ucb-pool-sz 0
 ```
 
 ### 1 session
