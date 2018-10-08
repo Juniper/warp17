@@ -70,6 +70,7 @@ from time import sleep
 from datetime import datetime
 from b2b_setup import *
 
+from uniq import get_uniq_stamp
 from warp17_common_pb2 import *
 from warp17_l3_pb2 import *
 from warp17_app_raw_pb2 import *
@@ -220,7 +221,8 @@ def search_mimimum_memory(pivot, R):
     env.set_value(env.MEMORY, pivot)
 
     try:
-        proc = warp17_start(env=env, exec_file=bin)
+        oarg = Warp17OutputArgs(out_file=log_file)
+        proc = warp17_start(env=env, exec_file=bin, output_args=oarg)
 
     except BaseException as E:
         print("Error occurred: {}".format(E))
@@ -241,11 +243,11 @@ def search_mimimum_memory(pivot, R):
     if not not_started:
         if test.passed(results):
             message = "Success run with {}Mb memory\n".format(pivot)
-            log.write(message)
+            result.write(message)
             search_mimimum_memory(pivot - R / 2, R / 2)
             return
     message = "Failed run with {}Mb memory\n".format(pivot)
-    log.write(message)
+    result.write(message)
     search_mimimum_memory(pivot + R / 2, R / 2)
     return
 
@@ -276,15 +278,20 @@ def test_10m_sessions():
     env.set_value(env.TCB_POOL_SZ, 20000)
     env.set_value(env.UCB_POOL_SZ, 0)
 
-    output_file = "/tmp/10m-res-test.txt"
+    out_folder = "/tmp/10m-test-{}/".format(get_uniq_stamp())
 
-    return test_10m, start_memory, output_file
+    return test_10m, start_memory, out_folder
 
 
-test, start_memory, output_file = test_10m_sessions()  # set your test here
-log = open(output_file, "w")
-log.write("Start binary search {}\n".format(datetime.today()))
+test, start_memory, out_folder = test_10m_sessions()  # set your test here
+res_file = "{}res.txt".format(out_folder)
+log_file = "{}out.log".format(out_folder)
+if not os.path.exists(out_folder):
+    os.mkdir(out_folder)
+print "Logs and outputs in " + out_folder
+result = open(res_file, "w")
+result.write("Start binary search {}\n".format(datetime.today()))
 precision = 1000
 search_mimimum_memory(start_memory / 2, start_memory / 2)
-log.write("Finish\n")
-log.close()
+result.write("Finish\n")
+result.close()
