@@ -32,7 +32,7 @@ WARP17 will be able to run on all the platforms that are supported by DPDK.
 
 # Performance benchmarks
 
-## Reference platform HW configuration
+## <a name="hw"></a> Reference platform HW configuration
 The configuration of the server on which the WARP17 benchmarks were run is:
 
 * [Super X10DRX](http://www.supermicro.com/products/motherboard/Xeon/C600/X10DRX.cfm)
@@ -154,17 +154,7 @@ type of nics, number of sockets, number of cpu and their architecture can
 influence how much memory is needed by warp17, moreover when you configure
 a server you can't really predict how much memory is gonna use.
 
-Those two tests listed below will give an idea.
-
-### 10 Million sessions
-
-In order to run 10 million TCP sessions test on our setup we need a tcb-pool-sz of 20000 at least
-and 18432 MB of memory.
-
-This is the commandline needed to run this test:
-```
-./warp17-private/build/warp17 -c 0xFF3FCFF3FF -n 4 -m 18432 -- --qmap-default max-q --tcb-pool-sz 20000 --ucb-pool-sz 0
-```
+Those two tests, which have been run on our [setup](#hw), listed below will give a better idea.
 
 ### 1 session
 
@@ -177,6 +167,15 @@ This is the commandline needed to run this test:
 ./warp17-private/build/warp17 -c 0xF -n 1 --socket-mem 1,1 -- --qmap-default max-q --tcb-pool-sz 1 --ucb-pool-sz 0 --mbuf-pool-sz 18 --mbuf-hdr-pool-sz 1
 ```
 
+### 10 Million sessions
+
+In order to run 10 million TCP sessions test on our setup we need a tcb-pool-sz of 20000 at least
+and 18432 MB of memory.
+
+This is the commandline needed to run this test:
+```
+./warp17-private/build/warp17 -c 0xFF3FCFF3FF -n 4 -m 18432 -- --qmap-default max-q --tcb-pool-sz 20000 --ucb-pool-sz 0
+```
 
 # Installing and configuring
 
