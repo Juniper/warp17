@@ -65,15 +65,15 @@ million TCP servers) on which clients continuously send fixed size requests
   bandwidth):
 
 <div align="center">
-  <img src="benchmarks/tcp_raw_link_usage.png" width="49%" alt="TCP raw link usage">
-  <img src="benchmarks/tcp_raw_pps.png" width="49%" alt="TCP raw pps">
+  <img src="../benchmarks/tcp_raw_link_usage.png" width="49%" alt="TCP raw link usage">
+  <img src="../benchmarks/tcp_raw_pps.png" width="49%" alt="TCP raw pps">
 </div>
 
 * TCP raw traffic setup rate is stable at approximately
   __7M sessions per second__ (3.5M TCP clients and 3.5M TCP servers per second)
 
 <div align="center">
-  <img src="benchmarks/tcp_raw_setup.png" width="49%" alt="TCP raw setup rate">
+  <img src="../benchmarks/tcp_raw_setup.png" width="49%" alt="TCP raw setup rate">
 </div>
 
 ## TCP setup and data rates for HTTP application traffic
@@ -88,8 +88,8 @@ requests and wait for the _HTTP_ responses from the servers.
   bandwidth):
 
 <div align="center">
-  <img src="benchmarks/tcp_http_link_usage.png" width="49%" alt="HTTP link usage">
-  <img src="benchmarks/tcp_http_pps.png" width="49%" alt="HTTP pps">
+  <img src="../benchmarks/tcp_http_link_usage.png" width="49%" alt="HTTP link usage">
+  <img src="../benchmarks/tcp_http_pps.png" width="49%" alt="HTTP pps">
 </div>
 
 * HTTP traffic setup rate is stable at approximately
@@ -97,7 +97,7 @@ requests and wait for the _HTTP_ responses from the servers.
   second)
 
 <div align="center">
-  <img src="benchmarks/tcp_http_setup.png" width="49%" alt="HTTP setup rate">
+  <img src="../benchmarks/tcp_http_setup.png" width="49%" alt="HTTP setup rate">
 </div>
 
 ## UDP setup and data rates for RAW application traffic
@@ -110,8 +110,8 @@ payload) from 10 million clients which are processed on the receing side by
   as we reach the link bandwidth the rate decreases.
 
 <div align="center">
-  <img src="benchmarks/udp_raw_link_usage.png" width="49%" alt="UDP raw link usage">
-  <img src="benchmarks/udp_raw_pps.png" width="49%" alt="UDP raw pps">
+  <img src="../benchmarks/udp_raw_link_usage.png" width="49%" alt="UDP raw link usage">
+  <img src="../benchmarks/udp_raw_pps.png" width="49%" alt="UDP raw pps">
 </div>
 
 ## Memory consumption
