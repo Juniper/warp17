@@ -31,7 +31,75 @@ the additional latency in the kernel stack. From a hardware perspective,
 WARP17 will be able to run on all the platforms that are supported by DPDK.
 
 # Performance benchmarks
-You can find all the performance test in the doc folder [here](./doc/Performance.md).
+
+You can find all the performance test and the reference architecture
+in the doc folder [here](./doc/Performance.md).
+
+## TCP setup and data rates for RAW application traffic
+
+__NOTE__: In the case when we only want to test the TCP control implementation
+(i.e., the TCP 3-way handshake and TCP CLOSE sequence), WARP17 achieved the
+maximum setup rate of 8.5M clients/s and 8.5M servers/s, __so a total of
+17M TCP sessions are handled every second__.
+
+The tests set up 20 million TCP sessions (i.e., 10 million TCP clients and 10
+million TCP servers) on which clients continuously send fixed size requests
+(with random payload) and wait for fixed size responses from the servers.
+
+* TCP raw traffic link utilization reaches line rate (40Gbps) as we increase
+  the size of the requests and responses. When line rate is achieved the number
+  of packets that actually make it on the wire decreases (due to the link
+  bandwidth):
+
+<div align="center">
+  <img src="./benchmarks/tcp_raw_link_usage.png" width="49%" alt="TCP raw link usage">
+  <img src="./benchmarks/tcp_raw_pps.png" width="49%" alt="TCP raw pps">
+</div>
+
+* TCP raw traffic setup rate is stable at approximately
+  __7M sessions per second__ (3.5M TCP clients and 3.5M TCP servers per second)
+
+<div align="center">
+  <img src="./benchmarks/tcp_raw_setup.png" width="49%" alt="TCP raw setup rate">
+</div>
+
+## TCP setup and data rates for HTTP application traffic
+
+The tests set up 20 million TCP sessions (i.e., 10 million TCP clients and 10
+million TCP servers) on which the clients continuously send _HTTP GET_
+requests and wait for the _HTTP_ responses from the servers.
+
+* HTTP traffic link utilization reaches line rate (40Gbps) as we increase the
+  size of the requests and responses. When line rate is achieved the number
+  of packets that actually make it on the wire decreases (due to the link
+  bandwidth):
+
+<div align="center">
+  <img src="./benchmarks/tcp_http_link_usage.png" width="49%" alt="HTTP link usage">
+  <img src="./benchmarks/tcp_http_pps.png" width="49%" alt="HTTP pps">
+</div>
+
+* HTTP traffic setup rate is stable at approximately
+  __7M sessions per second__ (3.5M HTTP clients and 3.5M HTTP servers per
+  second)
+
+<div align="center">
+  <img src="./benchmarks/tcp_http_setup.png" width="49%" alt="HTTP setup rate">
+</div>
+
+## UDP setup and data rates for RAW application traffic
+
+The tests continuously send UDP fixed size packets (with random
+payload) from 10 million clients which are processed on the receing side by
+10 million UDP listeners.
+
+* UDP packets are generated at approximately __22 Mpps__ (for small packets) and
+  as we reach the link bandwidth the rate decreases.
+
+<div align="center">
+  <img src="./benchmarks/udp_raw_link_usage.png" width="49%" alt="UDP raw link usage">
+  <img src="./benchmarks/udp_raw_pps.png" width="49%" alt="UDP raw pps">
+</div>
 
 # Installing and configuring
 
@@ -1345,7 +1413,8 @@ sudo perl -I ./perl/ examples/perl/test_1_http_4M.pl
 ```
 
 # Contributing a new L7 Application implementation
-You can find how to contribute to our project and add more L7 app (here)[here](./doc/Contributing.md).
+You can find how to contribute to our project and how to add new L7
+application implementations (here)[here](./doc/Contributing.md).
 
 # Release notes
 For a summary of the currently supported functionalities please check the
