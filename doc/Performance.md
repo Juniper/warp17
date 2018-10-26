@@ -67,7 +67,7 @@ Those two tests, which have been run on our [setup](#hw), listed below will give
 ### 1 session
 
 In order to run 1 TCP session, we can allocate just 1 hugepage of 1GB
-per each socket
+per socket.
 
 
 This is the commandline needed to run this test:
