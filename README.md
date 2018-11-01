@@ -32,8 +32,8 @@ WARP17 will be able to run on all the platforms that are supported by DPDK.
 
 # Performance benchmarks
 
-You can find all the performance test and the reference architecture
-in the doc folder [here](./doc/Performance.md).
+You can find all the performance tests descriptions and the reference
+hardware architecture details in the [doc folder](./doc/Performance.md).
 
 ## TCP setup and data rates for RAW application traffic
 
@@ -1414,7 +1414,7 @@ sudo perl -I ./perl/ examples/perl/test_1_http_4M.pl
 
 # Contributing a new L7 Application implementation
 You can find how to contribute to our project and how to add new L7
-application implementations (here)[here](./doc/Contributing.md).
+application implementations [here](./doc/Contributing.md).
 
 # Release notes
 For a summary of the currently supported functionalities please check the
