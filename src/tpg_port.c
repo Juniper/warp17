@@ -535,8 +535,8 @@ static bool port_setup_port(uint8_t port)
     };
 
 #if defined(TPG_SW_CHECKSUMMING)
-    if ((port_dev_info[port].pi_dev_info.rx_offload_capa & DEV_RX_OFFLOAD_IPV4_CKSUM)
-        != DEV_RX_OFFLOAD_IPV4_CKSUM)
+    if ((port_dev_info[port].pi_dev_info.rx_offload_capa & DEV_RX_OFFLOAD_IPV4_CKSUM) !=
+            DEV_RX_OFFLOAD_IPV4_CKSUM)
         default_port_config.rxmode.hw_ip_checksum = 0;
 #endif /* !defined(TPG_SW_CHECKSUMMING) */
 
