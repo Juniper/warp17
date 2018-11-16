@@ -497,18 +497,18 @@ static bool port_adjust_info(uint32_t port)
  ****************************************************************************/
 static bool port_setup_port(uint8_t port)
 {
-    int                 rc;
-    int                 queue;
+    int                    rc;
+    int                    queue;
 #if !defined(TPG_SW_CHECKSUMMING)
-    uint64_t            expected_rx_flags;
-    uint64_t            expected_tx_flags;
+    uint64_t               expected_rx_flags;
+    uint64_t               expected_tx_flags;
 #endif /* !defined(TPG_SW_CHECKSUMMING) */
-    uint16_t            number_of_rings;
-    global_config_t    *cfg;
-    struct ether_addr   mac_addr;
-    tpg_port_options_t  default_port_options;
-    struct rte_eth_rxconf rx_conf;
-    struct rte_eth_txconf tx_conf;
+    uint16_t               number_of_rings;
+    global_config_t       *cfg;
+    struct ether_addr      mac_addr;
+    tpg_port_options_t     default_port_options;
+    struct rte_eth_rxconf  rx_conf;
+    struct rte_eth_txconf  tx_conf;
 
     struct rte_eth_conf default_port_config = {
         .rxmode = {
@@ -533,6 +533,12 @@ static bool port_setup_port(uint8_t port)
             .mq_mode = ETH_MQ_TX_NONE,
         }
     };
+
+#if defined(TPG_SW_CHECKSUMMING)
+    if ((port_dev_info[port].pi_dev_info.rx_offload_capa & DEV_RX_OFFLOAD_IPV4_CKSUM) !=
+            DEV_RX_OFFLOAD_IPV4_CKSUM)
+        default_port_config.rxmode.hw_ip_checksum = 0;
+#endif /* !defined(TPG_SW_CHECKSUMMING) */
 
     /* Initialise configurations for rx and tx*/
     port_init_rx_conf(port);
