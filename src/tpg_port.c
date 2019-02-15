@@ -566,10 +566,9 @@ static bool port_setup_port(uint8_t port)
 #endif /* !defined(TPG_SW_CHECKSUMMING) */
 
 #if !defined(TPG_SW_CHECKSUMMING)
-    expected_tx_flags = (DEV_RX_OFFLOAD_VLAN_STRIP |
-                         DEV_RX_OFFLOAD_IPV4_CKSUM |
-                         DEV_RX_OFFLOAD_UDP_CKSUM |
-                         DEV_RX_OFFLOAD_TCP_CKSUM);
+    expected_tx_flags = (DEV_TX_OFFLOAD_IPV4_CKSUM |
+                         DEV_TX_OFFLOAD_UDP_CKSUM |
+                         DEV_TX_OFFLOAD_TCP_CKSUM);
 
     if ((port_dev_info[port].pi_dev_info.tx_offload_capa & expected_tx_flags)
         != expected_tx_flags)
