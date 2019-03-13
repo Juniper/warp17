@@ -2514,26 +2514,10 @@ static void cmd_latency_parsed(void *parsed_result, struct cmdline *cl,
     printer_arg_t              parg;
     struct cmd_latency_result *pr;
     tpg_update_arg_t           update_arg;
-    tpg_ipv4_sockopt_t         ipv4_sockopt;
 
     tpg_xlate_default_UpdateArg(&update_arg);
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
-
-    if (test_mgmt_get_ipv4_sockopt(pr->port, pr->tcid, &ipv4_sockopt, &parg))
-        return;
-
-    /*
-     * Once we will give possibility of changing test config at runtime thise
-     * should go away.
-     */
-    if (!ipv4_sockopt.ip4so_rx_tstamp) {
-        cmdline_printf(cl,
-                       "WARNING: Seting latency option without RX timestamping "
-                       "enabled in test case %"PRIu32" config on "
-                       "port %"PRIu32"\n",
-                       pr->tcid, pr->port);
-    }
 
     if (pr->samples) {
         TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg.ua_latency, tcs_samples,
