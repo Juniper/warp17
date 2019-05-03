@@ -38,3 +38,8 @@ cscope.in.out
 
 # Perl autogen
 /_Inline/
+
+/.vscode/
+/.idea/
+/cmake-build-debug/
+CMakeLists.txt

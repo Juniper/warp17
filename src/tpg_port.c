@@ -1224,19 +1224,25 @@ bool port_handle_cmdline(void)
  ****************************************************************************/
 struct cmd_show_port_statistics_result {
     cmdline_fixed_string_t show;
-    cmdline_fixed_string_t port;
+    cmdline_fixed_string_t portS;
     cmdline_fixed_string_t statistics;
     cmdline_fixed_string_t details;
+    cmdline_fixed_string_t port_kw;
+    uint32_t               port;
 };
 
 static cmdline_parse_token_string_t cmd_show_port_statistics_T_show =
     TOKEN_STRING_INITIALIZER(struct cmd_show_port_statistics_result, show, "show");
-static cmdline_parse_token_string_t cmd_show_port_statistics_T_port =
-    TOKEN_STRING_INITIALIZER(struct cmd_show_port_statistics_result, port, "port");
+static cmdline_parse_token_string_t cmd_show_port_statistics_T_portS =
+    TOKEN_STRING_INITIALIZER(struct cmd_show_port_statistics_result, portS, "port");
 static cmdline_parse_token_string_t cmd_show_port_statistics_T_statistics =
     TOKEN_STRING_INITIALIZER(struct cmd_show_port_statistics_result, statistics, "statistics");
 static cmdline_parse_token_string_t cmd_show_port_statistics_T_details =
     TOKEN_STRING_INITIALIZER(struct cmd_show_port_statistics_result, details, "details");
+static cmdline_parse_token_string_t cmd_show_port_statistics_T_port_kw =
+        TOKEN_STRING_INITIALIZER(struct cmd_show_port_statistics_result, port_kw, "port");
+static cmdline_parse_token_num_t cmd_show_port_statistics_T_port =
+        TOKEN_NUM_INITIALIZER(struct cmd_show_port_statistics_result, port, UINT32);
 
 #define SHOW_ETH_STATS(counter)                        \
 do {                                                   \
@@ -1262,11 +1268,14 @@ static void cmd_show_port_statistics_parsed(void *parsed_result __rte_unused,
                                             struct cmdline *cl,
                                             void *data)
 {
-    int           port;
-    int           option = (intptr_t) data;
-    printer_arg_t parg = TPG_PRINTER_ARG(cli_printer, cl);
+    uint32_t                                port;
+    int                                     option = (intptr_t) data;
+    struct cmd_show_port_statistics_result *pr = parsed_result;
+    printer_arg_t                           parg = TPG_PRINTER_ARG(cli_printer, cl);
 
     for (port = 0; port < rte_eth_dev_count(); port++) {
+        if ((option == 'p' || option == 'c') && port != pr->port)
+            continue;
 
         /*
          * Calculate totals first
@@ -1403,7 +1412,7 @@ cmdline_parse_inst_t cmd_show_port_statistics = {
     .help_str = "show port statistics",
     .tokens = {
         (void *)&cmd_show_port_statistics_T_show,
-        (void *)&cmd_show_port_statistics_T_port,
+        (void *)&cmd_show_port_statistics_T_portS,
         (void *)&cmd_show_port_statistics_T_statistics,
         NULL,
     },
@@ -1415,9 +1424,38 @@ cmdline_parse_inst_t cmd_show_port_statistics_details = {
     .help_str = "show port statistics details",
     .tokens = {
         (void *)&cmd_show_port_statistics_T_show,
-        (void *)&cmd_show_port_statistics_T_port,
+        (void *)&cmd_show_port_statistics_T_portS,
         (void *)&cmd_show_port_statistics_T_statistics,
         (void *)&cmd_show_port_statistics_T_details,
+        NULL,
+    },
+};
+cmdline_parse_inst_t cmd_show_port_statistics_port = {
+    .f = cmd_show_port_statistics_parsed,
+    .data = (void *) (intptr_t) 'p',
+    .help_str = "show port statistics port <id>",
+    .tokens = {
+        (void *)&cmd_show_port_statistics_T_show,
+        (void *)&cmd_show_port_statistics_T_portS,
+        (void *)&cmd_show_port_statistics_T_statistics,
+        (void *)&cmd_show_port_statistics_T_port_kw,
+        (void *)&cmd_show_port_statistics_T_port,
+        NULL,
+    },
+};
+
+/* ATTENTION: data is gonna be filled with 'c' which means "port and details" */
+cmdline_parse_inst_t cmd_show_port_statistics_port_details = {
+    .f = cmd_show_port_statistics_parsed,
+    .data = (void *) (intptr_t) 'c',
+    .help_str = "show port statistics details port <id>",
+    .tokens = {
+        (void *)&cmd_show_port_statistics_T_show,
+        (void *)&cmd_show_port_statistics_T_portS,
+        (void *)&cmd_show_port_statistics_T_statistics,
+        (void *)&cmd_show_port_statistics_T_details,
+        (void *)&cmd_show_port_statistics_T_port_kw,
+        (void *)&cmd_show_port_statistics_T_port,
         NULL,
     },
 };
@@ -1669,6 +1707,8 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_show_port_link,
     &cmd_show_port_statistics,
     &cmd_show_port_statistics_details,
+    &cmd_show_port_statistics_port,
+    &cmd_show_port_statistics_port_details,
     NULL,
 };
 

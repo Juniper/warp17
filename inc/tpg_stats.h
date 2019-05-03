@@ -178,29 +178,28 @@ do {                                                                   \
     if ((opt) == 'd') {                                                \
         int _core;                                                     \
         RTE_LCORE_FOREACH(_core) {                                     \
-            int _idx = rte_lcore_index(_core);                         \
             cmdline_printf(cl,                                         \
                            "    - core idx %3.3u    : %20"int_fmt"\n", \
-                           _idx,                                       \
+                           _core,                                      \
                            STATS_GLOBAL(type, _core, port)->counter);  \
         }                                                              \
     }                                                                  \
 } while (0)
 
-#define SHOW_PER_PACKET_CORE_STATS(type, counter, port, opt, int_fmt)      \
-do {                                                                       \
-    if ((opt) == 'd') {                                                    \
-        int _core;                                                         \
-        RTE_LCORE_FOREACH(_core) {                                         \
-            int _idx = rte_lcore_index(_core);                             \
-            if (cfg_is_pkt_core(_core)) {                                  \
-                cmdline_printf(cl,                                         \
-                               "    - core idx %3.3u    : %20"int_fmt"\n", \
-                               _idx,                                       \
-                               STATS_GLOBAL(type, _core, port)->counter);  \
-            }                                                              \
-        }                                                                  \
-    }                                                                      \
+#define SHOW_PER_PACKET_CORE_STATS(type, counter, port, opt, int_fmt)          \
+do {                                                                           \
+    if ((opt) == 'd' || (opt) == 'c') {                                        \
+        uint32_t _core;                                                        \
+        RTE_LCORE_FOREACH(_core) {                                             \
+            if (PORT_COREID_IN_MASK(port_port_cfg[port].ppc_core_mask, _core)) \
+            {                                                                  \
+                cmdline_printf(cl,                                             \
+                               "    - core idx %3.3u    : %20"int_fmt"\n",     \
+                               _core,                                          \
+                               STATS_GLOBAL(type, _core, port)->counter);      \
+            }                                                                  \
+        }                                                                      \
+    }                                                                          \
 } while (0)
 
 #define SHOW_PER_PACKET_CORE_64BIT_STATS(type, counter, port, opt) \
