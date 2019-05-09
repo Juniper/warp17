@@ -740,6 +740,8 @@ struct cmd_show_timer_statistics_result {
     cmdline_fixed_string_t timer;
     cmdline_fixed_string_t statistics;
     cmdline_fixed_string_t details;
+    cmdline_fixed_string_t port_kw;
+    uint32_t               port;
 };
 
 static cmdline_parse_token_string_t cmd_show_timer_statistics_t_show =
@@ -750,15 +752,23 @@ static cmdline_parse_token_string_t cmd_show_timer_statistics_t_statistics =
     TOKEN_STRING_INITIALIZER(struct cmd_show_timer_statistics_result, statistics, "statistics");
 static cmdline_parse_token_string_t cmd_show_timer_statistics_t_details =
     TOKEN_STRING_INITIALIZER(struct cmd_show_timer_statistics_result, details, "details");
+static cmdline_parse_token_string_t cmd_show_timer_statistics_T_port_kw =
+        TOKEN_STRING_INITIALIZER(struct cmd_show_timer_statistics_result, port_kw, "port");
+static cmdline_parse_token_num_t cmd_show_timer_statistics_T_port =
+        TOKEN_NUM_INITIALIZER(struct cmd_show_timer_statistics_result, port, UINT32);
+
 
 static void cmd_show_timer_statistics_parsed(void *parsed_result __rte_unused,
                                              struct cmdline *cl, void *data)
 {
-    int           port;
-    int           option = (intptr_t) data;
-    printer_arg_t parg = TPG_PRINTER_ARG(cli_printer, cl);
+    uint32_t                                 port;
+    uint32_t                                 option = (intptr_t) data;
+    printer_arg_t                            parg = TPG_PRINTER_ARG(cli_printer, cl);
+    struct cmd_show_timer_statistics_result *pr = parsed_result;
 
     for (port = 0; port < rte_eth_dev_count(); port++) {
+        if ((option == 'p' || option == 'c') && port != pr->port)
+            continue;
 
         /*
          * Calculate totals first
@@ -857,7 +867,7 @@ static void cmd_show_timer_statistics_parsed(void *parsed_result __rte_unused,
 cmdline_parse_inst_t cmd_show_timer_statistics = {
     .f = cmd_show_timer_statistics_parsed,
     .data = NULL,
-    .help_str = "show tcp timer statistics",
+    .help_str = "show timer statistics",
     .tokens = {
         (void *)&cmd_show_timer_statistics_t_show,
         (void *)&cmd_show_timer_statistics_t_timer,
@@ -866,15 +876,44 @@ cmdline_parse_inst_t cmd_show_timer_statistics = {
     },
 };
 
+cmdline_parse_inst_t cmd_show_timer_statistics_port = {
+    .f = cmd_show_timer_statistics_parsed,
+    .data = (void *) (intptr_t) 'p',
+    .help_str = "show timer statistics port <id>",
+    .tokens = {
+        (void *)&cmd_show_timer_statistics_t_show,
+        (void *)&cmd_show_timer_statistics_t_timer,
+        (void *)&cmd_show_timer_statistics_t_statistics,
+        (void *)&cmd_show_timer_statistics_T_port_kw,
+        (void *)&cmd_show_timer_statistics_T_port,
+        NULL,
+    },
+};
+
 cmdline_parse_inst_t cmd_show_timer_statistics_details = {
     .f = cmd_show_timer_statistics_parsed,
     .data = (void *) (intptr_t) 'd',
-    .help_str = "show tcp timer statistics details",
+    .help_str = "show timer statistics details",
     .tokens = {
         (void *)&cmd_show_timer_statistics_t_show,
         (void *)&cmd_show_timer_statistics_t_timer,
         (void *)&cmd_show_timer_statistics_t_statistics,
         (void *)&cmd_show_timer_statistics_t_details,
+        NULL,
+    },
+};
+
+cmdline_parse_inst_t cmd_show_timer_statistics_details_port = {
+    .f = cmd_show_timer_statistics_parsed,
+    .data = (void *) (intptr_t) 'c',
+    .help_str = "show timer statistics details port <id>",
+    .tokens = {
+        (void *)&cmd_show_timer_statistics_t_show,
+        (void *)&cmd_show_timer_statistics_t_timer,
+        (void *)&cmd_show_timer_statistics_t_statistics,
+        (void *)&cmd_show_timer_statistics_t_details,
+        (void *)&cmd_show_timer_statistics_T_port_kw,
+        (void *)&cmd_show_timer_statistics_T_port,
         NULL,
     },
 };
@@ -885,6 +924,8 @@ cmdline_parse_inst_t cmd_show_timer_statistics_details = {
 static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_show_timer_statistics,
     &cmd_show_timer_statistics_details,
+    &cmd_show_timer_statistics_port,
+    &cmd_show_timer_statistics_details_port,
     NULL,
 };
 
