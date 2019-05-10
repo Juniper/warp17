@@ -752,9 +752,9 @@ static cmdline_parse_token_string_t cmd_show_timer_statistics_t_statistics =
     TOKEN_STRING_INITIALIZER(struct cmd_show_timer_statistics_result, statistics, "statistics");
 static cmdline_parse_token_string_t cmd_show_timer_statistics_t_details =
     TOKEN_STRING_INITIALIZER(struct cmd_show_timer_statistics_result, details, "details");
-static cmdline_parse_token_string_t cmd_show_timer_statistics_T_port_kw =
+static cmdline_parse_token_string_t cmd_show_timer_statistics_t_port_kw =
         TOKEN_STRING_INITIALIZER(struct cmd_show_timer_statistics_result, port_kw, "port");
-static cmdline_parse_token_num_t cmd_show_timer_statistics_T_port =
+static cmdline_parse_token_num_t cmd_show_timer_statistics_t_port =
         TOKEN_NUM_INITIALIZER(struct cmd_show_timer_statistics_result, port, UINT32);
 
 
@@ -884,8 +884,8 @@ cmdline_parse_inst_t cmd_show_timer_statistics_port = {
         (void *)&cmd_show_timer_statistics_t_show,
         (void *)&cmd_show_timer_statistics_t_timer,
         (void *)&cmd_show_timer_statistics_t_statistics,
-        (void *)&cmd_show_timer_statistics_T_port_kw,
-        (void *)&cmd_show_timer_statistics_T_port,
+        (void *)&cmd_show_timer_statistics_t_port_kw,
+        (void *)&cmd_show_timer_statistics_t_port,
         NULL,
     },
 };
@@ -912,8 +912,8 @@ cmdline_parse_inst_t cmd_show_timer_statistics_details_port = {
         (void *)&cmd_show_timer_statistics_t_timer,
         (void *)&cmd_show_timer_statistics_t_statistics,
         (void *)&cmd_show_timer_statistics_t_details,
-        (void *)&cmd_show_timer_statistics_T_port_kw,
-        (void *)&cmd_show_timer_statistics_T_port,
+        (void *)&cmd_show_timer_statistics_t_port_kw,
+        (void *)&cmd_show_timer_statistics_t_port,
         NULL,
     },
 };
