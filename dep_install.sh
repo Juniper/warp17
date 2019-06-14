@@ -2,7 +2,7 @@
 #
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
 #
-# Copyright (c) 2018, Juniper Networks, Inc. All rights reserved.
+# Copyright (c) 2019, Juniper Networks, Inc. All rights reserved.
 #
 #
 # The contents of this file are subject to the terms of the BSD 3 clause
@@ -52,25 +52,39 @@
 #     06/13/2019
 #
 # Notes:
-#     
+#     Scripts which installs warp17 deps included unsupported protobuf2
 
 # Parse args
 source common/common.sh
 set -e
 
-sudo apt-get install build-essential libnuma-dev python ncurses-dev sudo
-
-# Protobuf2 dependencies
-sudo apt-get install zlib1g-dev python-pkg-resources
-# ATTENTION: this will go away once we will support Protobuf v3
-dep_file=Dependencies.zip
 workdir=/tmp/deps
+dep_file=Dependencies.zip
 
-mkdir -p $workdir
-cd $workdir
+# Warp17 and protobuf2 dependencies
+function update {
+    apt-get update
+    apt-get install build-essential libnuma-dev python ncurses-dev zlib1g-dev python-pkg-resources
+}
 
-curl -G https://storage.googleapis.com/drive-bulk-export-anonymous/20190614T094635Z/4133399871716478688/10ab227c-821c-4712-9c76-c2305cb0be1c/1/69dd0249-c12c-4d64-86ce-93c1a8f714c1?authuser > $dep_file
+function get_packets {
+    mkdir -p $workdir
+    cd $workdir
 
-unzip $dep_file
-cd Dependencies
-sudo dpkg -i *.deb
+    curl -G https://storage.googleapis.com/drive-bulk-export-anonymous/20190614T094635Z/4133399871716478688/10ab227c-821c-4712-9c76-c2305cb0be1c/1/69dd0249-c12c-4d64-86ce-93c1a8f714c1?authuser > $dep_file
+}
+
+function install {
+    update
+    get_packets
+
+    unzip $dep_file
+    cd Dependencies
+    dpkg -i *.deb
+    rm -rf $workdir
+
+}
+
+check_root
+install
+exit
