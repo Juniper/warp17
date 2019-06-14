@@ -253,6 +253,8 @@ RTE_SDK. For example:
     sudo dpkg -i protobuf-c-compiler_0.15-1build1_amd64.deb
     ```
 
+__ATTENTION: Since Ubuntu trusty (14) is been dropped you can't download this packets anymore, although you can run the script in the code root `dep_install.sh` which will provide a full installation of protobuf2 untill we will support protobuf3.__
+
 ## Get WARP17
 Get the `warp17-<ver>.tgz` archive or clone the desired
 [release](https://github.com/Juniper/warp17/releases).

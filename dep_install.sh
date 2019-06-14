@@ -58,8 +58,9 @@
 source common/common.sh
 set -e
 
-workdir=/tmp/deps
-dep_file=Dependencies.zip
+workdir="/tmp/deps"
+dep_file="Dependencies.zip"
+url="https://storage.googleapis.com/drive-bulk-export-anonymous/20190614T094635Z/4133399871716478688/10ab227c-821c-4712-9c76-c2305cb0be1c/1/69dd0249-c12c-4d64-86ce-93c1a8f714c1?authuser"
 
 # Warp17 and protobuf2 dependencies
 function update {
@@ -68,20 +69,19 @@ function update {
 }
 
 function get_packets {
-    mkdir -p $workdir
     cd $workdir
-
-    curl -G https://storage.googleapis.com/drive-bulk-export-anonymous/20190614T094635Z/4133399871716478688/10ab227c-821c-4712-9c76-c2305cb0be1c/1/69dd0249-c12c-4d64-86ce-93c1a8f714c1?authuser > $dep_file
+    curl -G $url > $dep_file
+    unzip $dep_file
 }
 
 function install {
     update
+    exec_cmd "Preparing the working directory" mkdir -p $workdir
     get_packets
 
-    unzip $dep_file
     cd Dependencies
-    dpkg -i *.deb
-    rm -rf $workdir
+    exec_cmd "Installing protobuf2 packets" dpkg -i *.deb
+    exec_cmd "Cleaning the working directory" rm -rf $workdir
 
 }
 
