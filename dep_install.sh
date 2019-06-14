@@ -61,7 +61,7 @@ set -e
 sudo apt-get install build-essential libnuma-dev python ncurses-dev sudo
 
 # Protobuf2 dependencies
-sudo apt-get install zlib1g-dev
+sudo apt-get install zlib1g-dev python-pkg-resources
 # ATTENTION: this will go away once we will support Protobuf v3
 dep_file=Dependencies.zip
 workdir=/tmp/deps
@@ -69,7 +69,7 @@ workdir=/tmp/deps
 mkdir -p $workdir
 cd $workdir
 
-curl -G https://storage.googleapis.com/drive-bulk-export-anonymous/20190614T085116Z/4133399871716478688/03c93114-c414-4f6a-b443-ad474cb0a30a/1/267a930f-6296-4aae-a6a2-dfd370417a97?authuser > $dep_file
+curl -G https://storage.googleapis.com/drive-bulk-export-anonymous/20190614T094635Z/4133399871716478688/10ab227c-821c-4712-9c76-c2305cb0be1c/1/69dd0249-c12c-4d64-86ce-93c1a8f714c1?authuser > $dep_file
 
 unzip $dep_file
 cd Dependencies
