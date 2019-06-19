@@ -60,7 +60,17 @@ set -e
 
 workdir="/tmp/deps"
 dep_file="Dependencies.zip"
-url="https://storage.googleapis.com/drive-bulk-export-anonymous/20190614T094635Z/4133399871716478688/10ab227c-821c-4712-9c76-c2305cb0be1c/1/69dd0249-c12c-4d64-86ce-93c1a8f714c1?authuser"
+urls=(
+    "https://doc-0s-94-docs.googleusercontent.com/docs/securesc/ha0ro937gcuc7l7deffksulhg5h7mbp1/hp3ug5t346k6kn76virmb55ubkk84r3s/1560931200000/09252655687098329908/*/1-DG5b-zLLq3DrjykzxhAPF00qbvbSnts?e=download" 
+    "https://doc-0s-94-docs.googleusercontent.com/docs/securesc/ha0ro937gcuc7l7deffksulhg5h7mbp1/e6js7kogp3fu008pptiqv47qob6r4tgr/1560931200000/09252655687098329908/*/1-MHS78RcFdf8y4QjSEOtsjse5Cy9bfim?e=download"
+    "https://doc-14-94-docs.googleusercontent.com/docs/securesc/ha0ro937gcuc7l7deffksulhg5h7mbp1/rt0p830ai5fhr99af1usltsmqtl4j48v/1560931200000/09252655687098329908/*/1-DAQK4OJIzLaE4gcUwonmLZApYqzaP3K?e=download"
+    "https://doc-08-94-docs.googleusercontent.com/docs/securesc/ha0ro937gcuc7l7deffksulhg5h7mbp1/20pp5lhuc6bdufb5m5ipkkpl4mgra7fi/1560931200000/09252655687098329908/*/1-BK5tI-R2UPT6xf9EXhe35L_uoZQmIZb?e=download"
+    "https://doc-08-94-docs.googleusercontent.com/docs/securesc/ha0ro937gcuc7l7deffksulhg5h7mbp1/ommhcoute3ifk9fclmrrikvmkh06906o/1560931200000/09252655687098329908/*/1-Rlc1N8f3YnUmuGuTIalK3g896Mhw_lA?e=download"
+    "https://doc-0o-94-docs.googleusercontent.com/docs/securesc/ha0ro937gcuc7l7deffksulhg5h7mbp1/voa0ttn10bpolj13p295fq6ec0jkdpjm/1560931200000/09252655687098329908/*/1-2Qkq9RllXUnZGlc3_rp-3-f4o4FpbBQ?e=download"
+    "https://doc-0k-94-docs.googleusercontent.com/docs/securesc/ha0ro937gcuc7l7deffksulhg5h7mbp1/ffuuq0cp7rl26ria8kce5a7opijj195m/1560931200000/09252655687098329908/*/1--pRSs8ixWk6IqCCjVL5uqzfugLaor4x?e=download"
+    "https://doc-0k-94-docs.googleusercontent.com/docs/securesc/ha0ro937gcuc7l7deffksulhg5h7mbp1/qec6sa56oqdqfoh77fifb9t4j4t8bpll/1560931200000/09252655687098329908/*/1-T5PrlZ7JbJilwth64EscDOms1W2MScQ?e=download"
+    "https://doc-0o-94-docs.googleusercontent.com/docs/securesc/ha0ro937gcuc7l7deffksulhg5h7mbp1/32emp7voo0ksqus39gucrtrov8umlge4/1560931200000/09252655687098329908/*/1-VKIs68HtuygznHN_v4g15xEpCeZTw0u?e=download"
+)
 
 # Warp17 and protobuf2 dependencies
 function update {
@@ -70,8 +80,11 @@ function update {
 
 function get_packets {
     cd $workdir
-    curl -G $url > $dep_file
-    unzip $dep_file
+    let a=1
+    for i in ${urls[@]}; do
+        exec_cmd "Downloading $i" "curl -G $i > $a.deb"
+        let a+=1
+    done
 }
 
 function install {
@@ -79,7 +92,6 @@ function install {
     exec_cmd "Preparing the working directory" mkdir -p $workdir
     get_packets
 
-    cd Dependencies
     exec_cmd "Installing protobuf2 packets" dpkg -i *.deb
     exec_cmd "Cleaning the working directory" rm -rf $workdir
 
