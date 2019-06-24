@@ -254,7 +254,7 @@ RTE_SDK. For example:
     ```
 
 __ATTENTION: Since Ubuntu trusty (14) is been dropped you can't download
- this packets anymore, although you can run the script in the code root 
+ these packages anymore, although you can run the script in the code root 
  `dep_install.sh` which will provide a full installation of protobuf2 
  untill we will support protobuf3.__
 
