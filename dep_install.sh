@@ -106,12 +106,12 @@ function freeze_updates {
         filename=$(basename -- "$fullfile")
         extension="${filename##*.}"
         filename="${filename%.*}"
-        sudo apt-mark hold $filename
+        apt-mark hold $filename
     done
 }
 
 function install {
-    # update
+    update
     exec_cmd "Preparing the working directory" mkdir -p $workdir
     get_packets
 
