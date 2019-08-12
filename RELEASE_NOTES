@@ -33,6 +33,14 @@ KNOWN ISSUES:
 4. No IPv4 fragmentation support (neither on the send side nor on the receive
    side).
 
+5. In our scripts, starter.py for instance, we don't use a standard way of
+   defining tests or running/connecting the application itself.
+
+6. starter.py for now balance the session load on the ports only.
+
+7. We should add a new function which will suggest an optimal hw config in the
+   starter script.
+
 API CHANGES:
 
 v1.8:
