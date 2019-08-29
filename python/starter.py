@@ -682,7 +682,7 @@ def parse_test_args(args):
     port = 0
 
     if args.test_definition is None:
-        if args.example is not None:
+        if args.example is True:
             logging.warning(
                 "no test has been specified, example test will be run")
             example_test = Test()
@@ -802,5 +802,5 @@ def main():
 
 if __name__ == "__main__":
     # Set DEBUG for debug prints.
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.ERROR)
     main()
