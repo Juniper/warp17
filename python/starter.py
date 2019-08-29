@@ -407,16 +407,16 @@ class Config:
         memsocket = []
 
         if len(self._socket_list) > 1:
-            middle = False
+            first = True
             memsocket = ['--socket-mem']
             # Creating the socket-mem string per each socket.
             for socket in self._socket_list:
                 if socket.n_hugepages != 0:
-                    memsocket += "{}".format(
-                        int(socket.n_hugepages * self.hugesz))
-                    if middle is True:
+                    if first is False:
                         memsocket += ","
-                    middle = True
+                    memsocket += [str(int(socket.n_hugepages * self.hugesz /
+                                          1024))]
+                    first = False
                 else:
                     # If we have even one socket without hugepages we fallback.
                     logging.debug(
