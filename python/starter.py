@@ -135,7 +135,7 @@ class Socket:
             logging.warning(
                 "{} hugepages on socket {}".format(self._n_hugepages, self.id))
         else:
-            self._n_hugepages = int(output.split(' ')[7])
+            self._n_hugepages = int(output.split(' ')[-1])
             logging.debug(
                 "{} hugepages on socket {}".format(self._n_hugepages, self.id))
         return self._n_hugepages
@@ -316,7 +316,7 @@ class Config:
         self._hugesz = -1
         self._n_total_pkt_cores = -1
         # Memory warp17 needs reserved for it's own in MB
-        self.reserved_mem = int(args.reserved_memory[0])
+        self.reserved_mem = int(args.reserved_memory)
 
     @property
     def memory(self):
@@ -386,7 +386,7 @@ class Config:
     @staticmethod
     def _get_huge_total():
         (rc, output) = commands.getstatusoutput(GET_MEMORY_N)
-        output = output.split(' ')[7]
+        output = output.split(' ')[-1]
         logging.debug("Total Hugepages {}".format(output))
         return int(output)
 
@@ -408,7 +408,7 @@ class Config:
 
         if len(self._socket_list) > 1:
             middle = False
-            res = ['--socket-mem']
+            memsocket = ['--socket-mem']
             # Creating the socket-mem string per each socket.
             for socket in self._socket_list:
                 if socket.n_hugepages != 0:
@@ -430,6 +430,8 @@ class Config:
         if len(self._socket_list) <= 1 or len(memsocket) == 0:
             res = ['-m']
             res += [str(self.memory)]
+        else:
+            res = memsocket
         return res
 
     # You can use this function only if you've already calc the memory
