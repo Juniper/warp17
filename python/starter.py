@@ -316,13 +316,14 @@ class Config:
         self._hugesz = -1
         self._n_total_pkt_cores = -1
         # Memory warp17 needs reserved for it's own in MB
-        self.reserved_mem = int(args.reserved_memory)
+        self.reserved_mem = int(args.reserved_memory[0] if type(
+            args.reserved_memory) is list else args.reserved_memory)
 
     @property
     def memory(self):
         if self._memory is not -1:
             return self._memory
-        self._memory = int(Config._get_huge_total() * self._hugesz) / 1024
+        self._memory = int(Config._get_huge_total() * self.hugesz) / 1024
         return self._memory
 
     @property
@@ -406,11 +407,14 @@ class Config:
         res = []
         memsocket = []
 
-        if len(self._socket_list) > 1:
+        # Preventing to assign memory to socket where you don't have ports
+        socket_list = [socket for socket in self._socket_list if socket.has_ports()]
+
+        if len(socket_list) > 1:
             first = True
             memsocket = ['--socket-mem']
             # Creating the socket-mem string per each socket.
-            for socket in self._socket_list:
+            for socket in socket_list:
                 if socket.n_hugepages != 0:
                     if first is False:
                         memsocket += ","
@@ -427,7 +431,7 @@ class Config:
 
         # If we have only 1 socket or we don't have hugepages on all the
         # sockets.
-        if len(self._socket_list) <= 1 or len(memsocket) == 0:
+        if len(socket_list) <= 1 or len(memsocket) == 0:
             res = ['-m']
             res += [str(self.memory)]
         else:
