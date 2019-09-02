@@ -184,6 +184,7 @@ class Socket:
 
     @staticmethod
     def get_dpdk_drivers(port_map, given_ports):
+        warp17_nics = []
         dpdk_nics = []
 
         # Procedures to initialize dpdk data structures.
@@ -207,20 +208,8 @@ class Socket:
             if "Active" in nic.Active:
                 logging.debug("{} is {}".format(nic.Slot, nic.Active))
                 continue
-            if given_ports is None:
-                ans = raw_input(
-                    "Do you want to add {} from this pci {}?\n".format(
-                        nic.Name, nic.Slot))
-                if ans is "yes" or ans is "y":
-                    nic.warp17_id = warp17_nic_index
-                    warp17_nic_index += 1
-                    logging.debug("NIC {} added.\n".format(nic.Slot))
-                    dpdk_nics.append(nic)
-            elif nic.Slot in [wnics[0] for wnics in given_ports]:
-                nic.warp17_id = warp17_nic_index
-                warp17_nic_index += 1
-                logging.debug("NIC {} added.\n".format(nic.Slot))
-                dpdk_nics.append(nic)
+            logging.debug("NIC {} added.".format(nic.Slot))
+            dpdk_nics.append(nic)
 
         for nic in dpdk_nics:
             (rc, output) = commands.getstatusoutput(
@@ -230,19 +219,38 @@ class Socket:
                 if output is 0 or -1:
                     nic.Socket = 0
                 else:
-                    logging.debug(
-                        "nic {} is on socket {}".format(nic.Slot, output))
                     nic.Socket = int(output)
+                logging.debug("NIC {} is on {}".format(nic.Slot, nic.Socket))
             else:
                 sys.exit(rc)
 
+        if given_ports is None:
+            for nic in dpdk_nics:
+                ans = raw_input(
+                    "Do you want to add {} from this pci {}?\n".format(
+                        nic.Name, nic.Slot)).lower()
+                if ans in ["yes", "y"]:
+                    nic.warp17_id = warp17_nic_index
+                    warp17_nic_index += 1
+                    warp17_nics.append(nic)
+        else:
+            for wnics in given_ports:
+                for nic in dpdk_nics:
+                    if wnics[0] in nic.Slot:
+                        nic.warp17_id = warp17_nic_index
+                        warp17_nic_index += 1
+                        warp17_nics.append(nic)
+            if len(warp17_nics) != len(given_ports):
+                logging.error("Some ports you are trying to associate are not correct")
+                exit(-1)
+
         sockets = []
-        for nic in dpdk_nics:
+        for nic in warp17_nics:
             if nic.Socket not in sockets:
                 sockets.append(nic.Socket)
 
         for socket in sockets:
-            port_map[socket] = [port for port in dpdk_nics if
+            port_map[socket] = [port for port in warp17_nics if
                                 port.Socket is socket]
 
     @staticmethod
