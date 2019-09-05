@@ -216,7 +216,8 @@ class Socket:
                 GET_INTERFACE_NUMA_NODE % nic.Slot)
             if rc is 0:
                 # If NUMA is not supported output will be -1.
-                if output is 0 or -1:
+                print "output {}".format(output)
+                if int(output) is -1:
                     nic.Socket = 0
                 else:
                     nic.Socket = int(output)
@@ -546,15 +547,16 @@ class Config:
 
         for socket in self._socket_list:
             toberemoved_lcores = []
+            if not socket.has_ports() and socket.id is not 0:
+                continue
+            # Mgmt cores
             for lcore in socket.free_lcores:
                 if lcore in range(0, 2):
                     socket.bind_warp17_mgmt_lcores(lcore, lcore)
                     toberemoved_lcores.append(lcore)
             for lcore in toberemoved_lcores:
                 socket.free_lcores.remove(lcore)
-
-        # Pkt cores
-        for socket in self._socket_list:
+            # Pkt cores
             while socket.free_lcores:
                 lcore = socket.free_lcores.pop()
                 socket.bind_warp17_pkt_lcores(lcore, lcore)
