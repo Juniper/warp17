@@ -1,11 +1,11 @@
 # Object directories
 /build/
 
-# OSX files
-.DS_Store
+# Protobuf generated files
+/api/generated/*
 
-# Temp emacs files
-*~
+# Python Venv
+/warp17-venv/
 
 # cscope and etags files
 TAGS
@@ -26,20 +26,21 @@ cscope.in.out
 *.lib
 *.a
 
-# Sublime-text files
-*.sublime-project
-*.sublime-workspace
+# OSX files
+.DS_Store
 
-# Protobuf generated files
-/api/generated/*
-
-# Python Venv
-/warp17-venv/
+# Temp emacs files
+*~
 
 # Perl autogen
 /_Inline/
 
+# IDEs files and folders
+*.sublime-project
+*.sublime-workspace
 /.vscode/
 /.idea/
+
+# Cmake generated files
 /cmake-build-debug/
 CMakeLists.txt

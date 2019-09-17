@@ -86,9 +86,8 @@ files=(
 )
 
 # Warp17 and protobuf2 dependencies
-function update {
-    apt-get update
-    apt-get install build-essential libnuma-dev python ncurses-dev zlib1g-dev python-pkg-resources
+function dep_install {
+    apt install -y build-essential libnuma-dev python ncurses-dev zlib1g-dev python-pkg-resources
 }
 
 function get_packets {
@@ -112,6 +111,7 @@ function freeze_updates {
 
 function install {
     update
+    dep_install
     exec_cmd "Preparing the working directory" mkdir -p $workdir
     get_packets
 

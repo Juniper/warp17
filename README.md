@@ -106,157 +106,28 @@ payload) from 10 million clients which are processed on the receing side by
 ## Prerequisites
 
 Any 64 bit Linux distribution will do, however we have been testing this with
-Ubuntu Server 14.04 LTS. In addition we have made an OVF virtual machine image
+Ubuntu Server 16.04 LTS. In addition we have made an OVF virtual machine image
 available, details can be found in the respective [documentation](ovf/README.md).
 
-### Install build essential, lib Numa, python and ncurses
+### Install DPDK
+
+Run the automated script with `<version>` as 17.11.6 (the latest LTS supported by warp17)
+
 ```
-sudo apt-get install build-essential libnuma-dev python ncurses-dev
+# build_dpdk.sh -v <version>
 ```
-
-### Install DPDK 17.11.3
-
-* Download [DPDK 17.11.3](http://fast.dpdk.org/rel/dpdk-17.11.3.tar.xz)
-
-	```
-	tar xf dpdk-17.11.3.tar.xz
-	cd dpdk-stable-17.11.3
-	```
-
-* Install DPDK:
-
-	```
-	make config T=x86_64-native-linuxapp-gcc
-	make
-	sudo make install
-	```
-
-* Load the `igb_uio` DPDK module, either as shown below or by running the
-  `$RTE_SDK/usertools/dpdk-setup.sh` script and selecting option
-  `Insert IGB UIO module`:
-
-	- add the following modules to `/etc/modules`:
-
-		```
-		#
-		# DPDK additions
-		#
-		uio
-		igb_uio
-		rte_kni
-		```
-
-	- reload all modules:
-
-		```
-		sudo depmod -a
-		sudo modprobe uio
-		sudo modprobe igb_uio
-		sudo modprobe rte_kni
-		```
-
-* Enable at least 32 1G hugepages and configure them (see section 2.3.2.1 from
-the [DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/sys_reqs.html)):
-	- add the following line to `/etc/default/grub`:
-
-		```
-		GRUB_CMDLINE_LINUX="default_hugepagesz=1G hugepagesz=1G hugepages=32"
-		```
-
-   - update grub:
-
-		```
-		sudo update-grub
-		```
-
-   - reboot the machine
-
-		```
-		sudo reboot
-		```
-
-* Mount hugepages (see section 2.3.2.2 from the
-[DPDK Guide](http://dpdk.org/doc/guides/linux_gsg/sys_reqs.html)):
-    - add the mountpoint:
-
-		```
-		sudo mkdir /mnt/huge_1GB
-		```
-
-    - make the mountpoint permanent by adding to `/etc/fstab`:
-
-		```
-		nodev           /mnt/huge_1GB   hugetlbfs pagesize=1GB  0       0
-		```
-
-		- remount:
-
-		```
-		sudo mount /mnt/huge_1GB
-		```
-
-* Export the path to the DPDK SDK (where DPDK was installed) into the variable
-RTE_SDK. For example:
-
-	```
-	export RTE_SDK=/usr/local/share/dpdk
-	```
-
-* Export the target of the DPDK SDK into the variable RTE_TARGET. For example:
-
-	```
-	export RTE_TARGET=x86_64-native-linuxapp-gcc
-	```
 
 ### Install Google Protocol Buffers
 
-* First install the protobuf compilers and python libraries.
+Run `dep_install.sh` as root from the source folder
 
-	```
-	sudo apt-get install protobuf-compiler libprotobuf-dev python-protobuf
-	```
-
-* If using Ubuntu Server 14.04 LTS then just install:
-
-	```
-	sudo apt-get install libprotobuf-c0 libprotobuf-c0-dev libprotobuf8 libprotoc8 protobuf-c-compiler
-	```
-
-* Otherwise (Ubuntu version >= 15.10):
- * Install [libprotobuf-c](http://packages.ubuntu.com/trusty/amd64/libprotobuf-c0/download),
-   [libprotobuf-c-dev](http://packages.ubuntu.com/trusty/amd64/libprotobuf-c0-dev/download)
-   from Ubuntu 14.04LTS:
-
-    ```
-    sudo dpkg -i libprotobuf-c0_0.15-1build1_amd64.deb
-    sudo dpkg -i libprotobuf-c0-dev_0.15-1build1_amd64.deb
-    ```
-
- * Install [libprotobuf8](http://packages.ubuntu.com/trusty/amd64/libprotobuf8/download)
-   from Ubuntu 14.04LTS:
-
-    ```
-    sudo dpkg -i libprotobuf8_2.5.0-9ubuntu1_amd64.deb
-    ```
-
- * Install [libprotoc8](http://packages.ubuntu.com/trusty/amd64/libprotoc8/download)
-   from Ubuntu 14.04LTS:
-
-    ```
-    sudo dpkg -i libprotoc8_2.5.0-9ubuntu1_amd64.deb
-    ```
-
- * Install [protobuf-c-compiler](http://packages.ubuntu.com/trusty/amd64/protobuf-c-compiler/download)
-   from ubuntu 14.04LTS:
-
-    ```
-    sudo dpkg -i protobuf-c-compiler_0.15-1build1_amd64.deb
-    ```
-
-__ATTENTION: Since Ubuntu trusty (14) is been dropped you can't download
- these packages anymore, although you can run the script in the code root 
- `dep_install.sh` which will provide a full installation of protobuf2 
- untill we will support protobuf3.__
+```
+# dep_install.sh
+```
+ 
+__ATTENTION: This will download and install packpackagesets from unsigned source.__
+           __This is like this because we support only protobuf2 which is dropped__
+           __since ubuntu14.04 (we are planning to move on protobuf3)__
 
 ## Get WARP17
 Get the `warp17-<ver>.tgz` archive or clone the desired

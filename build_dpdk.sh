@@ -115,11 +115,39 @@ function install {
     if [[ -z $interactive ]]; then
         confirm "Installing the dpdk lib"
     fi
-    check_root
     exec_cmd "Copying igb_uio in $kernel folder" cp $1/x86_64-native-linuxapp-gcc/kmod/igb_uio.ko /lib/modules/$kernel/kernel/drivers/uio/
     exec_cmd "Generating modules and map files." depmod -a
     exec_cmd "Add uio mod" modprobe uio
     exec_cmd "Add igb_uio mod" modprobe igb_uio
+}
+
+# Install dpdk dependecies
+# ATTENTION: update at every new dpdk release supported [current state 17.11.5]
+function get_deps {
+    exec_cmd "Installing required dependecies" sudo apt install -y build-essential libnuma-dev python ncurses-dev
+}
+
+function exports {
+    RTE_SDK="$dest/$name"
+    
+    if [[ -n $SUDO_USER ]]; then
+        echo "ATTENTION"
+        echo "Run this script using command  \"sudo -E\" or I won't able to check your env"
+        if [[ -z $interactive ]]; then
+            confirm "Writing the RTE_SDK in your profile?"
+        fi
+    fi
+
+    for line in $(env); do
+        if [[ -n $(echo $line | grep $RTE_SDK) ]]; then
+            die "you've $RTE_SDK already exported"
+        fi
+        if [[ -n $(cat $HOME/.bash_profile 2>/dev/null | grep $RTE_SDK) ||
+              -n $(cat $HOME/.bashrc 2>/dev/null | grep $RTE_SDK) ]]; then
+            die "you've $RTE_SDK already written"
+        fi
+    done
+    exec_cmd "" "echo RTE_SDK=$RTE_SDK >> $HOME/.bash_profile"
 }
 
 # Skipping in case dpdk is already there
@@ -132,5 +160,9 @@ else
 
 fi
 
+check_root
+update
+get_deps
 install "$dest/$name"
+exports
 exit

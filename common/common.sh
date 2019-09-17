@@ -101,3 +101,17 @@ function usage {
     die ${usage}
     exit 1
 }
+
+# Update ubuntu
+function update {
+    confirm "Do you want to upgrade you packages?"
+    apt update
+    apt upgrade -y
+}
+
+# Debug print function that adds a counter
+#   You can also provide your message at the end
+function count_debug_print() {
+    let i=i+1
+    echo -e "I'm $i \t $@"
+}
