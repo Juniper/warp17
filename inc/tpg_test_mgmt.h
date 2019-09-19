@@ -204,6 +204,8 @@ extern tpg_rate_stats_t *test_mgmt_get_rate_stats(uint32_t eth_port,
                                                   uint32_t tc_id);
 extern tpg_app_stats_t  *test_mgmt_get_app_stats(uint32_t eth_port,
                                                  uint32_t tc_id);
+extern void test_update_state_counter(const tpg_test_case_t *test_case,
+                                      test_state_counter_t *state_counter);
 
 
 #endif /* _H_TPG_TEST_MGMT_ */

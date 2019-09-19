@@ -780,3 +780,25 @@ test_sm_function test_sm_function_array[TSTS_MAX_STATE] = {
     [TSTS_PURGED] = test_sm_SF_purged,
 };
 
+/*****************************************************************************
+ * Session Test State name array
+ ****************************************************************************/
+const char *test_sm_states_array_array[TSTS_MAX_STATE] = {
+    [TSTS_CL_TO_INIT]     = "TSTS_CL_TO_INIT",
+    [TSTS_CL_TO_OPEN]     = "TSTS_CL_TO_OPEN",
+    [TSTS_CL_OPENING]     = "TSTS_CL_OPENING",
+    [TSTS_CL_OPEN]        = "TSTS_CL_OPEN",
+    [TSTS_CL_SENDING]     = "TSTS_CL_SENDING",
+    [TSTS_CL_NO_SND_WIN]  = "TSTS_CL_NO_SND_WIN",
+    [TSTS_CL_TO_CLOSE]    = "TSTS_CL_TO_CLOSE",
+    [TSTS_CL_CLOSING]     = "TSTS_CL_CLOSING",
+    [TSTS_CL_CLOSED]      = "TSTS_CL_CLOSED",
+    [TSTS_SRV_OPENING]    = "TSTS_SRV_OPENING",
+    [TSTS_SRV_OPEN]       = "TSTS_SRV_OPEN",
+    [TSTS_SRV_SENDING]    = "TSTS_SRV_SENDING",
+    [TSTS_SRV_NO_SND_WIN] = "TSTS_SRV_NO_SND_WIN",
+    [TSTS_SRV_CLOSING]    = "TSTS_SRV_CLOSING",
+    [TSTS_SRV_CLOSED]     = "TSTS_SRV_CLOSED",
+    [TSTS_LISTEN]         = "TSTS_LISTEN",
+    [TSTS_PURGED]         = "TSTS_PURGED"
+};

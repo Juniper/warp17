@@ -1690,6 +1690,7 @@ int test_mgmt_get_vlan_sockopt(uint32_t eth_port, uint32_t test_case_id,
     vlan_load_sockopt(out, &sockopt->so_vlan);
     return 0;
 }
+
 /*****************************************************************************
  * test_mgmt_start_port()
  ****************************************************************************/
@@ -1817,7 +1818,6 @@ test_mgmt_get_test_case_app_stats(uint32_t eth_port, uint32_t test_case_id,
     *out = *test_mgmt_get_app_stats(eth_port, test_case_id);
     return 0;
 }
-
 
 /*****************************************************************************
  * test_mgmt_get_port_stats()

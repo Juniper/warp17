@@ -119,7 +119,7 @@ static tsm_function tsm_function_array[] = {
 /*****************************************************************************
  * Define statemachine state and event names
  ****************************************************************************/
-const char *stateNames[TS_MAX_STATE] = {
+const char *stateNamesTCP[TS_MAX_STATE] = {
 
     "INIT",
     "LISTEN",
@@ -419,7 +419,7 @@ int tsm_str_to_state(const char *state_str)
     tcpState_t state;
 
     for (state = 0; state < TS_MAX_STATE; state++) {
-        if (strcmp(state_str, stateNames[state]) == 0)
+        if (strcmp(state_str, stateNamesTCP[state]) == 0)
             return state;
     }
     /* Should never be reached! */

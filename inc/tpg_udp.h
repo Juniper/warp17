@@ -66,6 +66,7 @@ typedef enum udpState {
     US_LISTEN,
     US_OPEN,
     US_CLOSED,
+    US_MAX_STATE
 
 } udpState_t;
 
@@ -121,6 +122,8 @@ typedef struct udp_control_block_s {
  * Globals for tpg_udp.c
  ****************************************************************************/
 STATS_GLOBAL_DECLARE(tpg_udp_statistics_t);
+
+extern const char *stateNamesUDP[US_MAX_STATE];
 
 /*****************************************************************************
  * Externals for tpg_udp.c

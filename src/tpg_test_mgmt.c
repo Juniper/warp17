@@ -248,6 +248,7 @@ static void test_update_rates(tpg_test_case_t *test_case)
         duration = TPG_TIME_DIFF(prate_stats->rs_end_time,
                                  prate_stats->rs_start_time);
 
+
         /* Compute the averages and aggregate. */
         prate_stats->rs_estab_per_s +=
             rate_stats.rs_estab_per_s * (uint64_t)TPG_SEC_TO_USEC /
@@ -258,6 +259,77 @@ static void test_update_rates(tpg_test_case_t *test_case)
         prate_stats->rs_data_per_s +=
             rate_stats.rs_data_per_s * (uint64_t)TPG_SEC_TO_USEC /
             duration;
+    } FOREACH_CORE_IN_PORT_END()
+}
+
+/*****************************************************************************
+ * test_update_state_counter()
+ ****************************************************************************/
+void test_update_state_counter(const tpg_test_case_t *test_case,
+                                test_state_counter_t *state_counter)
+{
+    test_state_counter_t tci_state;
+    int               error = 0;
+    uint32_t          core;
+    MSG_LOCAL_DEFINE(test_case_rates_req_msg_t, smsg);
+
+    bzero(state_counter, sizeof(test_state_counter_t));
+
+    FOREACH_CORE_IN_PORT_START(core, test_case->tc_eth_port) {
+        msg_t                      *msgp;
+        test_case_states_req_msg_t *stats_msg;
+        uint32_t                   state;
+
+        /* Skip non-packet cores */
+        if (!cfg_is_pkt_core(core))
+            continue;
+
+        bzero(&tci_state, sizeof(tci_state));
+
+        msgp = MSG_LOCAL(smsg);
+        msg_init(msgp, MSG_TEST_CASE_STATES_REQ, core, 0);
+
+        stats_msg = MSG_INNER(test_case_states_req_msg_t, msgp);
+        stats_msg->tcsrm_eth_port = test_case->tc_eth_port;
+        stats_msg->tcsrm_test_case_id = test_case->tc_id;
+        stats_msg->tcsrm_test_state_counter = &tci_state;
+
+        /* BLOCK waiting for msg to be processed */
+        error = msg_send(msgp, 0);
+        if (error) {
+            TPG_ERROR_ABORT("ERROR: Failed to send state req msg: %s(%d)!\n",
+                            rte_strerror(-error), -error);
+        }
+
+        state_counter->tos_to_init_cbs += tci_state.tos_to_init_cbs;
+        state_counter->tos_to_open_cbs += tci_state.tos_to_open_cbs;
+        state_counter->tos_to_close_cbs += tci_state.tos_to_close_cbs;
+        state_counter->tos_to_send_cbs += tci_state.tos_to_send_cbs;
+        state_counter->tos_closed_cbs += tci_state.tos_closed_cbs;
+
+        for (state = 0; state < TSTS_MAX_STATE; ++state) {
+            state_counter->test_states_from_test[state] +=
+                    tci_state.test_states_from_test[state];
+            state_counter->test_states_from_tcp[state] += tci_state
+                .test_states_from_tcp[state];
+            state_counter->test_states_from_udp[state] += tci_state
+                .test_states_from_udp[state];
+        }
+
+        for (state = 0; state < TS_MAX_STATE; ++state) {
+            state_counter->tcp_states_from_test[state] +=
+                    tci_state.tcp_states_from_test[state];
+            state_counter->tcp_states_from_tcp[state] += tci_state
+                .tcp_states_from_tcp[state];
+            if (state == TS_SYN_RECV &&
+                (tci_state.tcp_states_from_test[state] != 0))
+                RTE_LOG(INFO, USER1, "core %d has %d TS_SYN_RECV\n", core,
+                        tci_state.tcp_states_from_test[state]);
+        }
+
+        for (state = 0; state < US_MAX_STATE; ++state)
+            state_counter->udp_states_from_udp[state] += tci_state
+                .udp_states_from_udp[state];
     } FOREACH_CORE_IN_PORT_END()
 }
 

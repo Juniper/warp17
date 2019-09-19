@@ -314,6 +314,78 @@ cmdline_parse_inst_t cmd_show_tests_ui = {
     },
 };
 
+#if defined(TPG_DEBUG)
+/****************************************************************************
+ * - "show tests debug info port <eth_port> test-case-id <tcid>"
+ ****************************************************************************/
+struct cmd_show_tests_debug_info_result {
+    cmdline_fixed_string_t show;
+    cmdline_fixed_string_t tests;
+    cmdline_fixed_string_t debug;
+    cmdline_fixed_string_t info;
+    cmdline_fixed_string_t port_kw;
+    uint32_t               port;
+    cmdline_fixed_string_t tcid_kw;
+    uint32_t               tcid;
+};
+
+static cmdline_parse_token_string_t cmd_show_tests_debug_info_T_show =
+    TOKEN_STRING_INITIALIZER(struct cmd_show_tests_debug_info_result, show, "show");
+static cmdline_parse_token_string_t cmd_show_tests_debug_info_T_tests =
+    TOKEN_STRING_INITIALIZER(struct cmd_show_tests_debug_info_result, tests, "tests");
+static cmdline_parse_token_string_t cmd_show_tests_debug_info_T_debug =
+    TOKEN_STRING_INITIALIZER(struct cmd_show_tests_debug_info_result, debug, "debug");
+static cmdline_parse_token_string_t cmd_show_tests_debug_info_T_info =
+    TOKEN_STRING_INITIALIZER(struct cmd_show_tests_debug_info_result, info, "info");
+static cmdline_parse_token_string_t cmd_show_tests_debug_info_T_port_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_show_tests_debug_info_result, port_kw, "port");
+static cmdline_parse_token_num_t cmd_show_tests_debug_info_T_port =
+    TOKEN_NUM_INITIALIZER(struct cmd_show_tests_debug_info_result, port, UINT32);
+static cmdline_parse_token_string_t cmd_show_tests_debug_info_T_tcid_kw =
+    TOKEN_STRING_INITIALIZER(struct cmd_show_tests_debug_info_result, tcid_kw, "test-case-id");
+static cmdline_parse_token_num_t cmd_show_tests_debug_info_T_tcid =
+    TOKEN_NUM_INITIALIZER(struct cmd_show_tests_debug_info_result, tcid, UINT32);
+
+
+static void cmd_show_tests_debug_info_parsed(void *parsed_result,
+                                             struct cmdline *cl __rte_unused,
+                                             void *data __rte_unused)
+{
+    printer_arg_t                            parg;
+    tpg_test_case_t                          tc;
+    struct cmd_show_tests_debug_info_result *pr;
+
+
+    parg = TPG_PRINTER_ARG(cli_printer, cl);
+    pr = parsed_result;
+
+    if (test_mgmt_get_test_case_cfg(pr->port, pr->tcid, &tc, &parg) != 0)
+        return;
+
+    cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" Counters:\n",
+        pr->port, pr->tcid);
+
+    test_debug_show_counters(&tc, &parg);
+
+}
+cmdline_parse_inst_t cmd_show_tests_debug_info = {
+    .f = cmd_show_tests_debug_info_parsed,
+    .data = NULL,
+    .help_str = "show tests debug info port <eth_port> test-case-id <tcid>",
+    .tokens = {
+        (void *)&cmd_show_tests_debug_info_T_show,
+        (void *)&cmd_show_tests_debug_info_T_tests,
+        (void *)&cmd_show_tests_debug_info_T_debug,
+        (void *)&cmd_show_tests_debug_info_T_info,
+        (void *)&cmd_show_tests_debug_info_T_port_kw,
+        (void *)&cmd_show_tests_debug_info_T_port,
+        (void *)&cmd_show_tests_debug_info_T_tcid_kw,
+        (void *)&cmd_show_tests_debug_info_T_tcid,
+        NULL,
+    },
+};
+#endif /*defined(TPG_DEBUG)*/
+
 /****************************************************************************
  * - "show tests config"
  ****************************************************************************/
@@ -2670,6 +2742,9 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_stop,
     &cmd_clear_stats,
     &cmd_show_tests_ui,
+#if defined(TPG_DEBUG)
+    &cmd_show_tests_debug_info,
+#endif /*defined(TPG_DEBUG)*/
     &cmd_show_link_rate,
     &cmd_show_tests_config,
     &cmd_show_tests_state,

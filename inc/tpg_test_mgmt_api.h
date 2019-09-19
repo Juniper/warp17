@@ -378,6 +378,16 @@ test_mgmt_get_test_case_app_stats(uint32_t eth_port, uint32_t test_case_id,
                                   printer_arg_t *printer_arg);
 
 /*
+ * Returns:
+ *  -ENOENT: test_case_id not found.
+ *  0 on success
+ */
+extern __tpg_api_func int
+test_mgmt_get_test_case_state_counter(uint32_t eth_port, uint32_t test_case_id,
+                                      test_state_counter_t *out,
+                                      printer_arg_t *printer_arg);
+
+/*
 * Returns:
 *  -EINVAL: port not valid.
 *  0 on success

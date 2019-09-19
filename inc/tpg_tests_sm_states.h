@@ -129,5 +129,10 @@ typedef enum {
 
 } test_sm_event_t;
 
+/*****************************************************************************
+ * Externs for tpg_tests_sm_states.h
+ ****************************************************************************/
+const char *test_sm_states_array_array[TSTS_MAX_STATE];
+
 #endif /* _H_TPG_TESTS_SM_STATES_ */
 

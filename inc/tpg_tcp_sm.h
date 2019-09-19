@@ -133,7 +133,7 @@ typedef struct tsm_data_arg_s {
  * Globals for tpg_tcp_sm.c
  ****************************************************************************/
 
-extern const char *stateNames[TS_MAX_STATE];
+extern const char *stateNamesTCP[TS_MAX_STATE];
 
 /*****************************************************************************
  * Static inlines for tpg_tcp_sm.
@@ -147,7 +147,7 @@ static inline const char *tsm_get_state_str(tcpState_t state)
     if (state >= TS_MAX_STATE)
         return "<unknown>";
 
-    return stateNames[state];
+    return stateNamesTCP[state];
 }
 
 /*****************************************************************************

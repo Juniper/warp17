@@ -68,6 +68,17 @@
 STATS_DEFINE(tpg_udp_statistics_t);
 
 /*****************************************************************************
+ * Define statemachine state and event names
+ ****************************************************************************/
+const char *stateNamesUDP[US_MAX_STATE] = {
+
+    "US_INIT",
+    "US_LISTEN",
+    "US_OPEN",
+    "US_CLOSED"
+};
+
+/*****************************************************************************
  * Forward declarations
  ****************************************************************************/
 static cmdline_parse_ctx_t cli_ctx[];
