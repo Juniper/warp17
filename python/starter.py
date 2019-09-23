@@ -135,7 +135,7 @@ class Socket:
             logging.warning(
                 "{} hugepages on socket {}".format(self._n_hugepages, self.id))
         else:
-            self._n_hugepages = int(output.split(' ')[7])
+            self._n_hugepages = int(output.split(' ')[-1])
             logging.debug(
                 "{} hugepages on socket {}".format(self._n_hugepages, self.id))
         return self._n_hugepages
@@ -184,6 +184,7 @@ class Socket:
 
     @staticmethod
     def get_dpdk_drivers(port_map, given_ports):
+        warp17_nics = []
         dpdk_nics = []
 
         # Procedures to initialize dpdk data structures.
@@ -207,42 +208,49 @@ class Socket:
             if "Active" in nic.Active:
                 logging.debug("{} is {}".format(nic.Slot, nic.Active))
                 continue
-            if given_ports is None:
-                ans = raw_input(
-                    "Do you want to add {} from this pci {}?\n".format(
-                        nic.Name, nic.Slot))
-                if ans is "yes" or ans is "y":
-                    nic.warp17_id = warp17_nic_index
-                    warp17_nic_index += 1
-                    logging.debug("NIC {} added.\n".format(nic.Slot))
-                    dpdk_nics.append(nic)
-            elif nic.Slot in [wnics[0] for wnics in given_ports]:
-                nic.warp17_id = warp17_nic_index
-                warp17_nic_index += 1
-                logging.debug("NIC {} added.\n".format(nic.Slot))
-                dpdk_nics.append(nic)
+            logging.debug("NIC {} added.".format(nic.Slot))
+            dpdk_nics.append(nic)
 
         for nic in dpdk_nics:
             (rc, output) = commands.getstatusoutput(
                 GET_INTERFACE_NUMA_NODE % nic.Slot)
             if rc is 0:
                 # If NUMA is not supported output will be -1.
-                if output is 0 or -1:
+                if int(output) is -1:
                     nic.Socket = 0
                 else:
-                    logging.debug(
-                        "nic {} is on socket {}".format(nic.Slot, output))
                     nic.Socket = int(output)
+                logging.debug("NIC {} is on {}".format(nic.Slot, nic.Socket))
             else:
                 sys.exit(rc)
 
+        if given_ports is None:
+            for nic in dpdk_nics:
+                ans = raw_input(
+                    "Do you want to add {} from this pci {}?\n".format(
+                        nic.Name, nic.Slot)).lower()
+                if ans in ["yes", "y"]:
+                    nic.warp17_id = warp17_nic_index
+                    warp17_nic_index += 1
+                    warp17_nics.append(nic)
+        else:
+            for wnics in given_ports:
+                for nic in dpdk_nics:
+                    if wnics[0] in nic.Slot:
+                        nic.warp17_id = warp17_nic_index
+                        warp17_nic_index += 1
+                        warp17_nics.append(nic)
+            if len(warp17_nics) != len(given_ports):
+                logging.error("Some ports you are trying to associate are not correct")
+                exit(-1)
+
         sockets = []
-        for nic in dpdk_nics:
+        for nic in warp17_nics:
             if nic.Socket not in sockets:
                 sockets.append(nic.Socket)
 
         for socket in sockets:
-            port_map[socket] = [port for port in dpdk_nics if
+            port_map[socket] = [port for port in warp17_nics if
                                 port.Socket is socket]
 
     @staticmethod
@@ -316,13 +324,14 @@ class Config:
         self._hugesz = -1
         self._n_total_pkt_cores = -1
         # Memory warp17 needs reserved for it's own in MB
-        self.reserved_mem = int(args.reserved_memory[0])
+        self.reserved_mem = int(args.reserved_memory[0] if type(
+            args.reserved_memory) is list else args.reserved_memory)
 
     @property
     def memory(self):
         if self._memory is not -1:
             return self._memory
-        self._memory = int(Config._get_huge_total() * self._hugesz) / 1024
+        self._memory = int(Config._get_huge_total() * self.hugesz) / 1024
         return self._memory
 
     @property
@@ -386,7 +395,7 @@ class Config:
     @staticmethod
     def _get_huge_total():
         (rc, output) = commands.getstatusoutput(GET_MEMORY_N)
-        output = output.split(' ')[7]
+        output = output.split(' ')[-1]
         logging.debug("Total Hugepages {}".format(output))
         return int(output)
 
@@ -406,17 +415,20 @@ class Config:
         res = []
         memsocket = []
 
-        if len(self._socket_list) > 1:
-            middle = False
-            res = ['--socket-mem']
+        # Preventing to assign memory to socket where you don't have ports
+        socket_list = [socket for socket in self._socket_list if socket.has_ports()]
+
+        if len(socket_list) > 1:
+            first = True
+            memsocket = ['--socket-mem']
             # Creating the socket-mem string per each socket.
-            for socket in self._socket_list:
+            for socket in socket_list:
                 if socket.n_hugepages != 0:
-                    memsocket += "{}".format(
-                        int(socket.n_hugepages * self.hugesz))
-                    if middle is True:
+                    if first is False:
                         memsocket += ","
-                    middle = True
+                    memsocket += [str(int(socket.n_hugepages * self.hugesz /
+                                          1024))]
+                    first = False
                 else:
                     # If we have even one socket without hugepages we fallback.
                     logging.debug(
@@ -427,9 +439,11 @@ class Config:
 
         # If we have only 1 socket or we don't have hugepages on all the
         # sockets.
-        if len(self._socket_list) <= 1 or len(memsocket) == 0:
+        if len(socket_list) <= 1 or len(memsocket) == 0:
             res = ['-m']
             res += [str(self.memory)]
+        else:
+            res = memsocket
         return res
 
     # You can use this function only if you've already calc the memory
@@ -532,15 +546,16 @@ class Config:
 
         for socket in self._socket_list:
             toberemoved_lcores = []
+            if not socket.has_ports() and socket.id is not 0:
+                continue
+            # Mgmt cores
             for lcore in socket.free_lcores:
                 if lcore in range(0, 2):
                     socket.bind_warp17_mgmt_lcores(lcore, lcore)
                     toberemoved_lcores.append(lcore)
             for lcore in toberemoved_lcores:
                 socket.free_lcores.remove(lcore)
-
-        # Pkt cores
-        for socket in self._socket_list:
+            # Pkt cores
             while socket.free_lcores:
                 lcore = socket.free_lcores.pop()
                 socket.bind_warp17_pkt_lcores(lcore, lcore)
@@ -680,7 +695,7 @@ def parse_test_args(args):
     port = 0
 
     if args.test_definition is None:
-        if args.example is not None:
+        if args.example is True:
             logging.warning(
                 "no test has been specified, example test will be run")
             example_test = Test()
@@ -800,5 +815,5 @@ def main():
 
 if __name__ == "__main__":
     # Set DEBUG for debug prints.
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.ERROR)
     main()
