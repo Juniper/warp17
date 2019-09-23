@@ -216,7 +216,6 @@ class Socket:
                 GET_INTERFACE_NUMA_NODE % nic.Slot)
             if rc is 0:
                 # If NUMA is not supported output will be -1.
-                print "output {}".format(output)
                 if int(output) is -1:
                     nic.Socket = 0
                 else:
