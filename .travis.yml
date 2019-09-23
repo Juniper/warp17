@@ -63,7 +63,7 @@ env:
 cache:
   directories:
     - ./build
-    - /opt/dpdk-17.11.3/*
+    - $RTE_SDK
     - $HOME/.cache/pip
 
 before_install:

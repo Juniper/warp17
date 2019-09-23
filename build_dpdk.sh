@@ -124,7 +124,7 @@ function install {
 # Install dpdk dependecies
 # ATTENTION: update at every new dpdk release supported [current state 17.11.5]
 function get_deps {
-    exec_cmd "Installing required dependecies" sudo apt install -y build-essential libnuma-dev python ncurses-dev
+    exec_cmd "Installing required dependecies" sudo apt install -y build-essential libnuma-dev python ncurses-dev linux-headers-$(uname -r)
 }
 
 function exports {

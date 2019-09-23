@@ -104,10 +104,9 @@ function usage {
 
 # Update ubuntu
 function update {
-    if [[ -n $interactive ]]; then
-        return
+    if [[ -z $interactive ]]; then
+        confirm "Do you want to upgrade you packages?"
     fi
-    confirm "Do you want to upgrade you packages?"
     apt update
     apt upgrade -y
 }
