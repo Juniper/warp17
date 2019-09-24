@@ -140,11 +140,13 @@ function exports {
 
     for line in $(env); do
         if [[ -n $(echo $line | grep $RTE_SDK) ]]; then
-            die "you've $RTE_SDK already exported"
+            echo "you've $RTE_SDK already exported"
+            return
         fi
         if [[ -n $(cat $HOME/.bash_profile 2>/dev/null | grep $RTE_SDK) ||
               -n $(cat $HOME/.bashrc 2>/dev/null | grep $RTE_SDK) ]]; then
-            die "you've $RTE_SDK already written"
+            echo "you've $RTE_SDK already written"
+            return
         fi
     done
     exec_cmd "" "echo RTE_SDK=$RTE_SDK >> $HOME/.bash_profile"
