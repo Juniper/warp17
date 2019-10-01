@@ -121,6 +121,20 @@ function install {
 
 }
 
+while getopts "n:i" opt; do
+    case $opt in
+    n)
+        dry_run=1
+        ;;
+    i)
+        interactive=1
+        ;;
+    \?)
+        usage $0
+        ;;
+    esac
+done
+
 check_root
 install
 exit

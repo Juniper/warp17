@@ -124,7 +124,7 @@ function install {
 # Install dpdk dependecies
 # ATTENTION: update at every new dpdk release supported [current state 17.11.5]
 function get_deps {
-    exec_cmd "Installing required dependecies" sudo apt install -y build-essential libnuma-dev python ncurses-dev
+    exec_cmd "Installing required dependecies" sudo apt install -y build-essential libnuma-dev python ncurses-dev linux-headers-$(uname -r)
 }
 
 function exports {
@@ -140,11 +140,13 @@ function exports {
 
     for line in $(env); do
         if [[ -n $(echo $line | grep $RTE_SDK) ]]; then
-            die "you've $RTE_SDK already exported"
+            echo "you've $RTE_SDK already exported"
+            return
         fi
         if [[ -n $(cat $HOME/.bash_profile 2>/dev/null | grep $RTE_SDK) ||
               -n $(cat $HOME/.bashrc 2>/dev/null | grep $RTE_SDK) ]]; then
-            die "you've $RTE_SDK already written"
+            echo "you've $RTE_SDK already written"
+            return
         fi
     done
     exec_cmd "" "echo RTE_SDK=$RTE_SDK >> $HOME/.bash_profile"
@@ -153,16 +155,15 @@ function exports {
 # Skipping in case dpdk is already there
 if [[ -d "$dest/$name/x86_64-native-linuxapp-gcc/build" ]]; then
     echo dpdk-$ver is already there
-else
-    rm -rf $dest/$name
-    get $dest $tmp
-    build "$dest/$name" x86_64-native-linuxapp-gcc $jobs
-
+    install "$dest/$name"
+    return
 fi
 
 check_root
 update
 get_deps
+get $dest $tmp
+build "$dest/$name" x86_64-native-linuxapp-gcc $jobs
 install "$dest/$name"
 exports
 exit

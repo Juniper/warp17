@@ -104,9 +104,13 @@ function usage {
 
 # Update ubuntu
 function update {
-    confirm "Do you want to upgrade you packages?"
+    if [[ -z $interactive ]]; then
+        confirm "Do you want to upgrade you packages?"
+    fi
     apt update
-    apt upgrade -y
+    if [[ -z $TRAVIS ]]; then
+        apt upgrade -y
+    fi
 }
 
 # Debug print function that adds a counter
