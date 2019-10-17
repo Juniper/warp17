@@ -410,6 +410,14 @@ static void test_sm_SF_client_to_close(l4_control_block_t *l4_cb,
         test_sm_enter_state(l4_cb, TSTS_PURGED, ctx);
         break;
 
+    case TSTE_SND_WIN:
+    case TSTE_NO_SND_WIN:
+        /* Might be that we already moved to OPEN because we managed to fit
+         * the application data so (by filling the tcp send window) ignore
+         * this notification.
+         */
+        break;
+
     default:
         assert(false);
         break;
