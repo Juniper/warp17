@@ -120,6 +120,10 @@ class Test():
 
         self.l4_ccfg = L4Client()
 
+        self.init_delay = Delay(d_value=0)
+        self.uptime = Delay()
+        self.downtime = Delay(d_value=0)
+
         self.ccfg = TestCase()
         self.sr_test_criteria = TestCriteria(tc_crit_type=SRV_UP, tc_srv_up=1)
 
@@ -128,6 +132,71 @@ class Test():
         self.cl_port = 0
         self.sr_port = 1
         self.tc_id = 0
+
+    def __del__(self):
+        self.l3_config = None
+        self.l4_config = None
+        self.rate_ccfg = None
+        self.app_ccfg = None
+
+        self.l4_ccfg = None
+
+        self.init_delay = None
+        self.uptime = None
+        self.downtime = None
+
+        self.ccfg = None
+        self.sr_test_criteria = None
+
+        self.l4_scfg = None
+        self.scfg = None
+        self.cl_port = None
+        self.sr_port = None
+        self.tc_id = None
+
+    def init_single(self, type, port, id):
+        self.__del__()
+        # l3_config = {
+        #     port : [
+        #         def_gw,
+        #         n_ip]
+        # }
+        self.l3_config = {
+            0: [0,
+                1],
+            1: [0,
+                1]
+        }
+        # self.l4_config = {
+        #     port: n_ports
+        # }
+        self.l4_config = {
+            0: 1,
+            1: 1,
+        }
+        if type is TestCaseType(CLIENT):
+            self.rate_ccfg = RateClient(rc_open_rate=Rate(),
+                                        rc_close_rate=Rate(),
+                                        rc_send_rate=Rate())
+            self.app_ccfg = App()
+
+            self.l4_ccfg = L4Client()
+
+            self.init_delay = Delay(d_value=0)
+            self.uptime = Delay()
+            self.downtime = Delay(d_value=0)
+
+            self.ccfg = TestCase()
+            self.cl_port = port
+        if type is TestCaseType(SERVER):
+            self.sr_test_criteria = TestCriteria(tc_crit_type=SRV_UP, tc_srv_up=1)
+
+            self.l4_scfg = L4Server()
+            self.scfg = TestCase()
+            self.sr_port = port
+        else:
+            raise BaseException("Wrong test type.")
+        self.tc_id = id
 
     def add_l3(self, port, def_gw, n_ip):
         self.l3_config[port] = [def_gw, n_ip]
@@ -151,8 +220,6 @@ class Test():
                                     tuc_sports=b2b_ports(self.l4_config[0]),
                                     tuc_dports=b2b_ports(self.l4_config[1])))
 
-        uptime_delay = Delay(d_value=2)
-        downtime_delay = Delay(d_value=0)
         self.ccfg = TestCase(tc_type=CLIENT, tc_eth_port=self.cl_port,
                              tc_id=self.tc_id,
                              tc_client=Client(cl_src_ips=cl_src_ips,
@@ -160,8 +227,9 @@ class Test():
                                               cl_l4=self.l4_ccfg,
                                               cl_rates=self.rate_ccfg),
                              tc_app=self.app_ccfg,
-                             tc_uptime=uptime_delay,
-                             tc_downtime=downtime_delay,
+                             tc_init_delay=self.init_delay,
+                             tc_uptime=self.uptime,
+                             tc_downtime=self.downtime,
                              tc_criteria=self.cl_test_criteria)
         warp17_call('ConfigureTestCase', self.ccfg)
 
@@ -188,7 +256,7 @@ class Test():
         status = []
         stats = []
         tstamps = []
-        sleep(5)
+        sleep(2) # wait for test to be fully running before start colleting stats
         while times >= 0:
             status1 = {}
             stats1 = {}
@@ -277,7 +345,6 @@ def collect_stats(logwriter, localenv):
 
     try:
         oarg = Warp17OutputArgs(out_file=log_file)
-        # pdb.set_trace()
         proc = warp17_start(env=localenv, exec_file=bin, output_args=oarg)
 
     except BaseException as E:
@@ -296,7 +363,7 @@ def collect_stats(logwriter, localenv):
             stats1 = stats[i]
             status1 = status[i]
             tstamps1 = tstamps[i]
-            message = "timestamp: {} ".format(tstamps1)
+            message = "timestamp={},".format(tstamps1)
             
             
             for port in (test.cl_port, test.sr_port):
@@ -306,10 +373,11 @@ def collect_stats(logwriter, localenv):
 
                 tx_usage = min(float(phystats.pys_tx_bytes) * 100 / link_speed_bytes, 100.0)
                 rx_usage = min(float(phystats.pys_rx_bytes) * 100 / link_speed_bytes, 100.0)
-                message += "pys_rx_bytes {} ".format(rx_usage)
-                message += "pys_tx_bytes {} ".format(tx_usage)
-                message += "gs_estab {} ".format(statusstats.gs_estab)
-                message += "\n"
+                message += "port={},".format(port)
+                message += "rx_usage={},".format(rx_usage)
+                message += "tx_usage={},".format(tx_usage)
+                message += "gs_estab={},".format(statusstats.gs_estab)
+            message += "\n"
             logwriter.write(message)
             i += 1
 
@@ -369,10 +437,15 @@ def test_throughoput():
 
     test_thr.app_ccfg = App(app_proto=RAW_CLIENT,
                             app_raw_client=RawClient(rc_req_plen=80000,
-                                                     rc_resp_plen=0))
+                                                     rc_resp_plen=80000))
     test_thr.app_scfg = App(app_proto=RAW_SERVER,
                             app_raw_server=RawServer(rs_req_plen=80000,
-                                                     rs_resp_plen=0))
+                                                     rs_resp_plen=80000))
+
+    test_thr.tc_init_delay = Delay(d_value=0)
+    test_thr.tc_uptime = Delay(d_value=1)
+    test_thr.tc_downtime = Delay(d_value=0)
+
 
     start_memory = int(env.get_memory())
 
@@ -384,9 +457,9 @@ def test_throughoput():
     return test_thr, start_memory, out_folder, localenv
 
 tests = []
-#tests.append(test_throughoput())
-tests.append(test_10m_sessions())
-
+tests.append(test_throughoput())
+# tests.append(test_10m_sessions())
+# TODO: bug when we try to set
 for test, start_memory, out_folder, localenv in tests:
     # test, start_memory, out_folder = test_throughoput()  # set your test here
     res_file = "{}res.txt".format(out_folder)
