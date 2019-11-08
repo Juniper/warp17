@@ -94,68 +94,7 @@ bin = "{}/build/warp17".format(local_dir)
 
 class Test():
 
-    def __init__(self):
-        # l3_config = {
-        #     port : [
-        #         def_gw,
-        #         n_ip]
-        # }
-        self.l3_config = {
-            0: [0,
-                1],
-            1: [0,
-                1]
-        }
-        # self.l4_config = {
-        #     port: n_ports
-        # }
-        self.l4_config = {
-            0: 1,
-            1: 1,
-        }
-        self.rate_ccfg = RateClient(rc_open_rate=Rate(),
-                                    rc_close_rate=Rate(),
-                                    rc_send_rate=Rate())
-        self.app_ccfg = App()
-
-        self.l4_ccfg = L4Client()
-
-        self.init_delay = Delay(d_value=0)
-        self.uptime = Delay()
-        self.downtime = Delay(d_value=0)
-
-        self.ccfg = TestCase()
-        self.sr_test_criteria = TestCriteria(tc_crit_type=SRV_UP, tc_srv_up=1)
-
-        self.l4_scfg = L4Server()
-        self.scfg = TestCase()
-        self.cl_port = 0
-        self.sr_port = 1
-        self.tc_id = 0
-        test_type = None
-
-    def __del__(self):
-        self.l3_config = None
-        self.l4_config = None
-        self.rate_ccfg = None
-        self.app_ccfg = None
-
-        self.l4_ccfg = None
-
-        self.init_delay = None
-        self.uptime = None
-        self.downtime = None
-
-        self.ccfg = None
-        self.sr_test_criteria = None
-
-        self.l4_scfg = None
-        self.scfg = None
-        self.cl_port = None
-        self.sr_port = None
-        self.tc_id = None
-
-    def __init__(self, type, port, id):
+    def __init__(self, type=None, port=None, id=None):
         # l3_config = {
         #     port : [
         #         def_gw,
@@ -188,16 +127,39 @@ class Test():
 
             self.ccfg = TestCase()
             self.cl_port = port
+            self.tc_id = id
+            self.test_type = type
         elif type is TestCaseType.Value('SERVER'):
             self.sr_test_criteria = TestCriteria(tc_crit_type=SRV_UP, tc_srv_up=1)
 
             self.l4_scfg = L4Server()
             self.scfg = TestCase()
             self.sr_port = port
+            self.tc_id = id
+            self.test_type = type
+        elif type is None and port is None and id is None:
+            self.rate_ccfg = RateClient(rc_open_rate=Rate(),
+                                        rc_close_rate=Rate(),
+                                        rc_send_rate=Rate())
+            self.app_ccfg = App()
+
+            self.l4_ccfg = L4Client()
+
+            self.init_delay = Delay(d_value=0)
+            self.uptime = Delay()
+            self.downtime = Delay(d_value=0)
+
+            self.ccfg = TestCase()
+            self.sr_test_criteria = TestCriteria(tc_crit_type=SRV_UP, tc_srv_up=1)
+
+            self.l4_scfg = L4Server()
+            self.scfg = TestCase()
+            self.cl_port = 0
+            self.sr_port = 1
+            self.tc_id = 0
+            self.test_type = None
         else:
             raise BaseException("Wrong test type.")
-        self.tc_id = id
-        self.test_type = type
 
     def add_l3(self, port, def_gw, n_ip):
         self.l3_config[port] = [def_gw, n_ip]
@@ -359,6 +321,8 @@ def collect_stats(logwriter, localenv, test_list):
     try:
         warp17_wait(localenv)
 
+        n_samples = 10
+        sample = 0
         status = []
         stats = []
         tstamps = []
@@ -367,24 +331,24 @@ def collect_stats(logwriter, localenv, test_list):
         for test in test_list:
             test.add_config()
             test.start()
-        for times in range(0, 10):
-            sleep(2) # wait for test to be fully running before start colleting stats
-            while times >= 0:
-                status1 = {}
-                stats1 = {}
-                for port in range(0, 1):
-                    status1[port] = warp17_call('GetTestStatus',
-                                                TestCaseArg(tca_eth_port=port,
-                                                            tca_test_case_id=0))
-                    stats1[port] = warp17_call('GetStatistics',
-                                               TestCaseArg(tca_eth_port=port,
-                                                           tca_test_case_id=0))
-                    tstamp1 = time.time()
-                status.append(status1)
-                stats.append(stats1)
-                tstamps.append(tstamp1)
-                time.sleep(1)
-                times -= 1
+
+        sleep(2)  # wait for test to be fully running before start colleting stats
+        while sample <= n_samples:
+            status1 = {}
+            stats1 = {}
+            for port in range(0, 1):
+                status1[port] = warp17_call('GetTestStatus',
+                                            TestCaseArg(tca_eth_port=port,
+                                                        tca_test_case_id=0))
+                stats1[port] = warp17_call('GetStatistics',
+                                           TestCaseArg(tca_eth_port=port,
+                                                       tca_test_case_id=0))
+                tstamp1 = time.time()
+            status.append(status1)
+            stats.append(stats1)
+            tstamps.append(tstamp1)
+            time.sleep(1)
+            sample += 1
 
         for test in test_list:
             test.stop()
@@ -416,7 +380,6 @@ def collect_stats(logwriter, localenv, test_list):
 
     except BaseException as E:
         print("Error occurred: {}".format(E))
-        # pass
 
     return
 
@@ -451,7 +414,7 @@ def test_10m_sessions():
 
     out_folder = "/tmp/10m-test-{}/".format(get_uniq_stamp())
 
-    return test_10m, start_memory, out_folder, localenv
+    return [test_10m], start_memory, out_folder, localenv
 
 def test_throughput():
     """Configures a test that fulfill the 100Gb/s nic"""
@@ -558,7 +521,7 @@ for test, start_memory, out_folder, localenv in tests:
         os.mkdir(out_folder)
     print "Logs and outputs in " + out_folder
     resultwriter = open(res_file, "w")
-    resultwriter.write("Start binary search {}\n".format(datetime.today()))
+    resultwriter.write("Stats collection:_{}\n".format(datetime.today()))
     for i in range (0, 1):
         print "run {}".format(i)
         resultwriter.write("Run {}\n".format(i))
