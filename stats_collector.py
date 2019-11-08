@@ -64,7 +64,6 @@ import os
 from warp17_api import *
 import socket
 import time
-import os
 
 from rpc_impl import *
 from functools import partial
@@ -165,25 +164,23 @@ class Test():
         self.l3_config[port] = [def_gw, n_ip]
 
     def add_config(self):
-        for port in self.l3_config:
-            def_gw, n_ip = self.l3_config[port]
-            pcfg = b2b_port_add(port, def_gw=Ip(ip_version=IPV4, ip_v4=def_gw))
+        # TODO: enable multiple server/client tests
+        if self.test_type is TestCaseType.Value('CLIENT'):
+
+            def_gw, n_ip = self.l3_config[self.cl_port]
+            pcfg = b2b_port_add(self.cl_port, def_gw=Ip(ip_version=IPV4, ip_v4=def_gw))
             b2b_port_add_intfs(pcfg,
-                               [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(port, i)),
-                                 Ip(ip_version=IPV4, ip_v4=b2b_mask(port, i)),
-                                 b2b_count(port, i)) for i in range(0, 1)])
+                               [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(self.cl_port, i)),
+                                 Ip(ip_version=IPV4, ip_v4=b2b_mask(self.cl_port, i)),
+                                 b2b_count(self.cl_port, i)) for i in range(0, 1)])
             warp17_call('ConfigurePort', pcfg)
 
-        cl_src_ips = b2b_sips(self.cl_port, self.l3_config[self.cl_port][1])
-        cl_dst_ips = b2b_sips(self.sr_port, self.l3_config[self.sr_port][1])
-
-        # todo: enable multiple server/client tests
-        self.l4_ccfg = L4Client(l4c_proto=self.proto,
-                                l4c_tcp_udp=TcpUdpClient(
-                                    tuc_sports=b2b_ports(self.l4_config[0]),
-                                    tuc_dports=b2b_ports(self.l4_config[1])))
-        if self.test_type is TestCaseType.Value('CLIENT') or self.test_type \
-                is None:
+            self.l4_ccfg = L4Client(l4c_proto=self.proto,
+                                    l4c_tcp_udp=TcpUdpClient(
+                                        tuc_sports=b2b_ports(self.l4_config[self.cl_port]),
+                                        tuc_dports=b2b_ports(self.l4_config[self.sr_port])))
+            cl_src_ips = b2b_sips(self.cl_port, self.l3_config[self.cl_port][1])
+            cl_dst_ips = b2b_sips(self.sr_port, self.l3_config[self.sr_port][1])
             self.ccfg = TestCase(tc_type=CLIENT, tc_eth_port=self.cl_port,
                                  tc_id=self.tc_id,
                                  tc_client=Client(cl_src_ips=cl_src_ips,
@@ -200,17 +197,70 @@ class Test():
             if answer.e_code is not 0:
                 raise BaseException("{} trying to configure testcase {}"
                                     "".format(answer.e_code, self.ccfg))
+        elif self.test_type is TestCaseType.Value('SERVER'):
 
-        self.l4_scfg = L4Server(l4s_proto=self.proto,
-                                l4s_tcp_udp=TcpUdpServer(
-                                    tus_ports=b2b_ports(1)))
-        srv_ips = b2b_sips(self.sr_port, self.l3_config[self.sr_port][1])
-
-        if self.test_type is TestCaseType.Value('SERVER') or self.test_type \
-                is None:
+            def_gw, n_ip = self.l3_config[self.sr_port]
+            pcfg = b2b_port_add(self.sr_port, def_gw=Ip(ip_version=IPV4, ip_v4=def_gw))
+            b2b_port_add_intfs(pcfg,
+                               [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(self.sr_port, i)),
+                                 Ip(ip_version=IPV4, ip_v4=b2b_mask(self.sr_port, i)),
+                                 b2b_count(self.sr_port, i)) for i in range(0, 1)])
+            warp17_call('ConfigurePort', pcfg)
+            self.l4_scfg = L4Server(l4s_proto=self.proto,
+                                    l4s_tcp_udp=TcpUdpServer(
+                                        tus_ports=b2b_ports(1)))
+            srv_src_ips = b2b_sips(self.sr_port, self.l3_config[self.sr_port][1])
             self.scfg = TestCase(tc_type=SERVER, tc_eth_port=self.sr_port,
                                  tc_id=self.tc_id,
-                                 tc_server=Server(srv_ips=srv_ips,
+                                 tc_server=Server(srv_ips=srv_src_ips,
+                                                  srv_l4=self.l4_scfg),
+                                 tc_app=self.app_scfg,
+                                 tc_criteria=self.sr_test_criteria)
+            answer = warp17_call('ConfigureTestCase', self.scfg)
+
+            if answer.e_code is not 0:
+                raise BaseException("{} trying to configure testcase {}"
+                                    "".format(answer.e_code, self.scfg))
+        elif self.test_type is None:
+
+            for port in self.l3_config:
+                def_gw, n_ip = self.l3_config[port]
+                pcfg = b2b_port_add(port, def_gw=Ip(ip_version=IPV4, ip_v4=def_gw))
+                b2b_port_add_intfs(pcfg,
+                                   [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(port, i)),
+                                     Ip(ip_version=IPV4, ip_v4=b2b_mask(port, i)),
+                                     b2b_count(port, i)) for i in range(0, 1)])
+                warp17_call('ConfigurePort', pcfg)
+            
+            self.l4_ccfg = L4Client(l4c_proto=self.proto,
+                                    l4c_tcp_udp=TcpUdpClient(
+                                        tuc_sports=b2b_ports(self.l4_config[self.cl_port]),
+                                        tuc_dports=b2b_ports(self.l4_config[self.sr_port])))
+            cl_src_ips = b2b_sips(self.cl_port, self.l3_config[self.cl_port][1])
+            cl_dst_ips = b2b_sips(self.sr_port, self.l3_config[self.sr_port][1])
+            self.ccfg = TestCase(tc_type=CLIENT, tc_eth_port=self.cl_port,
+                                 tc_id=self.tc_id,
+                                 tc_client=Client(cl_src_ips=cl_src_ips,
+                                                  cl_dst_ips=cl_dst_ips,
+                                                  cl_l4=self.l4_ccfg,
+                                                  cl_rates=self.rate_ccfg),
+                                 tc_app=self.app_ccfg,
+                                 tc_init_delay=self.init_delay,
+                                 tc_uptime=self.uptime,
+                                 tc_downtime=self.downtime,
+                                 tc_criteria=self.cl_test_criteria)
+            answer = warp17_call('ConfigureTestCase', self.ccfg)
+            if answer.e_code is not 0:
+                raise BaseException("{} trying to configure testcase {}"
+                                    "".format(answer.e_code, self.ccfg))
+
+            self.l4_scfg = L4Server(l4s_proto=self.proto,
+                                    l4s_tcp_udp=TcpUdpServer(
+                                        tus_ports=b2b_ports(self.l4_config[self.sr_port])))
+            srv_src_ips = b2b_sips(self.sr_port, self.l3_config[self.sr_port][1])
+            self.scfg = TestCase(tc_type=SERVER, tc_eth_port=self.sr_port,
+                                 tc_id=self.tc_id,
+                                 tc_server=Server(srv_ips=srv_src_ips,
                                                   srv_l4=self.l4_scfg),
                                  tc_app=self.app_scfg,
                                  tc_criteria=self.sr_test_criteria)
@@ -220,6 +270,8 @@ class Test():
                 raise BaseException("{} trying to configure testcase {}"
                                     "".format(answer.e_code, self.scfg))
 
+        else:
+            raise BaseException("test type is invalid")
     def check_results(self, times=1):
         status = []
         stats = []
@@ -251,8 +303,6 @@ class Test():
     def start(self):
         for port in self.l3_config:
             warp17_call('PortStart', PortArg(pa_eth_port=port))
-        # wait for the test to start running
-        sleep(2)
 
     @staticmethod
     def passed(results):
@@ -326,8 +376,7 @@ def collect_stats(logwriter, localenv, test_list):
         status = []
         stats = []
         tstamps = []
-        # status, stats, tstamps = test_list.run()
-        # TODO fix the runner in order to have a common behaviour
+
         for test in test_list:
             test.add_config()
             test.start()
@@ -336,14 +385,14 @@ def collect_stats(logwriter, localenv, test_list):
         while sample <= n_samples:
             status1 = {}
             stats1 = {}
-            for port in range(0, 1):
+            for port in (0, 1):
                 status1[port] = warp17_call('GetTestStatus',
                                             TestCaseArg(tca_eth_port=port,
                                                         tca_test_case_id=0))
                 stats1[port] = warp17_call('GetStatistics',
                                            TestCaseArg(tca_eth_port=port,
                                                        tca_test_case_id=0))
-                tstamp1 = time.time()
+            tstamp1 = time.time()
             status.append(status1)
             stats.append(stats1)
             tstamps.append(tstamp1)
@@ -363,7 +412,7 @@ def collect_stats(logwriter, localenv, test_list):
             message = "timestamp={},".format(tstamps1)
             
             
-            for port in range(0, 1):
+            for port in (0, 1):
                 phystats = stats1[port].sr_phy_rate
                 statusstats = status1[port].tsr_stats
                 link_speed_bytes = float(phystats.pys_link_speed) * 1000 * 1000 / 8
@@ -450,7 +499,7 @@ def test_throughput():
 
     out_folder = "/tmp/throughput-test-{}/".format(get_uniq_stamp())
 
-    return test_thr, start_memory, out_folder, localenv
+    return [test_thr], start_memory, out_folder, localenv
 
 def test_throughput2():
     """Configures a test that fulfill the 100Gb/s nic"""
@@ -493,16 +542,15 @@ def test_throughput2():
 
     test_thr_cl2.app_ccfg = App(app_proto=RAW_CLIENT,
                                 app_raw_client=RawClient(rc_req_plen=80000,
-                                                         rc_resp_plen=80000))
+                                                         rc_resp_plen=0))
 
-    test_thr_cl2.tc_init_delay = Delay(d_value=0)
-    test_thr_cl2.tc_uptime = Delay(d_value=1)
-    test_thr_cl2.tc_downtime = Delay(d_value=0)
+    test_thr_cl2.init_delay = Delay(d_value=0)
+    test_thr_cl2.uptime = Delay(d_value=1)
+    test_thr_cl2.downtime = Delay(d_value=0)
 
 
     start_memory = int(env.get_memory())
 
-    # pdb.set_trace()
     localenv.set_value(env.TCB_POOL_SZ, 0)
     localenv.set_value(env.UCB_POOL_SZ, 95000)
 
@@ -511,7 +559,7 @@ def test_throughput2():
     return [test_thr_cl1, test_thr_cl2], start_memory, out_folder, localenv
 
 tests = []
-tests.append(test_throughput2())
+tests.append(test_throughput())
 # tests.append(test_10m_sessions())
 
 for test, start_memory, out_folder, localenv in tests:
