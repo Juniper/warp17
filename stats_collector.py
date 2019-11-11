@@ -258,6 +258,7 @@ class Test():
                                     l4s_tcp_udp=TcpUdpServer(
                                         tus_ports=b2b_ports(self.l4_config[self.sr_port])))
             srv_src_ips = b2b_sips(self.sr_port, self.l3_config[self.sr_port][1])
+            assert(cl_dst_ips == srv_src_ips)
             self.scfg = TestCase(tc_type=SERVER, tc_eth_port=self.sr_port,
                                  tc_id=self.tc_id,
                                  tc_server=Server(srv_ips=srv_src_ips,
@@ -272,7 +273,8 @@ class Test():
 
         else:
             raise BaseException("test type is invalid")
-    def check_results(self, times=1):
+
+    def collect_results(self, times=1):
         status = []
         stats = []
         tstamps = []
@@ -298,11 +300,28 @@ class Test():
 
     def stop(self):
         for port in self.l3_config:
-            warp17_call('PortStop', PortArg(pa_eth_port=port))
+            answer = warp17_call('PortStop', PortArg(pa_eth_port=port))
+            if answer.e_code is not 0:
+                raise BaseException("{} trying to start testcases on port {}"
+                                    "".format(answer.e_code, port))
+
+    # DEBUG function that tries to get the testcase and prints it
+    #   ATTENTION: use it only after you configured the testcases
+    def check_test(self):
+        for port in self.l3_config:
+            answer = warp17_call('GetTestCase', TestCaseArg(
+                tca_eth_port=port, tca_test_case_id=0))
+            if answer.tcr_error.e_code is not 0:
+                raise BaseException("{} trying to start testcases on port {}"
+                                    "".format(answer.tcr_error.e_code, port))
+            print(answer.tcr_cfg)
 
     def start(self):
         for port in self.l3_config:
-            warp17_call('PortStart', PortArg(pa_eth_port=port))
+            answer = warp17_call('PortStart', PortArg(pa_eth_port=port))
+            if answer.e_code is not 0:
+                raise BaseException("{} trying to start testcases on port {}"
+                                    "".format(answer.e_code, port))
 
     @staticmethod
     def passed(results):
@@ -313,6 +332,7 @@ class Test():
                 client_result.tsr_state != PASSED):
             return False
         return True
+
 
 # TODO: adapt this to the new test class
 def search_mimimum_memory(pivot, R):
@@ -379,9 +399,10 @@ def collect_stats(logwriter, localenv, test_list):
 
         for test in test_list:
             test.add_config()
+            # test.check_test() # use to debug only
             test.start()
 
-        sleep(2)  # wait for test to be fully running before start colleting stats
+        sleep(2) # wait for test to be fully running
         while sample <= n_samples:
             status1 = {}
             stats1 = {}
@@ -396,7 +417,7 @@ def collect_stats(logwriter, localenv, test_list):
             status.append(status1)
             stats.append(stats1)
             tstamps.append(tstamp1)
-            time.sleep(1)
+            time.sleep(0.5)
             sample += 1
 
         for test in test_list:
@@ -420,8 +441,8 @@ def collect_stats(logwriter, localenv, test_list):
                 tx_usage = min(float(phystats.pys_tx_bytes) * 100 / link_speed_bytes, 100.0)
                 rx_usage = min(float(phystats.pys_rx_bytes) * 100 / link_speed_bytes, 100.0)
                 message += "port={},".format(port)
-                message += "rx_usage={},".format(rx_usage)
-                message += "tx_usage={},".format(tx_usage)
+                message += "rx_usage={:.2f},".format(rx_usage)
+                message += "tx_usage={:.2f},".format(tx_usage)
                 message += "gs_estab={},".format(statusstats.gs_estab)
             message += "\n"
             logwriter.write(message)
@@ -469,13 +490,13 @@ def test_throughput():
     """Configures a test that fulfill the 100Gb/s nic"""
     localenv = env
     test_thr = Test()
-    test_thr.add_l3(0, 167837697, 1)  # 10.1.0.1
-    test_thr.add_l3(1, 167772161, 10)  # 10.0.0.1-10.0.0.10
-    test_thr.l4_config[0] = 10
-    test_thr.l4_config[1] = 50000  # not really needed
-    test_thr.proto = UDP
     test_thr.cl_port = 0
     test_thr.sr_port = 1
+    test_thr.add_l3(test_thr.cl_port, 167837697, 1)  # 10.1.0.1
+    test_thr.add_l3(test_thr.sr_port, 167772161, 10)  # 10.0.0.1-10.0.0.10
+    test_thr.l4_config[test_thr.cl_port] = 10
+    test_thr.l4_config[test_thr.sr_port] = 50000  # not really needed
+    test_thr.proto = UDP
 
     test_thr.cl_test_criteria = TestCriteria(tc_crit_type=RUN_TIME,
                                              tc_cl_estab=120)
@@ -560,7 +581,7 @@ def test_throughput2():
 
 tests = []
 tests.append(test_throughput())
-# tests.append(test_10m_sessions())
+#tests.append(test_10m_sessions())
 
 for test, start_memory, out_folder, localenv in tests:
     res_file = "{}res.txt".format(out_folder)
@@ -570,10 +591,11 @@ for test, start_memory, out_folder, localenv in tests:
     print "Logs and outputs in " + out_folder
     resultwriter = open(res_file, "w")
     resultwriter.write("Stats collection:_{}\n".format(datetime.today()))
-    for i in range (0, 1):
+    running_times = 10
+    for i in range (0, running_times):
         print "run {}".format(i)
         resultwriter.write("Run {}\n".format(i))
         collect_stats(resultwriter, localenv, test)
     resultwriter.write("Finish\n")
     resultwriter.close()
-
+    sleep(20) # waiting between each warp17 restart
