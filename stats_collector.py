@@ -337,7 +337,7 @@ class Test():
 # TODO: adapt this to the new test class
 def search_mimimum_memory(pivot, R):
     """Binary search the minimum memory needed to run the test"""
-    localenv = env
+    localenv = Warp17Env('ut/ini/{}.ini'.format(socket.gethostname()))
     if R < precision:
         return
     print("Running warp17 on {}Mb memory".format(pivot))
@@ -391,18 +391,18 @@ def collect_stats(logwriter, localenv, test_list):
     try:
         warp17_wait(localenv)
 
-        n_samples = 10
+        n_samples = 20
         sample = 0
         status = []
         stats = []
         tstamps = []
-
         for test in test_list:
             test.add_config()
             # test.check_test() # use to debug only
             test.start()
 
         sleep(2) # wait for test to be fully running
+        init_tstamp = time.time()
         while sample <= n_samples:
             status1 = {}
             stats1 = {}
@@ -413,10 +413,10 @@ def collect_stats(logwriter, localenv, test_list):
                 stats1[port] = warp17_call('GetStatistics',
                                            TestCaseArg(tca_eth_port=port,
                                                        tca_test_case_id=0))
-            tstamp1 = time.time()
+            tstamp_diff = time.time() - init_tstamp
             status.append(status1)
             stats.append(stats1)
-            tstamps.append(tstamp1)
+            tstamps.append(tstamp_diff)
             time.sleep(0.5)
             sample += 1
 
@@ -430,9 +430,7 @@ def collect_stats(logwriter, localenv, test_list):
             stats1 = stats[i]
             status1 = status[i]
             tstamps1 = tstamps[i]
-            message = "timestamp={},".format(tstamps1)
-            
-            
+            message = "timestamp={:.2f},".format(tstamps1)
             for port in (0, 1):
                 phystats = stats1[port].sr_phy_rate
                 statusstats = status1[port].tsr_stats
@@ -450,20 +448,21 @@ def collect_stats(logwriter, localenv, test_list):
 
     except BaseException as E:
         print("Error occurred: {}".format(E))
+        warp17_stop(localenv, proc)
 
     return
 
 def test_10m_sessions():
     """Configures a test to run 10 million sessions"""
-    localenv = env
+    localenv = Warp17Env('ut/ini/{}.ini'.format(socket.gethostname()))
     test_10m = Test()
-    test_10m.add_l3(0, 167837697, 200)  # 10.1.0.1-10.1.0.200
-    test_10m.add_l3(1, 167772161, 1)  # 10.0.0.1
-    test_10m.l4_config[0] = 50000
-    test_10m.l4_config[1] = 1  # not really needed
-    test_10m.proto = TCP
     test_10m.cl_port = 0
     test_10m.sr_port = 1
+    test_10m.add_l3(test_10m.cl_port, 167837697, 20)  # 10.1.0.1-10.1.0.20
+    test_10m.add_l3(test_10m.sr_port, 167772161, 1)  # 10.0.0.1
+    test_10m.l4_config[test_10m.cl_port] = 50000
+    test_10m.l4_config[test_10m.sr_port] = 10  # not really needed
+    test_10m.proto = TCP
 
     test_10m.cl_test_criteria = TestCriteria(tc_crit_type=RUN_TIME,
                                              tc_cl_estab=120)
@@ -488,7 +487,7 @@ def test_10m_sessions():
 
 def test_throughput():
     """Configures a test that fulfill the 100Gb/s nic"""
-    localenv = env
+    localenv = Warp17Env('ut/ini/{}.ini'.format(socket.gethostname()))
     test_thr = Test()
     test_thr.cl_port = 0
     test_thr.sr_port = 1
@@ -524,7 +523,7 @@ def test_throughput():
 
 def test_throughput2():
     """Configures a test that fulfill the 100Gb/s nic"""
-    localenv = env
+    localenv = Warp17Env('ut/ini/{}.ini'.format(socket.gethostname()))
 
     test_thr_cl1 = Test(type=TestCaseType.Value('CLIENT'), port=0, id=0)
     test_thr_cl1.cl_port = 0
@@ -581,7 +580,7 @@ def test_throughput2():
 
 tests = []
 tests.append(test_throughput())
-#tests.append(test_10m_sessions())
+tests.append(test_10m_sessions())
 
 for test, start_memory, out_folder, localenv in tests:
     res_file = "{}res.txt".format(out_folder)
