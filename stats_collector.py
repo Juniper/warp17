@@ -377,6 +377,7 @@ def search_mimimum_memory(pivot, R):
     search_mimimum_memory(pivot + R / 2, R / 2)
     return
 
+
 def collect_stats(logwriter, localenv, test_list):
     print("Running warp17 on {}".format(localenv))
 
@@ -401,7 +402,8 @@ def collect_stats(logwriter, localenv, test_list):
             # test.check_test() # use to debug only
             test.start()
 
-        sleep(2) # wait for test to be fully running
+        sleep(15) # wait for test to be fully running
+                  #     (http tests take a lot of time)
         init_tstamp = time.time()
         while sample <= n_samples:
             status1 = {}
@@ -452,6 +454,7 @@ def collect_stats(logwriter, localenv, test_list):
 
     return
 
+
 def test_10m_sessions():
     """Configures a test to run 10 million sessions"""
     localenv = Warp17Env('ut/ini/{}.ini'.format(socket.gethostname()))
@@ -484,6 +487,42 @@ def test_10m_sessions():
     out_folder = "/tmp/10m-test-{}/".format(get_uniq_stamp())
 
     return [test_10m], start_memory, out_folder, localenv
+
+
+def test_40m_http_sessions():
+    """Configures a test to run 10 million sessions"""
+    localenv = Warp17Env('ut/ini/{}.ini'.format(socket.gethostname()))
+    test_40m = Test()
+    test_40m.cl_port = 0
+    test_40m.sr_port = 1
+    test_40m.add_l3(test_40m.cl_port, 167837697, 20)  # 10.1.0.1-10.1.0.20
+    test_40m.add_l3(test_40m.sr_port, 167772161, 4)  # 10.0.0.1
+    test_40m.l4_config[test_40m.cl_port] = 50000
+    test_40m.l4_config[test_40m.sr_port] = 10  # not really needed
+    test_40m.proto = TCP
+
+    test_40m.cl_test_criteria = TestCriteria(tc_crit_type=RUN_TIME,
+                                             tc_cl_estab=120)
+
+    test_40m.app_ccfg = App(app_proto=HTTP_CLIENT,
+                            app_http_client=HttpClient(hc_req_method=GET,
+                                                       hc_req_object_name='/index.html',
+                                                       hc_req_host_name='www.foobar.net',
+                                                       hc_req_size=204800))
+    #20kb
+    test_40m.app_scfg = App(app_proto=HTTP_SERVER,
+                            app_http_server=HttpServer(hs_resp_code=OK_200,
+                                                       hs_resp_size=204800))
+
+    start_memory = int(env.get_memory())
+
+    localenv.set_value(env.TCB_POOL_SZ, 95000)
+    localenv.set_value(env.UCB_POOL_SZ, 0)
+
+    out_folder = "/tmp/40m-http-test-{}/".format(get_uniq_stamp())
+
+    return [test_40m], start_memory, out_folder, localenv
+
 
 def test_throughput():
     """Configures a test that fulfill the 100Gb/s nic"""
@@ -520,6 +559,7 @@ def test_throughput():
     out_folder = "/tmp/throughput-test-{}/".format(get_uniq_stamp())
 
     return [test_thr], start_memory, out_folder, localenv
+
 
 def test_throughput2():
     """Configures a test that fulfill the 100Gb/s nic"""
@@ -580,7 +620,7 @@ def test_throughput2():
 
 tests = []
 tests.append(test_throughput())
-tests.append(test_10m_sessions())
+tests.append(test_40m_http_sessions())
 
 for test, start_memory, out_folder, localenv in tests:
     res_file = "{}res.txt".format(out_folder)
