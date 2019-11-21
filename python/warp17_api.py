@@ -90,6 +90,7 @@ class Warp17Env():
     NCHAN            = 'nchan'
     NO_HUGE          = 'no-huge'
     MEMORY           = 'memory'
+    SOCKET_MEM       = 'socket-mem'
     PORTS            = 'ports'
     QMAP_DEFAULT     = 'qmap-default'
     QMAP             = 'qmap'
@@ -153,7 +154,19 @@ class Warp17Env():
             return False
 
     def get_memory(self):
-        return int(self.get_value(Warp17Env.MEMORY, mandatory=True))
+        retvalue = None
+
+        if self.get_value(Warp17Env.MEMORY, mandatory=False) is not None:
+            retvalue = ('-m ' + str(
+                int(self.get_value(Warp17Env.MEMORY, mandatory=False))) + ' ')
+        elif self.get_value(Warp17Env.SOCKET_MEM, mandatory=False) is not None:
+            retvalue = ('--socket-mem ' + str(
+                self.get_value(Warp17Env.SOCKET_MEM, mandatory=False)) + ' ')
+
+        if retvalue is None:
+            raise Warp17Exception("Memory configuration missing.")
+        else:
+            return retvalue
 
     def get_ports(self):
         return self.get_value(Warp17Env.PORTS, mandatory=False)
@@ -220,7 +233,7 @@ class Warp17Env():
         args += '-n ' + str(self.get_nchan()) + ' '
         if self.get_nohuge():
             args += '--no-huge '
-        args += '-m ' + str(self.get_memory()) + ' '
+        args += self.get_memory()
         ports = self.get_ports()
         if ports is not None:
             args += ' '.join(['-w ' + port for port in string.split(self.get_ports())]) + ' '
