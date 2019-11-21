@@ -491,7 +491,7 @@ def test_http_throughput():
                             app_http_server=HttpServer(hs_resp_code=OK_200,
                                                        hs_resp_size=45056))
 
-    start_memory = int(env.get_memory())
+    start_memory = env.get_memory()
 
     localenv.set_value(env.TCB_POOL_SZ, 95000)
     localenv.set_value(env.UCB_POOL_SZ, 0)
@@ -527,7 +527,7 @@ def test_400k_http_sessions():
                             app_http_server=HttpServer(hs_resp_code=OK_200,
                                                        hs_resp_size=45056))
 
-    start_memory = int(env.get_memory())
+    start_memory = env.get_memory()
 
     localenv.set_value(env.TCB_POOL_SZ, 98000)
     localenv.set_value(env.UCB_POOL_SZ, 0)
@@ -562,7 +562,7 @@ def test_800k_http_sessions():
                             app_http_server=HttpServer(hs_resp_code=OK_200,
                                                        hs_resp_size=45056))
 
-    start_memory = int(env.get_memory())
+    start_memory = env.get_memory()
 
     localenv.set_value(env.TCB_POOL_SZ, 98000)
     localenv.set_value(env.UCB_POOL_SZ, 0)
@@ -599,7 +599,7 @@ def test_udp_throughput():
     test_thr.tc_downtime = Delay(d_value=0)
 
 
-    start_memory = int(env.get_memory())
+    start_memory = env.get_memory()
 
     localenv.set_value(env.TCB_POOL_SZ, 0)
     localenv.set_value(env.UCB_POOL_SZ, 98000)
@@ -632,7 +632,7 @@ def test_single_udp_throughput():
                             app_raw_server=RawServer(rs_req_plen=0,
                                                      rs_resp_plen=0))
 
-    start_memory = int(env.get_memory())
+    start_memory = env.get_memory()
 
     localenv.set_value(env.TCB_POOL_SZ, 0)
     localenv.set_value(env.UCB_POOL_SZ, 98000)
@@ -691,7 +691,7 @@ def test_throughput2():
     test_thr_cl2.downtime = Delay(d_value=0)
 
 
-    start_memory = int(env.get_memory())
+    start_memory = env.get_memory()
 
     localenv.set_value(env.TCB_POOL_SZ, 0)
     localenv.set_value(env.UCB_POOL_SZ, 95000)
