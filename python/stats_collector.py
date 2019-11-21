@@ -128,6 +128,7 @@ class Test():
             self.cl_port = port
             self.tc_id = id
             self.test_type = type
+            self.mtu = 1500 # Redundant
         elif type is TestCaseType.Value('SERVER'):
             self.sr_test_criteria = TestCriteria(tc_crit_type=SRV_UP, tc_srv_up=1)
 
@@ -136,6 +137,7 @@ class Test():
             self.sr_port = port
             self.tc_id = id
             self.test_type = type
+            self.mtu = 1500
         elif type is None and port is None and id is None:
             self.rate_ccfg = RateClient(rc_open_rate=Rate(),
                                         rc_close_rate=Rate(),
@@ -157,6 +159,7 @@ class Test():
             self.sr_port = 1
             self.tc_id = 0
             self.test_type = None
+            self.mtu = 1500
         else:
             raise BaseException("Wrong test type.")
 
@@ -231,7 +234,16 @@ class Test():
                                      Ip(ip_version=IPV4, ip_v4=b2b_mask(port, i)),
                                      b2b_count(port, i)) for i in range(0, 1)])
                 warp17_call('ConfigurePort', pcfg)
-            
+
+                if self.mtu is not 1500: # 1500 is the default MTU
+                    port_options = PortOptions(po_mtu=self.mtu)
+                    answer = warp17_call('SetPortOptions',
+                                         PortOptionsArg(poa_port=PortArg(pa_eth_port=port),
+                                                        poa_opts=port_options))
+                    if answer.e_code is not 0:
+                        raise BaseException("{} trying to configure testcase {}"
+                                            "".format(answer.e_code, self.ccfg))
+
             self.l4_ccfg = L4Client(l4c_proto=self.proto,
                                     l4c_tcp_udp=TcpUdpClient(
                                         tuc_sports=b2b_ports(self.l4_config[self.cl_port]),
@@ -474,32 +486,34 @@ def test_http_throughput():
                             app_http_client=HttpClient(hc_req_method=GET,
                                                        hc_req_object_name='/index.html',
                                                        hc_req_host_name='www.foobar.net',
-                                                       hc_req_size=10485760))#10MB
+                                                       hc_req_size=45056)) #44k
     test_10m.app_scfg = App(app_proto=HTTP_SERVER,
                             app_http_server=HttpServer(hs_resp_code=OK_200,
-                                                       hs_resp_size=10485760))
+                                                       hs_resp_size=45056))
 
     start_memory = int(env.get_memory())
 
     localenv.set_value(env.TCB_POOL_SZ, 95000)
     localenv.set_value(env.UCB_POOL_SZ, 0)
 
-    out_folder = "/tmp/10m-test-{}/".format(get_uniq_stamp())
+    out_folder = "/tmp/{}-test-{}/".format(test_http_throughput.__name__,
+                                           get_uniq_stamp())
 
     return [test_10m], start_memory, out_folder, localenv
 
 
-def test_40m_http_sessions():
-    """Configures a test to run 10 million sessions"""
+def test_400k_http_sessions():
+    """Configures a test to run 400k sessions"""
     localenv = Warp17Env('ut/ini/{}.ini'.format(socket.gethostname()))
     test_40m = Test()
     test_40m.cl_port = 0
     test_40m.sr_port = 1
-    test_40m.add_l3(test_40m.cl_port, 167837697, 20)  # 10.1.0.1-10.1.0.20
-    test_40m.add_l3(test_40m.sr_port, 167772161, 5)  # 10.0.0.1-10.0.0.5
-    test_40m.l4_config[test_40m.cl_port] = 45000
-    test_40m.l4_config[test_40m.sr_port] = 10  # not really needed
+    test_40m.add_l3(test_40m.cl_port, 167837697, 1)  # 10.1.0.1-10.1.0.20
+    test_40m.add_l3(test_40m.sr_port, 167772161, 1)  # 10.0.0.1-10.0.0.5
+    test_40m.l4_config[test_40m.cl_port] = 4000
+    test_40m.l4_config[test_40m.sr_port] = 100  # not really needed
     test_40m.proto = TCP
+    test_40m.mtu = 9192
 
     test_40m.cl_test_criteria = TestCriteria(tc_crit_type=RUN_TIME,
                                              tc_cl_estab=120)
@@ -508,17 +522,53 @@ def test_40m_http_sessions():
                             app_http_client=HttpClient(hc_req_method=GET,
                                                        hc_req_object_name='/index.html',
                                                        hc_req_host_name='www.foobar.net',
-                                                       hc_req_size=67108864))
+                                                       hc_req_size=45056)) # 44k
     test_40m.app_scfg = App(app_proto=HTTP_SERVER,
                             app_http_server=HttpServer(hs_resp_code=OK_200,
-                                                       hs_resp_size=67108864))
+                                                       hs_resp_size=45056))
 
     start_memory = int(env.get_memory())
 
     localenv.set_value(env.TCB_POOL_SZ, 98000)
     localenv.set_value(env.UCB_POOL_SZ, 0)
 
-    out_folder = "/tmp/40m-http-test-{}/".format(get_uniq_stamp())
+    out_folder = "/tmp/{}-test-{}/".format(test_400k_http_sessions.__name__,
+                                           get_uniq_stamp())
+
+    return [test_40m], start_memory, out_folder, localenv
+
+def test_800k_http_sessions():
+    """Configures a test to run 800k sessions"""
+    localenv = Warp17Env('ut/ini/{}.ini'.format(socket.gethostname()))
+    test_40m = Test()
+    test_40m.cl_port = 0
+    test_40m.sr_port = 1
+    test_40m.add_l3(test_40m.cl_port, 167837697, 1)  # 10.1.0.1-10.1.0.20
+    test_40m.add_l3(test_40m.sr_port, 167772161, 1)  # 10.0.0.1-10.0.0.5
+    test_40m.l4_config[test_40m.cl_port] = 4000
+    test_40m.l4_config[test_40m.sr_port] = 200  # not really needed
+    test_40m.proto = TCP
+    test_40m.mtu = 9192
+
+    test_40m.cl_test_criteria = TestCriteria(tc_crit_type=RUN_TIME,
+                                             tc_cl_estab=120)
+
+    test_40m.app_ccfg = App(app_proto=HTTP_CLIENT,
+                            app_http_client=HttpClient(hc_req_method=GET,
+                                                       hc_req_object_name='/index.html',
+                                                       hc_req_host_name='www.foobar.net',
+                                                       hc_req_size=45056)) # 44k
+    test_40m.app_scfg = App(app_proto=HTTP_SERVER,
+                            app_http_server=HttpServer(hs_resp_code=OK_200,
+                                                       hs_resp_size=45056))
+
+    start_memory = int(env.get_memory())
+
+    localenv.set_value(env.TCB_POOL_SZ, 98000)
+    localenv.set_value(env.UCB_POOL_SZ, 0)
+
+    out_folder = "/tmp/{}-test-{}/".format(test_800k_http_sessions.__name__,
+                                           get_uniq_stamp())
 
     return [test_40m], start_memory, out_folder, localenv
 
@@ -554,7 +604,8 @@ def test_udp_throughput():
     localenv.set_value(env.TCB_POOL_SZ, 0)
     localenv.set_value(env.UCB_POOL_SZ, 98000)
 
-    out_folder = "/tmp/throughput-test-{}/".format(get_uniq_stamp())
+    out_folder = "/tmp/{}-test-{}/".format(test_udp_throughput.__name__,
+                                           get_uniq_stamp())
 
     return [test_thr], start_memory, out_folder, localenv
 
@@ -586,7 +637,8 @@ def test_single_udp_throughput():
     localenv.set_value(env.TCB_POOL_SZ, 0)
     localenv.set_value(env.UCB_POOL_SZ, 98000)
 
-    out_folder = "/tmp/throughput-test-{}/".format(get_uniq_stamp())
+    out_folder = "/tmp/{}-test-{}/".format(
+        test_single_udp_throughput.__name__, get_uniq_stamp())
 
     return [test_thr], start_memory, out_folder, localenv
 
@@ -644,13 +696,14 @@ def test_throughput2():
     localenv.set_value(env.TCB_POOL_SZ, 0)
     localenv.set_value(env.UCB_POOL_SZ, 95000)
 
-    out_folder = "/tmp/throughput-test-{}/".format(get_uniq_stamp())
+    out_folder = "/tmp/{}-test-{}/".format(test_throughput2.__name__,
+                                           get_uniq_stamp())
 
     return [test_thr_cl1, test_thr_cl2], start_memory, out_folder, localenv
 
-tests = []
-tests.append(test_single_udp_throughput())
-tests.append(test_40m_http_sessions())
+tests = [] # here you can append the tests you want to run (in sequence)
+tests.append(test_400k_http_sessions())
+tests.append(test_800k_http_sessions())
 
 for test, start_memory, out_folder, localenv in tests:
     res_file = "{}res.txt".format(out_folder)
@@ -668,4 +721,4 @@ for test, start_memory, out_folder, localenv in tests:
         collect_stats(resultwriter, localenv, test)
     resultwriter.write("Finish\n")
     resultwriter.close()
-    sleep(20) # waiting between each warp17 restart
+    sleep(20)  # waiting between each warp17 restart
