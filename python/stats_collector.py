@@ -1,5 +1,4 @@
 #!/usr/bin/env python2
-
 #
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
 #
@@ -60,9 +59,7 @@
 # ****************************************************************************
 # Include files
 # ****************************************************************************
-import os
 from warp17_api import *
-import socket
 import time
 
 from rpc_impl import *
@@ -112,6 +109,8 @@ class Test():
             0: 1,
             1: 1,
         }
+        self.tcpwin = None
+        self.mtu = 1500
         if type is TestCaseType.Value('CLIENT'):
             self.rate_ccfg = RateClient(rc_open_rate=Rate(),
                                         rc_close_rate=Rate(),
@@ -128,17 +127,16 @@ class Test():
             self.cl_port = port
             self.tc_id = id
             self.test_type = type
-            self.mtu = 1500 # Redundant
         elif type is TestCaseType.Value('SERVER'):
-            self.sr_test_criteria = TestCriteria(tc_crit_type=SRV_UP, tc_srv_up=1)
+            self.sr_test_criteria = TestCriteria(tc_crit_type=SRV_UP,
+                                                 tc_srv_up=1)
 
             self.l4_scfg = L4Server()
             self.scfg = TestCase()
             self.sr_port = port
             self.tc_id = id
             self.test_type = type
-            self.mtu = 1500
-        elif type is None and port is None and id is None:
+        elif type is None and port is None:
             self.rate_ccfg = RateClient(rc_open_rate=Rate(),
                                         rc_close_rate=Rate(),
                                         rc_send_rate=Rate())
@@ -151,15 +149,15 @@ class Test():
             self.downtime = Delay(d_value=0)
 
             self.ccfg = TestCase()
-            self.sr_test_criteria = TestCriteria(tc_crit_type=SRV_UP, tc_srv_up=1)
+            self.sr_test_criteria = TestCriteria(tc_crit_type=SRV_UP,
+                                                 tc_srv_up=1)
 
             self.l4_scfg = L4Server()
             self.scfg = TestCase()
             self.cl_port = 0
             self.sr_port = 1
-            self.tc_id = 0
+            self.tc_id = 0 if id is None else id
             self.test_type = None
-            self.mtu = 1500
         else:
             raise BaseException("Wrong test type.")
 
@@ -171,17 +169,23 @@ class Test():
         if self.test_type is TestCaseType.Value('CLIENT'):
 
             def_gw, n_ip = self.l3_config[self.cl_port]
-            pcfg = b2b_port_add(self.cl_port, def_gw=Ip(ip_version=IPV4, ip_v4=def_gw))
+            pcfg = b2b_port_add(self.cl_port,
+                                def_gw=Ip(ip_version=IPV4, ip_v4=def_gw))
             b2b_port_add_intfs(pcfg,
-                               [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(self.cl_port, i)),
-                                 Ip(ip_version=IPV4, ip_v4=b2b_mask(self.cl_port, i)),
-                                 b2b_count(self.cl_port, i)) for i in range(0, 1)])
+                               [(Ip(ip_version=IPV4,
+                                    ip_v4=b2b_ipv4(self.cl_port, i)),
+                                 Ip(ip_version=IPV4,
+                                    ip_v4=b2b_mask(self.cl_port, i)),
+                                 b2b_count(self.cl_port, i)) for i in
+                                range(0, 1)])
             warp17_call('ConfigurePort', pcfg)
 
             self.l4_ccfg = L4Client(l4c_proto=self.proto,
                                     l4c_tcp_udp=TcpUdpClient(
-                                        tuc_sports=b2b_ports(self.l4_config[self.cl_port]),
-                                        tuc_dports=b2b_ports(self.l4_config[self.sr_port])))
+                                        tuc_sports=b2b_ports(
+                                            self.l4_config[self.cl_port]),
+                                        tuc_dports=b2b_ports(
+                                            self.l4_config[self.sr_port])))
             cl_src_ips = b2b_sips(self.cl_port, self.l3_config[self.cl_port][1])
             cl_dst_ips = b2b_sips(self.sr_port, self.l3_config[self.sr_port][1])
             self.ccfg = TestCase(tc_type=CLIENT, tc_eth_port=self.cl_port,
@@ -194,7 +198,8 @@ class Test():
                                  tc_init_delay=self.init_delay,
                                  tc_uptime=self.uptime,
                                  tc_downtime=self.downtime,
-                                 tc_criteria=self.cl_test_criteria)
+                                 tc_criteria=self.cl_test_criteria,
+                                 tc_async=True)
             answer = warp17_call('ConfigureTestCase', self.ccfg)
 
             if answer.e_code is not 0:
@@ -203,22 +208,28 @@ class Test():
         elif self.test_type is TestCaseType.Value('SERVER'):
 
             def_gw, n_ip = self.l3_config[self.sr_port]
-            pcfg = b2b_port_add(self.sr_port, def_gw=Ip(ip_version=IPV4, ip_v4=def_gw))
+            pcfg = b2b_port_add(self.sr_port,
+                                def_gw=Ip(ip_version=IPV4, ip_v4=def_gw))
             b2b_port_add_intfs(pcfg,
-                               [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(self.sr_port, i)),
-                                 Ip(ip_version=IPV4, ip_v4=b2b_mask(self.sr_port, i)),
-                                 b2b_count(self.sr_port, i)) for i in range(0, 1)])
+                               [(Ip(ip_version=IPV4,
+                                    ip_v4=b2b_ipv4(self.sr_port, i)),
+                                 Ip(ip_version=IPV4,
+                                    ip_v4=b2b_mask(self.sr_port, i)),
+                                 b2b_count(self.sr_port, i)) for i in
+                                range(0, 1)])
             warp17_call('ConfigurePort', pcfg)
             self.l4_scfg = L4Server(l4s_proto=self.proto,
                                     l4s_tcp_udp=TcpUdpServer(
                                         tus_ports=b2b_ports(1)))
-            srv_src_ips = b2b_sips(self.sr_port, self.l3_config[self.sr_port][1])
+            srv_src_ips = b2b_sips(self.sr_port,
+                                   self.l3_config[self.sr_port][1])
             self.scfg = TestCase(tc_type=SERVER, tc_eth_port=self.sr_port,
                                  tc_id=self.tc_id,
                                  tc_server=Server(srv_ips=srv_src_ips,
                                                   srv_l4=self.l4_scfg),
                                  tc_app=self.app_scfg,
-                                 tc_criteria=self.sr_test_criteria)
+                                 tc_criteria=self.sr_test_criteria,
+                                 tc_async=True)
             answer = warp17_call('ConfigureTestCase', self.scfg)
 
             if answer.e_code is not 0:
@@ -228,26 +239,32 @@ class Test():
 
             for port in self.l3_config:
                 def_gw, n_ip = self.l3_config[port]
-                pcfg = b2b_port_add(port, def_gw=Ip(ip_version=IPV4, ip_v4=def_gw))
+                pcfg = b2b_port_add(port,
+                                    def_gw=Ip(ip_version=IPV4, ip_v4=def_gw))
                 b2b_port_add_intfs(pcfg,
-                                   [(Ip(ip_version=IPV4, ip_v4=b2b_ipv4(port, i)),
-                                     Ip(ip_version=IPV4, ip_v4=b2b_mask(port, i)),
+                                   [(Ip(ip_version=IPV4,
+                                        ip_v4=b2b_ipv4(port, i)),
+                                     Ip(ip_version=IPV4,
+                                        ip_v4=b2b_mask(port, i)),
                                      b2b_count(port, i)) for i in range(0, 1)])
                 warp17_call('ConfigurePort', pcfg)
 
-                if self.mtu is not 1500: # 1500 is the default MTU
+                if self.mtu is not 1500:  # 1500 is the default MTU
                     port_options = PortOptions(po_mtu=self.mtu)
                     answer = warp17_call('SetPortOptions',
-                                         PortOptionsArg(poa_port=PortArg(pa_eth_port=port),
-                                                        poa_opts=port_options))
+                                         PortOptionsArg(
+                                             poa_port=PortArg(pa_eth_port=port),
+                                             poa_opts=port_options))
                     if answer.e_code is not 0:
                         raise BaseException("{} trying to configure testcase {}"
                                             "".format(answer.e_code, self.ccfg))
 
             self.l4_ccfg = L4Client(l4c_proto=self.proto,
                                     l4c_tcp_udp=TcpUdpClient(
-                                        tuc_sports=b2b_ports(self.l4_config[self.cl_port]),
-                                        tuc_dports=b2b_ports(self.l4_config[self.sr_port])))
+                                        tuc_sports=b2b_ports(
+                                            self.l4_config[self.cl_port]),
+                                        tuc_dports=b2b_ports(
+                                            self.l4_config[self.sr_port])))
             cl_src_ips = b2b_sips(self.cl_port, self.l3_config[self.cl_port][1])
             cl_dst_ips = b2b_sips(self.sr_port, self.l3_config[self.sr_port][1])
             self.ccfg = TestCase(tc_type=CLIENT, tc_eth_port=self.cl_port,
@@ -260,17 +277,35 @@ class Test():
                                  tc_init_delay=self.init_delay,
                                  tc_uptime=self.uptime,
                                  tc_downtime=self.downtime,
-                                 tc_criteria=self.cl_test_criteria)
+                                 tc_criteria=self.cl_test_criteria,
+                                 tc_async=True)
             answer = warp17_call('ConfigureTestCase', self.ccfg)
+
             if answer.e_code is not 0:
-                raise BaseException("{} trying to configure testcase {}"
+                raise BaseException("{} error trying to configure testcase {}"
                                     "".format(answer.e_code, self.ccfg))
+
+            if self.tcpwin is not None:
+                time.sleep(1)
+                sockopt_arg = TcpSockoptArg(
+                    toa_tc_arg=TestCaseArg(tca_eth_port=self.cl_port,
+                                           tca_test_case_id=self.tc_id),
+                    toa_opts=TcpSockopt(
+                        to_win_size=self.tcpwin))
+                answer = warp17_call('SetTcpSockopt', sockopt_arg)
+
+                if answer.e_code is not 0:
+                    raise BaseException(
+                        '{} error configuring tcp option {}'.format(
+                            answer.e_code, sockopt_arg))
 
             self.l4_scfg = L4Server(l4s_proto=self.proto,
                                     l4s_tcp_udp=TcpUdpServer(
-                                        tus_ports=b2b_ports(self.l4_config[self.sr_port])))
-            srv_src_ips = b2b_sips(self.sr_port, self.l3_config[self.sr_port][1])
-            assert(cl_dst_ips == srv_src_ips)
+                                        tus_ports=b2b_ports(
+                                            self.l4_config[self.sr_port])))
+            srv_src_ips = b2b_sips(self.sr_port,
+                                   self.l3_config[self.sr_port][1])
+            assert (cl_dst_ips == srv_src_ips)
             self.scfg = TestCase(tc_type=SERVER, tc_eth_port=self.sr_port,
                                  tc_id=self.tc_id,
                                  tc_server=Server(srv_ips=srv_src_ips,
@@ -283,6 +318,20 @@ class Test():
                 raise BaseException("{} trying to configure testcase {}"
                                     "".format(answer.e_code, self.scfg))
 
+            if self.tcpwin is not None:
+                time.sleep(1)
+                sockopt_arg = TcpSockoptArg(
+                    toa_tc_arg=TestCaseArg(tca_eth_port=self.sr_port,
+                                           tca_test_case_id=self.tc_id),
+                    toa_opts=TcpSockopt(
+                        to_win_size=self.tcpwin))
+                answer = warp17_call('SetTcpSockopt', sockopt_arg)
+
+                if answer.e_code is not 0:                    raise BaseException(
+                    '{} error configuring tcp option {}'.format(answer.e_code,
+                                                                sockopt_arg))
+
+
         else:
             raise BaseException("test type is invalid")
 
@@ -290,14 +339,14 @@ class Test():
         status = []
         stats = []
         tstamps = []
-        sleep(2) # wait for test to be fully running before start colleting stats
+        sleep(2)  # wait for test to be fully running before start colleting stats
         while times >= 0:
             status1 = {}
             stats1 = {}
             for port in self.l3_config:
                 status1[port] = warp17_call('GetTestStatus',
-                                           TestCaseArg(tca_eth_port=port,
-                                                       tca_test_case_id=self.tc_id))
+                                            TestCaseArg(tca_eth_port=port,
+                                                        tca_test_case_id=self.tc_id))
                 stats1[port] = warp17_call('GetStatistics',
                                            TestCaseArg(tca_eth_port=port,
                                                        tca_test_case_id=self.tc_id))
@@ -473,10 +522,10 @@ def test_http_throughput():
     test_10m = Test()
     test_10m.cl_port = 0
     test_10m.sr_port = 1
-    test_10m.add_l3(test_10m.cl_port, 167837697, 20)  # 10.1.0.1-10.1.0.20
-    test_10m.add_l3(test_10m.sr_port, 167772161, 1)  # 10.0.0.1
-    test_10m.l4_config[test_10m.cl_port] = 50000
-    test_10m.l4_config[test_10m.sr_port] = 10  # not really needed
+    test_10m.add_l3(test_10m.cl_port, 167837697, 2)
+    test_10m.add_l3(test_10m.sr_port, 167772161, 1)
+    test_10m.l4_config[test_10m.cl_port] = 200
+    test_10m.l4_config[test_10m.sr_port] = 50000
     test_10m.proto = TCP
 
     test_10m.cl_test_criteria = TestCriteria(tc_crit_type=RUN_TIME,
@@ -486,10 +535,10 @@ def test_http_throughput():
                             app_http_client=HttpClient(hc_req_method=GET,
                                                        hc_req_object_name='/index.html',
                                                        hc_req_host_name='www.foobar.net',
-                                                       hc_req_size=45056)) #44k
+                                                       hc_req_size=512))
     test_10m.app_scfg = App(app_proto=HTTP_SERVER,
                             app_http_server=HttpServer(hs_resp_code=OK_200,
-                                                       hs_resp_size=45056))
+                                                       hs_resp_size=512))
 
     start_memory = env.get_memory()
 
@@ -502,80 +551,9 @@ def test_http_throughput():
     return [test_10m], start_memory, out_folder, localenv
 
 
-def test_400k_http_sessions():
-    """Configures a test to run 400k sessions"""
-    localenv = Warp17Env('ut/ini/{}.ini'.format(socket.gethostname()))
-    test_40m = Test()
-    test_40m.cl_port = 0
-    test_40m.sr_port = 1
-    test_40m.add_l3(test_40m.cl_port, 167837697, 1)  # 10.1.0.1-10.1.0.20
-    test_40m.add_l3(test_40m.sr_port, 167772161, 1)  # 10.0.0.1-10.0.0.5
-    test_40m.l4_config[test_40m.cl_port] = 4000
-    test_40m.l4_config[test_40m.sr_port] = 100  # not really needed
-    test_40m.proto = TCP
-    test_40m.mtu = 9192
-
-    test_40m.cl_test_criteria = TestCriteria(tc_crit_type=RUN_TIME,
-                                             tc_cl_estab=120)
-
-    test_40m.app_ccfg = App(app_proto=HTTP_CLIENT,
-                            app_http_client=HttpClient(hc_req_method=GET,
-                                                       hc_req_object_name='/index.html',
-                                                       hc_req_host_name='www.foobar.net',
-                                                       hc_req_size=45056)) # 44k
-    test_40m.app_scfg = App(app_proto=HTTP_SERVER,
-                            app_http_server=HttpServer(hs_resp_code=OK_200,
-                                                       hs_resp_size=45056))
-
-    start_memory = env.get_memory()
-
-    localenv.set_value(env.TCB_POOL_SZ, 98000)
-    localenv.set_value(env.UCB_POOL_SZ, 0)
-
-    out_folder = "/tmp/{}-test-{}/".format(test_400k_http_sessions.__name__,
-                                           get_uniq_stamp())
-
-    return [test_40m], start_memory, out_folder, localenv
-
-def test_800k_http_sessions():
-    """Configures a test to run 800k sessions"""
-    localenv = Warp17Env('ut/ini/{}.ini'.format(socket.gethostname()))
-    test_40m = Test()
-    test_40m.cl_port = 0
-    test_40m.sr_port = 1
-    test_40m.add_l3(test_40m.cl_port, 167837697, 1)  # 10.1.0.1-10.1.0.20
-    test_40m.add_l3(test_40m.sr_port, 167772161, 1)  # 10.0.0.1-10.0.0.5
-    test_40m.l4_config[test_40m.cl_port] = 4000
-    test_40m.l4_config[test_40m.sr_port] = 200  # not really needed
-    test_40m.proto = TCP
-    test_40m.mtu = 9192
-
-    test_40m.cl_test_criteria = TestCriteria(tc_crit_type=RUN_TIME,
-                                             tc_cl_estab=120)
-
-    test_40m.app_ccfg = App(app_proto=HTTP_CLIENT,
-                            app_http_client=HttpClient(hc_req_method=GET,
-                                                       hc_req_object_name='/index.html',
-                                                       hc_req_host_name='www.foobar.net',
-                                                       hc_req_size=45056)) # 44k
-    test_40m.app_scfg = App(app_proto=HTTP_SERVER,
-                            app_http_server=HttpServer(hs_resp_code=OK_200,
-                                                       hs_resp_size=45056))
-
-    start_memory = env.get_memory()
-
-    localenv.set_value(env.TCB_POOL_SZ, 98000)
-    localenv.set_value(env.UCB_POOL_SZ, 0)
-
-    out_folder = "/tmp/{}-test-{}/".format(test_800k_http_sessions.__name__,
-                                           get_uniq_stamp())
-
-    return [test_40m], start_memory, out_folder, localenv
-
-
 def test_udp_throughput():
     localenv = Warp17Env('ut/ini/{}.ini'.format(socket.gethostname()))
-    test_thr = Test()
+    test_thr = Test(id=0)
     test_thr.cl_port = 0
     test_thr.sr_port = 1
     test_thr.add_l3(test_thr.cl_port, 167837697, 1)  # 10.1.0.1
@@ -588,16 +566,38 @@ def test_udp_throughput():
                                              tc_cl_estab=120)
 
     test_thr.app_ccfg = App(app_proto=RAW_CLIENT,
-                            app_raw_client=RawClient(rc_req_plen=80000,
-                                                     rc_resp_plen=80000))
+                            app_raw_client=RawClient(rc_req_plen=1324,
+                                                     rc_resp_plen=1324))
     test_thr.app_scfg = App(app_proto=RAW_SERVER,
-                            app_raw_server=RawServer(rs_req_plen=80000,
-                                                     rs_resp_plen=80000))
+                            app_raw_server=RawServer(rs_req_plen=1324,
+                                                     rs_resp_plen=1324))
 
     test_thr.tc_init_delay = Delay(d_value=0)
     test_thr.tc_uptime = Delay(d_value=1)
     test_thr.tc_downtime = Delay(d_value=0)
 
+    test_thr2 = Test(id=1)
+    test_thr2.cl_port = 1
+    test_thr2.sr_port = 0
+    test_thr2.add_l3(test_thr2.cl_port, 167837697, 1)  # 10.1.0.1
+    test_thr2.add_l3(test_thr2.sr_port, 167772161, 10)  # 10.0.0.1-10.0.0.10
+    test_thr2.l4_config[test_thr2.cl_port] = 10
+    test_thr2.l4_config[test_thr2.sr_port] = 50000  # not really needed
+    test_thr2.proto = UDP
+
+    test_thr2.cl_test_criteria = TestCriteria(tc_crit_type=RUN_TIME,
+                                              tc_cl_estab=120)
+
+    test_thr2.app_ccfg = App(app_proto=RAW_CLIENT,
+                             app_raw_client=RawClient(rc_req_plen=1324,
+                                                      rc_resp_plen=1324))
+    test_thr2.app_scfg = App(app_proto=RAW_SERVER,
+                             app_raw_server=RawServer(rs_req_plen=1324,
+                                                      rs_resp_plen=1324))
+
+    test_thr2.tc_init_delay = Delay(d_value=0)
+    test_thr2.tc_uptime = Delay(d_value=1)
+    test_thr2.tc_downtime = Delay(d_value=0)
 
     start_memory = env.get_memory()
 
@@ -605,6 +605,154 @@ def test_udp_throughput():
     localenv.set_value(env.UCB_POOL_SZ, 98000)
 
     out_folder = "/tmp/{}-test-{}/".format(test_udp_throughput.__name__,
+                                           get_uniq_stamp())
+
+    return [test_thr, test_thr2], start_memory, out_folder, localenv
+
+
+def test_tcp_throughput():
+    localenv = Warp17Env('ut/ini/{}.ini'.format(socket.gethostname()))
+    test_thr = Test()
+    test_thr.cl_port = 0
+    test_thr.sr_port = 1
+    test_thr.add_l3(test_thr.cl_port, 167837697, 4)  # 10.1.0.1
+    test_thr.add_l3(test_thr.sr_port, 167772161, 1)  # 10.0.0.1-10.0.0.10
+    test_thr.l4_config[test_thr.cl_port] = 200
+    test_thr.l4_config[test_thr.sr_port] = 50000  # not really needed
+    test_thr.proto = TCP
+
+    test_thr.cl_test_criteria = TestCriteria(tc_crit_type=RUN_TIME,
+                                             tc_cl_estab=120)
+
+    test_thr.app_ccfg = App(app_proto=RAW_CLIENT,
+                            app_raw_client=RawClient(rc_req_plen=512,
+                                                     rc_resp_plen=512))
+    test_thr.app_scfg = App(app_proto=RAW_SERVER,
+                            app_raw_server=RawServer(rs_req_plen=512,
+                                                     rs_resp_plen=512))
+
+    test_thr.tc_init_delay = Delay(d_value=0)
+    test_thr.tc_uptime = Delay(d_value=1)
+    test_thr.tc_downtime = Delay(d_value=0)
+
+    start_memory = env.get_memory()
+
+    localenv.set_value(env.TCB_POOL_SZ, 98000)
+    localenv.set_value(env.UCB_POOL_SZ, 0)
+
+    out_folder = "/tmp/{}-test-{}/".format(test_tcp_throughput.__name__,
+                                           get_uniq_stamp())
+
+    return [test_thr], start_memory, out_folder, localenv
+
+
+def test_tcp2_throughput():
+    localenv = Warp17Env('ut/ini/{}.ini'.format(socket.gethostname()))
+    test_thr = Test()
+    test_thr.cl_port = 0
+    test_thr.sr_port = 1
+    test_thr.add_l3(test_thr.cl_port, 167837697, 4)  # 10.1.0.1
+    test_thr.add_l3(test_thr.sr_port, 167772161, 1)  # 10.0.0.1-10.0.0.10
+    test_thr.l4_config[test_thr.cl_port] = 200
+    test_thr.l4_config[test_thr.sr_port] = 50000  # not really needed
+    test_thr.proto = TCP
+
+    test_thr.cl_test_criteria = TestCriteria(tc_crit_type=RUN_TIME,
+                                             tc_cl_estab=120)
+
+    test_thr.app_ccfg = App(app_proto=RAW_CLIENT,
+                            app_raw_client=RawClient(rc_req_plen=1024,
+                                                     rc_resp_plen=1024))
+    test_thr.app_scfg = App(app_proto=RAW_SERVER,
+                            app_raw_server=RawServer(rs_req_plen=1024,
+                                                     rs_resp_plen=1024))
+
+    test_thr.tc_init_delay = Delay(d_value=0)
+    test_thr.tc_uptime = Delay(d_value=1)
+    test_thr.tc_downtime = Delay(d_value=0)
+
+    start_memory = env.get_memory()
+
+    localenv.set_value(env.TCB_POOL_SZ, 98000)
+    localenv.set_value(env.UCB_POOL_SZ, 0)
+
+    out_folder = "/tmp/{}-test-{}/".format(test_tcp2_throughput.__name__,
+                                           get_uniq_stamp())
+
+    return [test_thr], start_memory, out_folder, localenv
+
+
+def test_tcp3_throughput():
+    localenv = Warp17Env('ut/ini/{}.ini'.format(socket.gethostname()))
+    test_thr = Test()
+    test_thr.cl_port = 0
+    test_thr.sr_port = 1
+    test_thr.add_l3(test_thr.cl_port, 167837697, 4)  # 10.1.0.1
+    test_thr.add_l3(test_thr.sr_port, 167772161, 1)  # 10.0.0.1-10.0.0.10
+    test_thr.l4_config[test_thr.cl_port] = 200
+    test_thr.l4_config[test_thr.sr_port] = 50000  # not really needed
+    test_thr.proto = TCP
+    test_thr.mtu = 2854
+    test_thr.tcpwin = 2560
+
+    test_thr.cl_test_criteria = TestCriteria(tc_crit_type=RUN_TIME,
+                                             tc_cl_estab=120)
+
+    test_thr.app_ccfg = App(app_proto=RAW_CLIENT,
+                            app_raw_client=RawClient(rc_req_plen=2560,
+                                                     rc_resp_plen=2560))
+    test_thr.app_scfg = App(app_proto=RAW_SERVER,
+                            app_raw_server=RawServer(rs_req_plen=2560,
+                                                     rs_resp_plen=2560))
+
+    test_thr.tc_init_delay = Delay(d_value=0)
+    test_thr.tc_uptime = Delay(d_value=1)
+    test_thr.tc_downtime = Delay(d_value=0)
+
+    start_memory = env.get_memory()
+
+    localenv.set_value(env.TCB_POOL_SZ, 98000)
+    localenv.set_value(env.UCB_POOL_SZ, 0)
+
+    out_folder = "/tmp/{}-test-{}/".format(test_tcp3_throughput.__name__,
+                                           get_uniq_stamp())
+
+    return [test_thr], start_memory, out_folder, localenv
+
+
+def test_tcp4_throughput():
+    localenv = Warp17Env('ut/ini/{}.ini'.format(socket.gethostname()))
+    test_thr = Test()
+    test_thr.cl_port = 0
+    test_thr.sr_port = 1
+    test_thr.add_l3(test_thr.cl_port, 167837697, 4)  # 10.1.0.1
+    test_thr.add_l3(test_thr.sr_port, 167772161, 1)  # 10.0.0.1-10.0.0.10
+    test_thr.l4_config[test_thr.cl_port] = 200
+    test_thr.l4_config[test_thr.sr_port] = 50000  # not really needed
+    test_thr.proto = TCP
+    test_thr.mtu = 5414
+    test_thr.tcpwin = 5120
+
+    test_thr.cl_test_criteria = TestCriteria(tc_crit_type=RUN_TIME,
+                                             tc_cl_estab=120)
+
+    test_thr.app_ccfg = App(app_proto=RAW_CLIENT,
+                            app_raw_client=RawClient(rc_req_plen=5120,
+                                                     rc_resp_plen=5120))
+    test_thr.app_scfg = App(app_proto=RAW_SERVER,
+                            app_raw_server=RawServer(rs_req_plen=5120,
+                                                     rs_resp_plen=5120))
+
+    test_thr.tc_init_delay = Delay(d_value=0)
+    test_thr.tc_uptime = Delay(d_value=1)
+    test_thr.tc_downtime = Delay(d_value=0)
+
+    start_memory = env.get_memory()
+
+    localenv.set_value(env.TCB_POOL_SZ, 98000)
+    localenv.set_value(env.UCB_POOL_SZ, 0)
+
+    out_folder = "/tmp/{}-test-{}/".format(test_tcp4_throughput.__name__,
                                            get_uniq_stamp())
 
     return [test_thr], start_memory, out_folder, localenv
@@ -656,7 +804,6 @@ def test_throughput2():
     test_thr_cl1.l4_config[test_thr_cl1.sr_port] = 50000  # not really needed
     test_thr_cl1.proto = UDP
 
-
     test_thr_cl1.cl_test_criteria = TestCriteria(tc_crit_type=RUN_TIME,
                                                  tc_cl_estab=120)
 
@@ -668,8 +815,8 @@ def test_throughput2():
     test_thr_cl1.tc_downtime = Delay(d_value=0)
 
     test_thr_cl2 = Test(type=TestCaseType.Value('CLIENT'),
-                                      port=1,
-                                      id=0)
+                        port=1,
+                        id=0)
     test_thr_cl2.cl_port = 1
     test_thr_cl2.sr_port = 0
     test_thr_cl2.add_l3(test_thr_cl2.cl_port, 167837697, 1)  # 10.1.0.1
@@ -677,7 +824,6 @@ def test_throughput2():
     test_thr_cl2.l4_config[test_thr_cl2.cl_port] = 10
     test_thr_cl2.l4_config[test_thr_cl2.sr_port] = 50000  # not really needed
     test_thr_cl2.proto = UDP
-
 
     test_thr_cl2.cl_test_criteria = TestCriteria(tc_crit_type=RUN_TIME,
                                                  tc_cl_estab=120)
@@ -690,7 +836,6 @@ def test_throughput2():
     test_thr_cl2.uptime = Delay(d_value=1)
     test_thr_cl2.downtime = Delay(d_value=0)
 
-
     start_memory = env.get_memory()
 
     localenv.set_value(env.TCB_POOL_SZ, 0)
@@ -701,9 +846,11 @@ def test_throughput2():
 
     return [test_thr_cl1, test_thr_cl2], start_memory, out_folder, localenv
 
-tests = [] # here you can append the tests you want to run (in sequence)
-tests.append(test_400k_http_sessions())
-tests.append(test_800k_http_sessions())
+
+tests = []  # here you can append the tests you want to run (in sequence)
+# tests.append(test_http_throughput())
+tests.append(test_tcp4_throughput())
+tests.append(test_udp_throughput())
 
 for test, start_memory, out_folder, localenv in tests:
     res_file = "{}res.txt".format(out_folder)
@@ -714,7 +861,7 @@ for test, start_memory, out_folder, localenv in tests:
     resultwriter = open(res_file, "w")
     resultwriter.write("Stats collection:_{}\n".format(datetime.today()))
     running_times = 10
-    for i in range (0, running_times):
+    for i in range(0, running_times):
         print "run {}".format(i)
         resultwriter.write("Run {}\n".format(i))
         resultwriter.flush()
