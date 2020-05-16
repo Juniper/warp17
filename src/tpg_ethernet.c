@@ -103,7 +103,7 @@ static void cmd_show_ethernet_statistics_parsed(void *parsed_result __rte_unused
     printer_arg_t                               parg = TPG_PRINTER_ARG(cli_printer, cl);
     struct cmd_show_ethernet_statistics_result *pr = parsed_result;
 
-    for (port = 0; port < rte_eth_dev_count(); port++) {
+    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
         if ((option == 'p' || option == 'c') && port != pr->port)
             continue;
 
@@ -269,9 +269,9 @@ struct rte_mbuf *eth_build_hdr_mbuf(l4_control_block_t *l4_cb,
                                     uint64_t src_mac,
                                     uint16_t ether_type)
 {
-    struct ether_hdr *eth;
-    struct rte_mbuf  *mbuf;
-    struct vlan_hdr *tag_hdr;
+    struct rte_ether_hdr *eth;
+    struct rte_mbuf      *mbuf;
+    struct rte_vlan_hdr  *tag_hdr;
     uint32_t port = l4_cb->l4cb_interface;
 
     mbuf = pkt_mbuf_alloc(mem_get_mbuf_local_pool_tx_hdr());
@@ -292,8 +292,8 @@ struct rte_mbuf *eth_build_hdr_mbuf(l4_control_block_t *l4_cb,
     /*
      * Build ethernet header
      */
-    eth = (struct ether_hdr *) rte_pktmbuf_append(mbuf,
-                                                  sizeof(struct ether_hdr));
+    eth = (struct rte_ether_hdr *)
+        rte_pktmbuf_append(mbuf, sizeof(struct rte_ether_hdr));
 
     if (unlikely(!eth)) {
         pkt_mbuf_free(mbuf);
@@ -307,11 +307,11 @@ struct rte_mbuf *eth_build_hdr_mbuf(l4_control_block_t *l4_cb,
      * Build the Vlan header if vlan is configured by user
      */
     if (l4_cb->l4cb_sockopt.so_vlan.vlanso_hdr_opt_len > 0) {
-        eth->ether_type = rte_cpu_to_be_16(ETHER_TYPE_VLAN);
+        eth->ether_type = rte_cpu_to_be_16(RTE_ETHER_TYPE_VLAN);
 
         tag_hdr =
-            (struct vlan_hdr *)rte_pktmbuf_append(mbuf,
-                                                  sizeof(struct vlan_hdr));
+            (struct rte_vlan_hdr *)rte_pktmbuf_append(mbuf,
+                                                      sizeof(struct rte_vlan_hdr));
 
         if (unlikely(!tag_hdr)) {
             pkt_mbuf_free(mbuf);
@@ -332,7 +332,7 @@ struct rte_mbuf *eth_build_hdr_mbuf(l4_control_block_t *l4_cb,
          * We assume hardware checksum calculation for ip/tcp, to
          * support this we need to set the correct l2 header size.
          */
-        mbuf->l2_len = sizeof(struct ether_hdr) +
+        mbuf->l2_len = sizeof(struct rte_ether_hdr) +
                            l4_cb->l4cb_sockopt.so_vlan.vlanso_hdr_opt_len;
     }
 
@@ -348,12 +348,12 @@ struct rte_mbuf *eth_build_hdr_mbuf(l4_control_block_t *l4_cb,
 struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
                                  struct rte_mbuf *mbuf)
 {
-    uint16_t          etype;
-    struct ether_hdr *eth_hdr;
-    uint16_t          vlan_tci  = VLAN_NO_TAG;
+    uint16_t              etype;
+    struct rte_ether_hdr *eth_hdr;
+    uint16_t              vlan_tci  = VLAN_NO_TAG;
 
-    if (unlikely(rte_pktmbuf_data_len(mbuf) < sizeof(struct ether_hdr))) {
-        RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: mbuf fragment to small for ether_hdr!\n",
+    if (unlikely(rte_pktmbuf_data_len(mbuf) < sizeof(struct rte_ether_hdr))) {
+        RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: mbuf fragment to small for rte_ether_hdr!\n",
                 pcb->pcb_core_index, __func__);
 
         INC_STATS(STATS_LOCAL(tpg_eth_statistics_t, pcb->pcb_port),
@@ -361,7 +361,7 @@ struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
         return mbuf;
     }
 
-    eth_hdr = rte_pktmbuf_mtod(mbuf, struct ether_hdr *);
+    eth_hdr = rte_pktmbuf_mtod(mbuf, struct rte_ether_hdr *);
     etype = rte_be_to_cpu_16(eth_hdr->ether_type);
 
     PKT_TRACE(pcb, ETH, DEBUG, "dst=%02X:%02X:%02X:%02X:%02X:%02X, src=%02X:%02X:%02X:%02X:%02X:%02X, etype=0x%4.4X",
@@ -383,21 +383,21 @@ struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
      * Pop all vlan tags to determine protocol type.
      * TODO: we only pass on the inner-most vlan tag right now.
      */
-    if (unlikely(etype == ETHER_TYPE_VLAN)) {
+    if (unlikely(etype == RTE_ETHER_TYPE_VLAN)) {
 
         INC_STATS(STATS_LOCAL(tpg_eth_statistics_t, pcb->pcb_port),
                   es_etype_vlan);
 
         assert(pcb->pcb_mbuf == mbuf);
-        mbuf = data_adj_chain(mbuf, sizeof(struct ether_hdr));
+        mbuf = data_adj_chain(mbuf, sizeof(struct rte_ether_hdr));
         pcb->pcb_mbuf = mbuf;
 
         do {
-            struct vlan_hdr *tag_hdr;
+            struct rte_vlan_hdr *tag_hdr;
 
-            tag_hdr = rte_pktmbuf_mtod(mbuf, struct vlan_hdr *);
+            tag_hdr = rte_pktmbuf_mtod(mbuf, struct rte_vlan_hdr *);
 
-            if (unlikely(rte_pktmbuf_data_len(mbuf) < sizeof(struct vlan_hdr))) {
+            if (unlikely(rte_pktmbuf_data_len(mbuf) < sizeof(struct rte_vlan_hdr))) {
                 RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: mbuf fragment to small for vlan_hdr!\n",
                         pcb->pcb_core_index, __func__);
 
@@ -413,14 +413,14 @@ struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
                       vlan_tci, etype);
 
             assert(pcb->pcb_mbuf == mbuf);
-            mbuf = data_adj_chain(mbuf, sizeof(struct vlan_hdr));
+            mbuf = data_adj_chain(mbuf, sizeof(struct rte_vlan_hdr));
             pcb->pcb_mbuf = mbuf;
 
-        } while (etype == ETHER_TYPE_VLAN);
+        } while (etype == RTE_ETHER_TYPE_VLAN);
 
     } else {
         assert(pcb->pcb_mbuf == mbuf);
-        mbuf = data_adj_chain(mbuf, sizeof(struct ether_hdr));
+        mbuf = data_adj_chain(mbuf, sizeof(struct rte_ether_hdr));
         pcb->pcb_mbuf = mbuf;
     }
 
@@ -431,19 +431,19 @@ struct rte_mbuf *eth_receive_pkt(packet_control_block_t *pcb,
      */
     switch (etype) {
 
-    case ETHER_TYPE_IPv4:
+    case RTE_ETHER_TYPE_IPV4:
         INC_STATS(STATS_LOCAL(tpg_eth_statistics_t, pcb->pcb_port),
                   es_etype_ipv4);
         mbuf = ipv4_receive_pkt(pcb, mbuf);
         break;
 
-    case ETHER_TYPE_ARP:
+    case RTE_ETHER_TYPE_ARP:
         INC_STATS(STATS_LOCAL(tpg_eth_statistics_t, pcb->pcb_port),
                   es_etype_arp);
         mbuf = arp_receive_pkt(pcb, mbuf, vlan_tci);
         break;
 
-    case ETHER_TYPE_IPv6:
+    case RTE_ETHER_TYPE_IPV6:
         /* TODO: handle IPv6 */
         INC_STATS(STATS_LOCAL(tpg_eth_statistics_t, pcb->pcb_port),
                   es_etype_ipv6);
@@ -468,7 +468,7 @@ void vlan_store_sockopt(vlan_sockopt_t *dest, const tpg_vlan_sockopt_t *options)
 
     /* Set the header length based on vlan option provided or not*/
     if (dest->vlanso_id)
-        dest->vlanso_hdr_opt_len = sizeof(struct vlan_hdr);
+        dest->vlanso_hdr_opt_len = sizeof(struct rte_vlan_hdr);
     else
         dest->vlanso_hdr_opt_len = 0;
 }

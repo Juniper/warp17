@@ -86,7 +86,7 @@ uint32_t kni_if_get_count(void)
  ****************************************************************************/
 uint32_t kni_get_first_kni_interface(void)
 {
-    return rte_eth_dev_count() - kni_if_get_count();
+    return rte_eth_dev_count_avail() - kni_if_get_count();
 }
 
 /*****************************************************************************
@@ -171,9 +171,10 @@ bool kni_if_init(void)
      *
      * NOTE: It's missing the ring_if_get_count() below, as it's init function
      *       has been called at this stage, so they are included in the
-     *       rte_eth_dev_count()!
+     *       rte_eth_dev_count_avail()!
      */
-    if ((rte_eth_dev_count() + kni_if_get_count()) > TPG_ETH_DEV_MAX) {
+    if ((rte_eth_dev_count_avail() + kni_if_get_count()) >
+        TPG_ETH_DEV_MAX) {
         TPG_ERROR_EXIT(EXIT_FAILURE,
                        "ERROR: Total number of virtual interfaces and ethernet ports must be less than (or equal to) %u!\n",
                        TPG_ETH_DEV_MAX);
@@ -209,7 +210,7 @@ bool kni_if_init(void)
         struct rte_kni_conf     conf;
         struct rte_kni_ops      ops;
         struct rte_eth_dev_info dev_info;
-        uint32_t                port = rte_eth_dev_count();
+        uint32_t                port = rte_eth_dev_count_avail();
 
         if (port_port_cfg[port].ppc_q_cnt != kni_cores_in_mask(port_port_cfg[port].ppc_core_mask))
             TPG_ERROR_ABORT("ERROR: Assigned lcores should be the same as number of queues!");
@@ -304,12 +305,12 @@ static int kni_change_mtu(uint16_t port, unsigned mtu)
         return -EINVAL;
     }
 
-    if (mtu < ETHER_MIN_LEN) {
+    if (mtu < RTE_ETHER_MIN_LEN) {
         RTE_LOG(ERR, USER1,
                 "ERROR: Requested MTU, %u, for port %u smaller than minimal ethernet size, %u!\n",
                 mtu,
                 port,
-                ETHER_MIN_LEN);
+                RTE_ETHER_MIN_LEN);
         return -EINVAL;
     }
 

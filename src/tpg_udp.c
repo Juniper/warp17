@@ -196,13 +196,13 @@ struct rte_mbuf *udp_receive_pkt(packet_control_block_t *pcb,
                                  struct rte_mbuf *mbuf)
 {
     tpg_udp_statistics_t *stats;
-    struct udp_hdr       *udp_hdr;
+    struct rte_udp_hdr   *udp_hdr;
     udp_control_block_t  *ucb;
     int                   error;
 
     stats = STATS_LOCAL(tpg_udp_statistics_t, pcb->pcb_port);
 
-    if (unlikely(rte_pktmbuf_data_len(mbuf) < sizeof(struct udp_hdr))) {
+    if (unlikely(rte_pktmbuf_data_len(mbuf) < sizeof(struct rte_udp_hdr))) {
         RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: mbuf fragment to small for udp_hdr!\n",
                 pcb->pcb_core_index, __func__);
 
@@ -210,7 +210,7 @@ struct rte_mbuf *udp_receive_pkt(packet_control_block_t *pcb,
         return mbuf;
     }
 
-    udp_hdr = rte_pktmbuf_mtod(mbuf, struct udp_hdr *);
+    udp_hdr = rte_pktmbuf_mtod(mbuf, struct rte_udp_hdr *);
 
     PKT_TRACE(pcb, UDP, DEBUG, "sport=%u, dport=%u, data_len=%u, cksum=%"PRIX16,
               rte_be_to_cpu_16(udp_hdr->src_port),
@@ -276,9 +276,9 @@ struct rte_mbuf *udp_receive_pkt(packet_control_block_t *pcb,
      * Update mbuf/pcb and send packet of to the client handler
      */
     pcb->pcb_udp = udp_hdr;
-    pcb->pcb_l5_len = pcb->pcb_l4_len - sizeof(struct udp_hdr);
+    pcb->pcb_l5_len = pcb->pcb_l4_len - sizeof(struct rte_udp_hdr);
     assert(pcb->pcb_mbuf == mbuf);
-    mbuf = data_adj_chain(mbuf, sizeof(struct udp_hdr));
+    mbuf = data_adj_chain(mbuf, sizeof(struct rte_udp_hdr));
     pcb->pcb_mbuf = mbuf;
 
     /*
@@ -373,17 +373,17 @@ struct rte_mbuf *udp_receive_pkt(packet_control_block_t *pcb,
 /*****************************************************************************
  * udp_build_hdr()
  ****************************************************************************/
-static struct udp_hdr *udp_build_hdr(udp_control_block_t *ucb,
-                                     struct rte_mbuf *mbuf,
-                                     struct ipv4_hdr *ipv4_hdr,
-                                     uint16_t dgram_len)
+static struct rte_udp_hdr *udp_build_hdr(udp_control_block_t *ucb,
+                                         struct rte_mbuf *mbuf,
+                                         struct rte_ipv4_hdr *ipv4_hdr,
+                                         uint16_t dgram_len)
 {
-    uint16_t        udp_hdr_len = sizeof(struct udp_hdr);
-    uint16_t        udp_hdr_offset = rte_pktmbuf_data_len(mbuf);
-    struct udp_hdr *udp_hdr;
-    int             ip_hdr_len;
+    uint16_t            udp_hdr_len = sizeof(struct rte_udp_hdr);
+    uint16_t            udp_hdr_offset = rte_pktmbuf_data_len(mbuf);
+    struct rte_udp_hdr *udp_hdr;
+    int                 ip_hdr_len;
 
-    udp_hdr = (struct udp_hdr *) rte_pktmbuf_append(mbuf, udp_hdr_len);
+    udp_hdr = (struct rte_udp_hdr *) rte_pktmbuf_append(mbuf, udp_hdr_len);
 
     if (udp_hdr == NULL)
         return NULL;
@@ -426,10 +426,10 @@ static struct udp_hdr *udp_build_hdr(udp_control_block_t *ucb,
  ****************************************************************************/
 static struct rte_mbuf *udp_build_hdr_mbuf(udp_control_block_t *ucb,
                                            uint32_t l4_len,
-                                           struct udp_hdr **udp_hdr_p)
+                                           struct rte_udp_hdr **udp_hdr_p)
 {
     struct rte_mbuf *mbuf;
-    struct ipv4_hdr *ip_hdr;
+    struct rte_ipv4_hdr *ip_hdr;
 
     if (ucb->ucb_l4.l4cb_domain != AF_INET) {
         TPG_ERROR_ABORT("TODO: UDP = IPv4 only for now!\n");
@@ -437,7 +437,7 @@ static struct rte_mbuf *udp_build_hdr_mbuf(udp_control_block_t *ucb,
     }
 
     mbuf = ipv4_build_hdr_mbuf(&ucb->ucb_l4, IPPROTO_UDP,
-                                sizeof(struct udp_hdr) + l4_len,
+                                sizeof(struct rte_udp_hdr) + l4_len,
                                 &ip_hdr);
     if (unlikely(!mbuf))
         return NULL;
@@ -459,7 +459,7 @@ static struct rte_mbuf *udp_build_hdr_mbuf(udp_control_block_t *ucb,
  ****************************************************************************/
 static int
 udp_send_pkt(udp_control_block_t *ucb, struct rte_mbuf *hdr_mbuf,
-             struct udp_hdr *udp_hdr,
+             struct rte_udp_hdr *udp_hdr,
              struct rte_mbuf *data_mbuf,
              uint32_t *data_sent)
 {
@@ -476,7 +476,7 @@ udp_send_pkt(udp_control_block_t *ucb, struct rte_mbuf *hdr_mbuf,
         if (unlikely(DATA_IS_TSTAMP(data_mbuf))) {
             tstamp_write_cksum_offset(hdr_mbuf,
                                       hdr_mbuf->pkt_len -
-                                      sizeof(struct udp_hdr) +
+                                      sizeof(struct rte_udp_hdr) +
                                       RTE_PTR_DIFF(&udp_hdr->dgram_cksum,
                                                    udp_hdr));
         }
@@ -683,7 +683,7 @@ int udp_send_v4(udp_control_block_t *ucb, struct rte_mbuf *data_mbuf,
                 uint32_t *data_sent)
 {
     struct rte_mbuf      *hdr;
-    struct udp_hdr       *udp_hdr;
+    struct rte_udp_hdr   *udp_hdr;
     tpg_udp_statistics_t *stats;
     int                   err;
 
@@ -751,7 +751,7 @@ static void cmd_show_udp_statistics_parsed(void *parsed_result __rte_unused,
     struct cmd_show_udp_statistics_result *pr = parsed_result;
     printer_arg_t                          parg = TPG_PRINTER_ARG(cli_printer, cl);
 
-    for (port = 0; port < rte_eth_dev_count(); port++) {
+    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
         if ((option == 'p' || option == 'c') && port != pr->port)
             continue;
 

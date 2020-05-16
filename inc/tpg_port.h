@@ -114,9 +114,9 @@ typedef struct port_core_cfg_s {
 
 #define CORE_PORT_QINVALID (-1)
 
-#define FOREACH_PORT_IN_CORE_START(core, port)                 \
-    for ((port) = 0; (port) < rte_eth_dev_count(); (port)++) { \
-        if (port_core_cfg[core].pcc_qport_map[port] !=         \
+#define FOREACH_PORT_IN_CORE_START(core, port)                       \
+    for ((port) = 0; (port) < rte_eth_dev_count_avail(); (port)++) { \
+        if (port_core_cfg[core].pcc_qport_map[port] !=               \
                 CORE_PORT_QINVALID) {
 
 #define FOREACH_PORT_IN_CORE_END()                             \

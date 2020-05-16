@@ -766,7 +766,7 @@ static void cmd_show_timer_statistics_parsed(void *parsed_result __rte_unused,
     printer_arg_t                            parg = TPG_PRINTER_ARG(cli_printer, cl);
     struct cmd_show_timer_statistics_result *pr = parsed_result;
 
-    for (port = 0; port < rte_eth_dev_count(); port++) {
+    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
         if ((option == 'p' || option == 'c') && port != pr->port)
             continue;
 

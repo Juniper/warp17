@@ -777,7 +777,7 @@ static void test_display_stats_test_state(ui_win_t *ui_win,
 
     parg = TPG_PRINTER_ARG(ui_printer, ui_win->uw_win);
 
-    for (port = 0; port < rte_eth_dev_count(); port++) {
+    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
         test_state_show_tcs_hdr(port, &parg);
         UI_HLINE_PRINT(ui_win->uw_win, "=", ui_win->uw_cols - 2);
 
@@ -1085,7 +1085,7 @@ static void test_display(void)
     test_display_win(&stats_test_detail_win, true,
                       test_display_stats_test_detail, NULL);
 
-    for (port = 0; port < rte_eth_dev_count(); port++) {
+    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
         test_display_win(&stats_win[port], true, test_display_stats,
                          (void *)(uintptr_t)port);
     }
@@ -1199,9 +1199,9 @@ static void test_stats_init_windows(void)
      * Create the stats windows - the right part of the screen.
      */
     stats_x = stats_test_state_win.uw_cols;
-    stats_xsz = WIN_SZ(cols, STATS_WIN_XPERC) / rte_eth_dev_count();
+    stats_xsz = WIN_SZ(cols, STATS_WIN_XPERC) / rte_eth_dev_count_avail();
 
-    for (port = 0; port < rte_eth_dev_count(); port++) {
+    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
         test_stats_ui_win_init(&stats_win[port],
                                lines, stats_xsz,
                                0, stats_x,
@@ -1236,7 +1236,7 @@ static void test_stats_tmr_cb(struct rte_timer *tmr __rte_unused,
 {
     uint32_t port;
 
-    for (port = 0; port < rte_eth_dev_count(); port++)
+    for (port = 0; port < rte_eth_dev_count_avail(); port++)
         test_display_win(&stats_win[port], false, test_display_stats,
                          (void *)(uintptr_t)port);
 }
@@ -1280,7 +1280,7 @@ static void test_stats_init_detail_tc(void)
 {
     uint32_t port;
 
-    for (port = 0; port < rte_eth_dev_count(); port++) {
+    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
         if (test_mgmt_get_test_case_count(port)) {
             tpg_test_case_t entry;
 
@@ -1326,7 +1326,7 @@ static void test_stats_forward_detail_tc(void)
 
     do {
         stats_detail_port++;
-        stats_detail_port %= rte_eth_dev_count();
+        stats_detail_port %= rte_eth_dev_count_avail();
     } while (test_mgmt_get_test_case_count(stats_detail_port) == 0);
 
     for (stats_detail_tcid = 0;
@@ -1371,7 +1371,7 @@ static void test_stats_back_detail_tc(void)
 
     do {
         if (stats_detail_port == 0)
-            stats_detail_port = rte_eth_dev_count() - 1;
+            stats_detail_port = rte_eth_dev_count_avail() - 1;
         else
             stats_detail_port--;
     } while (test_mgmt_get_test_case_count(stats_detail_port) == 0);
@@ -1434,7 +1434,7 @@ void test_init_stats_screen(void)
     };
 
     stats_win = rte_zmalloc_socket("stats_win",
-                                   rte_eth_dev_count() * sizeof(*stats_win),
+                                   rte_eth_dev_count_avail() * sizeof(*stats_win),
                                    0,
                                    rte_lcore_to_socket_id(rte_lcore_id()));
 

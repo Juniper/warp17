@@ -1122,7 +1122,7 @@ static bool test_mgmt_init_env(void)
      * Allocate port test configuration array.
      */
     test_env = rte_zmalloc_socket("test_env",
-                                  rte_eth_dev_count() * sizeof(*test_env),
+                                  rte_eth_dev_count_avail() * sizeof(*test_env),
                                   0,
                                   rte_lcore_to_socket_id(rte_lcore_id()));
 
@@ -1139,7 +1139,7 @@ static bool test_mgmt_init_runtime_stats(void)
      */
     test_runtime_gen_stats =
         rte_zmalloc_socket("test_runtime_gen_stats",
-                           rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES *
+                           rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES *
                            sizeof(*test_runtime_gen_stats),
                            0,
                            rte_lcore_to_socket_id(rte_lcore_id()));
@@ -1148,7 +1148,7 @@ static bool test_mgmt_init_runtime_stats(void)
 
     test_runtime_rate_stats =
         rte_zmalloc_socket("test_runtime_rate_stats",
-                           rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES *
+                           rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES *
                            sizeof(*test_runtime_rate_stats),
                            0,
                            rte_lcore_to_socket_id(rte_lcore_id()));
@@ -1157,7 +1157,7 @@ static bool test_mgmt_init_runtime_stats(void)
 
     test_runtime_app_stats =
         rte_zmalloc_socket("test_runtime_app_stats",
-                           rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES *
+                           rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES *
                            sizeof(*test_runtime_app_stats),
                            0,
                            rte_lcore_to_socket_id(rte_lcore_id()));

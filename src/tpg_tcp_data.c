@@ -222,10 +222,10 @@ int tcp_data_send(tcp_control_block_t *tcb, tsm_data_arg_t *data)
     *data->tda_data_sent = 0;
 
     if (data->tda_push)
-        snd_flags |= TCP_PSH_FLAG;
+        snd_flags |= RTE_TCP_PSH_FLAG;
 
     if (data->tda_urg)
-        snd_flags |= TCP_URG_FLAG;
+        snd_flags |= RTE_TCP_URG_FLAG;
 
     stored_bytes = tcp_data_store_send(tcb, data);
     if (stored_bytes == 0)
@@ -247,7 +247,7 @@ int tcp_data_send(tcp_control_block_t *tcb, tsm_data_arg_t *data)
 
     tcp_data_send_segments(tcb, data_to_send, unsent_size, data_offset,
                            tcb->tcb_snd.nxt,
-                           TCP_ACK_FLAG | snd_flags);
+                           RTE_TCP_ACK_FLAG | snd_flags);
 
 done:
     if (data->tda_data_len == stored_bytes) {
@@ -447,7 +447,7 @@ uint32_t tcp_data_retrans(tcp_control_block_t *tcb)
                                                    tcb->tcb_snd.wnd),
                                            0,
                                            tcb->tcb_snd.una,
-                                           TCP_ACK_FLAG);
+                                           RTE_TCP_ACK_FLAG);
     return retrans_bytes;
 }
 

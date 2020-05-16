@@ -89,9 +89,9 @@ RTE_DEFINE_PER_LCORE(port_info_t *, local_port_dev_info);
 static void pkt_trace_tx(packet_control_block_t *pcb, int32_t tx_queue_id,
                          struct rte_mbuf *mbuf, bool failed)
 {
-    struct ether_hdr *eth_hdr;
-    uint16_t          etype;
-    uint16_t          offset = 0;
+    struct rte_ether_hdr *eth_hdr;
+    uint16_t              etype;
+    uint16_t              offset = 0;
 
     /* To avoid compiler complaints if tracing is not compiled in. */
     RTE_SET_USED(tx_queue_id);
@@ -108,15 +108,15 @@ static void pkt_trace_tx(packet_control_block_t *pcb, int32_t tx_queue_id,
      * Only do this is the segment header is big enough to hold longest
      * decode train. eth/ip/tcp in this case.
      */
-    if (mbuf->buf_len < (sizeof(struct ether_hdr) +
-                          sizeof(struct ipv4_hdr) +
-                          sizeof(struct tcp_hdr))) {
+    if (mbuf->buf_len < (sizeof(struct rte_ether_hdr) +
+                          sizeof(struct rte_ipv4_hdr) +
+                          sizeof(struct rte_tcp_hdr))) {
         return;
     }
 
-    eth_hdr = rte_pktmbuf_mtod(mbuf, struct ether_hdr *);
+    eth_hdr = rte_pktmbuf_mtod(mbuf, struct rte_ether_hdr *);
     etype = rte_be_to_cpu_16(eth_hdr->ether_type);
-    offset += sizeof(struct ether_hdr);
+    offset += sizeof(struct rte_ether_hdr);
 
     PKT_TRACE(pcb, ETH, DEBUG, "dst=%02X:%02X:%02X:%02X:%02X:%02X, src=%02X:%02X:%02X:%02X:%02X:%02X, etype=0x%4.4X",
               eth_hdr->d_addr.addr_bytes[0],
@@ -134,23 +134,23 @@ static void pkt_trace_tx(packet_control_block_t *pcb, int32_t tx_queue_id,
               etype);
 
     /* If vlan is enabled in the Packet */
-    if (unlikely(etype == ETHER_TYPE_VLAN)) {
-        struct vlan_hdr *tag_hdr = rte_pktmbuf_mtod_offset(mbuf,
-                                                           struct vlan_hdr *,
-                                                           offset);
+    if (unlikely(etype == RTE_ETHER_TYPE_VLAN)) {
+        struct rte_vlan_hdr *tag_hdr = rte_pktmbuf_mtod_offset(mbuf,
+                                                               struct rte_vlan_hdr *,
+                                                               offset);
 
-        offset += sizeof(struct vlan_hdr);
+        offset += sizeof(struct rte_vlan_hdr);
         etype = rte_be_to_cpu_16(tag_hdr->eth_proto);
         PKT_TRACE(pcb, ETH, DEBUG, "vlan_tci=%4.4X, etype=%4.4X\n",
                       rte_be_to_cpu_16(tag_hdr->vlan_tci), etype);
     }
 
     switch (etype) {
-    case ETHER_TYPE_IPv4:
+    case RTE_ETHER_TYPE_IPV4:
         if (true) {
-            struct ipv4_hdr *ip_hdr = rte_pktmbuf_mtod_offset(mbuf,
-                                                              struct ipv4_hdr *,
-                                                              offset);
+            struct rte_ipv4_hdr *ip_hdr = rte_pktmbuf_mtod_offset(mbuf,
+                                                                  struct rte_ipv4_hdr *,
+                                                                  offset);
 
             PKT_TRACE(pcb, IPV4, DEBUG, "src/dst=%8.8X/%8.8X, prot=%u, ver_len=0x%2.2X, len=%u",
                       rte_be_to_cpu_32(ip_hdr->src_addr),
@@ -162,23 +162,23 @@ static void pkt_trace_tx(packet_control_block_t *pcb, int32_t tx_queue_id,
             PKT_TRACE(pcb, IPV4, DEBUG, " ttl=%u, tos=%u, frag=0x%4.4X[%c%c%c], id=0x%4.4X, csum=0x%4.4X",
                       ip_hdr->time_to_live,
                       ip_hdr->type_of_service,
-                      rte_be_to_cpu_16(ip_hdr->fragment_offset) & IPV4_HDR_OFFSET_MASK,
+                      rte_be_to_cpu_16(ip_hdr->fragment_offset) & RTE_IPV4_HDR_OFFSET_MASK,
                       (rte_be_to_cpu_16(ip_hdr->fragment_offset) & 1<<15) == 0 ? '-' : 'R',
-                      (rte_be_to_cpu_16(ip_hdr->fragment_offset) & IPV4_HDR_DF_FLAG) == 0 ? '-' : 'd',
-                      (rte_be_to_cpu_16(ip_hdr->fragment_offset) & IPV4_HDR_MF_FLAG) == 0 ? '-' : 'm',
+                      (rte_be_to_cpu_16(ip_hdr->fragment_offset) & RTE_IPV4_HDR_DF_FLAG) == 0 ? '-' : 'd',
+                      (rte_be_to_cpu_16(ip_hdr->fragment_offset) & RTE_IPV4_HDR_MF_FLAG) == 0 ? '-' : 'm',
                       rte_be_to_cpu_16(ip_hdr->packet_id),
                       rte_be_to_cpu_16(ip_hdr->hdr_checksum));
 
             switch (ip_hdr->next_proto_id) {
             case IPPROTO_TCP:
                 if (true) {
-                    uint32_t        i;
-                    uint32_t        ip_len;
-                    struct tcp_hdr *tcp_hdr;
-                    uint32_t       *options;
+                    uint32_t            i;
+                    uint32_t            ip_len;
+                    struct rte_tcp_hdr *tcp_hdr;
+                    uint32_t           *options;
 
                     ip_len = ((ip_hdr->version_ihl & 0x0F) << 2);
-                    tcp_hdr = (struct tcp_hdr *) ((char *) ip_hdr + ip_len);
+                    tcp_hdr = (struct rte_tcp_hdr *) ((char *) ip_hdr + ip_len);
                     options = (uint32_t *) (tcp_hdr + 1);
 
                     /* To avoid compiler complaints if tracing is not
@@ -190,11 +190,11 @@ static void pkt_trace_tx(packet_control_block_t *pcb, int32_t tx_queue_id,
                               rte_be_to_cpu_16(tcp_hdr->src_port),
                               rte_be_to_cpu_16(tcp_hdr->dst_port),
                               (tcp_hdr->data_off >> 4) << 2,
-                              (tcp_hdr->tcp_flags & TCP_URG_FLAG) == 0 ? '-' : 'u',
-                              (tcp_hdr->tcp_flags & TCP_ACK_FLAG) == 0 ? '-' : 'a',
-                              (tcp_hdr->tcp_flags & TCP_PSH_FLAG) == 0 ? '-' : 'p',
-                              (tcp_hdr->tcp_flags & TCP_RST_FLAG) == 0 ? '-' : 'r',
-                              (tcp_hdr->tcp_flags & TCP_SYN_FLAG) == 0 ? '-' : 's',
+                              (tcp_hdr->tcp_flags & RTE_TCP_URG_FLAG) == 0 ? '-' : 'u',
+                              (tcp_hdr->tcp_flags & RTE_TCP_ACK_FLAG) == 0 ? '-' : 'a',
+                              (tcp_hdr->tcp_flags & RTE_TCP_PSH_FLAG) == 0 ? '-' : 'p',
+                              (tcp_hdr->tcp_flags & RTE_TCP_RST_FLAG) == 0 ? '-' : 'r',
+                              (tcp_hdr->tcp_flags & RTE_TCP_SYN_FLAG) == 0 ? '-' : 's',
                               (tcp_hdr->tcp_flags & TCP_FIN_FLAG) == 0 ? '-' : 'f',
                               rte_be_to_cpu_16(tcp_hdr->cksum));
 
@@ -205,7 +205,7 @@ static void pkt_trace_tx(packet_control_block_t *pcb, int32_t tx_queue_id,
                               rte_be_to_cpu_16(tcp_hdr->tcp_urp));
 
                     for (i = 0;
-                         i < (((((tcp_hdr->data_off >> 4) << 2) - sizeof(struct tcp_hdr)) / sizeof(uint32_t)));
+                         i < (((((tcp_hdr->data_off >> 4) << 2) - sizeof(struct rte_tcp_hdr)) / sizeof(uint32_t)));
                          i++) {
 
                         PKT_TRACE(pcb, TCP, DEBUG, "  option word 0x%2.2X: 0x%8.8X",
@@ -218,18 +218,17 @@ static void pkt_trace_tx(packet_control_block_t *pcb, int32_t tx_queue_id,
         }
         break;
 
-    case ETHER_TYPE_ARP:
+    case RTE_ETHER_TYPE_ARP:
         if (true) {
 
-            struct arp_hdr *arp_hdr = rte_pktmbuf_mtod_offset(mbuf,
-                                                              struct arp_hdr *,
-                                                              offset);
+            struct rte_arp_hdr *arp_hdr =
+                rte_pktmbuf_mtod_offset(mbuf, struct rte_arp_hdr *, offset);
 
             PKT_TRACE(pcb, ARP, DEBUG, "hrd=%u, pro=0x%4.4X, hln=%u, pln=%u, op=%u",
-                      rte_be_to_cpu_16(arp_hdr->arp_hrd),
-                      rte_be_to_cpu_16(arp_hdr->arp_pro),
-                      arp_hdr->arp_hln, arp_hdr->arp_pln,
-                      rte_be_to_cpu_16(arp_hdr->arp_op));
+                      rte_be_to_cpu_16(arp_hdr->arp_hardware),
+                      rte_be_to_cpu_16(arp_hdr->arp_protocol),
+                      arp_hdr->arp_hlen, arp_hdr->arp_plen,
+                      rte_be_to_cpu_16(arp_hdr->arp_opcode));
 
             PKT_TRACE(pcb, ARP, DEBUG, "  sha=%02X:%02X:%02X:%02X:%02X:%02X spa=" TPG_IPV4_PRINT_FMT,
                       arp_hdr->arp_data.arp_sha.addr_bytes[0],
@@ -567,7 +566,7 @@ int pkt_receive_loop(void *arg __rte_unused)
     }
 
     RTE_PER_LCORE(pktloop_port_info) = rte_zmalloc_socket("pktloop_port_info_pktloop",
-                                                          rte_eth_dev_count() *
+                                                          rte_eth_dev_count_avail() *
                                                           sizeof(local_port_info_t),
                                                           RTE_CACHE_LINE_SIZE,
                                                           rte_lcore_to_socket_id(lcore_id));
@@ -577,7 +576,7 @@ int pkt_receive_loop(void *arg __rte_unused)
                         lcore_index);
 
     RTE_PER_LCORE(local_port_dev_info) = rte_zmalloc_socket("global_port_info_pktloop",
-                                                            rte_eth_dev_count() *
+                                                            rte_eth_dev_count_avail() *
                                                             sizeof(port_info_t),
                                                             RTE_CACHE_LINE_SIZE,
                                                             rte_lcore_to_socket_id(lcore_id));
@@ -586,7 +585,7 @@ int pkt_receive_loop(void *arg __rte_unused)
         TPG_ERROR_ABORT("[%d] Cannot allocate pktloop global port info!\n",
                         lcore_index);
 
-    for (port = 0; port < rte_eth_dev_count(); port++) {
+    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
         queue_id = port_get_rx_queue_id(lcore_id, port);
         if (queue_id != CORE_PORT_QINVALID) {
             RTE_PER_LCORE(local_port_dev_info)[port] = port_dev_info[port];

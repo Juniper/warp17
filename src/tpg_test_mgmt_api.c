@@ -239,7 +239,7 @@ static void test_init_sockopt_defaults(sockopt_t *sockopt,
 static bool test_mgmt_validate_port_id(uint32_t eth_port,
                                        printer_arg_t *printer_arg)
 {
-    if (eth_port >= rte_eth_dev_count()) {
+    if (eth_port >= rte_eth_dev_count_avail()) {
         tpg_printf(printer_arg, "ERROR: Invalid ethernet port!\n");
         return false;
     }

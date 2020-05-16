@@ -2268,7 +2268,7 @@ static void test_lcore_init_test_case_info(void)
     uint32_t eth_port;
     uint32_t tcid;
 
-    for (eth_port = 0; eth_port < rte_eth_dev_count(); eth_port++) {
+    for (eth_port = 0; eth_port < rte_eth_dev_count_avail(); eth_port++) {
         for (tcid = 0; tcid < TPG_TEST_MAX_ENTRIES; tcid++) {
             test_case_info_t *tc_info = TEST_GET_INFO(eth_port, tcid);
 
@@ -2288,48 +2288,48 @@ void test_lcore_init(uint32_t lcore_id)
 {
     test_lcore_init_pool(RTE_PER_LCORE(test_case_info),
                          "per_lcore_test_case_info",
-                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
 
     test_lcore_init_pool(RTE_PER_LCORE(test_case_cfg),
                          "per_lcore_test_case_cfg",
-                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
 
     test_lcore_init_pool(RTE_PER_LCORE(test_case_stats),
                          "per_lcore_test_stats",
-                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
 
     test_lcore_init_pool(RTE_PER_LCORE(test_case_latency_state),
                          "per_lcore_test_case_latency_state",
-                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
 
     test_lcore_init_pool(RTE_PER_LCORE(test_open_msgpool),
                          "per_lcore_open_msgpool",
-                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
     test_lcore_init_pool(RTE_PER_LCORE(test_close_msgpool),
                          "per_lcore_close_msgpool",
-                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
     test_lcore_init_pool(RTE_PER_LCORE(test_send_msgpool),
                          "per_lcore_send_msgpool",
-                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
 
     test_lcore_init_pool(RTE_PER_LCORE(test_tmr_open_args),
                          "per_lcore_tmr_open_arg",
-                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
     test_lcore_init_pool(RTE_PER_LCORE(test_tmr_close_args),
                          "per_lcore_tmr_close_arg",
-                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
     test_lcore_init_pool(RTE_PER_LCORE(test_tmr_send_args),
                          "per_lcore_tmr_send_arg",
-                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
 
     test_lcore_init_test_case_info();
