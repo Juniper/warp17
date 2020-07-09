@@ -717,9 +717,11 @@ void test_show_link_rate(uint32_t eth_port, printer_arg_t *printer_arg)
     double               usage_rx;
     struct rte_eth_link  link_info;
     struct rte_eth_stats link_rate_stats;
+    struct rte_eth_fc_conf fc_conf;
 
     port_link_info_get(eth_port, &link_info);
     port_link_rate_stats_get(eth_port, &link_rate_stats);
+    port_flow_ctrl_get(eth_port, &fc_conf);
 
     link_speed_bytes = (uint64_t)link_info.link_speed * 1000 * 1000 / 8;
 
@@ -732,12 +734,14 @@ void test_show_link_rate(uint32_t eth_port, printer_arg_t *printer_arg)
     }
 
     tpg_printf(printer_arg,
-               "Port %"PRIu32": link %s, speed %d%s, duplex %s%s, TX: %.2lf%% RX: %.2lf%%\n",
+               "Port %"PRIu32": link %s, speed %d%s, duplex %s%s, pause %s%s, "
+               "TX: %.2lf%% RX: %.2lf%%\n",
                eth_port,
                LINK_STATE(&link_info),
                LINK_SPEED(&link_info),
                LINK_SPEED_SZ(&link_info),
                LINK_DUPLEX(&link_info),
+               LINK_PAUSE(&fc_conf),
                usage_tx,
                usage_rx);
 }
@@ -830,8 +834,13 @@ test_display_stats_hdr(ui_win_t *ui_win, int line, uint32_t port)
 
     test_show_link_rate(port, &parg);
 
-    /* Take into account the link rate display (one line). */
-    line++;
+    /*
+     * Take into account the link rate display (two lines).
+     * Depending on the terminal size, the port status and link rate header
+     * printf can wrap in the display so we reserve an extra line here to
+     * ensure the whole string will be shown.
+     */
+    line += 2;
     UI_HLINE_WIN(win, line, 0, '=', ui_win->uw_cols - 2);
 
     return line;
@@ -866,6 +875,9 @@ test_display_stats_link(ui_win_t *ui_win, int line,
     UI_PRINTLN_WIN(win, line, 0, "%10s %15"PRIu64" %10"PRIu64" %15"PRIu64,
                    "Tx Bytes", link_stats->obytes, link_rate_stats->obytes,
                    ptotal_stats->ps_sent_bytes);
+    UI_PRINTLN_WIN(win, line, 0, "%10s %15"PRIu64" %10"PRIu64" %15s",
+                   "Rx Drops", link_stats->imissed, link_rate_stats->imissed,
+                   "N/A");
     UI_PRINTLN_WIN(win, line, 0, "%10s %15"PRIu64" %10"PRIu64" %15s",
                    "Rx Err", link_stats->ierrors, link_rate_stats->ierrors,
                    "N/A");

@@ -461,6 +461,24 @@ int tsm_dispatch_net_event(tcp_control_block_t *tcb, tcpEvent_t event,
                   rte_be_to_cpu_32(pcb->pcb_tcp->recv_ack),
                   rte_be_to_cpu_16(pcb->pcb_tcp->rx_win),
                   rte_be_to_cpu_16(pcb->pcb_tcp->tcp_urp));
+
+        if (pcb->pcb_tcp->tcp_flags & RTE_TCP_SYN_FLAG) {
+            INC_STATS(STATS_LOCAL(tpg_tcp_statistics_t,
+                                  tcb->tcb_l4.l4cb_interface),
+                      ts_recv_syn);
+        }
+
+        if (pcb->pcb_tcp->tcp_flags & RTE_TCP_FIN_FLAG) {
+            INC_STATS(STATS_LOCAL(tpg_tcp_statistics_t,
+                                  tcb->tcb_l4.l4cb_interface),
+                      ts_recv_fin);
+        }
+
+        if (pcb->pcb_tcp->tcp_flags & RTE_TCP_RST_FLAG) {
+            INC_STATS(STATS_LOCAL(tpg_tcp_statistics_t,
+                                  tcb->tcb_l4.l4cb_interface),
+                      ts_recv_rst);
+        }
     }
 
     return tsm_dispatch_event(tcb, event, pcb);
@@ -562,6 +580,7 @@ void tsm_initialize_statemachine(tcp_control_block_t *tcb, bool active)
 
     tsm_initialize_minimal_statemachine(tcb, active);
     tcb->tcb_fin_rcvd = false;
+    tcb->tcb_rst_rcvd = false;
     tcb->tcb_rcv_fin_seq = 0;
 
     bzero(&tcb->tcb_snd, sizeof(tcb_snd_t));
@@ -880,6 +899,7 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
                  * delete TCB, and return.  Otherwise (no ACK) drop the segment
                  * and return.
                  */
+                tcb->tcb_rst_rcvd = true;
                 TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
@@ -1068,6 +1088,8 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
              */
 
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                tcb->tcb_rst_rcvd = true;
+
                 if (!tcb->tcb_active) {
                     /* If this connection was initiated with a passive OPEN
                      * (i.e., came from the LISTEN state), then return this
@@ -1287,6 +1309,7 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
                 /* Starting to close the session so send out the
                  * notification. Buffers are cleaned up upon close.
                  */
+                tcb->tcb_rst_rcvd = true;
                 TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
@@ -1506,6 +1529,7 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
                  * notification.
                  * Buffers are cleaned up upon close.
                  */
+                tcb->tcb_rst_rcvd = true;
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
 
@@ -1764,6 +1788,7 @@ static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
                  * notification.
                  * Buffers are cleaned up upon close.
                  */
+                tcb->tcb_rst_rcvd = true;
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
 
@@ -1940,8 +1965,10 @@ static int tsm_SF_last_ack(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * second check the RST bit, [70]
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG))
+            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                tcb->tcb_rst_rcvd = true;
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
+            }
 
             /*
              * third check security and precedence [71]
@@ -2066,8 +2093,10 @@ static int tsm_SF_closing(tcp_control_block_t *tcb, tcpEvent_t event,
              * If the RST bit is set then, enter the CLOSED state, delete
              * the TCB and return.
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG))
+            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                tcb->tcb_rst_rcvd = true;
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
+            }
 
             /*
              * fourth, check the SYN bit, [71]
@@ -2241,8 +2270,10 @@ static int tsm_SF_time_wait(tcp_control_block_t *tcb, tcpEvent_t event,
              * If the RST bit is set then, enter the CLOSED state, delete
              * the TCB and return.
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG))
+            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                tcb->tcb_rst_rcvd = true;
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
+            }
 
             /*
              * fourth, check the SYN bit, [71]
@@ -2364,6 +2395,7 @@ static int tsm_SF_close_wait(tcp_control_block_t *tcb, tcpEvent_t event,
                  * notification.
                  * Buffers are cleaned up upon close.
                  */
+                tcb->tcb_rst_rcvd = true;
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
 

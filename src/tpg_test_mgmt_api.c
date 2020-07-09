@@ -2111,6 +2111,13 @@ int test_mgmt_get_tcp_stats(uint32_t eth_port,
 #ifndef _SPEEDY_PKT_PARSE_
         total_stats->ts_reserved_bit_set += tcp_stats->ts_reserved_bit_set;
 #endif
+
+        total_stats->ts_recv_syn += tcp_stats->ts_recv_syn;
+        total_stats->ts_sent_syn += tcp_stats->ts_sent_syn;
+        total_stats->ts_recv_fin += tcp_stats->ts_recv_fin;
+        total_stats->ts_sent_fin += tcp_stats->ts_sent_fin;
+        total_stats->ts_recv_rst += tcp_stats->ts_recv_rst;
+        total_stats->ts_sent_rst += tcp_stats->ts_sent_rst;
     }
 
     return 0;

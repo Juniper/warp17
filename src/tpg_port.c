@@ -1060,6 +1060,14 @@ void port_link_info_get_nowait(uint32_t port, struct rte_eth_link *link)
 }
 
 /*****************************************************************************
+ * port_flow_ctrl_get()
+ *****************************************************************************/
+void port_flow_ctrl_get(uint32_t port, struct rte_eth_fc_conf *fc_conf)
+{
+    rte_eth_dev_flow_ctrl_get(port, fc_conf);
+}
+
+/*****************************************************************************
  * port_link_stats_get()
  *****************************************************************************/
 void port_link_stats_get(uint32_t port, struct rte_eth_stats *total_link_stats)
@@ -1098,6 +1106,9 @@ void port_link_rate_stats_get(uint32_t port, struct rte_eth_stats *total_rstats)
 
     total_rstats->obytes = (estats.obytes - lrstats->lrs_estats.obytes) *
                            hz / time_diff;
+
+    total_rstats->imissed = (estats.imissed - lrstats->lrs_estats.imissed) *
+                            hz / time_diff;
 
     total_rstats->ierrors = (estats.ierrors - lrstats->lrs_estats.ierrors) *
                             hz / time_diff;
@@ -1498,22 +1509,24 @@ static void cmd_show_port_link_parsed(void *parsed_result __rte_unused,
 
     for (port = 0; port < rte_eth_dev_count_avail(); port++) {
         struct rte_eth_link link;
+        struct rte_eth_fc_conf fc_conf;
 
         port_link_info_get(port, &link);
+        port_flow_ctrl_get(port, &fc_conf);
 
         if (link.link_status == 0) {
             cmdline_printf(cl, "Port %d linkstate %s\n",
                            port, "DOWN");
         } else {
-
             cmdline_printf(cl,
                            "Port %"PRIu32" linkstate %s, speed %d%s, "
-                           "duplex %s%s\n",
+                           "duplex %s%s, pause %s%s\n",
                            port,
                            LINK_STATE(&link),
                            LINK_SPEED(&link),
                            LINK_SPEED_SZ(&link),
-                           LINK_DUPLEX(&link));
+                           LINK_DUPLEX(&link),
+                           LINK_PAUSE(&fc_conf));
         }
     }
 }

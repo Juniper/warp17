@@ -106,7 +106,7 @@ function get {
 # $2 compiler version
 function build {
     cd $1
-    exec_cmd "Compiling dpdk for $2 arch" make T=$2 -j $3 install
+    exec_cmd "Compiling dpdk for $2 arch" make T=$2 CONFIG_RTE_EAL_IGB_UIO=y -j $3 install
 }
 
 # Install dpdk in the local machine

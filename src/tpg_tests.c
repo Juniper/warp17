@@ -1346,9 +1346,11 @@ static void test_case_purge_cbs(test_case_info_t *tc_info)
     tpg_test_case_type_t tc_type = tc_info->tci_cfg->tcim_test_case.tc_type;
     tpg_l4_proto_t       l4_proto = tc_info->tci_cfg->tcim_l4_type;
 
-    uint32_t eth_port = tc_info->tci_cfg->tcim_test_case.tc_eth_port;
-    uint32_t tc_id    = tc_info->tci_cfg->tcim_test_case.tc_id;
+    uint32_t eth_port  = tc_info->tci_cfg->tcim_test_case.tc_eth_port;
+    uint32_t tc_id     = tc_info->tci_cfg->tcim_test_case.tc_id;
     uint32_t purge_cnt = 0;
+    uint32_t cnt       = 0;
+    int lcore_id       = rte_lcore_id();
 
     test_case_htable_walk_cb_t htable_walk_fn;
 
@@ -1357,26 +1359,66 @@ static void test_case_purge_cbs(test_case_info_t *tc_info)
         if (l4_cb->l4cb_test_case_id != tc_id)
             return true;
 
-        purge_cnt++;
+        cnt++;
 
         test_sm_purge(l4_cb, tc_info);
         test_callbacks[tc_type][l4_proto].sess_purge(l4_cb);
         return true;
     }
 
-    purge_cnt += test_purge_list(tc_info, &tc_info->tci_state.tos_to_init_cbs);
-    purge_cnt += test_purge_list(tc_info, &tc_info->tci_state.tos_to_open_cbs);
-    purge_cnt += test_purge_list(tc_info, &tc_info->tci_state.tos_to_close_cbs);
-    purge_cnt += test_purge_list(tc_info, &tc_info->tci_state.tos_to_send_cbs);
-    purge_cnt += test_purge_list(tc_info, &tc_info->tci_state.tos_closed_cbs);
+    cnt = test_purge_list(tc_info, &tc_info->tci_state.tos_to_init_cbs);
+    if (cnt) {
+        RTE_LOG(INFO, USER1,
+                "lcore=%d Purged %d sessions from tos_to_init_cbs\n",
+                lcore_id, cnt);
+        purge_cnt += cnt;
+    }
 
+    cnt = test_purge_list(tc_info, &tc_info->tci_state.tos_to_open_cbs);
+    if (cnt) {
+        RTE_LOG(INFO, USER1,
+                "lcore=%d Purged %d sessions from tos_to_open_cbs\n",
+                lcore_id, cnt);
+        purge_cnt += cnt;
+    }
+
+    cnt = test_purge_list(tc_info, &tc_info->tci_state.tos_to_close_cbs);
+    if (cnt) {
+        RTE_LOG(INFO, USER1,
+                "lcore=%d Purged %d sessions from tos_to_close_cbs\n",
+                lcore_id, cnt);
+        purge_cnt += cnt;
+    }
+
+    cnt = test_purge_list(tc_info, &tc_info->tci_state.tos_to_send_cbs);
+    if (cnt) {
+        RTE_LOG(INFO, USER1,
+                "lcore=%d Purged %d sessions from tos_to_send_cbs\n",
+                lcore_id, cnt);
+        purge_cnt += cnt;
+    }
+
+    cnt = test_purge_list(tc_info, &tc_info->tci_state.tos_closed_cbs);
+    if (cnt) {
+        RTE_LOG(INFO, USER1,
+                "lcore=%d Purged %d sessions from tos_to_closed_cbs\n",
+                lcore_id, cnt);
+        purge_cnt += cnt;
+    }
+
+    cnt = 0;
     htable_walk_fn = test_callbacks[tc_type][l4_proto].sess_htable_walk;
-
     htable_walk_fn(eth_port, purge_htable_cb, NULL);
+    if (cnt) {
+        RTE_LOG(INFO, USER1,
+                "lcore=%d Purged %d sessions from the session table\n",
+                lcore_id, cnt);
+        purge_cnt += cnt;
+    }
 
     RTE_LOG(INFO, USER1,
-            "Purged %u sessions on eth_port %"PRIu32" tcid %"PRIu32"\n",
-            purge_cnt, eth_port, tc_id);
+            "lcore=%d Purged %u total sessions on eth_port %"PRIu32" tcid %"PRIu32"\n",
+            lcore_id, purge_cnt, eth_port, tc_id);
 }
 
 /*****************************************************************************

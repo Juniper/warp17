@@ -195,7 +195,7 @@ static void pkt_trace_tx(packet_control_block_t *pcb, int32_t tx_queue_id,
                               (tcp_hdr->tcp_flags & RTE_TCP_PSH_FLAG) == 0 ? '-' : 'p',
                               (tcp_hdr->tcp_flags & RTE_TCP_RST_FLAG) == 0 ? '-' : 'r',
                               (tcp_hdr->tcp_flags & RTE_TCP_SYN_FLAG) == 0 ? '-' : 's',
-                              (tcp_hdr->tcp_flags & TCP_FIN_FLAG) == 0 ? '-' : 'f',
+                              (tcp_hdr->tcp_flags & RTE_TCP_FIN_FLAG) == 0 ? '-' : 'f',
                               rte_be_to_cpu_16(tcp_hdr->cksum));
 
                     PKT_TRACE(pcb, TCP, DEBUG, " seq=%u, ack=%u, window=%u, urgent=%u",

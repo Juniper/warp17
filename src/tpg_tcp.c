@@ -275,6 +275,14 @@ int tcp_close_connection(tcp_control_block_t *tcb, uint32_t flags)
      * For silent close all we do is cleanup the tcb
      */
     if ((flags & TCG_SILENT_CLOSE) != 0) {
+        /* don't send a RST when closing after a RST was received */
+        if (!tcb->tcb_rst_rcvd) {
+            //tpg_port_statistics_t *stats =
+            //    STATS_LOCAL(tpg_port_statistics_t,
+            //                tcb->tcb_l4.l4cb_interface);
+            tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG | RTE_TCP_RST_FLAG);
+            //pkt_flush_tx_q(tcb->tcb_l4.l4cb_interface, stats);
+        }
 
         tlkp_delete_tcb(tcb);
 
@@ -835,6 +843,15 @@ inline bool tcp_send_ctrl_pkt_with_sseq(tcp_control_block_t *tcb, uint32_t sseq,
 
     stats = STATS_LOCAL(tpg_tcp_statistics_t, tcb->tcb_l4.l4cb_interface);
 
+    if (flags & RTE_TCP_SYN_FLAG)
+        INC_STATS(stats, ts_sent_syn);
+
+    if (flags & RTE_TCP_FIN_FLAG)
+        INC_STATS(stats, ts_sent_fin);
+
+    if (flags & RTE_TCP_RST_FLAG)
+        INC_STATS(stats, ts_sent_rst);
+
     if (unlikely(!tcp_send_pkt(tcb, sseq, flags, NULL, 0, 0)))
         return false;
 
@@ -1035,6 +1052,36 @@ static void cmd_show_tcp_statistics_parsed(void *parsed_result __rte_unused,
                          port,
                          option);
 #endif
+
+        SHOW_32BIT_STATS("Recv SYN", tpg_tcp_statistics_t,
+                         ts_recv_syn,
+                         port,
+                         option);
+
+        SHOW_32BIT_STATS("Sent SYN", tpg_tcp_statistics_t,
+                         ts_sent_syn,
+                         port,
+                         option);
+
+        SHOW_32BIT_STATS("Recv FIN", tpg_tcp_statistics_t,
+                         ts_recv_fin,
+                         port,
+                         option);
+
+        SHOW_32BIT_STATS("Sent FIN", tpg_tcp_statistics_t,
+                         ts_sent_fin,
+                         port,
+                         option);
+
+        SHOW_32BIT_STATS("Recv RST", tpg_tcp_statistics_t,
+                         ts_recv_rst,
+                         port,
+                         option);
+
+        SHOW_32BIT_STATS("Sent RST", tpg_tcp_statistics_t,
+                         ts_sent_rst,
+                         port,
+                         option);
 
         cmdline_printf(cl, "\n");
     }

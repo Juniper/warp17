@@ -185,6 +185,14 @@ typedef struct port_info_s {
     ((ls)->link_autoneg == ETH_LINK_AUTONEG ? "(auto)" :      \
         "(manual)")
 
+#define LINK_PAUSE(fc)                        \
+    ((fc)->mode == RTE_FC_NONE     ? "none" : \
+     (fc)->mode == RTE_FC_RX_PAUSE ? "rx" :   \
+     (fc)->mode == RTE_FC_TX_PAUSE ? "tx" :   \
+     (fc)->mode == RTE_FC_FULL     ? "full" : \
+                                     "???"),  \
+    ((fc)->autoneg ? "(auto)" : "(manual)")
+
 /*****************************************************************************
  * Link rate statistics
  ****************************************************************************/
@@ -216,6 +224,8 @@ extern void                     port_link_info_get(uint32_t port,
                                                    struct rte_eth_link *link_info);
 extern void                     port_link_info_get_nowait(uint32_t port,
                                                           struct rte_eth_link *link);
+extern void                     port_flow_ctrl_get(uint32_t port,
+                                                   struct rte_eth_fc_conf *fc_conf);
 extern void                     port_link_stats_get(uint32_t port,
                                                     struct rte_eth_stats *total_link_stats);
 extern void                     port_link_rate_stats_get(uint32_t port,

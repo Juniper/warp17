@@ -190,6 +190,8 @@ typedef struct tcp_control_block_s {
     uint32_t           tcb_retrans_cnt      :8;
     uint32_t           tcb_fin_rcvd         :1;
 
+    uint32_t           tcb_rst_rcvd         :1;
+
     /* uint32_t        tcb_unused           :17; */
 
     uint32_t           tcb_rcv_fin_seq;
