@@ -125,9 +125,9 @@ Run `dep_install.sh` as root from the source folder
 # dep_install.sh
 ```
  
-__ATTENTION: This will download and install packpackagesets from unsigned source.__
-           __This is like this because we support only protobuf2 which is dropped__
-           __since ubuntu14.04 (we are planning to move on protobuf3)__
+__ATTENTION: This will download and install packages from unsigned source.__
+__This is required because we support only protobuf2 which is dropped__
+__since ubuntu 14.04 (we are planning to move to protobuf3).__
 
 ## Get WARP17
 Get the `warp17-<ver>.tgz` archive or clone the desired
