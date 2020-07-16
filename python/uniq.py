@@ -60,5 +60,5 @@ def get_uniq_stamp():
     return datetime.datetime.now().strftime('%y%m%d-%H%M%S.%f')
 
 if __name__ == '__main__':
-    print get_uniq_stamp()
+    print(get_uniq_stamp())
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 #
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
@@ -288,7 +288,7 @@ res_file = "{}res.txt".format(out_folder)
 log_file = "{}out.log".format(out_folder)
 if not os.path.exists(out_folder):
     os.mkdir(out_folder)
-print "Logs and outputs in " + out_folder
+print("Logs and outputs in " + out_folder)
 result = open(res_file, "w")
 result.write("Start binary search {}\n".format(datetime.today()))
 precision = 1000

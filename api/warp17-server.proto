@@ -54,6 +54,8 @@
 //
 //
 
+syntax = "proto2";
+
 import "warp17-common.proto";
 
 message TcpUdpServer {

@@ -106,7 +106,7 @@ payload) from 10 million clients which are processed on the receing side by
 ## Prerequisites
 
 Any 64 bit Linux distribution will do, however we have been testing this with
-Ubuntu Server 16.04 LTS. In addition we have made an OVF virtual machine image
+Ubuntu Server 18.04 LTS. In addition we have made an OVF virtual machine image
 available, details can be found in the respective [documentation](ovf/README.md).
 
 ### Install DPDK
@@ -141,10 +141,10 @@ cd warp17-<ver>
 make
 ```
 
-## Configure Python virtualenv
+## Configure Python virtualenv (on Ubuntu)
 
 ```
-sudo apt-get install python-pip
+sudo apt-get install python3-pip
 sudo pip install virtualenv
 virtualenv warp17-venv
 source warp17-venv/bin/activate

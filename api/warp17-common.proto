@@ -54,6 +54,8 @@
 //
 //
 
+syntax = "proto2";
+
 import "google/protobuf/descriptor.proto";
 
 extend google.protobuf.EnumOptions {

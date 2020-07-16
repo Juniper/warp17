@@ -112,7 +112,8 @@ class Warp17Env():
         if not os.path.exists(path):
             raise Warp17Exception('Missing ' + path + ' config file!')
 
-        self._config.read_file(open(path))
+        with open(path) as config_f:
+            self._config.read_file(config_f)
 
         self._uniq_stamp = os.environ.get(Warp17Env.UNIQ_STAMP, get_uniq_stamp())
         self._bin_name = os.environ.get(Warp17Env.BIN, '../build/warp17')
@@ -172,7 +173,7 @@ class Warp17Env():
         return self.get_value(Warp17Env.PORTS, mandatory=False)
 
     def get_ring_ports(self):
-        return self.get_value(Warp17Env.RING_PAIR, mandatory=False)
+        return self.get_value(Warp17Env.RING_PAIR, mandatory=False, cast=int)
 
     def get_kni_ports(self):
         return self.get_value(Warp17Env.KNI_IF, mandatory=False)
@@ -187,7 +188,7 @@ class Warp17Env():
         return ' '.join(['--qmap ' + \
                             str(idx) + '.' + \
                             self.get_value(Warp17Env.QMAP, section=port) for
-                            idx, port in enumerate(string.split(ports))])
+                            idx, port in enumerate(ports.split())])
 
     def get_mbuf_sz(self):
         return self.get_value(Warp17Env.MBUF_SZ)
@@ -236,7 +237,7 @@ class Warp17Env():
         args += self.get_memory()
         ports = self.get_ports()
         if ports is not None:
-            args += ' '.join(['-w ' + port for port in string.split(self.get_ports())]) + ' '
+            args += ' '.join(['-w ' + port for port in self.get_ports().split()]) + ' '
         # warp17 args
         args += '--' + ' ' + self.get_qmap()
         mbuf_sz = self.get_mbuf_sz()
@@ -278,7 +279,7 @@ def warp17_start(env, exec_file = None, optional_args = None,
     if exec_file is None: exec_file = env.get_bin_name()
     if output_args is None: output_args = Warp17OutputArgs()
 
-    args = [exec_file] + string.split(env.get_exec_args().__str__())
+    args = [exec_file] + env.get_exec_args().__str__().split()
     if optional_args is not None:
         for arg in optional_args:
             args.append(arg)
@@ -311,7 +312,7 @@ def warp17_wait(env, logger = None):
                 print_stdout('WARP17 (%(ver)s) started!\n' % \
                              {'ver': response.vr_version})
                 return
-        except Warp17RpcException, ex:
+        except Warp17RpcException as ex:
             print_stdout('WARP17 not up yet. Sleeping for a bit...\n')
             time.sleep(2)
 

@@ -41,8 +41,8 @@ def init_test():
 
     filename = sys.argv[0]
     args = dict([arg.split('=') for arg in sys.argv[1:]])
-    print filename
-    print args
+    print(filename)
+    print(args)
     env = Warp17Env(path='./rpc_client.ini')
 
     exec_bin = '../../build/warp17'
@@ -138,7 +138,7 @@ def configure_testcase_port0():
     if err.e_code != 0:
         die('Error configuring client test case.')
 
-    print 'Clients configured successfully!\n'
+    print('Clients configured successfully!\n')
 
 
 def delete_testcase():
@@ -391,7 +391,7 @@ def configure_testcase_port1():
     if err.e_code != 0:
         die('Error configuring server test case.')
 
-    print 'Servers configured successfully!\n'
+    print('Servers configured successfully!\n')
 
 
 def start_port():
@@ -400,7 +400,7 @@ def start_port():
     if err.e_code != 0:
         die('Error starting port' + args['port'] + ' test cases.')
 
-    print 'Traffic started successfully!\n'
+    print('Traffic started successfully!\n')
 
 
 def imix_config():
@@ -570,14 +570,14 @@ def check_stats():
                                                    args['tc_id'])))
         if client_result.tsr_error.e_code != 0:
             die('Error fetching client test case stats.')
-        print 'client_result' + str(client_result) + '\n\n'
-        print 'Client test case state: ' + str(client_result.tsr_state) + '\n'
-        print 'Global stats:'
-        print client_result.tsr_stats.tcs_client
-        print 'Rate stats:'
-        print client_result.tsr_rate_stats
-        print 'HTTP Client stats:'
-        print client_result.tsr_app_stats.tcas_http
+        print('client_result' + str(client_result) + '\n\n')
+        print('Client test case state: ' + str(client_result.tsr_state) + '\n')
+        print('Global stats:')
+        print(client_result.tsr_stats.tcs_client)
+        print('Rate stats:')
+        print(client_result.tsr_rate_stats)
+        print('HTTP Client stats:')
+        print(client_result.tsr_app_stats.tcas_http)
         time.sleep(1)
 
     port_config = warp17_method_call(warp17_host, warp17_port, Warp17_Stub,
@@ -587,7 +587,7 @@ def check_stats():
                                                      args['tc_id'])))
     if port_config.tcr_error.e_code != 0:
         die('Error fetching client test case config.')
-    print 'port_config' + str(port_config) + '\n\n'
+    print('port_config' + str(port_config) + '\n\n')
 
 
 def stop_port():
@@ -596,7 +596,7 @@ def stop_port():
     if err.e_code != 0:
         die('Error stopping port' + args['port'] + ' test cases.')
 
-    print 'port' + args['port'] + ' stopped successfully!\n'
+    print('port' + args['port'] + ' stopped successfully!\n')
 
 
 def build_http_app_client(size):

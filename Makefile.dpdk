@@ -185,6 +185,7 @@ CFLAGS += -D_GNU_SOURCE
 
 LDFLAGS += -lncurses
 LDFLAGS += -lprotobuf-c
+LDFLAGS += -lprotobuf-c-rpc
 
 include $(RTE_SDK)/mk/rte.extapp.mk
 
