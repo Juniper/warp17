@@ -276,13 +276,8 @@ int tcp_close_connection(tcp_control_block_t *tcb, uint32_t flags)
      */
     if ((flags & TCG_SILENT_CLOSE) != 0) {
         /* don't send a RST when closing after a RST was received */
-        if (!tcb->tcb_rst_rcvd) {
-            //tpg_port_statistics_t *stats =
-            //    STATS_LOCAL(tpg_port_statistics_t,
-            //                tcb->tcb_l4.l4cb_interface);
+        if (!tcb->tcb_rst_rcvd)
             tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG | RTE_TCP_RST_FLAG);
-            //pkt_flush_tx_q(tcb->tcb_l4.l4cb_interface, stats);
-        }
 
         tlkp_delete_tcb(tcb);
 
@@ -869,6 +864,29 @@ inline bool tcp_send_ctrl_pkt_with_sseq(tcp_control_block_t *tcb, uint32_t sseq,
 bool tcp_send_ctrl_pkt(tcp_control_block_t *tcb, uint32_t flags)
 {
     return tcp_send_ctrl_pkt_with_sseq(tcb, tcb->tcb_snd.nxt, flags);
+}
+
+/*****************************************************************************
+ * tcp_send_ack_pkt()
+ ****************************************************************************/
+bool tcp_send_ack_pkt(tcp_control_block_t *tcb)
+{
+    tpg_tcp_statistics_t *stats;
+
+    TCB_CHECK(tcb);
+
+    stats = STATS_LOCAL(tpg_tcp_statistics_t, tcb->tcb_l4.l4cb_interface);
+
+    if (unlikely(!tcp_send_pkt(tcb, tcb->tcb_snd.nxt, RTE_TCP_ACK_FLAG,
+                               NULL, 0, 0)))
+        return false;
+
+    /*
+     * Increment transmit counters. Failed counters are incremented lower in
+     * the stack.
+     */
+    INC_STATS(stats, ts_sent_ctrl_pkts);
+    return true;
 }
 
 /*****************************************************************************

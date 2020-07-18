@@ -111,7 +111,7 @@ available, details can be found in the respective [documentation](ovf/README.md)
 
 ### Install DPDK
 
-Run the automated script with `<version>` as 17.11.6 (the latest LTS supported by warp17)
+Run the automated script with `<version>` as 19.11.3 (the latest LTS supported by warp17)
 
 ```
 # build_dpdk.sh -v <version>

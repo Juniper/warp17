@@ -74,10 +74,12 @@ message PhyStatistics {
     required uint64 pys_tx_pkts     = 3;
     required uint64 pys_tx_bytes    = 4;
 
-    required uint64 pys_rx_errors   = 5;
-    required uint64 pys_tx_errors   = 6;
+    required uint64 pys_rx_drops    = 5;
+    required uint64 pys_rx_errors   = 6;
+    required uint64 pys_tx_errors   = 7;
+    required uint64 pys_rx_nombuf   = 8;
 
-    required uint32 pys_link_speed  = 7;
+    required uint32 pys_link_speed  = 9;
 }
 
 message EthStatistics {

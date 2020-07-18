@@ -570,6 +570,9 @@ class TestApi(Warp17UnitTestCase):
                     self.assertGreater(server_result.sr_tcp.ts_sent_ctrl_bytes,
                                        0,
                                        'TCP ts_sent_ctrl_bytes has to be greater than 0')
+                    self.assertGreater(server_result.sr_tcp.ts_sent_syn,
+                                       0,
+                                       'TCP ts_sent_syn has to be greater than 0')
                     self.assertGreater(server_result.sr_tcp.ts_sent_data_pkts,
                                        0,
                                        'TCP ts_sent_data_pkts has to be greater than 0')

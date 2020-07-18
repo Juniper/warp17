@@ -167,6 +167,24 @@ static const char *eventNames[TE_MAX_EVENT] = {
          true))
 
 /*****************************************************************************
+ * TCP stat macros
+ ****************************************************************************/
+#define TCP_RECV_SYN_INC_STAT(tcb)                       \
+    INC_STATS(STATS_LOCAL(tpg_tcp_statistics_t,          \
+                          (tcb)->tcb_l4.l4cb_interface), \
+              ts_recv_syn);
+
+#define TCP_RECV_FIN_INC_STAT(tcb)                       \
+    INC_STATS(STATS_LOCAL(tpg_tcp_statistics_t,          \
+                          (tcb)->tcb_l4.l4cb_interface), \
+              ts_recv_fin);
+
+#define TCP_RECV_RST_INC_STAT(tcb)                       \
+    INC_STATS(STATS_LOCAL(tpg_tcp_statistics_t,          \
+                          (tcb)->tcb_l4.l4cb_interface), \
+              ts_recv_rst);
+
+/*****************************************************************************
  * tsm_schedule_retransmission()
  ****************************************************************************/
 static void tsm_schedule_retransmission(tcp_control_block_t *tcb)
@@ -461,24 +479,6 @@ int tsm_dispatch_net_event(tcp_control_block_t *tcb, tcpEvent_t event,
                   rte_be_to_cpu_32(pcb->pcb_tcp->recv_ack),
                   rte_be_to_cpu_16(pcb->pcb_tcp->rx_win),
                   rte_be_to_cpu_16(pcb->pcb_tcp->tcp_urp));
-
-        if (pcb->pcb_tcp->tcp_flags & RTE_TCP_SYN_FLAG) {
-            INC_STATS(STATS_LOCAL(tpg_tcp_statistics_t,
-                                  tcb->tcb_l4.l4cb_interface),
-                      ts_recv_syn);
-        }
-
-        if (pcb->pcb_tcp->tcp_flags & RTE_TCP_FIN_FLAG) {
-            INC_STATS(STATS_LOCAL(tpg_tcp_statistics_t,
-                                  tcb->tcb_l4.l4cb_interface),
-                      ts_recv_fin);
-        }
-
-        if (pcb->pcb_tcp->tcp_flags & RTE_TCP_RST_FLAG) {
-            INC_STATS(STATS_LOCAL(tpg_tcp_statistics_t,
-                                  tcb->tcb_l4.l4cb_interface),
-                      ts_recv_rst);
-        }
     }
 
     return tsm_dispatch_event(tcb, event, pcb);
@@ -707,8 +707,10 @@ static int tsm_SF_listen(tcp_control_block_t *tcb, tcpEvent_t event,
             seg_seq = rte_be_to_cpu_32(tcp->sent_seq);
 
             /* An incoming RST should be ignored.  Return. */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG))
+            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                TCP_RECV_RST_INC_STAT(tcb);
                 return 0;
+            }
 
             /* Any acknowledgment is bad if it arrives on a connection still in
             * the LISTEN state.  An acceptable reset segment should be formed
@@ -723,6 +725,7 @@ static int tsm_SF_listen(tcp_control_block_t *tcb, tcpEvent_t event,
             }
 
             if (likely(TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG))) {
+                TCP_RECV_SYN_INC_STAT(tcb);
                 /* Keep the old tcb in the LISTEN state and continue using
                  * a clone.
                  */
@@ -870,8 +873,10 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
                  */
                 if (SEG_LE(seg_ack, tcb->tcb_snd.iss) ||
                         SEG_GT(seg_ack, tcb->tcb_snd.nxt)) {
-                    if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG))
+                    if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                        TCP_RECV_RST_INC_STAT(tcb);
                         return 0;
+                    }
                     tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG | RTE_TCP_RST_FLAG);
                     return 0;
                 }
@@ -893,6 +898,7 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
              * If the RST bit is set.
              */
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                TCP_RECV_RST_INC_STAT(tcb);
                 /*
                  * If the ACK was acceptable then signal the user "error:
                  * connection reset", drop the segment, enter CLOSED state,
@@ -914,6 +920,7 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
              * no ACK, and it the segment did not contain a RST.
              */
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
+                TCP_RECV_SYN_INC_STAT(tcb);
                 /*
                  * If the SYN bit is on and the security/compartment and precedence
                  * are acceptable then, RCV.NXT is set to SEG.SEQ+1, IRS is set to
@@ -977,7 +984,7 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
 
                         /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
                         if (tsm_need_ack(tcb))
-                            tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG);
+                            tcp_send_ack_pkt(tcb);
 
                         return ret;
                     }
@@ -1078,7 +1085,9 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
             if (!seg_ok) {
                 if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
                     /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                    tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG);
+                    tcp_send_ack_pkt(tcb);
+                } else {
+                    TCP_RECV_RST_INC_STAT(tcb);
                 }
                 return 0;
             }
@@ -1088,6 +1097,7 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
              */
 
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                TCP_RECV_RST_INC_STAT(tcb);
                 tcb->tcb_rst_rcvd = true;
 
                 if (!tcb->tcb_active) {
@@ -1123,6 +1133,7 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
              */
 
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
+                TCP_RECV_SYN_INC_STAT(tcb);
                 /*
                  * The user is informed of the state change through a
                  * notification.
@@ -1194,13 +1205,14 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
 
                 /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
                 if (tsm_need_ack(tcb))
-                    tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG);
+                    tcp_send_ack_pkt(tcb);
             }
 
             /*
              * eighth, check the FIN bit,
              */
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_FIN_FLAG)) {
+                TCP_RECV_FIN_INC_STAT(tcb);
                 /*
                  * We do not ack the fin yet, this happens when we move to LAST_ACK,
                  * but we do update the RCV.NXT here.
@@ -1297,7 +1309,9 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
             if (!seg_ok) {
                 if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
                     /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                    tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG);
+                    tcp_send_ack_pkt(tcb);
+                } else {
+                    TCP_RECV_RST_INC_STAT(tcb);
                 }
                 return 0;
             }
@@ -1306,6 +1320,7 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
              * second check the RST bit, [70]
              */
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                TCP_RECV_RST_INC_STAT(tcb);
                 /* Starting to close the session so send out the
                  * notification. Buffers are cleaned up upon close.
                  */
@@ -1323,6 +1338,7 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
              */
 
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
+                TCP_RECV_SYN_INC_STAT(tcb);
                 /* Starting to close the session so send out the
                  * notification. Buffers are cleaned up upon close.
                  */
@@ -1379,7 +1395,7 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
                  */
 
                 if (tsm_need_ack(tcb))
-                    tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG);
+                    tcp_send_ack_pkt(tcb);
             }
 
             /*
@@ -1387,6 +1403,7 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
              */
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_FIN_FLAG)) {
                 uint32_t fin_seq = seg_seq + seg_len;
+                TCP_RECV_FIN_INC_STAT(tcb);
 
                 /* If we're missing some data we can't process the fin yet. Store
                  * the information in the TCB and process later.
@@ -1513,7 +1530,9 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
             if (!seg_ok) {
                 if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
                     /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                    tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG);
+                    tcp_send_ack_pkt(tcb);
+                } else {
+                    TCP_RECV_RST_INC_STAT(tcb);
                 }
                 return 0;
             }
@@ -1522,6 +1541,7 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
              * second check the RST bit, [70]
              */
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                TCP_RECV_RST_INC_STAT(tcb);
                 /* Cancel the orphan timer first. */
                 tcp_timer_slow_cancel(&tcb->tcb_l4);
                 /*
@@ -1542,6 +1562,7 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
              */
 
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
+                TCP_RECV_SYN_INC_STAT(tcb);
                 /* Cancel the orphan timer first. */
                 tcp_timer_slow_cancel(&tcb->tcb_l4);
                 /*
@@ -1630,9 +1651,10 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
                         tcb->tcb_rcv.nxt++;
                 }
                 /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG);
+                tcp_send_ack_pkt(tcb);
             } else {
                 uint32_t fin_seq = seg_seq + seg_len;
+                TCP_RECV_FIN_INC_STAT(tcb);
 
                 /* IF our FIN has been ACKed (perhaps in this segment),
                  * then enter TIME_WAIT, start the time-wait timer, turn
@@ -1651,7 +1673,7 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
 
                 /* Ack everything including the FIN. */
                 tcb->tcb_rcv.nxt++;
-                tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG);
+                tcp_send_ack_pkt(tcb);
 
                 /* Cancel the orphan timer first. */
                 tcp_timer_slow_cancel(&tcb->tcb_l4);
@@ -1772,7 +1794,9 @@ static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
             if (!seg_ok) {
                 if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
                     /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                    tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG);
+                    tcp_send_ack_pkt(tcb);
+                } else {
+                    TCP_RECV_RST_INC_STAT(tcb);
                 }
                 return 0;
             }
@@ -1781,6 +1805,7 @@ static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
              * second check the RST bit, [70]
              */
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                TCP_RECV_RST_INC_STAT(tcb);
                 /* Cancel the fin timer first. */
                 tcp_timer_slow_cancel(&tcb->tcb_l4);
                 /*
@@ -1801,6 +1826,7 @@ static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
              */
 
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
+                TCP_RECV_SYN_INC_STAT(tcb);
                 /* Cancel the fin timer first. */
                 tcp_timer_slow_cancel(&tcb->tcb_l4);
 
@@ -1870,8 +1896,9 @@ static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
              */
             if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_FIN_FLAG)) {
                 /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG);
+                tcp_send_ack_pkt(tcb);
             } else {
+                TCP_RECV_FIN_INC_STAT(tcb);
                 /* Cancel the fin timer first. */
                 tcp_timer_slow_cancel(&tcb->tcb_l4);
 
@@ -1881,7 +1908,7 @@ static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
                  * didn't receive all the data.
                  */
                 tcb->tcb_rcv.nxt++;
-                tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG);
+                tcp_send_ack_pkt(tcb);
                 return tsm_enter_state(tcb, TS_TIME_WAIT, NULL);
             }
 
@@ -1957,7 +1984,9 @@ static int tsm_SF_last_ack(tcp_control_block_t *tcb, tcpEvent_t event,
             if (!seg_ok) {
                 if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
                     /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                    tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG);
+                    tcp_send_ack_pkt(tcb);
+                } else {
+                    TCP_RECV_RST_INC_STAT(tcb);
                 }
                 return 0;
             }
@@ -1966,6 +1995,7 @@ static int tsm_SF_last_ack(tcp_control_block_t *tcb, tcpEvent_t event,
              * second check the RST bit, [70]
              */
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                TCP_RECV_RST_INC_STAT(tcb);
                 tcb->tcb_rst_rcvd = true;
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
@@ -1979,6 +2009,7 @@ static int tsm_SF_last_ack(tcp_control_block_t *tcb, tcpEvent_t event,
              */
 
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
+                TCP_RECV_SYN_INC_STAT(tcb);
                 /*
                  * The user is informed of the state change through a
                  * notification.
@@ -2083,7 +2114,9 @@ static int tsm_SF_closing(tcp_control_block_t *tcb, tcpEvent_t event,
             if (!seg_ok) {
                 if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
                     /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                    tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG);
+                    tcp_send_ack_pkt(tcb);
+                } else {
+                    TCP_RECV_RST_INC_STAT(tcb);
                 }
                 return 0;
             }
@@ -2094,6 +2127,7 @@ static int tsm_SF_closing(tcp_control_block_t *tcb, tcpEvent_t event,
              * the TCB and return.
              */
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                TCP_RECV_RST_INC_STAT(tcb);
                 tcb->tcb_rst_rcvd = true;
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
@@ -2102,6 +2136,7 @@ static int tsm_SF_closing(tcp_control_block_t *tcb, tcpEvent_t event,
              * fourth, check the SYN bit, [71]
              */
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
+                TCP_RECV_SYN_INC_STAT(tcb);
                 /*
                  * The user is informed of the state change through a
                  * notification.
@@ -2260,7 +2295,9 @@ static int tsm_SF_time_wait(tcp_control_block_t *tcb, tcpEvent_t event,
             if (!seg_ok) {
                 if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
                     /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                    tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG);
+                    tcp_send_ack_pkt(tcb);
+                } else {
+                    TCP_RECV_RST_INC_STAT(tcb);
                 }
                 return 0;
             }
@@ -2271,6 +2308,7 @@ static int tsm_SF_time_wait(tcp_control_block_t *tcb, tcpEvent_t event,
              * the TCB and return.
              */
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                TCP_RECV_RST_INC_STAT(tcb);
                 tcb->tcb_rst_rcvd = true;
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
@@ -2279,6 +2317,7 @@ static int tsm_SF_time_wait(tcp_control_block_t *tcb, tcpEvent_t event,
              * fourth, check the SYN bit, [71]
              */
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
+                TCP_RECV_SYN_INC_STAT(tcb);
                 /*
                  * The user is informed of the state change through a
                  * notification.
@@ -2291,7 +2330,7 @@ static int tsm_SF_time_wait(tcp_control_block_t *tcb, tcpEvent_t event,
              * retransmission of the remote FIN. Acknowledge it, and
              * restart the 2MSL timeout. [73]
              */
-            tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG);
+            tcp_send_ack_pkt(tcb);
 
             assert(TCB_SLOW_TMR_IS_SET(tcb));
 
@@ -2381,7 +2420,9 @@ static int tsm_SF_close_wait(tcp_control_block_t *tcb, tcpEvent_t event,
             if (!seg_ok) {
                 if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
                     /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                    tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG);
+                    tcp_send_ack_pkt(tcb);
+                } else {
+                    TCP_RECV_RST_INC_STAT(tcb);
                 }
                 return 0;
             }
@@ -2390,6 +2431,7 @@ static int tsm_SF_close_wait(tcp_control_block_t *tcb, tcpEvent_t event,
              * second check the RST bit, [70]
              */
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                TCP_RECV_RST_INC_STAT(tcb);
                 /*
                  * The user is informed of the state change through a
                  * notification.
@@ -2403,6 +2445,7 @@ static int tsm_SF_close_wait(tcp_control_block_t *tcb, tcpEvent_t event,
              * fourth, check the SYN bit, [71]
              */
             if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
+                TCP_RECV_SYN_INC_STAT(tcb);
                 /*
                  * The user is informed of the state change through a
                  * notification.
@@ -2551,6 +2594,8 @@ static int tsm_SF_closed(tcp_control_block_t *tcb, tcpEvent_t event,
                     tcb->tcb_rcv.nxt = seg_seq + seg_len;
                     tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG | RTE_TCP_RST_FLAG);
                 }
+            } else {
+                TCP_RECV_RST_INC_STAT(tcb);
             }
         }
         break;
