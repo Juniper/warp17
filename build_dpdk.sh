@@ -155,15 +155,12 @@ function exports {
 # Skipping in case dpdk is already there
 if [[ -d "$dest/$name/x86_64-native-linuxapp-gcc/build" ]]; then
     echo dpdk-$ver is already there
-    install "$dest/$name"
-    return
+else
+    get $dest $tmp
+    build "$dest/$name" x86_64-native-linuxapp-gcc $jobs
 fi
-
 check_root
 update
 get_deps
-get $dest $tmp
-build "$dest/$name" x86_64-native-linuxapp-gcc $jobs
 install "$dest/$name"
 exports
-exit
