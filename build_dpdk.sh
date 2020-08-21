@@ -113,7 +113,7 @@ function build {
 # $1 dpdk folder
 function install {
     if [[ -z $interactive ]]; then
-        confirm "Installing the dpdk lib"
+        confirm "Installing dpdk."
     fi
     exec_cmd "Copying igb_uio in $kernel folder" cp $1/x86_64-native-linuxapp-gcc/kmod/igb_uio.ko /lib/modules/$kernel/kernel/drivers/uio/
     exec_cmd "Generating modules and map files." depmod -a
@@ -121,10 +121,48 @@ function install {
     exec_cmd "Add igb_uio mod" modprobe igb_uio
 }
 
+# Install dpdk dependecies on centos7/rhel7.
+# ATTENTION: update at every new dpdk release supported [current state 19.11.3]
+function get_centos7_deps {
+    exec_cmd "Installing required dependencies" yum install -y \
+        elfutils-libelf-devel \
+        numactl-devel make gcc \
+        kernel-devel-$(uname -r)
+}
+
+# Install dpdk dependecies on centos8/rhel8.
+# ATTENTION: update at every new dpdk release supported [current state 19.11.3]
+function get_centos8_deps {
+    exec_cmd "Installing required dependencies" yum install -y \
+        elfutils-libelf-devel \
+        numactl-devel make gcc \
+        kernel-devel-$(uname -r)
+}
+
+# Install dpdk dependecies on Ubuntu.
+# ATTENTION: update at every new dpdk release supported [current state 19.11.3]
+function get_ubuntu_deps {
+    exec_cmd "Installing required dependecies" apt install -y \
+        build-essential libnuma-dev \
+        linux-headers-$(uname -r)
+}
+
 # Install dpdk dependecies
-# ATTENTION: update at every new dpdk release supported [current state 17.11.5]
+# ATTENTION: update at every new dpdk release supported [current state 19.11.3]
 function get_deps {
-    exec_cmd "Installing required dependecies" sudo apt install -y build-essential libnuma-dev python ncurses-dev linux-headers-$(uname -r)
+    get_os_image
+
+    case "${OS_IMAGE:-ubuntu}" in
+        "centos7")
+            get_centos7_deps
+            ;;
+        "centos8")
+            get_centos8_deps
+            ;;
+        "ubuntu")
+            get_ubuntu_deps
+            ;;
+    esac
 }
 
 function exports {
@@ -132,26 +170,29 @@ function exports {
     
     if [[ -n $SUDO_USER ]]; then
         echo "ATTENTION"
-        echo "Run this script using command  \"sudo -E\" or I won't able to check your env"
+        echo "Run this script using command  \"sudo -E\""
         if [[ -z $interactive ]]; then
-            confirm "Writing the RTE_SDK in your profile?"
+            confirm "Add RTE_SDK to ~/.bash_profile?"
         fi
     fi
 
     for line in $(env); do
         if [[ -n $(echo $line | grep $RTE_SDK) ]]; then
-            echo "you've $RTE_SDK already exported"
+            echo "RTE_SDK=$RTE_SDK was already exported"
             return
         fi
         if [[ -n $(cat $HOME/.bash_profile 2>/dev/null | grep $RTE_SDK) ||
               -n $(cat $HOME/.bashrc 2>/dev/null | grep $RTE_SDK) ]]; then
-            echo "you've $RTE_SDK already written"
+            echo "RTE_SDK=$RTE_SDK already existed."
             return
         fi
     done
     exec_cmd "" "echo RTE_SDK=$RTE_SDK >> $HOME/.bash_profile"
 }
 
+check_root
+update
+get_deps
 # Skipping in case dpdk is already there
 if [[ -d "$dest/$name/x86_64-native-linuxapp-gcc/build" ]]; then
     echo dpdk-$ver is already there
@@ -159,8 +200,5 @@ else
     get $dest $tmp
     build "$dest/$name" x86_64-native-linuxapp-gcc $jobs
 fi
-check_root
-update
-get_deps
 install "$dest/$name"
 exports

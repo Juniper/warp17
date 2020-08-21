@@ -60,13 +60,49 @@ set -e
 
 workdir="/tmp/deps"
 
-# Warp17 and protobuf2 dependencies.
-function dep_install {
-    apt install -y build-essential libnuma-dev ncurses-dev libtool autoconf \
-        automake python3-pkg-resources python3-netaddr \
+function dep_centos7_install {
+    exec_cmd "Installing EPEL" yum install -y \
+        https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+    exec_cmd "Installing required dependencies" yum install -y \
+        protobuf-c protobuf-c-devel protobuf-devel python-protobuf \
+        numactl-devel ncurses-devel autoconf automake libtool \
+        python-netaddr
+}
+
+function dep_centos8_install {
+    exec_cmd "Installing EPEL" yum install -y \
+        https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+    exec_cmd "Installing required dependencies" yum install -y \
+        protobuf-c protobuf-c-devel protobuf-devel python3-protobuf \
+        numactl-devel ncurses-devel autoconf automake libtool \
+        python3-netaddr
+}
+
+function dep_ubuntu_install {
+    exec_cmd "Installing required dependencies" apt install -y \
+        build-essential libnuma-dev ncurses-dev \
+        libtool autoconf automake \
+        python3-pkg-resources python3-netaddr \
         python3-pip python3-setuptools \
         libprotobuf-c-dev libprotobuf-c1 protobuf-c-compiler \
         libprotobuf-dev protobuf-compiler
+}
+
+# Warp17 and protobuf dependencies.
+function dep_install {
+    get_os_image
+
+    case "${OS_IMAGE:-ubuntu}" in
+        "centos7")
+            dep_centos7_install
+            ;;
+        "centos8")
+            dep_centos8_install
+            ;;
+        "ubuntu")
+            dep_ubuntu_install
+            ;;
+    esac
 }
 
 # Install protobuf-c-rpc from sources.
@@ -76,7 +112,14 @@ function install_protobuf_c_rpc {
     pushd $workdir
     git clone https://github.com/protobuf-c/protobuf-c-rpc
     pushd protobuf-c-rpc
-    ./autogen.sh && ./configure --libdir=/usr/lib/x86_64-linux-gnu/ && make && make install
+
+    if [[ "${OS_IMAGE}" =~ centos.* ]]; then
+        libdir=/usr/lib64
+    else
+        libdir=/usr/lib/x86_64-linux-gnu/
+    fi
+
+    ./autogen.sh && ./configure --libdir=$libdir && make && make install
     popd
     popd
 
