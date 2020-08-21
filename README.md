@@ -114,7 +114,7 @@ available, details can be found in the respective [documentation](ovf/README.md)
 Run the automated script with `<version>` as 19.11.3 (the latest LTS supported by warp17)
 
 ```
-# build_dpdk.sh -v <version>
+# ./build_dpdk.sh -v <version>
 ```
 
 ### Install Google Protocol Buffers
@@ -122,12 +122,8 @@ Run the automated script with `<version>` as 19.11.3 (the latest LTS supported b
 Run `dep_install.sh` as root from the source folder
 
 ```
-# dep_install.sh
+# ./dep_install.sh
 ```
- 
-__ATTENTION: This will download and install packages from unsigned source.__
-__This is required because we support only protobuf2 which is dropped__
-__since ubuntu 14.04 (we are planning to move to protobuf3).__
 
 ## Get WARP17
 Get the `warp17-<ver>.tgz` archive or clone the desired
