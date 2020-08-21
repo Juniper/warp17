@@ -166,23 +166,6 @@ static void port_setup_reta_table(uint8_t port, int nr_of_queus)
 }
 
 /*****************************************************************************
- * port_init_tx_conf()
- ****************************************************************************/
-static void port_init_tx_conf(uint16_t port __rte_unused)
-{
-
-}
-
-/*****************************************************************************
- * port_init_rx_conf()
- ****************************************************************************/
-static void port_init_rx_conf(uint16_t port __rte_unused)
-{
-
-}
-
-
-/*****************************************************************************
  * port_get_pre_init_port_count()
  ****************************************************************************/
 static inline uint32_t port_get_pre_init_port_count(void)
@@ -515,24 +498,12 @@ static bool port_setup_port(uint8_t port)
             },
         },
         .txmode = {
-#if !defined(TPG_SW_CHECKSUMMING)
             .offloads = DEV_TX_OFFLOAD_IPV4_CKSUM |
                         DEV_TX_OFFLOAD_UDP_CKSUM |
                         DEV_TX_OFFLOAD_TCP_CKSUM,
-#endif
             .mq_mode = ETH_MQ_TX_NONE,
         }
     };
-
-#if defined(TPG_SW_CHECKSUMMING)
-    if ((port_dev_info[port].pi_dev_info.rx_offload_capa & DEV_RX_OFFLOAD_IPV4_CKSUM) !=
-            DEV_RX_OFFLOAD_IPV4_CKSUM)
-        default_port_config.rxmode.offloads &= ~DEV_RX_OFFLOAD_IPV4_CKSUM;
-#endif /* !defined(TPG_SW_CHECKSUMMING) */
-
-    /* Initialise configurations for rx and tx */
-    port_init_rx_conf(port);
-    port_init_tx_conf(port);
 
     rx_conf = port_dev_info[port].pi_dev_info.default_rxconf;
     tx_conf = port_dev_info[port].pi_dev_info.default_txconf;
@@ -567,6 +538,10 @@ static bool port_setup_port(uint8_t port)
                        port_dev_info[port].pi_dev_info.driver_name);
 #endif /* !defined(TPG_SW_CHECKSUMMING) */
 
+    if ((port_dev_info[port].pi_dev_info.rx_offload_capa & DEV_RX_OFFLOAD_IPV4_CKSUM) !=
+            DEV_RX_OFFLOAD_IPV4_CKSUM)
+        default_port_config.rxmode.offloads &= ~DEV_RX_OFFLOAD_IPV4_CKSUM;
+
     if ((port_dev_info[port].pi_dev_info.rx_offload_capa & DEV_RX_OFFLOAD_JUMBO_FRAME) !=
             DEV_RX_OFFLOAD_JUMBO_FRAME)
         default_port_config.rxmode.offloads &= ~DEV_RX_OFFLOAD_JUMBO_FRAME;
@@ -578,6 +553,18 @@ static bool port_setup_port(uint8_t port)
     if ((port_dev_info[port].pi_dev_info.rx_offload_capa & DEV_RX_OFFLOAD_KEEP_CRC) !=
             DEV_RX_OFFLOAD_KEEP_CRC)
         default_port_config.rxmode.offloads &= ~DEV_RX_OFFLOAD_KEEP_CRC;
+
+    if ((port_dev_info[port].pi_dev_info.tx_offload_capa & DEV_TX_OFFLOAD_IPV4_CKSUM) !=
+            DEV_TX_OFFLOAD_IPV4_CKSUM)
+        default_port_config.txmode.offloads &= ~DEV_TX_OFFLOAD_IPV4_CKSUM;
+
+    if ((port_dev_info[port].pi_dev_info.tx_offload_capa & DEV_TX_OFFLOAD_UDP_CKSUM) !=
+            DEV_TX_OFFLOAD_UDP_CKSUM)
+        default_port_config.txmode.offloads &= ~DEV_TX_OFFLOAD_UDP_CKSUM;
+
+    if ((port_dev_info[port].pi_dev_info.tx_offload_capa & DEV_TX_OFFLOAD_TCP_CKSUM) !=
+            DEV_TX_OFFLOAD_TCP_CKSUM)
+        default_port_config.txmode.offloads &= ~DEV_TX_OFFLOAD_TCP_CKSUM;
 
     RTE_LOG(INFO, USER1, "[%s()] Initializing Ethernet port %u.\n", __func__,
             port);
