@@ -102,9 +102,9 @@ typedef struct udp_control_block_s {
  * DATA definitions
  ****************************************************************************/
 /* TODO: doesn't include any potential options (IP+TCP). */
-#define UCB_MIN_HDRS_SZ                                   \
-    (sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr) + \
-     sizeof(struct udp_hdr) + ETHER_CRC_LEN)
+#define UCB_MIN_HDRS_SZ                                           \
+    (sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + \
+     sizeof(struct rte_udp_hdr) + RTE_ETHER_CRC_LEN)
 
 #define UDP_MTU(port_info, sockopt)                                         \
     ((port_info)->pi_mtu - ipv4_get_sockopt((sockopt))->ip4so_hdr_opt_len - \

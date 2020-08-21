@@ -275,6 +275,9 @@ int tcp_close_connection(tcp_control_block_t *tcb, uint32_t flags)
      * For silent close all we do is cleanup the tcb
      */
     if ((flags & TCG_SILENT_CLOSE) != 0) {
+        /* don't send a RST when closing after a RST was received */
+        if (!tcb->tcb_rst_rcvd)
+            tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG | RTE_TCP_RST_FLAG);
 
         tlkp_delete_tcb(tcb);
 
@@ -384,12 +387,12 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
 {
     unsigned int          tcp_hdr_len;
     tpg_tcp_statistics_t *stats;
-    struct tcp_hdr       *tcp_hdr;
+    struct rte_tcp_hdr   *tcp_hdr;
     tcp_control_block_t  *tcb;
 
     stats = STATS_LOCAL(tpg_tcp_statistics_t, pcb->pcb_port);
 
-    if (unlikely(rte_pktmbuf_data_len(mbuf) < sizeof(struct tcp_hdr))) {
+    if (unlikely(rte_pktmbuf_data_len(mbuf) < sizeof(struct rte_tcp_hdr))) {
         RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: mbuf fragment to small for tcp_hdr!\n",
                 pcb->pcb_core_index, __func__);
 
@@ -397,19 +400,19 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
         return mbuf;
     }
 
-    tcp_hdr = rte_pktmbuf_mtod(mbuf, struct tcp_hdr *);
+    tcp_hdr = rte_pktmbuf_mtod(mbuf, struct rte_tcp_hdr *);
     tcp_hdr_len = (tcp_hdr->data_off >> 4) << 2;
 
     PKT_TRACE(pcb, TCP, DEBUG, "sport=%u, dport=%u, hdrlen=%u, flags=%c%c%c%c%c%c, data_len=%u",
               rte_be_to_cpu_16(tcp_hdr->src_port),
               rte_be_to_cpu_16(tcp_hdr->dst_port),
               tcp_hdr_len,
-              (tcp_hdr->tcp_flags & TCP_URG_FLAG) == 0 ? '-' : 'u',
-              (tcp_hdr->tcp_flags & TCP_ACK_FLAG) == 0 ? '-' : 'a',
-              (tcp_hdr->tcp_flags & TCP_PSH_FLAG) == 0 ? '-' : 'p',
-              (tcp_hdr->tcp_flags & TCP_RST_FLAG) == 0 ? '-' : 'r',
-              (tcp_hdr->tcp_flags & TCP_SYN_FLAG) == 0 ? '-' : 's',
-              (tcp_hdr->tcp_flags & TCP_FIN_FLAG) == 0 ? '-' : 'f',
+              (tcp_hdr->tcp_flags & RTE_TCP_URG_FLAG) == 0 ? '-' : 'u',
+              (tcp_hdr->tcp_flags & RTE_TCP_ACK_FLAG) == 0 ? '-' : 'a',
+              (tcp_hdr->tcp_flags & RTE_TCP_PSH_FLAG) == 0 ? '-' : 'p',
+              (tcp_hdr->tcp_flags & RTE_TCP_RST_FLAG) == 0 ? '-' : 'r',
+              (tcp_hdr->tcp_flags & RTE_TCP_SYN_FLAG) == 0 ? '-' : 's',
+              (tcp_hdr->tcp_flags & RTE_TCP_FIN_FLAG) == 0 ? '-' : 'f',
               pcb->pcb_l4_len - tcp_hdr_len);
 
     PKT_TRACE(pcb, TCP, DEBUG, "  seq=%u, ack=%u, window=%u, urgent=%u",
@@ -437,7 +440,7 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
         return mbuf;
     }
 
-    if (unlikely(tcp_hdr_len < sizeof(struct tcp_hdr))) {
+    if (unlikely(tcp_hdr_len < sizeof(struct rte_tcp_hdr))) {
         RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: TCP hdr len smaller than header!\n",
                 pcb->pcb_core_index, __func__);
 
@@ -447,7 +450,7 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
 
 #ifndef _SPEEDY_PKT_PARSE_
 
-    if (unlikely((tcp_hdr->tcp_flags & ~TCP_FLAG_ALL) != 0 ||
+    if (unlikely((tcp_hdr->tcp_flags & ~0x3F) != 0 ||
                  (tcp_hdr->data_off & 0x0F) != 0)) {
         /* No log message for this, as I know Francois is misusing these bits */
         INC_STATS(stats, ts_reserved_bit_set);
@@ -461,7 +464,7 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
         RTE_SET_USED(options);
 
         for (i = 0;
-             i < ((tcp_hdr_len - sizeof(struct tcp_hdr)) / sizeof(uint32_t));
+             i < ((tcp_hdr_len - sizeof(struct rte_tcp_hdr)) / sizeof(uint32_t));
              i++) {
 
             PKT_TRACE(pcb, TCP, DEBUG, "  option word 0x%2.2X: 0x%8.8X",
@@ -549,7 +552,7 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
      * If no existing tcb see if we have a server available that is
      * accepting new requests.
      */
-    if (tcb == NULL && (tcp_hdr->tcp_flags & TCP_SYN_FLAG) != 0) {
+    if (tcb == NULL && (tcp_hdr->tcp_flags & RTE_TCP_SYN_FLAG) != 0) {
         uint32_t tcp_listen_hash;
 
         tcp_listen_hash = tlkp_calc_pkt_hash(0, /* src_addr ANY */
@@ -624,19 +627,19 @@ struct rte_mbuf *tcp_receive_pkt(packet_control_block_t *pcb,
 /*****************************************************************************
  * tcp_build_hdr()
  ****************************************************************************/
-static struct tcp_hdr *tcp_build_hdr(tcp_control_block_t *tcb,
-                                     struct rte_mbuf *mbuf,
-                                     struct ipv4_hdr *ipv4_hdr,
-                                     uint32_t sseq,
-                                     uint32_t flags)
+static struct rte_tcp_hdr *tcp_build_hdr(tcp_control_block_t *tcb,
+                                         struct rte_mbuf *mbuf,
+                                         struct rte_ipv4_hdr *ipv4_hdr,
+                                         uint32_t sseq,
+                                         uint32_t flags)
 {
-    uint16_t        tcp_hdr_len = sizeof(struct tcp_hdr);
-    uint16_t        tcp_hdr_offset = rte_pktmbuf_data_len(mbuf);
-    struct tcp_hdr *tcp_hdr;
-    uint32_t        ip_hdr_len;
+    uint16_t            tcp_hdr_len = sizeof(struct rte_tcp_hdr);
+    uint16_t            tcp_hdr_offset = rte_pktmbuf_data_len(mbuf);
+    struct rte_tcp_hdr *tcp_hdr;
+    uint32_t            ip_hdr_len;
 
     /* TODO: Support options, we need more room */
-    tcp_hdr = (struct tcp_hdr *) rte_pktmbuf_append(mbuf, tcp_hdr_len);
+    tcp_hdr = (struct rte_tcp_hdr *) rte_pktmbuf_append(mbuf, tcp_hdr_len);
 
     if (unlikely(!tcp_hdr))
         return NULL;
@@ -691,10 +694,10 @@ static struct tcp_hdr *tcp_build_hdr(tcp_control_block_t *tcb,
 static struct rte_mbuf *tcp_build_hdr_mbuf(tcp_control_block_t *tcb,
                                            uint32_t sseq, uint32_t flags,
                                            uint16_t l4_len,
-                                           struct tcp_hdr **tcp_hdr_p)
+                                           struct rte_tcp_hdr **tcp_hdr_p)
 {
     struct rte_mbuf *mbuf;
-    struct ipv4_hdr *ip_hdr;
+    struct rte_ipv4_hdr *ip_hdr;
 
     if (tcb->tcb_l4.l4cb_domain != AF_INET) {
         TPG_ERROR_ABORT("TODO: TCP = IPv4 only for now!\n");
@@ -702,7 +705,7 @@ static struct rte_mbuf *tcp_build_hdr_mbuf(tcp_control_block_t *tcb,
     }
 
     mbuf = ipv4_build_hdr_mbuf(&tcb->tcb_l4, IPPROTO_TCP,
-                               sizeof(struct tcp_hdr) + l4_len,
+                               sizeof(struct rte_tcp_hdr) + l4_len,
                                &ip_hdr);
     if (unlikely(!mbuf))
         return NULL;
@@ -728,7 +731,7 @@ static bool tcp_send_pkt(tcp_control_block_t *tcb, uint32_t sseq,
                          uint32_t data_pkt_len, uint32_t data_nb_segs)
 {
     struct rte_mbuf      *hdr;
-    struct tcp_hdr       *tcp_hdr;
+    struct rte_tcp_hdr   *tcp_hdr;
     tpg_tcp_statistics_t *stats;
 
     TCB_CHECK(tcb);
@@ -752,7 +755,7 @@ static bool tcp_send_pkt(tcp_control_block_t *tcb, uint32_t sseq,
             !tcb->tcb_l4.l4cb_sockopt.so_eth.ethso_tx_offload_tcp_cksum) {
         if ((DATA_IS_TSTAMP(data_mbuf))) {
             tstamp_write_cksum_offset(hdr,
-                                      hdr->pkt_len - sizeof(struct tcp_hdr) +
+                                      hdr->pkt_len - sizeof(struct rte_tcp_hdr) +
                                       RTE_PTR_DIFF(&tcp_hdr->cksum, tcp_hdr));
         }
     }
@@ -835,6 +838,15 @@ inline bool tcp_send_ctrl_pkt_with_sseq(tcp_control_block_t *tcb, uint32_t sseq,
 
     stats = STATS_LOCAL(tpg_tcp_statistics_t, tcb->tcb_l4.l4cb_interface);
 
+    if (flags & RTE_TCP_SYN_FLAG)
+        INC_STATS(stats, ts_sent_syn);
+
+    if (flags & RTE_TCP_FIN_FLAG)
+        INC_STATS(stats, ts_sent_fin);
+
+    if (flags & RTE_TCP_RST_FLAG)
+        INC_STATS(stats, ts_sent_rst);
+
     if (unlikely(!tcp_send_pkt(tcb, sseq, flags, NULL, 0, 0)))
         return false;
 
@@ -852,6 +864,29 @@ inline bool tcp_send_ctrl_pkt_with_sseq(tcp_control_block_t *tcb, uint32_t sseq,
 bool tcp_send_ctrl_pkt(tcp_control_block_t *tcb, uint32_t flags)
 {
     return tcp_send_ctrl_pkt_with_sseq(tcb, tcb->tcb_snd.nxt, flags);
+}
+
+/*****************************************************************************
+ * tcp_send_ack_pkt()
+ ****************************************************************************/
+bool tcp_send_ack_pkt(tcp_control_block_t *tcb)
+{
+    tpg_tcp_statistics_t *stats;
+
+    TCB_CHECK(tcb);
+
+    stats = STATS_LOCAL(tpg_tcp_statistics_t, tcb->tcb_l4.l4cb_interface);
+
+    if (unlikely(!tcp_send_pkt(tcb, tcb->tcb_snd.nxt, RTE_TCP_ACK_FLAG,
+                               NULL, 0, 0)))
+        return false;
+
+    /*
+     * Increment transmit counters. Failed counters are incremented lower in
+     * the stack.
+     */
+    INC_STATS(stats, ts_sent_ctrl_pkts);
+    return true;
 }
 
 /*****************************************************************************
@@ -928,7 +963,7 @@ static void cmd_show_tcp_statistics_parsed(void *parsed_result __rte_unused,
     struct cmd_show_tcp_statistics_result *pr = parsed_result;
     printer_arg_t                          parg = TPG_PRINTER_ARG(cli_printer, cl);
 
-    for (port = 0; port < rte_eth_dev_count(); port++) {
+    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
         if ((option == 'p' || option == 'c') && port != pr->port)
             continue;
 
@@ -1035,6 +1070,36 @@ static void cmd_show_tcp_statistics_parsed(void *parsed_result __rte_unused,
                          port,
                          option);
 #endif
+
+        SHOW_32BIT_STATS("Recv SYN", tpg_tcp_statistics_t,
+                         ts_recv_syn,
+                         port,
+                         option);
+
+        SHOW_32BIT_STATS("Sent SYN", tpg_tcp_statistics_t,
+                         ts_sent_syn,
+                         port,
+                         option);
+
+        SHOW_32BIT_STATS("Recv FIN", tpg_tcp_statistics_t,
+                         ts_recv_fin,
+                         port,
+                         option);
+
+        SHOW_32BIT_STATS("Sent FIN", tpg_tcp_statistics_t,
+                         ts_sent_fin,
+                         port,
+                         option);
+
+        SHOW_32BIT_STATS("Recv RST", tpg_tcp_statistics_t,
+                         ts_recv_rst,
+                         port,
+                         option);
+
+        SHOW_32BIT_STATS("Sent RST", tpg_tcp_statistics_t,
+                         ts_sent_rst,
+                         port,
+                         option);
 
         cmdline_printf(cl, "\n");
     }

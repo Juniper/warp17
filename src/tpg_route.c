@@ -186,7 +186,7 @@ static int route_intf_add_cb(uint16_t msgid, uint16_t lcore, void *msg)
         return -ENOMEM;
     }
 
-    nh_zero = TPG_IPV4(IPv4(0, 0, 0, 0));
+    nh_zero = TPG_IPV4(RTE_IPV4(0, 0, 0, 0));
     if (!route_update_entry(add_msg->rim_eth_port, &add_msg->rim_ip,
                             &add_msg->rim_mask,
                             &nh_zero,
@@ -280,7 +280,8 @@ static int route_gw_add_cb(uint16_t msgid, uint16_t lcore, void *msg)
 
     assert(PORT_CORE_DEFAULT(port) == lcore);
 
-    default_gw_per_port[port] = ROUTE_V4(IPv4(0, 0, 0, 0), IPv4(0, 0, 0, 0),
+    default_gw_per_port[port] = ROUTE_V4(RTE_IPV4(0, 0, 0, 0),
+                                         RTE_IPV4(0, 0, 0, 0),
                                          add_msg->rgm_gw.ip_v4,
                                          ROUTE_FLAG_IN_USE);
 
@@ -353,7 +354,7 @@ bool route_init(void)
      * Allocate per port routing table.
      */
     route_per_port_table = rte_zmalloc("route_tables",
-                                       rte_eth_dev_count() *
+                                       rte_eth_dev_count_avail() *
                                        TPG_ROUTE_PORT_TABLE_SIZE *
                                        sizeof(*route_per_port_table),
                                        0);
@@ -363,7 +364,7 @@ bool route_init(void)
     }
 
     gw_per_port_per_vlan = rte_zmalloc("gw_per_port_per_vlan",
-                                       rte_eth_dev_count() *
+                                       rte_eth_dev_count_avail() *
                                        TPG_GW_PORT_VLAN_SIZE *
                                        sizeof(*gw_per_port_per_vlan),
                                        0);
@@ -374,7 +375,7 @@ bool route_init(void)
     }
 
     default_gw_per_port = rte_zmalloc("default_gw_per_port",
-                                      rte_eth_dev_count() *
+                                      rte_eth_dev_count_avail() *
                                       sizeof(*default_gw_per_port),
                                       0);
     if (default_gw_per_port == NULL) {
@@ -649,7 +650,7 @@ static void cmd_show_route_statistics_parsed(void *parsed_result __rte_unused,
     struct cmd_show_route_statistics_result *pr = parsed_result;
     printer_arg_t                            parg = TPG_PRINTER_ARG(cli_printer, cl);
 
-    for (port = 0; port < rte_eth_dev_count(); port++) {
+    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
         if ((option == 'p' || option == 'c') && port != pr->port)
             continue;
 

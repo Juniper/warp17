@@ -127,10 +127,10 @@ bool tlkp_init(void)
          * See https://msdn.microsoft.com/en-us/library/windows/hardware/ff571021(v=vs.85).aspx
          * for hash examples, we picket the first one.
          */
-        uint32_t src_addr = IPv4(66, 9, 149, 187);
+        uint32_t src_addr = RTE_IPV4(66, 9, 149, 187);
         uint16_t src_port = 2794;
 
-        uint32_t dst_addr = IPv4(161, 142, 100, 80);
+        uint32_t dst_addr = RTE_IPV4(161, 142, 100, 80);
         uint16_t dst_port = 1766;
 
         uint32_t thash = tlkp_calc_connection_hash(src_addr, dst_addr,

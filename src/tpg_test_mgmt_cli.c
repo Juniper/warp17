@@ -261,7 +261,7 @@ static void cmd_show_link_rate_parsed(void *parsed_result __rte_unused,
 
     parg = TPG_PRINTER_ARG(cli_printer, cl);
 
-    for (eth_port = 0; eth_port < rte_eth_dev_count(); eth_port++)
+    for (eth_port = 0; eth_port < rte_eth_dev_count_avail(); eth_port++)
         test_show_link_rate(eth_port, &parg);
 }
 
@@ -418,9 +418,9 @@ static void cmd_show_tests_config_parsed(void *parsed_result, struct cmdline *cl
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
 
-    if (pr->port >= rte_eth_dev_count()) {
+    if (pr->port >= rte_eth_dev_count_avail()) {
         cmdline_printf(cl, "ERROR: Port should be in the range 0..%"PRIu32"\n",
-                       rte_eth_dev_count());
+                       rte_eth_dev_count_avail());
         return;
     }
 
@@ -483,9 +483,9 @@ static void cmd_show_tests_state_parsed(void *parsed_result, struct cmdline *cl,
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
 
-    if (pr->port >= rte_eth_dev_count()) {
+    if (pr->port >= rte_eth_dev_count_avail()) {
         cmdline_printf(cl, "ERROR: Port should be in the range 0..%"PRIu32"\n",
-                       rte_eth_dev_count());
+                       rte_eth_dev_count_avail());
         return;
     }
 
@@ -636,7 +636,7 @@ static void cmd_tests_add_l3_intf_parsed(void *parsed_result, struct cmdline *cl
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
     vlan_enable = (intptr_t)data;
-    gw = TPG_IPV4(IPv4(0, 0, 0, 0));
+    gw = TPG_IPV4(RTE_IPV4(0, 0, 0, 0));
 
     if (pr->ip.family != AF_INET) {
         cmdline_printf(cl, "ERROR: IPv6 not supported yet!\n");

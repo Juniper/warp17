@@ -157,7 +157,7 @@ do {                                                \
 
 #define STATS_LOCAL_INIT(type, tag, lcore_id)                         \
     (STATS_GLOBAL_BY_CORE(type, (lcore_id)) =                         \
-        rte_zmalloc_socket(tag "_local", rte_eth_dev_count() *        \
+        rte_zmalloc_socket(tag "_local", rte_eth_dev_count_avail() *  \
                            sizeof(__typeof__(type)),                  \
                            RTE_CACHE_LINE_SIZE,                       \
                            rte_lcore_to_socket_id((lcore_id))),       \

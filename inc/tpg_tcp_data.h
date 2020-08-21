@@ -64,9 +64,9 @@
  * TCP MTU related macros
  ****************************************************************************/
 /* TODO: doesn't include any potential options (IP+TCP). */
-#define TCB_MIN_HDRS_SZ                                   \
-    (sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr) + \
-     sizeof(struct tcp_hdr) + ETHER_CRC_LEN)
+#define TCB_MIN_HDRS_SZ                                           \
+    (sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + \
+     sizeof(struct rte_tcp_hdr) + RTE_ETHER_CRC_LEN)
 
 /*
  * Quite an ugly hack to test that we have room to store the

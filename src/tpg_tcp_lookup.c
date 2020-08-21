@@ -114,7 +114,7 @@ void tlkp_tcp_lcore_init(uint32_t lcore_id)
     uint32_t i;
 
     RTE_PER_LCORE(tlkp_tcb_hash_table) =
-        rte_zmalloc_socket("tcp_hash_table", rte_eth_dev_count() *
+        rte_zmalloc_socket("tcp_hash_table", rte_eth_dev_count_avail() *
                            TPG_HASH_BUCKET_SIZE *
                            sizeof(tlkp_hash_bucket_t),
                            RTE_CACHE_LINE_SIZE,
@@ -124,7 +124,8 @@ void tlkp_tcp_lcore_init(uint32_t lcore_id)
                         rte_lcore_index(lcore_id));
     }
 
-    for (i = 0; i < (uint32_t)(rte_eth_dev_count() * TPG_HASH_BUCKET_SIZE);
+    for (i = 0; i < (uint32_t)(rte_eth_dev_count_avail() *
+                               TPG_HASH_BUCKET_SIZE);
          i++) {
         /*
          * Initialize all list headers.

@@ -95,7 +95,7 @@ static arp_entry_t **arp_per_port_tables;
  */
 static RTE_DEFINE_PER_LCORE(arp_entry_t **, arp_local_per_port_tables);
 
-static uint8_t arp_bcast_addr[ETHER_ADDR_LEN] = {
+static uint8_t arp_bcast_addr[RTE_ETHER_ADDR_LEN] = {
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
 };
 
@@ -124,7 +124,7 @@ static void cmd_show_arp_entries_parsed(void *parsed_result __rte_unused,
 {
     int port;
 
-    for (port = 0; port < rte_eth_dev_count(); port++) {
+    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
 
         int          entry;
         arp_entry_t *port_entries = arp_per_port_tables[port];
@@ -224,7 +224,7 @@ static void cmd_show_arp_statistics_parsed(void *parsed_result __rte_unused,
     struct cmd_show_arp_statistics_result *pr = parsed_result;
     printer_arg_t                          parg = TPG_PRINTER_ARG(cli_printer, cl);
 
-    for (port = 0; port < rte_eth_dev_count(); port++) {
+    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
         if ((option == 'p' || option == 'c') && port != pr->port)
             continue;
 
@@ -406,7 +406,8 @@ bool arp_init(void)
 
     arp_per_port_tables =
         rte_zmalloc_socket("arp_tables",
-                           rte_eth_dev_count() * sizeof(*arp_per_port_tables),
+                           rte_eth_dev_count_avail() *
+                           sizeof(*arp_per_port_tables),
                            0,
                            rte_lcore_to_socket_id(rte_lcore_id()));
     if (arp_per_port_tables == NULL) {
@@ -415,7 +416,7 @@ bool arp_init(void)
         return false;
     }
 
-    for (port = 0; port < rte_eth_dev_count(); port++) {
+    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
         uint32_t port_socket;
 
         port_socket = port_dev_info[port].pi_numa_node;
@@ -444,7 +445,7 @@ void arp_lcore_init(uint32_t lcore_id)
 
     RTE_PER_LCORE(arp_local_per_port_tables) =
         rte_zmalloc_socket("arp_local_tables",
-                           rte_eth_dev_count() *
+                           rte_eth_dev_count_avail() *
                            sizeof(*RTE_PER_LCORE(arp_local_per_port_tables)),
                            RTE_CACHE_LINE_SIZE,
                            rte_lcore_to_socket_id(lcore_id));
@@ -454,7 +455,7 @@ void arp_lcore_init(uint32_t lcore_id)
                         __func__);
     }
 
-    for (port = 0; port < rte_eth_dev_count(); port++) {
+    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
         RTE_PER_LCORE(arp_local_per_port_tables)[port] =
             arp_per_port_tables[port];
     }
@@ -574,11 +575,11 @@ static inline void arp_ipv4_to_uint8(uint32_t ip, uint8_t *mem)
 static bool arp_send_arp_reply(uint32_t port, uint32_t sip, uint32_t dip,
                                uint8_t *mac, uint16_t vlan_tci)
 {
-    struct rte_mbuf  *mbuf;
-    struct arp_hdr   *arp;
-    struct ether_hdr *eth;
-    struct vlan_hdr  *tag_hdr;
-    uint16_t          offset = 0;
+    struct rte_mbuf      *mbuf;
+    struct rte_arp_hdr   *arp;
+    struct rte_ether_hdr *eth;
+    struct rte_vlan_hdr  *tag_hdr;
+    uint16_t              offset = 0;
 
     /*
      * Malloc MBUF and construct the ARP packet
@@ -593,45 +594,48 @@ static bool arp_send_arp_reply(uint32_t port, uint32_t sip, uint32_t dip,
         return false;
     }
 
-    eth = rte_pktmbuf_mtod(mbuf, struct ether_hdr *);
-    offset += sizeof(struct ether_hdr);
+    eth = rte_pktmbuf_mtod(mbuf, struct rte_ether_hdr *);
+    offset += sizeof(struct rte_ether_hdr);
 
     /*
      * Here we assume mbuf segment is big enough to hold ethetnet, Vlan
      * and arp header
      */
     if (VLAN_TAG_ID(vlan_tci) == 0) {
-        mbuf->data_len = sizeof(struct ether_hdr) + sizeof(struct arp_hdr);
-        eth->ether_type = rte_cpu_to_be_16(ETHER_TYPE_ARP);
+        mbuf->data_len = sizeof(struct rte_ether_hdr) + sizeof(struct rte_arp_hdr);
+        eth->ether_type = rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP);
     } else {
         tag_hdr =
-            (struct vlan_hdr *)rte_pktmbuf_mtod_offset(mbuf, struct vlan_hdr *,
-                                                       offset);
+            (struct rte_vlan_hdr *)rte_pktmbuf_mtod_offset(mbuf,
+                                                           struct rte_vlan_hdr *,
+                                                           offset);
         tag_hdr->vlan_tci = rte_cpu_to_be_16(vlan_tci);
-        tag_hdr->eth_proto = rte_cpu_to_be_16(ETHER_TYPE_ARP);
-        mbuf->data_len = sizeof(struct ether_hdr) + sizeof(struct vlan_hdr)
-                                                  + sizeof(struct arp_hdr);
-        mbuf->l2_len = sizeof(struct ether_hdr) + sizeof(struct vlan_hdr);
-        offset += sizeof(struct vlan_hdr);
-        eth->ether_type = rte_cpu_to_be_16(ETHER_TYPE_VLAN);
+        tag_hdr->eth_proto = rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP);
+        mbuf->data_len = sizeof(struct rte_ether_hdr) + sizeof(struct rte_vlan_hdr)
+                                                      + sizeof(struct rte_arp_hdr);
+        mbuf->l2_len = sizeof(struct rte_ether_hdr) + sizeof(struct rte_vlan_hdr);
+        offset += sizeof(struct rte_vlan_hdr);
+        eth->ether_type = rte_cpu_to_be_16(RTE_ETHER_TYPE_VLAN);
     }
     mbuf->pkt_len = mbuf->data_len;
 
-    arp = (struct arp_hdr *)rte_pktmbuf_mtod_offset(mbuf, struct arp_hdr *,
-                                                    offset);
+    arp = (struct rte_arp_hdr *)rte_pktmbuf_mtod_offset(mbuf,
+                                                        struct rte_arp_hdr *,
+                                                        offset);
 
-    rte_memcpy(&eth->d_addr, mac, ETHER_ADDR_LEN);
+    rte_memcpy(&eth->d_addr, mac, RTE_ETHER_ADDR_LEN);
     rte_eth_macaddr_get(port, &eth->s_addr);
 
-    arp->arp_hrd = rte_cpu_to_be_16(ARP_HRD_ETHER);
-    arp->arp_pro = rte_cpu_to_be_16(ETHER_TYPE_IPv4);
-    arp->arp_hln = ETHER_ADDR_LEN;
-    arp->arp_pln = sizeof(uint32_t);
-    arp->arp_op = rte_cpu_to_be_16(ARP_OP_REPLY);
+    arp->arp_hardware = rte_cpu_to_be_16(RTE_ARP_HRD_ETHER);
+    arp->arp_protocol = rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4);
+    arp->arp_hlen = RTE_ETHER_ADDR_LEN;
+    arp->arp_plen = sizeof(uint32_t);
+    arp->arp_opcode = rte_cpu_to_be_16(RTE_ARP_OP_REPLY);
 
-    rte_memcpy(arp->arp_data.arp_sha.addr_bytes, &eth->s_addr, ETHER_ADDR_LEN);
+    rte_memcpy(arp->arp_data.arp_sha.addr_bytes, &eth->s_addr,
+               RTE_ETHER_ADDR_LEN);
     arp->arp_data.arp_sip = rte_cpu_to_be_32(sip);
-    rte_memcpy(arp->arp_data.arp_tha.addr_bytes, mac, ETHER_ADDR_LEN);
+    rte_memcpy(arp->arp_data.arp_tha.addr_bytes, mac, RTE_ETHER_ADDR_LEN);
     arp->arp_data.arp_tip = rte_cpu_to_be_32(dip);
 
     /*
@@ -660,11 +664,11 @@ static bool arp_send_arp_reply(uint32_t port, uint32_t sip, uint32_t dip,
 bool arp_send_arp_request(uint32_t port, uint32_t local_ip, uint32_t remote_ip,
                           uint16_t vlan_tci)
 {
-    struct rte_mbuf  *mbuf;
-    struct arp_hdr   *arp;
-    struct ether_hdr *eth;
-    struct vlan_hdr  *tag_hdr;
-    uint16_t          offset = 0;
+    struct rte_mbuf      *mbuf;
+    struct rte_arp_hdr   *arp;
+    struct rte_ether_hdr *eth;
+    struct rte_vlan_hdr  *tag_hdr;
+    uint16_t              offset = 0;
 
     /*
      * Malloc MBUF and construct the ARP packet
@@ -679,46 +683,48 @@ bool arp_send_arp_request(uint32_t port, uint32_t local_ip, uint32_t remote_ip,
         return false;
     }
 
-    eth = rte_pktmbuf_mtod(mbuf, struct ether_hdr *);
-    offset += sizeof(struct ether_hdr);
+    eth = rte_pktmbuf_mtod(mbuf, struct rte_ether_hdr *);
+    offset += sizeof(struct rte_ether_hdr);
 
     /*
      * Here we assume mbuf segment is big enough to hold ethetnet and arp header
      */
     if (VLAN_TAG_ID(vlan_tci) == 0) {
-        mbuf->data_len = sizeof(struct ether_hdr) + sizeof(struct arp_hdr);
-        eth->ether_type = rte_cpu_to_be_16(ETHER_TYPE_ARP);
+        mbuf->data_len = sizeof(struct rte_ether_hdr) + sizeof(struct rte_arp_hdr);
+        eth->ether_type = rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP);
     } else{
         tag_hdr =
-            (struct vlan_hdr *)rte_pktmbuf_mtod_offset(mbuf, struct vlan_hdr *,
-                                                       offset);
+            (struct rte_vlan_hdr *)rte_pktmbuf_mtod_offset(mbuf,
+                                                           struct rte_vlan_hdr *,
+                                                           offset);
         tag_hdr->vlan_tci = rte_cpu_to_be_16(vlan_tci);
-        tag_hdr->eth_proto = rte_cpu_to_be_16(ETHER_TYPE_ARP);
-        mbuf->data_len = sizeof(struct ether_hdr) + sizeof(struct vlan_hdr)
-                                                  + sizeof(struct arp_hdr);
-        mbuf->l2_len = sizeof(struct ether_hdr) + sizeof(struct vlan_hdr);
-        offset += sizeof(struct vlan_hdr);
-        eth->ether_type = rte_cpu_to_be_16(ETHER_TYPE_VLAN);
+        tag_hdr->eth_proto = rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP);
+        mbuf->data_len = sizeof(struct rte_ether_hdr) + sizeof(struct rte_vlan_hdr)
+                                                      + sizeof(struct rte_arp_hdr);
+        mbuf->l2_len = sizeof(struct rte_ether_hdr) + sizeof(struct rte_vlan_hdr);
+        offset += sizeof(struct rte_vlan_hdr);
+        eth->ether_type = rte_cpu_to_be_16(RTE_ETHER_TYPE_VLAN);
     }
 
     mbuf->pkt_len = mbuf->data_len;
-    memset(&eth->d_addr, 0xff, ETHER_ADDR_LEN);
+    memset(&eth->d_addr, 0xff, RTE_ETHER_ADDR_LEN);
     rte_eth_macaddr_get(port, &eth->s_addr);
 
-    arp = rte_pktmbuf_mtod_offset(mbuf, struct arp_hdr *, offset);
+    arp = rte_pktmbuf_mtod_offset(mbuf, struct rte_arp_hdr *, offset);
     if (unlikely(!arp)) {
         pkt_mbuf_free(mbuf);
         return false;
     }
-    arp->arp_hrd = rte_cpu_to_be_16(ARP_HRD_ETHER);
-    arp->arp_pro = rte_cpu_to_be_16(ETHER_TYPE_IPv4);
-    arp->arp_hln = ETHER_ADDR_LEN;
-    arp->arp_pln = sizeof(uint32_t);
-    arp->arp_op = rte_cpu_to_be_16(ARP_OP_REQUEST);
+    arp->arp_hardware = rte_cpu_to_be_16(RTE_ARP_HRD_ETHER);
+    arp->arp_protocol = rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4);
+    arp->arp_hlen = RTE_ETHER_ADDR_LEN;
+    arp->arp_plen = sizeof(uint32_t);
+    arp->arp_opcode = rte_cpu_to_be_16(RTE_ARP_OP_REQUEST);
 
-    rte_memcpy(arp->arp_data.arp_sha.addr_bytes, &eth->s_addr, ETHER_ADDR_LEN);
+    rte_memcpy(arp->arp_data.arp_sha.addr_bytes, &eth->s_addr,
+               RTE_ETHER_ADDR_LEN);
     arp->arp_data.arp_sip = rte_cpu_to_be_32(local_ip);
-    bzero(arp->arp_data.arp_tha.addr_bytes, ETHER_ADDR_LEN);
+    bzero(arp->arp_data.arp_tha.addr_bytes, RTE_ETHER_ADDR_LEN);
     arp->arp_data.arp_tip = rte_cpu_to_be_32(remote_ip);
 
     /*
@@ -796,7 +802,7 @@ uint64_t arp_lookup_mac(uint32_t port, uint32_t ip, uint16_t vlan_id)
  ****************************************************************************/
 bool arp_add_local(uint32_t port, uint32_t ip, uint16_t vlan_id)
 {
-    struct ether_addr mac;
+    struct rte_ether_addr mac;
 
     rte_eth_macaddr_get(port, &mac);
 
@@ -828,10 +834,10 @@ bool arp_delete_local(uint32_t port, uint32_t ip, uint16_t vlan_id)
  ****************************************************************************/
 static void arp_process_request(packet_control_block_t *pcb, uint16_t vlan_id)
 {
-    struct arp_hdr *arp_hdr = pcb->pcb_arp;
-    uint32_t        arp_req_ip;
-    uint32_t        arp_req_sip;
-    arp_entry_t    *local_arp;
+    struct rte_arp_hdr *arp_hdr = pcb->pcb_arp;
+    uint32_t            arp_req_ip;
+    uint32_t            arp_req_sip;
+    arp_entry_t        *local_arp;
 
     /*
      * ARP ip addresses are not 32 bit alligned, so just get it this way...
@@ -873,8 +879,8 @@ static void arp_process_request(packet_control_block_t *pcb, uint16_t vlan_id)
  ****************************************************************************/
 static void arp_process_reply(packet_control_block_t *pcb, uint16_t vlan_id)
 {
-    struct arp_hdr *arp_hdr = pcb->pcb_arp;
-    uint32_t        arp_req_ip;
+    struct rte_arp_hdr *arp_hdr = pcb->pcb_arp;
+    uint32_t            arp_req_ip;
 
     /*
      * ARP ip addresses are not 32 bit alligned, so just get it this way...
@@ -904,11 +910,11 @@ struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
                                  struct rte_mbuf *mbuf,
                                  uint16_t vlan_tci)
 {
-    uint16_t        op;
-    struct arp_hdr *arp_hdr;
+    uint16_t            op;
+    struct rte_arp_hdr *arp_hdr;
 
-    if (unlikely(rte_pktmbuf_data_len(mbuf) < sizeof(struct arp_hdr))) {
-        RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: mbuf fragment to small for arp_hdr!\n",
+    if (unlikely(rte_pktmbuf_data_len(mbuf) < sizeof(struct rte_arp_hdr))) {
+        RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: mbuf fragment to small for rte_arp_hdr!\n",
                 pcb->pcb_core_index, __func__);
 
         INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, pcb->pcb_port),
@@ -926,13 +932,13 @@ struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
         return mbuf;
     }
 
-    arp_hdr = rte_pktmbuf_mtod(mbuf, struct arp_hdr *);
-    op = rte_be_to_cpu_16(arp_hdr->arp_op);
+    arp_hdr = rte_pktmbuf_mtod(mbuf, struct rte_arp_hdr *);
+    op = rte_be_to_cpu_16(arp_hdr->arp_opcode);
 
     PKT_TRACE(pcb, ARP, DEBUG, "hrd=%u, pro=0x%4.4X, hln=%u, pln=%u, op=%u",
-              rte_be_to_cpu_16(arp_hdr->arp_hrd),
-              rte_be_to_cpu_16(arp_hdr->arp_pro),
-              arp_hdr->arp_hln, arp_hdr->arp_pln,
+              rte_be_to_cpu_16(arp_hdr->arp_hardware),
+              rte_be_to_cpu_16(arp_hdr->arp_protocol),
+              arp_hdr->arp_hlen, arp_hdr->arp_plen,
               op);
 
     PKT_TRACE(pcb, ARP, DEBUG, "sha=%02X:%02X:%02X:%02X:%02X:%02X spa=" TPG_IPV4_PRINT_FMT,
@@ -954,11 +960,11 @@ struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
               TPG_IPV4_PRINT_ARGS(rte_be_to_cpu_32(arp_hdr->arp_data.arp_tip)));
 
         switch (op) {
-        case ARP_OP_REQUEST:
+        case RTE_ARP_OP_REQUEST:
             INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, pcb->pcb_port),
                       as_received_req);
             break;
-        case ARP_OP_REPLY:
+        case RTE_ARP_OP_REPLY:
             INC_STATS(STATS_LOCAL(tpg_arp_statistics_t, pcb->pcb_port),
                       as_received_rep);
             break;
@@ -975,7 +981,8 @@ struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
         /*
          * Check handler before we process the ARP packet
          */
-        if (unlikely(rte_be_to_cpu_16(arp_hdr->arp_hrd) != ARP_HRD_ETHER)) {
+        if (unlikely(rte_be_to_cpu_16(arp_hdr->arp_hardware) !=
+                     RTE_ARP_HRD_ETHER)) {
             RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: ARP hardware protocol is not ethernet!\n",
                     pcb->pcb_core_index, __func__);
 
@@ -984,7 +991,8 @@ struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
             return mbuf;
         }
 
-        if (unlikely(rte_be_to_cpu_16(arp_hdr->arp_pro) != ETHER_TYPE_IPv4)) {
+        if (unlikely(rte_be_to_cpu_16(arp_hdr->arp_protocol) !=
+                     RTE_ETHER_TYPE_IPV4)) {
             RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Protocol is not IPv4!\n",
                     pcb->pcb_core_index, __func__);
 
@@ -993,7 +1001,7 @@ struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
             return mbuf;
         }
 
-        if (unlikely(arp_hdr->arp_hln != ETHER_ADDR_LEN)) {
+        if (unlikely(arp_hdr->arp_hlen != RTE_ETHER_ADDR_LEN)) {
             RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Hardware length is not 6!\n",
                     pcb->pcb_core_index, __func__);
 
@@ -1002,7 +1010,7 @@ struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
             return mbuf;
         }
 
-        if (unlikely(arp_hdr->arp_pln != sizeof(uint32_t))) {
+        if (unlikely(arp_hdr->arp_plen != sizeof(uint32_t))) {
             RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: Protocol length is not 4!\n",
                     pcb->pcb_core_index, __func__);
 
@@ -1014,9 +1022,9 @@ struct rte_mbuf *arp_receive_pkt(packet_control_block_t *pcb,
 
         pcb->pcb_arp = arp_hdr;
 
-        if (op == ARP_OP_REQUEST)
+        if (op == RTE_ARP_OP_REQUEST)
             arp_process_request(pcb, VLAN_TAG_ID(vlan_tci));
-        else if (op == ARP_OP_REPLY)
+        else if (op == RTE_ARP_OP_REPLY)
             arp_process_reply(pcb, VLAN_TAG_ID(vlan_tci));
 
         return mbuf;

@@ -239,7 +239,7 @@ static void test_init_sockopt_defaults(sockopt_t *sockopt,
 static bool test_mgmt_validate_port_id(uint32_t eth_port,
                                        printer_arg_t *printer_arg)
 {
-    if (eth_port >= rte_eth_dev_count()) {
+    if (eth_port >= rte_eth_dev_count_avail()) {
         tpg_printf(printer_arg, "ERROR: Invalid ethernet port!\n");
         return false;
     }
@@ -1871,8 +1871,10 @@ int test_mgmt_get_phy_stats(uint32_t eth_port,
     total_stats->pys_rx_bytes = phy_stats.ibytes;
     total_stats->pys_tx_pkts = phy_stats.opackets;
     total_stats->pys_tx_bytes = phy_stats.obytes;
+    total_stats->pys_rx_drops = phy_stats.imissed;
     total_stats->pys_rx_errors = phy_stats.ierrors;
     total_stats->pys_tx_errors = phy_stats.oerrors;
+    total_stats->pys_rx_nombuf = phy_stats.rx_nombuf;
     total_stats->pys_link_speed = link_info.link_speed;
 
     return 0;
@@ -1900,8 +1902,10 @@ int test_mgmt_get_phy_rate_stats(uint32_t eth_port,
     rate_stats->pys_rx_bytes = phy_stats.ibytes;
     rate_stats->pys_tx_pkts = phy_stats.opackets;
     rate_stats->pys_tx_bytes = phy_stats.obytes;
+    rate_stats->pys_rx_drops = phy_stats.imissed;
     rate_stats->pys_rx_errors = phy_stats.ierrors;
     rate_stats->pys_tx_errors = phy_stats.oerrors;
+    rate_stats->pys_rx_nombuf = phy_stats.rx_nombuf;
     rate_stats->pys_link_speed = link_info.link_speed;
 
     return 0;
@@ -2111,6 +2115,13 @@ int test_mgmt_get_tcp_stats(uint32_t eth_port,
 #ifndef _SPEEDY_PKT_PARSE_
         total_stats->ts_reserved_bit_set += tcp_stats->ts_reserved_bit_set;
 #endif
+
+        total_stats->ts_recv_syn += tcp_stats->ts_recv_syn;
+        total_stats->ts_sent_syn += tcp_stats->ts_sent_syn;
+        total_stats->ts_recv_fin += tcp_stats->ts_recv_fin;
+        total_stats->ts_sent_fin += tcp_stats->ts_sent_fin;
+        total_stats->ts_recv_rst += tcp_stats->ts_recv_rst;
+        total_stats->ts_sent_rst += tcp_stats->ts_sent_rst;
     }
 
     return 0;

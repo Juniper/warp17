@@ -191,7 +191,7 @@ static void cmd_show_ipv4_statistics_parsed(void *parsed_result __rte_unused,
     int                                     option = (intptr_t) data;
     struct cmd_show_ipv4_statistics_result *pr = parsed_result;
 
-    for (port = 0; port < rte_eth_dev_count(); port++) {
+    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
         if ((option == 'p' || option == 'c') && port != pr->port)
             continue;
 
@@ -513,20 +513,20 @@ uint8_t ipv4_dscp_ecn_to_tos(const char *dscp_str, const char *ecn_str)
 /*****************************************************************************
  * ipv4_build_hdr()
  ****************************************************************************/
-static struct ipv4_hdr *ipv4_build_hdr(l4_control_block_t *l4_cb,
-                                       struct rte_mbuf *mbuf,
-                                       uint8_t protocol,
-                                       uint16_t l4_len,
-                                       struct ipv4_hdr *ref_ip_hdr)
+static struct rte_ipv4_hdr *ipv4_build_hdr(l4_control_block_t *l4_cb,
+                                           struct rte_mbuf *mbuf,
+                                           uint8_t protocol,
+                                           uint16_t l4_len,
+                                           struct rte_ipv4_hdr *ref_ip_hdr)
 {
-    struct ipv4_hdr *ip_hdr;
-    uint16_t         ip_hdr_len = sizeof(struct ipv4_hdr);
+    struct rte_ipv4_hdr *ip_hdr;
+    uint16_t         ip_hdr_len = sizeof(struct rte_ipv4_hdr);
     sockopt_t       *sockopt = &l4_cb->l4cb_sockopt;
 
     if (unlikely(ref_ip_hdr != NULL))
         TPG_ERROR_ABORT("TODO: No reference IPv4 header supported!\n");
 
-    ip_hdr = (struct ipv4_hdr *) rte_pktmbuf_append(mbuf, ip_hdr_len);
+    ip_hdr = (struct rte_ipv4_hdr *) rte_pktmbuf_append(mbuf, ip_hdr_len);
     if (unlikely(!ip_hdr))
         return NULL;
 
@@ -595,7 +595,7 @@ static struct ipv4_hdr *ipv4_build_hdr(l4_control_block_t *l4_cb,
 struct rte_mbuf *ipv4_build_hdr_mbuf(l4_control_block_t *l4_cb,
                                      uint8_t protocol,
                                      uint16_t l4_len,
-                                     struct ipv4_hdr **ip_hdr_p)
+                                     struct rte_ipv4_hdr **ip_hdr_p)
 {
     struct rte_mbuf *mbuf;
     port_info_t     *port_info;
@@ -627,7 +627,7 @@ struct rte_mbuf *ipv4_build_hdr_mbuf(l4_control_block_t *l4_cb,
         return NULL;
     }
 
-    mbuf = eth_build_hdr_mbuf(l4_cb, dst_mac, src_mac, ETHER_TYPE_IPv4);
+    mbuf = eth_build_hdr_mbuf(l4_cb, dst_mac, src_mac, RTE_ETHER_TYPE_IPV4);
     if (unlikely(!mbuf))
         return NULL;
 
@@ -651,21 +651,21 @@ struct rte_mbuf *ipv4_receive_pkt(packet_control_block_t *pcb,
 {
     unsigned int           ip_hdr_len;
     tpg_ipv4_statistics_t *stats;
-    struct ipv4_hdr       *ip_hdr;
+    struct rte_ipv4_hdr   *ip_hdr;
     uint64_t               ipv4_tstamp_value;
 
     ipv4_tstamp_value = 0;
 
     stats = STATS_LOCAL(tpg_ipv4_statistics_t, pcb->pcb_port);
 
-    if (unlikely(rte_pktmbuf_data_len(mbuf) < sizeof(struct ipv4_hdr))) {
+    if (unlikely(rte_pktmbuf_data_len(mbuf) < sizeof(struct rte_ipv4_hdr))) {
         RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: mbuf fragment to small for ipv4_hdr!\n",
                 pcb->pcb_core_index, __func__);
         INC_STATS(stats, ips_to_small_fragment);
         return mbuf;
     }
 
-    ip_hdr = rte_pktmbuf_mtod(mbuf, struct ipv4_hdr *);
+    ip_hdr = rte_pktmbuf_mtod(mbuf, struct rte_ipv4_hdr *);
     ip_hdr_len = (ip_hdr->version_ihl & 0x0F) << 2;
 
     PKT_TRACE(pcb, IPV4, DEBUG, "src/dst=%8.8X/%8.8X, prot=%u, hdrlen=%d, len=%u",
@@ -678,18 +678,18 @@ struct rte_mbuf *ipv4_receive_pkt(packet_control_block_t *pcb,
     PKT_TRACE(pcb, IPV4, DEBUG, " ttl=%u, tos=%u, frag=0x%4.4X[%c%c%c], id=0x%4.4X, csum=0x%4.4X",
               ip_hdr->time_to_live,
               ip_hdr->type_of_service,
-              rte_be_to_cpu_16(ip_hdr->fragment_offset) & IPV4_HDR_OFFSET_MASK,
+              rte_be_to_cpu_16(ip_hdr->fragment_offset) & RTE_IPV4_HDR_OFFSET_MASK,
               (rte_be_to_cpu_16(ip_hdr->fragment_offset) & 1<<15) == 0 ? '-' : 'R',
-              (rte_be_to_cpu_16(ip_hdr->fragment_offset) & IPV4_HDR_DF_FLAG) == 0 ? '-' : 'd',
-              (rte_be_to_cpu_16(ip_hdr->fragment_offset) & IPV4_HDR_MF_FLAG) == 0 ? '-' : 'm',
+              (rte_be_to_cpu_16(ip_hdr->fragment_offset) & RTE_IPV4_HDR_DF_FLAG) == 0 ? '-' : 'd',
+              (rte_be_to_cpu_16(ip_hdr->fragment_offset) & RTE_IPV4_HDR_MF_FLAG) == 0 ? '-' : 'm',
               rte_be_to_cpu_16(ip_hdr->packet_id),
               rte_be_to_cpu_16(ip_hdr->hdr_checksum));
 
     /*
      * TODO: We don't support IP fragments yet so inc counter and drop.
      */
-    if (unlikely((rte_be_to_cpu_16(ip_hdr->fragment_offset) & IPV4_HDR_MF_FLAG) ||
-                 (rte_be_to_cpu_16(ip_hdr->fragment_offset) & IPV4_HDR_OFFSET_MASK))) {
+    if (unlikely((rte_be_to_cpu_16(ip_hdr->fragment_offset) & RTE_IPV4_HDR_MF_FLAG) ||
+                 (rte_be_to_cpu_16(ip_hdr->fragment_offset) & RTE_IPV4_HDR_OFFSET_MASK))) {
         INC_STATS(stats, ips_received_frags);
         return mbuf;
     }
@@ -729,7 +729,7 @@ struct rte_mbuf *ipv4_receive_pkt(packet_control_block_t *pcb,
         return mbuf;
     }
 
-    if (unlikely(ip_hdr_len < sizeof(struct ipv4_hdr))) {
+    if (unlikely(ip_hdr_len < sizeof(struct rte_ipv4_hdr))) {
         RTE_LOG(DEBUG, USER2, "[%d:%s()] ERR: IP hdr len smaller than header!\n",
                 pcb->pcb_core_index, __func__);
 
@@ -765,7 +765,7 @@ struct rte_mbuf *ipv4_receive_pkt(packet_control_block_t *pcb,
 
 #endif
 
-    if (unlikely(ip_hdr_len > sizeof(struct ipv4_hdr))) {
+    if (unlikely(ip_hdr_len > sizeof(struct rte_ipv4_hdr))) {
         if (ipv4_parse_options(mbuf, ip_hdr_len, stats, &ipv4_tstamp_value,
                                pcb))
             return mbuf;
@@ -847,7 +847,7 @@ static int ipv4_parse_options(struct rte_mbuf *mbuf, uint32_t total_len,
     uint32_t           std_ipv4_hdr_len;
     ipv4_option_hdr_t *ip_opt_hdr;
 
-    std_ipv4_hdr_len = sizeof(struct ipv4_hdr);
+    std_ipv4_hdr_len = sizeof(struct rte_ipv4_hdr);
     offset = std_ipv4_hdr_len;     /* already processed options length */
     total_len -= std_ipv4_hdr_len; /* remaining options length to process */
 

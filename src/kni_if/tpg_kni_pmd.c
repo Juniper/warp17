@@ -90,7 +90,7 @@ typedef struct nl_req_s {
 /*****************************************************************************
  * kni_get_kernel_if_mac()
  ****************************************************************************/
-static bool kni_get_kernel_if_mac(uint32_t port, struct ether_addr *mac)
+static bool kni_get_kernel_if_mac(uint32_t port, struct rte_ether_addr *mac)
 {
     int          fd;
     struct ifreq if_req;
@@ -564,7 +564,7 @@ static void kni_eth_mac_addr_remove(struct rte_eth_dev *dev,
  * kni_eth_mac_addr_add()
  ****************************************************************************/
 static int kni_eth_mac_addr_add(struct rte_eth_dev *dev,
-                                 struct ether_addr *mac,
+                                 struct rte_ether_addr *mac,
                                  uint32_t index,
                                  uint32_t vmdq __rte_unused)
 {
@@ -612,7 +612,7 @@ static int kni_eth_stats_get(struct rte_eth_dev *dev,
 /*****************************************************************************
  * kni_eth_stats_reset()
  ****************************************************************************/
-static void kni_eth_stats_reset(struct rte_eth_dev *dev __rte_unused)
+static int kni_eth_stats_reset(struct rte_eth_dev *dev __rte_unused)
 {
     /*
      * There is currently no support in the kernel to reset driver
@@ -621,13 +621,14 @@ static void kni_eth_stats_reset(struct rte_eth_dev *dev __rte_unused)
      *
      * For now we do NOTHING as we do not support clearing counters in WARP17.
      */
+    return 0;
 }
 
 /*****************************************************************************
  * kni_eth_dev_info()
  ****************************************************************************/
-static void kni_eth_dev_info(struct rte_eth_dev *dev,
-                             struct rte_eth_dev_info *dev_info)
+static int kni_eth_dev_info(struct rte_eth_dev *dev,
+                            struct rte_eth_dev_info *dev_info)
 {
     global_config_t *cfg;
 
@@ -640,7 +641,8 @@ static void kni_eth_dev_info(struct rte_eth_dev *dev,
     dev_info->max_rx_queues = 1;
     dev_info->max_tx_queues = 1;
     dev_info->min_rx_bufsize = 0;
-    dev_info->pci_dev = NULL;
+
+    return 0;
 }
 
 /*****************************************************************************
@@ -651,7 +653,7 @@ static int kni_eth_set_mtu(struct rte_eth_dev *dev, uint16_t mtu)
     global_config_t *cfg = cfg_get_config();
 
     if (cfg == NULL || mtu > (cfg->gcfg_mbuf_size - RTE_PKTMBUF_HEADROOM) ||
-        mtu < ETHER_MIN_LEN)
+        mtu < RTE_ETHER_MIN_LEN)
         return -EINVAL;
 
     if (!kni_set_kernel_if_mtu(dev->data->port_id, mtu))
@@ -710,9 +712,9 @@ static uint16_t kni_tx_pkt_burst(void *q, struct rte_mbuf **mbufs,
 bool kni_eth_from_kni(const char *kni_name, struct rte_kni *kni,
                       const unsigned int numa_node)
 {
-    struct rte_eth_dev       *eth_dev;
-    struct rte_eth_dev_data  *eth_data = NULL;
-    static struct ether_addr *mac_address;
+    struct rte_eth_dev           *eth_dev;
+    struct rte_eth_dev_data      *eth_data = NULL;
+    static struct rte_ether_addr *mac_address;
 
     if (kni_name == NULL || kni == NULL)
         return false;
@@ -752,7 +754,8 @@ bool kni_eth_from_kni(const char *kni_name, struct rte_kni *kni,
     }
 
     mac_address = rte_zmalloc_socket(kni_name,
-                                    sizeof(struct ether_addr), 0, numa_node);
+                                     sizeof(struct rte_ether_addr),
+                                     0, numa_node);
     if (mac_address == NULL) {
         rte_errno = ENOMEM;
         goto error;
@@ -764,7 +767,7 @@ bool kni_eth_from_kni(const char *kni_name, struct rte_kni *kni,
 
     if (!kni_get_kernel_if_mac(eth_dev->data->port_id,
                                mac_address)) {
-        memset(mac_address, 0, sizeof(struct ether_addr));
+        memset(mac_address, 0, sizeof(struct rte_ether_addr));
         mac_address->addr_bytes[5] = eth_dev->data->port_id;
     }
 

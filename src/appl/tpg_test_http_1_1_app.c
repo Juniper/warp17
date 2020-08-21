@@ -2388,7 +2388,7 @@ static void cmd_show_http_statistics_parsed(void *parsed_result __rte_unused,
     struct cmd_show_http_statistics_result *pr = parsed_result;
     int                                    option = (intptr_t) data;
 
-    for (port = 0; port < rte_eth_dev_count(); port++) {
+    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
         if ((option == 'p' || option == 'c') && port != pr->port)
             continue;
 
