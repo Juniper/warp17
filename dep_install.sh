@@ -74,8 +74,8 @@ function dep_centos8_install {
         https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
     exec_cmd "Installing required dependencies" yum install -y \
         protobuf-c protobuf-c-devel protobuf-devel python3-protobuf \
-        numactl-devel ncurses-devel autoconf automake libtool \
-        python3-netaddr
+        numactl-devel ncurses-devel autoconf automake libtool pciutils \
+        python3-netaddr python38-devel
 }
 
 function dep_ubuntu_install {

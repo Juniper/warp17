@@ -59,6 +59,8 @@ import sys
 import time
 import unittest
 
+from functools import reduce
+
 from warp17_ut  import Warp17UnitTestCase
 from warp17_api import Warp17Env
 from b2b_setup  import *

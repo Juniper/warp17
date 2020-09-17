@@ -1,2 +1,2 @@
 protobuf
-protobuf-compiler
+bitarray

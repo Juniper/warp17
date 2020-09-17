@@ -196,7 +196,7 @@ def poll_stats(env, duration):
 
         print('Iteration: {}: Collecting stastistics'.format(i))
 
-        for (port, tcs) in test_cases.iteritems():
+        for (port, tcs) in test_cases.items():
             for tcid in tcs:
                 tc_stats = warp17_method_call(env.get_host_name(), env.get_rpc_port(),
                                               Warp17_Stub,
@@ -255,7 +255,7 @@ def run_tests():
 
             # Write stats data
             write_cmd_file_hdr(csv_writer, cmd_file)
-            for ((port, tcid), stats) in sorted(data.iteritems()):
+            for ((port, tcid), stats) in sorted(data.items()):
                 write_test_case_hdr(csv_writer)
                 for stat in stats:
                     write_test_case_stats(csv_writer, port, tcid, stat)
