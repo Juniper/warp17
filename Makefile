@@ -65,7 +65,7 @@ MKUT   = Makefile.ut
 Q ?= @
 
 PYOBJS     = python/*.pyc
-UNIQ_STAMP = $(shell python python/uniq.py)
+UNIQ_STAMP = $(shell python3 python/uniq.py)
 UT_ARGS    = WARP17_UNIQ_STAMP=$(UNIQ_STAMP)
 
 all:

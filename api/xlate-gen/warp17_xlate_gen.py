@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 #
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
 #
@@ -909,7 +909,7 @@ def generate(request, response):
 
 if __name__ == '__main__':
     # Read request message from stdin
-    data = sys.stdin.read()
+    data = sys.stdin.buffer.raw.read()
 
     # Parse request
     request = plugin.CodeGeneratorRequest()
@@ -917,5 +917,5 @@ if __name__ == '__main__':
 
     response = plugin.CodeGeneratorResponse()
     generate(request, response)
-    sys.stdout.write(response.SerializeToString())
+    sys.stdout.buffer.raw.write(response.SerializeToString())
 

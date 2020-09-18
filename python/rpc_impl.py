@@ -204,7 +204,7 @@ class Warp17SyncRpcChannel(RpcChannel):
         if controller.Failed(): return None
 
         resp = resp_class()
-        resp.ParseFromString(str(resp_buf))
+        resp.ParseFromString(resp_buf)
         return resp
 
 def warp17_method_call(host, port, service_stub_class, method_name, arg):
@@ -220,7 +220,7 @@ def warp17_method_call(host, port, service_stub_class, method_name, arg):
                 lh.error('Request failed: ' + controller.ErrorText())
                 raise Warp17RpcException(controller.ErrorText())
 
-    except Exception, ex:
+    except Exception as ex:
         lh.error(ex.__str__())
         raise Warp17RpcException(str(ex))
 

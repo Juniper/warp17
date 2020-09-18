@@ -87,7 +87,7 @@ class Warp17BaseUnitTestCase(unittest.TestCase):
         if not os.path.exists(dirpath):
             os.mkdir(dirpath)
 
-        print "Logs and outputs in " + dirpath
+        print("Logs and outputs in " + dirpath)
 
         out_file = dirpath + '/' + cls.__name__ + '.out'
         log_file = dirpath + '/' + cls.__name__ + '.log'

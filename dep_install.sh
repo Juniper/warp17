@@ -59,66 +59,77 @@ source common/common.sh
 set -e
 
 workdir="/tmp/deps"
-dep_file="Dependencies.zip"
-url="https://drive.google.com/uc?export=download&id="
-id=(
-    "1-MHS78RcFdf8y4QjSEOtsjse5Cy9bfim" 
-    "1-DG5b-zLLq3DrjykzxhAPF00qbvbSnts"
-    "1-DAQK4OJIzLaE4gcUwonmLZApYqzaP3K"
-    "1-BK5tI-R2UPT6xf9EXhe35L_uoZQmIZb"
-    "1-Rlc1N8f3YnUmuGuTIalK3g896Mhw_lA"
-    "1-2Qkq9RllXUnZGlc3_rp-3-f4o4FpbBQ"
-    "1--pRSs8ixWk6IqCCjVL5uqzfugLaor4x"
-    "1-T5PrlZ7JbJilwth64EscDOms1W2MScQ"
-    "1-VKIs68HtuygznHN_v4g15xEpCeZTw0u"
-)
 
-files=(
-    "libprotobuf-c0-dev.deb"
-    "libprotobuf-c0.deb"
-    "libprotobuf-dev.deb"
-    "libprotobuf-lite8.deb"
-    "libprotobuf8.deb"
-    "libprotoc8.deb"
-    "protobuf-c-compiler.deb"
-    "protobuf-compiler.deb"
-    "python-protobuf.deb"
-)
+function dep_centos7_install {
+    exec_cmd "Installing EPEL" yum install -y \
+        https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+    exec_cmd "Installing required dependencies" yum install -y \
+        protobuf-c protobuf-c-devel protobuf-devel python-protobuf \
+        numactl-devel ncurses-devel autoconf automake libtool \
+        python-netaddr
+}
 
-# Warp17 and protobuf2 dependencies
+function dep_centos8_install {
+    exec_cmd "Installing EPEL" yum install -y \
+        https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+    exec_cmd "Installing required dependencies" yum install -y \
+        protobuf-c protobuf-c-devel protobuf-devel python3-protobuf \
+        numactl-devel ncurses-devel autoconf automake libtool pciutils \
+        python3-netaddr python38-devel
+}
+
+function dep_ubuntu_install {
+    exec_cmd "Installing required dependencies" apt install -y \
+        build-essential libnuma-dev ncurses-dev \
+        libtool autoconf automake \
+        python3-pkg-resources python3-netaddr \
+        python3-pip python3-setuptools \
+        libprotobuf-c-dev libprotobuf-c1 protobuf-c-compiler \
+        libprotobuf-dev protobuf-compiler
+}
+
+# Warp17 and protobuf dependencies.
 function dep_install {
-    apt install -y build-essential libnuma-dev python ncurses-dev zlib1g-dev python-pkg-resources
+    get_os_image
+
+    case "${OS_IMAGE:-ubuntu}" in
+        "centos7")
+            dep_centos7_install
+            ;;
+        "centos8")
+            dep_centos8_install
+            ;;
+        "ubuntu")
+            dep_ubuntu_install
+            ;;
+    esac
 }
 
-function get_packets {
-    cd $workdir
-    let a=1
-    for i in ${id[@]}; do
-        exec_cmd "Downloading $i" "wget \"$url$i\" -O ${files[a-1]}"
-        let a+=1
-    done
-}
+# Install protobuf-c-rpc from sources.
+function install_protobuf_c_rpc {
+    exec_cmd "Preparing the working directory" mkdir -p $workdir
 
-# Freeze packets to prevent autoupdates
-function freeze_updates {
-    for fullfile in ${files[@]}; do
-        filename=$(basename -- "$fullfile")
-        extension="${filename##*.}"
-        filename="${filename%.*}"
-        apt-mark hold $filename
-    done
+    pushd $workdir
+    git clone https://github.com/protobuf-c/protobuf-c-rpc
+    pushd protobuf-c-rpc
+
+    if [[ "${OS_IMAGE}" =~ centos.* ]]; then
+        libdir=/usr/lib64
+    else
+        libdir=/usr/lib/x86_64-linux-gnu/
+    fi
+
+    ./autogen.sh && ./configure --libdir=$libdir && make && make install
+    popd
+    popd
+
+    exec_cmd "Cleaning the working directory" rm -rf $workdir
 }
 
 function install {
     update
     dep_install
-    exec_cmd "Preparing the working directory" mkdir -p $workdir
-    get_packets
-
-    exec_cmd "Installing protobuf2 packets" dpkg -i *.deb
-    freeze_updates
-    exec_cmd "Cleaning the working directory" rm -rf $workdir
-
+    install_protobuf_c_rpc
 }
 
 while getopts "n:i" opt; do

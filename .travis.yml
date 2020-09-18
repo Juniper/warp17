@@ -56,20 +56,19 @@
 language: c
 dist: bionic
 os: linux
-sudo: required
 compiler: gcc
 env:
-    - RTE_VERSION='19.11.3' RTE_SDK='/opt/dpdk-$(RTE_VERSION)' WARP17_INI_FILE='./ini/travis.ini'
+  - RTE_VERSION='19.11.3' RTE_SDK='/opt/dpdk-${RTE_VERSION}' WARP17_INI_FILE='./ini/travis.ini' LD_LIBRARY_PATH=/usr/local/lib/
 cache:
   directories:
     - ./build
-    - $(RTE_SDK)
-    - $(HOME)/.cache/pip
+    - /opt/dpdk-19.11.3
+    - /home/travis/.cache/pip
 
 before_install:
     - sudo ./dep_install.sh -i
+    - sudo python3 -m pip install -r python/requirements.txt
     - sudo bash ./build_dpdk.sh -v $RTE_VERSION -j 2 -i
-    - sudo pip install -r python/requirements.txt
     - sudo sysctl -w vm.nr_hugepages=1024
     - sudo mkdir -p /mnt/huge
     - sudo mount -t hugetlbfs nodev /mnt/huge
@@ -85,5 +84,3 @@ after_script:
 after_failure:
     - sudo cat /tmp/warp17*/*.out
     - sudo cat /tmp/warp17*/*.log
-notifications:
-    slack: warp17:slrgF4MwJdIwf49Upb0BSIam

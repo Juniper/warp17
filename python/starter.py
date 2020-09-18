@@ -55,14 +55,15 @@
 #
 
 import subprocess
-import commands
 import copy
 import imp
 import sys
 import os
 import argparse
-from bitarray import bitarray
 import logging
+
+from bitarray import bitarray
+from functools import reduce
 
 # criteria types
 criteria_types = ['run-time', 'servers-up', 'clients-up', 'clients-estab',
@@ -89,15 +90,15 @@ class Nic:
         self.Slot = Slot
         self.Socket = None
         self.Active = Active
-        self.warp17_id = None
+        self._warp17_id = None
 
     @property
     def warp17_id(self):
-        return self.warp17_id
+        return self._warp17_id
 
     @warp17_id.setter
     def warp17_id(self, warp17_id):
-        self.warp17_id = warp17_id
+        self._warp17_id = warp17_id
 
 
 class Socket:
@@ -126,9 +127,9 @@ class Socket:
 
     @property
     def n_hugepages(self):
-        if self._n_hugepages is not -1:
+        if self._n_hugepages != -1:
             return self._n_hugepages
-        (rc, output) = commands.getstatusoutput(
+        (rc, output) = subproces.getstatusoutput(
             GET_MEMORY_NUMA_NODE % self.id)
         if "No" in output.split(' ')[2]:
             self._n_hugepages = 0
@@ -212,11 +213,11 @@ class Socket:
             dpdk_nics.append(nic)
 
         for nic in dpdk_nics:
-            (rc, output) = commands.getstatusoutput(
+            (rc, output) = subprocess.getstatusoutput(
                 GET_INTERFACE_NUMA_NODE % nic.Slot)
-            if rc is 0:
+            if rc == 0:
                 # If NUMA is not supported output will be -1.
-                if int(output) is -1:
+                if int(output) == -1:
                     nic.Socket = 0
                 else:
                     nic.Socket = int(output)
@@ -226,7 +227,7 @@ class Socket:
 
         if given_ports is None:
             for nic in dpdk_nics:
-                ans = raw_input(
+                ans = input(
                     "Do you want to add {} from this pci {}?\n".format(
                         nic.Name, nic.Slot)).lower()
                 if ans in ["yes", "y"]:
@@ -268,7 +269,7 @@ class Socket:
         core_details = []
         core_lines = {}
         for line in cpuinfo_lines:
-            if len(line.strip()) is not 0:
+            if len(line.strip()) != 0:
                 name, value = line.split(":", 1)
                 core_lines[name.strip()] = value.strip()
             else:
@@ -292,7 +293,7 @@ class Socket:
                 core_map[key] = []
             core_map[key].append(core["processor"])
 
-        for (socket, _), core in core_map.iteritems():
+        for (socket, _), core in core_map.items():
             socket_map[socket] = socket_map.get(socket, []) + [core]
 
     def bind_warp17_mgmt_lcores(self, lcore, warp17_lcore):
@@ -329,17 +330,17 @@ class Config:
 
     @property
     def memory(self):
-        if self._memory is not -1:
+        if self._memory != -1:
             return self._memory
         self._memory = int(Config._get_huge_total() * self.hugesz) / 1024
         return self._memory
 
     @property
     def hugesz(self):
-        if self._hugesz is not -1:
+        if self._hugesz != -1:
             return self._hugesz
-        (rc, output) = commands.getstatusoutput(GET_MEMORYSZ)
-        self._hugesz = int(output.split(' ')[4])
+        (rc, output) = subprocess.getstatusoutput(GET_MEMORYSZ)
+        self._hugesz = int(output.split(' ')[7])
         return self._hugesz
 
     def _get_nics(self, per_socket_mask):
@@ -394,7 +395,7 @@ class Config:
 
     @staticmethod
     def _get_huge_total():
-        (rc, output) = commands.getstatusoutput(GET_MEMORY_N)
+        (rc, output) = subprocess.getstatusoutput(GET_MEMORY_N)
         output = output.split(' ')[-1]
         logging.debug("Total Hugepages {}".format(output))
         return int(output)
@@ -529,7 +530,8 @@ class Config:
 
         try:
             output = subprocess.check_output(
-                ['dmidecode', '-s', 'system-product-name']).strip("\n")
+                'dmidecode -s system-product-name', shell=True)
+            output = str(output, 'UTF8').strip('\n')
         except subprocess.CalledProcessError as E:
             logging.warning("You can't check if you are running in a vm")
             logging.debug("{}".format(E))
@@ -546,7 +548,7 @@ class Config:
 
         for socket in self._socket_list:
             toberemoved_lcores = []
-            if not socket.has_ports() and socket.id is not 0:
+            if not socket.has_ports() and socket.id != 0:
                 continue
             # Mgmt cores
             for lcore in socket.free_lcores:
@@ -794,11 +796,11 @@ def main():
         logging.error("{} not found".format(executable))
         exit()
 
-    if len(tests) is not 0 and args.test_file is None:
+    if len(tests) != 0 and args.test_file is None:
         write_config(tests)
         wp17_res += ['--cmd-file', '/tmp/warp17/test.cfg']
     elif args.test_file is not None:
-        if len(tests) is not 0:
+        if len(tests) != 0:
             logging.warning("the given tests will be ignored " \
                             "and instead {} will be run".format(
                 args.test_file[0]))

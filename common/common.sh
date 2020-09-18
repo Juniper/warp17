@@ -104,12 +104,16 @@ function usage {
 
 # Update ubuntu
 function update {
-    if [[ -z $interactive ]]; then
-        confirm "Do you want to upgrade you packages?"
-    fi
-    apt update
-    if [[ -z $TRAVIS ]]; then
-        apt upgrade -y
+    get_os_image
+
+    if [ "${OS_IMAGE}" = "ubuntu" ]; then
+        if [[ -z $interactive ]]; then
+            confirm "Do you want to upgrade your packages?"
+        fi
+        apt update
+        if [[ -z $TRAVIS ]]; then
+            apt upgrade -y
+        fi
     fi
 }
 
@@ -118,4 +122,24 @@ function update {
 function count_debug_print() {
     let i=i+1
     echo -e "I'm $i \t $@"
+}
+
+function get_os_image {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS_IMAGE=${ID}${VERSION_ID}
+        if [[ "${OS_IMAGE}" =~ centos7\..* || "${OS_IMAGE}" =~ rhel7\..* ]]; then
+            export OS_IMAGE=centos7
+        elif [[ "${OS_IMAGE}" =~ centos8\..* || "${OS_IMAGE}" =~ rhel8\..* ]]; then
+            export OS_IMAGE=centos8
+        elif [[ "${OS_IMAGE}" =~ ubuntu.* ]]; then
+            export OS_IMAGE=ubuntu
+        else
+            echo "Unknown ${OS_IMAGE} extracted from /etc/os-release, assuming Ubuntu."
+            export OS_IMAGE=ubuntu
+        fi
+    else
+        echo "No /etc/os-release, assuming Ubuntu."
+        export OS_IMAGE=ubuntu
+    fi
 }
