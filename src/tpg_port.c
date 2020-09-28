@@ -500,7 +500,8 @@ static bool port_setup_port(uint8_t port)
         .txmode = {
             .offloads = DEV_TX_OFFLOAD_IPV4_CKSUM |
                         DEV_TX_OFFLOAD_UDP_CKSUM |
-                        DEV_TX_OFFLOAD_TCP_CKSUM,
+                        DEV_TX_OFFLOAD_TCP_CKSUM |
+                        DEV_TX_OFFLOAD_MULTI_SEGS,
             .mq_mode = ETH_MQ_TX_NONE,
         }
     };
@@ -537,6 +538,13 @@ static bool port_setup_port(uint8_t port)
                        "ERROR: %s doesn't support vlan/ipv4/udp/tcp tx capabilities!\n",
                        port_dev_info[port].pi_dev_info.driver_name);
 #endif /* !defined(TPG_SW_CHECKSUMMING) */
+
+    /* We really need support for multi segments but unfortunately some
+     * PMDs don't advertise it even though they support it (e.g., ring PMD).
+     */
+    if ((port_dev_info[port].pi_dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MULTI_SEGS) !=
+            DEV_TX_OFFLOAD_MULTI_SEGS)
+        default_port_config.txmode.offloads &= ~DEV_TX_OFFLOAD_MULTI_SEGS;
 
     if ((port_dev_info[port].pi_dev_info.rx_offload_capa & DEV_RX_OFFLOAD_IPV4_CKSUM) !=
             DEV_RX_OFFLOAD_IPV4_CKSUM)
