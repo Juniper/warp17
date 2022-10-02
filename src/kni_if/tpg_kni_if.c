@@ -64,8 +64,8 @@
 /*****************************************************************************
  * Definitions
  ****************************************************************************/
-static int kni_change_mtu(uint16_t port, unsigned mtu);
-static int kni_config_network_if(uint16_t port, uint8_t if_state);
+static int kni_change_mtu(uint8_t port, unsigned mtu);
+static int kni_config_network_if(uint8_t port, uint8_t if_state);
 
 /*****************************************************************************
  * Globals
@@ -86,7 +86,7 @@ uint32_t kni_if_get_count(void)
  ****************************************************************************/
 uint32_t kni_get_first_kni_interface(void)
 {
-    return rte_eth_dev_count_avail() - kni_if_get_count();
+    return rte_eth_dev_count() - kni_if_get_count();
 }
 
 /*****************************************************************************
@@ -171,10 +171,9 @@ bool kni_if_init(void)
      *
      * NOTE: It's missing the ring_if_get_count() below, as it's init function
      *       has been called at this stage, so they are included in the
-     *       rte_eth_dev_count_avail()!
+     *       rte_eth_dev_count()!
      */
-    if ((rte_eth_dev_count_avail() + kni_if_get_count()) >
-        TPG_ETH_DEV_MAX) {
+    if ((rte_eth_dev_count() + kni_if_get_count()) > TPG_ETH_DEV_MAX) {
         TPG_ERROR_EXIT(EXIT_FAILURE,
                        "ERROR: Total number of virtual interfaces and ethernet ports must be less than (or equal to) %u!\n",
                        TPG_ETH_DEV_MAX);
@@ -210,7 +209,7 @@ bool kni_if_init(void)
         struct rte_kni_conf     conf;
         struct rte_kni_ops      ops;
         struct rte_eth_dev_info dev_info;
-        uint32_t                port = rte_eth_dev_count_avail();
+        uint32_t                port = rte_eth_dev_count();
 
         if (port_port_cfg[port].ppc_q_cnt != kni_cores_in_mask(port_port_cfg[port].ppc_core_mask))
             TPG_ERROR_ABORT("ERROR: Assigned lcores should be the same as number of queues!");
@@ -276,7 +275,7 @@ bool kni_if_init(void)
 /*****************************************************************************
  * kni_change_mtu()
  ****************************************************************************/
-static int kni_change_mtu(uint16_t port, unsigned mtu)
+static int kni_change_mtu(uint8_t port, unsigned mtu)
 {
     global_config_t *cfg;
 
@@ -305,12 +304,12 @@ static int kni_change_mtu(uint16_t port, unsigned mtu)
         return -EINVAL;
     }
 
-    if (mtu < RTE_ETHER_MIN_LEN) {
+    if (mtu < ETHER_MIN_LEN) {
         RTE_LOG(ERR, USER1,
                 "ERROR: Requested MTU, %u, for port %u smaller than minimal ethernet size, %u!\n",
                 mtu,
                 port,
-                RTE_ETHER_MIN_LEN);
+                ETHER_MIN_LEN);
         return -EINVAL;
     }
 
@@ -326,7 +325,7 @@ static int kni_change_mtu(uint16_t port, unsigned mtu)
 /*****************************************************************************
  * kni_config_network_if()
  ****************************************************************************/
-static int kni_config_network_if(uint16_t port, uint8_t if_state)
+static int kni_config_network_if(uint8_t port, uint8_t if_state)
 {
     RTE_LOG(DEBUG, USER1, "KNI: Configure network interface of %d %s\n",
             port, if_state ? "up" : "down");

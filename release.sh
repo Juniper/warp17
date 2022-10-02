@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 #
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER
 #
@@ -56,9 +55,16 @@
 #
 
 vfile=VERSION
-usage="$1 -t major|minor -o <remote_name> -d \"<version_description>\" -p <perf_result_log_path>"
 
-source common/common.sh
+function die {
+    echo $1 >&2
+    exit 1
+}
+
+function usage {
+    die "$1 -t major|minor -o <remote_name> -d \"<version_description>\" -p <perf_result_log_path>"
+    exit 1
+}
 
 function build_version {
     major=$1
@@ -123,6 +129,15 @@ function inc_version {
 
     # stores the version in $ver
     build_version $major $minor
+}
+
+function exec_cmd {
+    echo
+    echo "$2.."
+    echo "$1"
+    if [[ -z $dry_run ]]; then
+        eval "$1"
+    fi
 }
 
 type=
@@ -201,18 +216,20 @@ case $yn in
     ;;
 esac
 
-exec_cmd "Updating version to: $ver" echo $ver > $vfile
+exec_cmd "echo $ver > $vfile" "Updating version to: $ver"
 
 # Generate the .png charts to be used by the release documentation.
-exec_cmd "Generating .png perf charts" gnuplot -e filename=$bmark_file -e \
-    tcp=$bmark_tcp_cnt -e udp=$bmark_udp_cnt -e http=$bmark_http_cnt \
-    -e out_dir=$bmark_out $bmark_plot_gp
+exec_cmd "gnuplot -e \"filename='$bmark_file'\" -e 'tcp=$bmark_tcp_cnt'\
+    -e \"udp=$bmark_udp_cnt\" -e \"http=$bmark_http_cnt\"\
+    -e \"out_dir='$bmark_out'\" $bmark_plot_gp"\
+    "Generating .png perf charts"
 
 # Now commit everything and tag the release
-exec_cmd "Add the generated .png perf charts" git add $bmark_out/*.png
-exec_cmd "Commit the new version" git commit -m $commit_msg -- \
-    $vfile $bmark_out/*.png
-exec_cmd "Tag the new release" git tag -a $tag_name -m $ver - $type - $descr
-exec_cmd "Push release to master" git push $remote master
-exec_cmd "Push tags" git push --tags
+exec_cmd "git add $bmark_out/*.png" "Add the generated .png perf charts"
+exec_cmd "git commit -m \"$commit_msg\" -- $vfile $bmark_out/*.png" \
+         "Commit the new version"
+exec_cmd "git tag -a $tag_name -m \"$ver - $type - $descr\"" \
+         "Tag the new release"
+exec_cmd "git push $remote master" "Push release to master"
+exec_cmd "git push --tags" "Push tags"
 

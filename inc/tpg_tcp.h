@@ -190,8 +190,6 @@ typedef struct tcp_control_block_s {
     uint32_t           tcb_retrans_cnt      :8;
     uint32_t           tcb_fin_rcvd         :1;
 
-    uint32_t           tcb_rst_rcvd         :1;
-
     /* uint32_t        tcb_unused           :17; */
 
     uint32_t           tcb_rcv_fin_seq;
@@ -282,7 +280,6 @@ extern bool             tcp_send_ctrl_pkt(tcp_control_block_t *tcb,
 extern bool             tcp_send_ctrl_pkt_with_sseq(tcp_control_block_t *tcb,
                                                     uint32_t sseq,
                                                     uint32_t flags);
-extern bool             tcp_send_ack_pkt(tcp_control_block_t *tcb);
 extern int              tcp_open_v4_connection(tcp_control_block_t **tcb,
                                                uint32_t eth_port,
                                                uint32_t src_ip_addr,

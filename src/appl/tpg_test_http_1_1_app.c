@@ -2362,8 +2362,6 @@ struct cmd_show_http_statistics_result {
     cmdline_fixed_string_t http;
     cmdline_fixed_string_t statistics;
     cmdline_fixed_string_t details;
-    cmdline_fixed_string_t port_kw;
-    uint32_t               port;
 };
 
 static cmdline_parse_token_string_t cmd_show_http_statistics_T_show =
@@ -2374,23 +2372,16 @@ static cmdline_parse_token_string_t cmd_show_http_statistics_T_statistics =
     TOKEN_STRING_INITIALIZER(struct cmd_show_http_statistics_result, statistics, "statistics");
 static cmdline_parse_token_string_t cmd_show_http_statistics_T_details =
     TOKEN_STRING_INITIALIZER(struct cmd_show_http_statistics_result, details, "details");
-static cmdline_parse_token_string_t cmd_show_http_statistics_T_port_kw =
-        TOKEN_STRING_INITIALIZER(struct cmd_show_http_statistics_result, port_kw, "port");
-static cmdline_parse_token_num_t cmd_show_http_statistics_T_port =
-        TOKEN_NUM_INITIALIZER(struct cmd_show_http_statistics_result, port, UINT32);
 
 static void cmd_show_http_statistics_parsed(void *parsed_result __rte_unused,
                                             struct cmdline *cl,
                                             void *data)
 {
-    uint32_t                               port;
-    int                                    core;
-    struct cmd_show_http_statistics_result *pr = parsed_result;
-    int                                    option = (intptr_t) data;
+    int port;
+    int core;
+    int option = (intptr_t) data;
 
-    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
-        if ((option == 'p' || option == 'c') && port != pr->port)
-            continue;
+    for (port = 0; port < rte_eth_dev_count(); port++) {
 
         /*
          * Calculate totals first
@@ -2449,35 +2440,6 @@ cmdline_parse_inst_t cmd_show_http_statistics_details = {
     },
 };
 
-cmdline_parse_inst_t cmd_show_http_statistics_port = {
-    .f = cmd_show_http_statistics_parsed,
-    .data = (void *) (intptr_t) 'p',
-    .help_str = "show http statistics port <id>",
-    .tokens = {
-        (void *)&cmd_show_http_statistics_T_show,
-        (void *)&cmd_show_http_statistics_T_http,
-        (void *)&cmd_show_http_statistics_T_statistics,
-        (void *)&cmd_show_http_statistics_T_port_kw,
-        (void *)&cmd_show_http_statistics_T_port,
-        NULL,
-    },
-};
-
-cmdline_parse_inst_t cmd_show_http_statistics_port_details = {
-    .f = cmd_show_http_statistics_parsed,
-    .data = (void *) (intptr_t) 'c',
-    .help_str = "show http statistics details port <id>",
-    .tokens = {
-        (void *)&cmd_show_http_statistics_T_show,
-        (void *)&cmd_show_http_statistics_T_http,
-        (void *)&cmd_show_http_statistics_T_statistics,
-        (void *)&cmd_show_http_statistics_T_details,
-        (void *)&cmd_show_http_statistics_T_port_kw,
-        (void *)&cmd_show_http_statistics_T_port,
-        NULL,
-    },
-};
-
 
 static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_set_app_http_client,
@@ -2490,8 +2452,6 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_set_app_http_field_server_imix,
     &cmd_show_http_statistics,
     &cmd_show_http_statistics_details,
-    &cmd_show_http_statistics_port,
-    &cmd_show_http_statistics_port_details,
     NULL,
 };
 

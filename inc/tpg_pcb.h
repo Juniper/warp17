@@ -77,15 +77,15 @@ typedef struct packet_control_block_s {
     struct rte_mbuf     *pcb_mbuf;
 
     union {
-        void                *pcb_l3;
-        struct rte_ipv4_hdr *pcb_ipv4;
-        struct rte_arp_hdr  *pcb_arp;
+        void            *pcb_l3;
+        struct ipv4_hdr *pcb_ipv4;
+        struct arp_hdr  *pcb_arp;
     };
 
     union {
-        void                *pcb_l4;
-        struct rte_tcp_hdr  *pcb_tcp;
-        struct rte_udp_hdr  *pcb_udp;
+        void            *pcb_l4;
+        struct tcp_hdr  *pcb_tcp;
+        struct udp_hdr  *pcb_udp;
     };
 
     uint16_t             pcb_l4_len;

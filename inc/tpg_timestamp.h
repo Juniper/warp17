@@ -127,10 +127,9 @@ extern void tstamp_start_tx(uint32_t port, uint32_t rss_queue,
 extern void tstamp_stop_tx(uint32_t port, uint32_t rss_queue);
 extern bool tstamp_tx_is_running(uint32_t port, uint32_t rss_queue);
 
-extern void tstamp_write_cksum_offset(struct rte_mbuf *mbuf,
-                                      uint32_t chksum_offset);
 extern void tstamp_tx_pkt(struct rte_mbuf *mbuf, uint32_t offset,
                           uint32_t size);
+
 extern void tstamp_pktloop_rx_pkt_burst(uint32_t eth_port, int32_t queue_id,
                                         struct rte_mbuf **rx_mbufs,
                                         packet_control_block_t *pcbs,

@@ -131,7 +131,7 @@ cmdline_arg_parser_res_t ring_if_handle_cmdline_opt(const char *opt_name, char *
 
     ring_if_pairs = val;
 
-    if (rte_eth_dev_count_avail() + ring_if_pairs * 2 > TPG_ETH_DEV_MAX) {
+    if (rte_eth_dev_count() + ring_if_pairs * 2 > TPG_ETH_DEV_MAX) {
         printf("ERROR: Total number of ring interfaces and ethernet ports must be less than\n"
                    " (or equal) %u!\n",
                TPG_ETH_DEV_MAX);
@@ -152,7 +152,7 @@ bool ring_if_init(void)
     char ring_name[TPG_RING_IF_RING_NAME_SIZE];
     char if_name[TPG_RING_IF_NAME_SIZE];
 
-    eth_dev_count = rte_eth_dev_count_avail();
+    eth_dev_count = rte_eth_dev_count();
 
     for (ring_pair_idx = 0; ring_pair_idx < ring_if_pairs; ring_pair_idx++) {
 

@@ -54,8 +54,6 @@
 //
 //
 
-syntax = "proto2";
-
 enum HttpMethod {
     GET             = 1; /* Currently supported. */
     HEAD            = 2; /* Currently supported. */

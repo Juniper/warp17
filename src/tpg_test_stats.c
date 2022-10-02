@@ -577,71 +577,6 @@ void test_state_show_stats(const tpg_test_case_t *te,
 }
 
 /*****************************************************************************
- * test_debug_show_counters()
- ****************************************************************************/
-void test_debug_show_counters(const tpg_test_case_t *te,
-                              printer_arg_t *printer_arg)
-{
-    test_state_counter_t  state_counter;
-    uint32_t              i = 0;
-    const char           *name = "";
-    uint32_t             *stats;
-
-    test_update_state_counter(te, &state_counter);
-
-    if (test_case_is_type(*te, L4_PROTO__TCP)) {
-        name = "tlkp_tcb_hash_table";
-        stats = (uint32_t *) &state_counter.test_states_from_tcp;
-    } else if (test_case_is_type(*te, L4_PROTO__UDP)) {
-        name = "tlkp_ucb_hash_table";
-        stats = (uint32_t *) &state_counter.test_states_from_udp;
-    } else {
-        return;
-    }
-    tpg_printf(printer_arg, "%13s %13s %13s %13s %13s\n",
-               "Init", "Closed", "Estab", "Established", "Closed");
-    tpg_printf(printer_arg, "%13"PRIu32 " %13"PRIu32 " %13"PRIu32 " %13"
-               PRIu32 " %13"PRIu32 "\n\n",
-               state_counter.tos_to_init_cbs,
-               state_counter.tos_to_open_cbs,
-               state_counter.tos_to_close_cbs,
-               state_counter.tos_to_send_cbs,
-               state_counter.tos_closed_cbs);
-
-    tpg_printf(printer_arg, "%19s %19s %20s\n",
-               "test states", name, "l4cb_test_list_entry");
-    for (i = 0; i < TSTS_MAX_STATE; ++i) {
-        tpg_printf(printer_arg, "%19s %19"PRIu32" %20"PRIu32"\n",
-            test_sm_states_array_array[i], stats[i],
-            state_counter.test_states_from_test[i]);
-    }
-
-    if (test_case_is_type(*te, L4_PROTO__TCP)) {
-        tpg_printf(printer_arg, "%19s %19s %20s\n",
-                   "tcp states", "tlkp_tcb_hash_table", "l4cb_test_list_entry");
-        for (i = 0; i < TS_MAX_STATE; ++i) {
-            tpg_printf(printer_arg, "%19s %19"PRIu32" %20"PRIu32"\n",
-                    stateNamesTCP[i],
-                    state_counter.tcp_states_from_tcp[i],
-                    state_counter.tcp_states_from_test[i]);
-        }
-    } else if (test_case_is_type(*te, L4_PROTO__UDP)) {
-        tpg_printf(printer_arg, "%19s %19s %20s\n",
-                   "udp states", "tlkp_ucb_hash_table", "l4cb_test_list_entry");
-        for (i = 0; i < US_MAX_STATE; ++i) {
-            tpg_printf(printer_arg, "%19s %19"PRIu32" %20"PRIu32"\n",
-                    stateNamesUDP[i],
-                    state_counter.udp_states_from_udp[i],
-                    state_counter.udp_states_from_test[i]);
-        }
-    } else {
-        return;
-    }
-
-    tpg_printf(printer_arg, "\n");
-}
-
-/*****************************************************************************
  * test_latency_stats_valid()
  ****************************************************************************/
 static bool test_latency_stats_valid(tpg_latency_stats_t *ts_stats)
@@ -717,11 +652,9 @@ void test_show_link_rate(uint32_t eth_port, printer_arg_t *printer_arg)
     double               usage_rx;
     struct rte_eth_link  link_info;
     struct rte_eth_stats link_rate_stats;
-    struct rte_eth_fc_conf fc_conf;
 
     port_link_info_get(eth_port, &link_info);
     port_link_rate_stats_get(eth_port, &link_rate_stats);
-    port_flow_ctrl_get(eth_port, &fc_conf);
 
     link_speed_bytes = (uint64_t)link_info.link_speed * 1000 * 1000 / 8;
 
@@ -734,14 +667,12 @@ void test_show_link_rate(uint32_t eth_port, printer_arg_t *printer_arg)
     }
 
     tpg_printf(printer_arg,
-               "Port %"PRIu32": link %s, speed %d%s, duplex %s%s, pause %s%s, "
-               "TX: %.2lf%% RX: %.2lf%%\n",
+               "Port %"PRIu32": link %s, speed %d%s, duplex %s%s, TX: %.2lf%% RX: %.2lf%%\n",
                eth_port,
                LINK_STATE(&link_info),
                LINK_SPEED(&link_info),
                LINK_SPEED_SZ(&link_info),
                LINK_DUPLEX(&link_info),
-               LINK_PAUSE(&fc_conf),
                usage_tx,
                usage_rx);
 }
@@ -781,7 +712,7 @@ static void test_display_stats_test_state(ui_win_t *ui_win,
 
     parg = TPG_PRINTER_ARG(ui_printer, ui_win->uw_win);
 
-    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
+    for (port = 0; port < rte_eth_dev_count(); port++) {
         test_state_show_tcs_hdr(port, &parg);
         UI_HLINE_PRINT(ui_win->uw_win, "=", ui_win->uw_cols - 2);
 
@@ -834,13 +765,8 @@ test_display_stats_hdr(ui_win_t *ui_win, int line, uint32_t port)
 
     test_show_link_rate(port, &parg);
 
-    /*
-     * Take into account the link rate display (two lines).
-     * Depending on the terminal size, the port status and link rate header
-     * printf can wrap in the display so we reserve an extra line here to
-     * ensure the whole string will be shown.
-     */
-    line += 2;
+    /* Take into account the link rate display (one line). */
+    line++;
     UI_HLINE_WIN(win, line, 0, '=', ui_win->uw_cols - 2);
 
     return line;
@@ -875,9 +801,6 @@ test_display_stats_link(ui_win_t *ui_win, int line,
     UI_PRINTLN_WIN(win, line, 0, "%10s %15"PRIu64" %10"PRIu64" %15"PRIu64,
                    "Tx Bytes", link_stats->obytes, link_rate_stats->obytes,
                    ptotal_stats->ps_sent_bytes);
-    UI_PRINTLN_WIN(win, line, 0, "%10s %15"PRIu64" %10"PRIu64" %15s",
-                   "Rx Drops", link_stats->imissed, link_rate_stats->imissed,
-                   "N/A");
     UI_PRINTLN_WIN(win, line, 0, "%10s %15"PRIu64" %10"PRIu64" %15s",
                    "Rx Err", link_stats->ierrors, link_rate_stats->ierrors,
                    "N/A");
@@ -1097,7 +1020,7 @@ static void test_display(void)
     test_display_win(&stats_test_detail_win, true,
                       test_display_stats_test_detail, NULL);
 
-    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
+    for (port = 0; port < rte_eth_dev_count(); port++) {
         test_display_win(&stats_win[port], true, test_display_stats,
                          (void *)(uintptr_t)port);
     }
@@ -1211,9 +1134,9 @@ static void test_stats_init_windows(void)
      * Create the stats windows - the right part of the screen.
      */
     stats_x = stats_test_state_win.uw_cols;
-    stats_xsz = WIN_SZ(cols, STATS_WIN_XPERC) / rte_eth_dev_count_avail();
+    stats_xsz = WIN_SZ(cols, STATS_WIN_XPERC) / rte_eth_dev_count();
 
-    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
+    for (port = 0; port < rte_eth_dev_count(); port++) {
         test_stats_ui_win_init(&stats_win[port],
                                lines, stats_xsz,
                                0, stats_x,
@@ -1248,7 +1171,7 @@ static void test_stats_tmr_cb(struct rte_timer *tmr __rte_unused,
 {
     uint32_t port;
 
-    for (port = 0; port < rte_eth_dev_count_avail(); port++)
+    for (port = 0; port < rte_eth_dev_count(); port++)
         test_display_win(&stats_win[port], false, test_display_stats,
                          (void *)(uintptr_t)port);
 }
@@ -1292,7 +1215,7 @@ static void test_stats_init_detail_tc(void)
 {
     uint32_t port;
 
-    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
+    for (port = 0; port < rte_eth_dev_count(); port++) {
         if (test_mgmt_get_test_case_count(port)) {
             tpg_test_case_t entry;
 
@@ -1338,7 +1261,7 @@ static void test_stats_forward_detail_tc(void)
 
     do {
         stats_detail_port++;
-        stats_detail_port %= rte_eth_dev_count_avail();
+        stats_detail_port %= rte_eth_dev_count();
     } while (test_mgmt_get_test_case_count(stats_detail_port) == 0);
 
     for (stats_detail_tcid = 0;
@@ -1383,7 +1306,7 @@ static void test_stats_back_detail_tc(void)
 
     do {
         if (stats_detail_port == 0)
-            stats_detail_port = rte_eth_dev_count_avail() - 1;
+            stats_detail_port = rte_eth_dev_count() - 1;
         else
             stats_detail_port--;
     } while (test_mgmt_get_test_case_count(stats_detail_port) == 0);
@@ -1432,7 +1355,7 @@ static void test_stats_quit_screen(void)
     test_stats_destroy_windows();
     rte_free(stats_win);
     win_changed = false;
-    rte_log_set_global_level(stats_old_rte_log_level);
+    rte_set_log_level(stats_old_rte_log_level);
 }
 
 /*****************************************************************************
@@ -1446,7 +1369,7 @@ void test_init_stats_screen(void)
     };
 
     stats_win = rte_zmalloc_socket("stats_win",
-                                   rte_eth_dev_count_avail() * sizeof(*stats_win),
+                                   rte_eth_dev_count() * sizeof(*stats_win),
                                    0,
                                    rte_lcore_to_socket_id(rte_lcore_id()));
 
@@ -1456,8 +1379,8 @@ void test_init_stats_screen(void)
 
     sigaction(SIGWINCH, &sigact, &win_chg_old_sigact);
     win_changed = true;
-    stats_old_rte_log_level = rte_log_get_global_level();
-    rte_log_set_global_level(0);
+    stats_old_rte_log_level = rte_get_log_level();
+    rte_set_log_level(0);
     test_stats_init_detail_tc();
 
     rte_timer_init(&display_tmr);

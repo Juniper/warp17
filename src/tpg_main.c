@@ -160,7 +160,7 @@ int main(int argc, char **argv)
                        "ERROR: WARP17 supports at most %"PRIu32" cores!\n",
                        (uint32_t)sizeof(uint64_t) * 8);
     }
-    if (rte_eth_dev_count_avail() > TPG_ETH_DEV_MAX) {
+    if (rte_eth_dev_count() > TPG_ETH_DEV_MAX) {
         TPG_ERROR_EXIT(EXIT_FAILURE,
                        "ERROR: WARP17 works with at most %u ports!\n",
                        TPG_ETH_DEV_MAX);
@@ -205,8 +205,8 @@ int main(int argc, char **argv)
 
     /* WARNING: Careful when adding code above this point. Up until ports are
      * initialized DPDK can't know that there might be ring interfaces that
-     * still need to be created. Therefore any call to
-     * rte_eth_dev_count_avail() doesn't include them.
+     * still need to be created. Therefore any call to rte_eth_dev_count()
+     * doesn't include them.
      */
     if (!port_init()) {
         TPG_ERROR_EXIT(EXIT_FAILURE, "ERROR: %s!\n",

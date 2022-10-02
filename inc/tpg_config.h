@@ -162,11 +162,11 @@ enum {
 /* TODO: No IPv6 supported. No TCP options supported.
  * Only IPv4 Tstamp Option supported.
  */
-#define GCFG_MBUF_HDR_FRAG_SIZE        (sizeof(struct rte_ether_hdr) + \
-                                        sizeof(struct rte_vlan_hdr) +  \
-                                        sizeof(struct rte_ipv4_hdr) +  \
+#define GCFG_MBUF_HDR_FRAG_SIZE        (sizeof(struct ether_hdr) +     \
+                                        sizeof(struct vlan_hdr) +      \
+                                        sizeof(struct ipv4_hdr) +      \
                                         sizeof(ipv4_tstamp_option_t) + \
-                                        sizeof(struct rte_tcp_hdr))
+                                        sizeof(struct tcp_hdr))
 #define GCFG_MBUF_HDR_SIZE             (GCFG_MBUF_HDR_FRAG_SIZE +  \
                                         sizeof(struct rte_mbuf) +  \
                                         RTE_PKTMBUF_HEADROOM)
@@ -229,6 +229,7 @@ enum {
 #define GCFG_UDP_CLIENT_BURST_MAX      16
 
 #define GCFG_TEST_MGMT_TMR_TO          500000    /* 500ms */
+#define GCFG_TEST_MGMT_RATES_TMR_TO    1000000   /* 1s */
 #define GCFG_TEST_MAX_TC_RUNTIME       600000000 /* 10min */
 
 /*

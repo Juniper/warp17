@@ -330,7 +330,7 @@ def run():
     setup_ports(w17_call)
 
     # Print csv header
-    print('Description, req_size, resp_size, rate, tx pps, rx pps, tx usage, rx usage')
+    print 'Description, req_size, resp_size, rate, tx pps, rx pps, tx usage, rx usage'
 
     for (test_name, proto, cl_cfg_fn, srv_cfg_fn, tcp_opts) in configs:
         for payload in payload_sizes:
@@ -341,12 +341,12 @@ def run():
                                      partial(server_test_case, proto, srv_cfg_fn(payload)),
                                      tcp_opts)
             # Print as csv
-            print('%(descr)s,%(req_size)u,%(resp_size)u,%(rate).0f,%(txr).0f,%(rxr).0f,%(txu).2f,%(rxu).2f' % \
+            print '%(descr)s,%(req_size)u,%(resp_size)u,%(rate).0f,%(txr).0f,%(rxr).0f,%(txu).2f,%(rxu).2f' % \
             {
                 'descr': descr, 'req_size': payload, 'resp_size': payload,
                 'rate': avgs[0], 'txr': avgs[1], 'rxr': avgs[2],
                 'txu': avgs[3], 'rxu': avgs[4]
-            })
+            }
 
     warp17_stop(env, warp17_pid, force=True)
 

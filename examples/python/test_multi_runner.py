@@ -115,7 +115,7 @@ def init_tests(cfg_file):
     return Warp17Env(path=cfg_file)
 
 def start_test(env, exec_file, log_prefix, cmd_file):
-    print('Starting test case: {}'.format(cmd_file))
+    print 'Starting test case: {}'.format(cmd_file)
 
     log_name = os.path.splitext(os.path.basename(cmd_file))[0]
     log_file = '{}/warp17-{}-log.out'.format(log_prefix, log_name)
@@ -194,9 +194,9 @@ def poll_stats(env, duration):
     for i in range(0, duration):
         time.sleep(1)
 
-        print('Iteration: {}: Collecting stastistics'.format(i))
+        print 'Iteration: {}: Collecting stastistics'.format(i)
 
-        for (port, tcs) in test_cases.items():
+        for (port, tcs) in test_cases.iteritems():
             for tcid in tcs:
                 tc_stats = warp17_method_call(env.get_host_name(), env.get_rpc_port(),
                                               Warp17_Stub,
@@ -255,7 +255,7 @@ def run_tests():
 
             # Write stats data
             write_cmd_file_hdr(csv_writer, cmd_file)
-            for ((port, tcid), stats) in sorted(data.items()):
+            for ((port, tcid), stats) in sorted(data.iteritems()):
                 write_test_case_hdr(csv_writer)
                 for stat in stats:
                     write_test_case_stats(csv_writer, port, tcid, stat)

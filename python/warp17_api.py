@@ -86,11 +86,8 @@ class Warp17Env():
     INIT_RETRY       = 'WARP17_INIT_RETRY'
 
     COREMASK         = 'coremask'
-    LCORES           = 'lcores'
     NCHAN            = 'nchan'
-    NO_HUGE          = 'no-huge'
     MEMORY           = 'memory'
-    SOCKET_MEM       = 'socket-mem'
     PORTS            = 'ports'
     QMAP_DEFAULT     = 'qmap-default'
     QMAP             = 'qmap'
@@ -99,8 +96,6 @@ class Warp17Env():
     MBUF_HDR_POOL_SZ = 'mbuf-hdr-pool-sz'
     TCB_POOL_SZ      = 'tcb-pool-sz'
     UCB_POOL_SZ      = 'ucb-pool-sz'
-    RING_PAIR        = 'ring-if-pairs'
-    KNI_IF           = 'kni-ifs'
 
     def __init__(self, path=None):
         if path is None:
@@ -112,8 +107,7 @@ class Warp17Env():
         if not os.path.exists(path):
             raise Warp17Exception('Missing ' + path + ' config file!')
 
-        with open(path) as config_f:
-            self._config.read_file(config_f)
+        self._config.read_file(open(path))
 
         self._uniq_stamp = os.environ.get(Warp17Env.UNIQ_STAMP, get_uniq_stamp())
         self._bin_name = os.environ.get(Warp17Env.BIN, '../build/warp17')
@@ -137,58 +131,28 @@ class Warp17Env():
         self._config.set(section, key, str(value))
 
     def get_coremask(self):
-        return self.get_value(Warp17Env.COREMASK, mandatory=False)
-
-    def get_lcores(self):
-        return self.get_value(Warp17Env.LCORES, mandatory=False)
+        return self.get_value(Warp17Env.COREMASK, mandatory=True)
 
     def get_nchan(self):
         return int(self.get_value(Warp17Env.NCHAN, mandatory=True))
 
-    def get_nohuge(self):
-        try:
-            if int(self.get_value(Warp17Env.NO_HUGE, mandatory=False)) is 1:
-                return True
-            else:
-                return False
-        except:
-            return False
-
     def get_memory(self):
-        retvalue = None
-
-        if self.get_value(Warp17Env.MEMORY, mandatory=False) is not None:
-            retvalue = ('-m ' + str(
-                int(self.get_value(Warp17Env.MEMORY, mandatory=False))) + ' ')
-        elif self.get_value(Warp17Env.SOCKET_MEM, mandatory=False) is not None:
-            retvalue = ('--socket-mem ' + str(
-                self.get_value(Warp17Env.SOCKET_MEM, mandatory=False)) + ' ')
-
-        if retvalue is None:
-            raise Warp17Exception("Memory configuration missing.")
-        else:
-            return retvalue
+        return int(self.get_value(Warp17Env.MEMORY, mandatory=True))
 
     def get_ports(self):
-        return self.get_value(Warp17Env.PORTS, mandatory=False)
-
-    def get_ring_ports(self):
-        return self.get_value(Warp17Env.RING_PAIR, mandatory=False, cast=int)
-
-    def get_kni_ports(self):
-        return self.get_value(Warp17Env.KNI_IF, mandatory=False)
+        return string.split(self.get_value(Warp17Env.PORTS, mandatory=True))
 
     def get_qmap(self):
         qmap_default = self.get_value(Warp17Env.QMAP_DEFAULT)
 
-        if qmap_default is not None:
+        if not qmap_default is None:
             return '--qmap-default ' + qmap_default
         ports = self.get_ports()
 
         return ' '.join(['--qmap ' + \
                             str(idx) + '.' + \
                             self.get_value(Warp17Env.QMAP, section=port) for
-                            idx, port in enumerate(ports.split())])
+                            idx, port in enumerate(ports)])
 
     def get_mbuf_sz(self):
         return self.get_value(Warp17Env.MBUF_SZ)
@@ -221,46 +185,27 @@ class Warp17Env():
         return int(self._init_retry)
 
     def get_exec_args(self):
-        # dpdk args
-        cores = self.get_coremask()
-        if cores is not None:
-            args = '-c ' + cores + ' '
-        else:
-            cores = self.get_lcores()
-            if cores is not None:
-                args = '--lcores ' + cores + ' '
-            else:
-                return
-        args += '-n ' + str(self.get_nchan()) + ' '
-        if self.get_nohuge():
-            args += '--no-huge '
-        args += self.get_memory()
-        ports = self.get_ports()
-        if ports is not None:
-            args += ' '.join(['-w ' + port for port in self.get_ports().split()]) + ' '
-        # warp17 args
-        args += '--' + ' ' + self.get_qmap()
+        args = '-c ' + self.get_coremask()                           + ' ' + \
+               '-n ' + str(self.get_nchan())                         + ' ' + \
+               '-m ' + str(self.get_memory())                        + ' ' + \
+               ' '.join(['-w ' + port for port in self.get_ports()]) + ' ' + \
+               '--'                                                  + ' ' + \
+               self.get_qmap()
         mbuf_sz = self.get_mbuf_sz()
-        if mbuf_sz is not None:
+        if not mbuf_sz is None:
             args += ' --mbuf-sz ' + str(mbuf_sz)
         tcb_pool_sz = self.get_tcb_pool_sz()
-        if tcb_pool_sz is not None:
+        if not tcb_pool_sz is None:
             args += ' --tcb-pool-sz ' + str(tcb_pool_sz)
         ucb_pool_sz = self.get_ucb_pool_sz()
-        if ucb_pool_sz is not None:
+        if not ucb_pool_sz is None:
             args += ' --ucb-pool-sz ' + str(ucb_pool_sz)
         mbuf_pool_sz = self.get_mbuf_pool_sz()
-        if mbuf_pool_sz is not None:
+        if not mbuf_pool_sz is None:
             args += ' --mbuf-pool-sz ' + str(mbuf_pool_sz)
         mbuf_hdr_pool_sz = self.get_mbuf_hdr_pool_sz()
-        if mbuf_hdr_pool_sz is not None:
+        if not mbuf_hdr_pool_sz is None:
             args += ' --mbuf-hdr-pool-sz ' + str(mbuf_hdr_pool_sz)
-        ring_if_pairs = self.get_ring_ports()
-        if ring_if_pairs is not None:
-            args += ' --ring-if-pairs ' + str(ring_if_pairs)
-        kni_if = self.get_kni_ports()
-        if kni_if is not None:
-            args += ' --kni-ifs ' + str(kni_if)
         return args
 
 class Warp17OutputArgs():
@@ -279,7 +224,7 @@ def warp17_start(env, exec_file = None, optional_args = None,
     if exec_file is None: exec_file = env.get_bin_name()
     if output_args is None: output_args = Warp17OutputArgs()
 
-    args = [exec_file] + env.get_exec_args().__str__().split()
+    args = [exec_file] + string.split(env.get_exec_args().__str__())
     if optional_args is not None:
         for arg in optional_args:
             args.append(arg)
@@ -312,7 +257,7 @@ def warp17_wait(env, logger = None):
                 print_stdout('WARP17 (%(ver)s) started!\n' % \
                              {'ver': response.vr_version})
                 return
-        except Warp17RpcException as ex:
+        except Warp17RpcException, ex:
             print_stdout('WARP17 not up yet. Sleeping for a bit...\n')
             time.sleep(2)
 

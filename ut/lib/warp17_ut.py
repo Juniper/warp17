@@ -87,7 +87,7 @@ class Warp17BaseUnitTestCase(unittest.TestCase):
         if not os.path.exists(dirpath):
             os.mkdir(dirpath)
 
-        print("Logs and outputs in " + dirpath)
+        print "Logs and outputs in " + dirpath
 
         out_file = dirpath + '/' + cls.__name__ + '.out'
         log_file = dirpath + '/' + cls.__name__ + '.log'
@@ -113,7 +113,6 @@ class Warp17BaseUnitTestCase(unittest.TestCase):
 
 class Warp17UnitTestCase(Warp17BaseUnitTestCase):
     """WARP17 Unit Test base class. Sets up the common variables."""
-    env = Warp17Env()
 
     @classmethod
     def setUpClass(cls):

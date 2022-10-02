@@ -54,7 +54,7 @@
 #
 #
 
-.PHONY: all clean pyclean unittest travis-ut
+.PHONY: all clean pyclean unittest
 
 APIDIR = api
 UTDIR  = ut
@@ -65,7 +65,7 @@ MKUT   = Makefile.ut
 Q ?= @
 
 PYOBJS     = python/*.pyc
-UNIQ_STAMP = $(shell python3 python/uniq.py)
+UNIQ_STAMP = $(shell python python/uniq.py)
 UT_ARGS    = WARP17_UNIQ_STAMP=$(UNIQ_STAMP)
 
 all:
@@ -93,8 +93,5 @@ pyclean:
 	$(Q)$(RM) -rf $(PYOBJS)
 
 unittest:
-	$(Q)$(MAKE) -C $(UTDIR) -f $(MKUT) -j1 -i all Q=$(Q) $(UT_ARGS)
-
-travis-ut:
-	$(Q)$(MAKE) -C $(UTDIR) -f $(MKUT) -j1 all-travis Q=$(Q) $(UT_ARGS)
+	$(Q)$(MAKE) -C $(UTDIR) -f $(MKUT) -i -j1 all Q=$(Q) $(UT_ARGS)
 
