@@ -223,35 +223,15 @@ done:
 }
 
 /*****************************************************************************
- * data_adj_chain()
- *  In some specific situation (for instance ring interfaces) the mbuf chain
- *  is fragmented or it has len 0 (mbufs?). Here we try to fix the whole data
- *  into a consistent chain
+ * data_adj_chain
  ****************************************************************************/
 static inline
 struct rte_mbuf *data_adj_chain(struct rte_mbuf *mbuf, uint32_t len)
 {
     struct rte_mbuf *prev;
-    struct rte_mbuf *next;
     uint32_t         new_pkt_len = mbuf->pkt_len - len;
-    void            *ret;
 
-    ret = rte_pktmbuf_adj(mbuf, len);
-    /* if len is bigger than mbuf->data_len rte_pktmbuf_adj return NULL */
-    if (likely(ret != NULL)) {
-        if (unlikely(mbuf->data_len != 0))
-            return mbuf;
-
-        /* if we move exactly at the end of the very first mbuf in the chain */
-        next = mbuf->next;
-        if (next) {
-            pkt_mbuf_free_seg(mbuf);
-            return next;
-        }
-        return mbuf;
-    }
-
-    while (len > 0 && len >= mbuf->data_len) {
+    while (len >= mbuf->data_len) {
         prev = mbuf;
         len -= mbuf->data_len;
         mbuf = mbuf->next;
@@ -282,7 +262,7 @@ struct rte_mbuf *data_adj_chain(struct rte_mbuf *mbuf, uint32_t len)
     } while (0)
 
 /*****************************************************************************
- * data_chain_from_static_template()
+ * data_chain_from_template()
  *      NOTE: duplicates the template as many times needed to fill the
  *            requested data len. Already marks all the mbufs in the chain as
  *            STATIC.
@@ -307,7 +287,6 @@ struct rte_mbuf *data_chain_from_static_template(uint32_t data_len,
     if (unlikely(!data_mbuf))
         goto done;
 
-    /* If data length is less than the mbuf len */
     if (data_len <= template_len) {
         DATA_SET_STATIC(data_mbuf);
         DATA_MBUF_FROM_TEMPLATE(data_mbuf, template, template_physaddr,
@@ -318,8 +297,9 @@ struct rte_mbuf *data_chain_from_static_template(uint32_t data_len,
     }
 
 
-    pkt_len   = data_len;
-    prev_mbuf = &data_mbufs;
+    pkt_len = data_len;
+    data_mbufs = data_mbuf;
+    prev_mbuf = &data_mbuf->next;
 
     do {
         DATA_SET_STATIC(data_mbuf);
@@ -330,8 +310,6 @@ struct rte_mbuf *data_chain_from_static_template(uint32_t data_len,
         prev_mbuf = &data_mbuf->next;
         data_len -= data_mbuf->data_len;
     } while (data_len >= template_len && (data_mbuf = pkt_mbuf_alloc(mpool)));
-
-    *prev_mbuf = NULL;
 
     if (!data_mbuf)
         goto done;
@@ -348,6 +326,8 @@ struct rte_mbuf *data_chain_from_static_template(uint32_t data_len,
         nb_segs++;
         *prev_mbuf = data_mbuf;
         data_mbuf->next = NULL;
+    } else {
+        *prev_mbuf = NULL;
     }
 
     data_mbufs->nb_segs = nb_segs;
@@ -387,8 +367,9 @@ struct rte_mbuf *data_chain_from_static_chain(struct rte_mbuf *static_chain,
     if (unlikely(!data_mbuf))
         goto done;
 
-    data_mbuf->pkt_len = data_len;
-    prev_mbuf          = &data_mbufs;
+    data_mbufs = data_mbuf;
+    data_mbufs->pkt_len = data_len;
+    prev_mbuf = &data_mbuf->next;
 
     do {
         DATA_SET_STATIC(data_mbuf);
@@ -528,6 +509,36 @@ static inline void data_mbuf_merge(struct rte_mbuf *dest, struct rte_mbuf *src)
     rte_pktmbuf_lastseg(dest)->next = src;
     dest->nb_segs += src->nb_segs;
     dest->pkt_len += src->pkt_len;
+}
+
+/*****************************************************************************
+ * data_mbuf_adj()
+ ****************************************************************************/
+static inline char *data_mbuf_adj(struct rte_mbuf *mbuf, uint32_t len)
+{
+    struct rte_mbuf *frag;
+    uint32_t         tmp_len;
+
+    if (unlikely(len > mbuf->pkt_len))
+        return NULL;
+
+    if (len == 0)
+        return (char *)mbuf->buf_addr + mbuf->data_off;
+
+    for (frag = mbuf, tmp_len = len; tmp_len > 0; frag = frag->next) {
+        uint32_t to_add = TPG_MIN(frag->data_len, tmp_len);
+
+        if (unlikely(to_add > frag->data_len))
+            return NULL;
+
+        frag->data_len = (uint16_t)(frag->data_len - to_add);
+        frag->data_off += to_add;
+
+        tmp_len -= to_add;
+    }
+
+    mbuf->pkt_len -= len;
+    return (char *)mbuf->buf_addr + mbuf->data_off;
 }
 
 /*****************************************************************************

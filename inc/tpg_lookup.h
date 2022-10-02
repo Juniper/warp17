@@ -295,7 +295,8 @@ void l4_cb_mempool_init(struct rte_mempool **mempools, rte_atomic16_t **mask,
 
         TAILQ_INIT(&tq);
 
-        while (rte_mempool_generic_get(mempools[core], &entry, 1, NULL) == 0) {
+        while (rte_mempool_generic_get(mempools[core], &entry, 1, NULL,
+                                       MEMPOOL_F_SC_GET) == 0) {
             l4_cb = (l4_control_block_t *)(((char *)entry) + l4_cb_offset);
 
             l4_cb->l4cb_id = id++;
@@ -308,7 +309,8 @@ void l4_cb_mempool_init(struct rte_mempool **mempools, rte_atomic16_t **mask,
             entry = (((char *)l4_cb) - l4_cb_offset);
 
             TAILQ_REMOVE(&tq, l4_cb, l4cb_test_list_entry);
-            rte_mempool_generic_put(mempools[core], &entry, 1, NULL);
+            rte_mempool_generic_put(mempools[core], &entry, 1, NULL,
+                                    MEMPOOL_F_SP_PUT);
         }
     }
 
@@ -345,6 +347,7 @@ void l4_cb_check(l4_control_block_t *cb)
     l4_cb_mempool_init((mpool), (mask), (max), (l4_cb_offset))
 #define L4_CB_CHECK(cb) \
     l4_cb_check((cb))
+
 #else /* defined(TPG_L4_CB_DEBUG) */
 
 #define L4_CB_ID(cb) 0
@@ -391,13 +394,14 @@ void l4_cb_check(l4_control_block_t *cb)
 static inline __attribute__((__always_inline__))
 void tlkp_alloc_cb_init(void *container, l4_control_block_t *cb,
                         size_t offset_in_container,
+                        struct rte_mempool *mp,
                         rte_atomic16_t *alloc_in_use_count,
                         uint32_t max_id)
 {
     L4_CB_ALLOC_INIT(cb, alloc_in_use_count, max_id);
 
     cb->l4cb_phys_addr =
-            rte_mempool_virt2iova(container) + offset_in_container;
+        rte_mempool_virt2phy(mp, container) + offset_in_container;
 }
 
 /*****************************************************************************

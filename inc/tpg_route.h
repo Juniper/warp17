@@ -148,8 +148,7 @@ extern int            route_v4_intf_add(uint32_t port, tpg_ip_t ip,
                                         tpg_ip_t mask, uint16_t vlan_id,
                                         tpg_ip_t gw, uint32_t index);
 extern int            route_v4_intf_del(uint32_t port, tpg_ip_t ip,
-                                        tpg_ip_t mask, uint16_t vlan_id,
-                                        tpg_ip_t gw);
+                                        tpg_ip_t mask);
 extern int            route_v4_gw_add(uint32_t port, tpg_ip_t gw);
 extern int            route_v4_gw_del(uint32_t port, tpg_ip_t gw);
 extern uint64_t       route_v4_nh_lookup(uint32_t port, uint32_t dest,

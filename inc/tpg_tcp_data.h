@@ -64,9 +64,9 @@
  * TCP MTU related macros
  ****************************************************************************/
 /* TODO: doesn't include any potential options (IP+TCP). */
-#define TCB_MIN_HDRS_SZ                                           \
-    (sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + \
-     sizeof(struct rte_tcp_hdr) + RTE_ETHER_CRC_LEN)
+#define TCB_MIN_HDRS_SZ                                   \
+    (sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr) + \
+     sizeof(struct tcp_hdr) + ETHER_CRC_LEN)
 
 /*
  * Quite an ugly hack to test that we have room to store the
@@ -125,17 +125,6 @@ extern uint32_t tcp_data_handle(tcp_control_block_t *tcb,
                                 bool urgent);
 
 extern uint32_t tcp_data_retrans(tcp_control_block_t *tcb);
-
-extern void tcp_data_walk_segs(tcp_control_block_t *tcb);
-
-#if defined(TPG_L4_CB_DEBUG)
-#define TCB_SEG_CHECK(tcb) \
-    tcp_data_walk_segs(tcb)
-
-#else /* defined(TPG_L4_CB_DEBUG) */
-#define TCB_SEG_CHECK(cb) (void)0
-
-#endif /* defined(TPG_L4_CB_DEBUG) */
 
 #endif /* _H_TPG_TCP_DATA_ */
 

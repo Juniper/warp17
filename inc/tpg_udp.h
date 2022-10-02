@@ -66,7 +66,6 @@ typedef enum udpState {
     US_LISTEN,
     US_OPEN,
     US_CLOSED,
-    US_MAX_STATE
 
 } udpState_t;
 
@@ -102,9 +101,9 @@ typedef struct udp_control_block_s {
  * DATA definitions
  ****************************************************************************/
 /* TODO: doesn't include any potential options (IP+TCP). */
-#define UCB_MIN_HDRS_SZ                                           \
-    (sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + \
-     sizeof(struct rte_udp_hdr) + RTE_ETHER_CRC_LEN)
+#define UCB_MIN_HDRS_SZ                                   \
+    (sizeof(struct ether_hdr) + sizeof(struct ipv4_hdr) + \
+     sizeof(struct udp_hdr) + ETHER_CRC_LEN)
 
 #define UDP_MTU(port_info, sockopt)                                         \
     ((port_info)->pi_mtu - ipv4_get_sockopt((sockopt))->ip4so_hdr_opt_len - \
@@ -122,8 +121,6 @@ typedef struct udp_control_block_s {
  * Globals for tpg_udp.c
  ****************************************************************************/
 STATS_GLOBAL_DECLARE(tpg_udp_statistics_t);
-
-extern const char *stateNamesUDP[US_MAX_STATE];
 
 /*****************************************************************************
  * Externals for tpg_udp.c

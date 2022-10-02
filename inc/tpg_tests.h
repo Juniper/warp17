@@ -74,7 +74,6 @@ enum tests_control_msg_types {
     MSG_TEST_CASE_STOP,
     MSG_TEST_CASE_STATS_REQ,
     MSG_TEST_CASE_RATES_REQ,
-    MSG_TEST_CASE_STATES_REQ,
     MSG_TYPE_DEF_END_MARKER(TESTS),
 
 };
@@ -252,22 +251,6 @@ typedef struct test_case_stats_req_msg_s {
 
 } __tpg_msg test_case_stats_req_msg_t;
 
-typedef struct test_state_counter_s {
-    uint32_t tos_to_init_cbs;  /* In Init, will move to to_open. */
-    uint32_t tos_to_open_cbs;  /* In Closed, should open. */
-    uint32_t tos_to_close_cbs; /* In Estab, should close. */
-    uint32_t tos_to_send_cbs;  /* In Established, need to send. */
-    uint32_t tos_closed_cbs;   /* In Closed, willmove to to_open.*/
-    uint32_t test_states_from_test[TSTS_MAX_STATE];
-    uint32_t test_states_from_tcp[TSTS_MAX_STATE];
-    uint32_t test_states_from_udp[TSTS_MAX_STATE];
-    uint32_t tcp_states_from_test[TS_MAX_STATE];
-    uint32_t udp_states_from_test[US_MAX_STATE];
-    uint32_t tcp_states_from_tcp[TS_MAX_STATE];
-    uint32_t udp_states_from_udp[US_MAX_STATE];
-
-} test_state_counter_t;
-
 typedef struct test_case_rates_req_msg_s {
 
     uint32_t          tcrrm_eth_port;
@@ -275,14 +258,6 @@ typedef struct test_case_rates_req_msg_s {
     tpg_rate_stats_t *tcrrm_test_case_rate_stats;
 
 } __tpg_msg test_case_rates_req_msg_t;
-
-typedef struct test_case_states_req_msg_s {
-
-    uint32_t              tcsrm_eth_port;
-    uint32_t              tcsrm_test_case_id;
-    test_state_counter_t *tcsrm_test_state_counter;
-
-} __tpg_msg test_case_states_req_msg_t;
 
 /*****************************************************************************
  * Test run open/send/mtu/close callbacks
@@ -492,22 +467,6 @@ test_resched_runner(test_rate_state_t *rate_state,
     if (test_case_run_msg(rte_lcore_id(), eth_port, test_case_id,
                           msgpool, msg_type) == 0)
         rate_state->trs_flags |= rate_in_progress_flag;
-}
-
-/*****************************************************************************
- * test_case_is_type()
- *      Function that checks the l4 type of a testcase
- ****************************************************************************/
-static inline bool test_case_is_type(tpg_test_case_t tc, L4Proto type)
-{
-    switch (tc.tc_type) {
-    case TEST_CASE_TYPE__SERVER:
-        return tc.tc_server.srv_l4.l4s_proto == type ? true : false;
-    case TEST_CASE_TYPE__CLIENT:
-        return tc.tc_client.cl_l4.l4c_proto == type ? true : false;
-    default:
-        return false;
-    }
 }
 
 #endif /* _H_TPG_TESTS_ */
