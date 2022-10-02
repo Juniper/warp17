@@ -168,10 +168,6 @@ ifneq ($(WARP17_KNI_IF),)
 CFLAGS += -DTPG_KNI_IF -DTPG_SW_CHECKSUMMING
 endif
 
-ifneq ($(WARP17_SW_CHECKSUMMING),)
-CFLAGS += -DTPG_SW_CHECKSUMMING
-endif
-
 ifneq ($(WARP17_DEBUG_DROP_RATE),)
 CFLAGS += -DTPG_DEBUG_DROP_RATE
 endif
@@ -185,7 +181,6 @@ CFLAGS += -D_GNU_SOURCE
 
 LDFLAGS += -lncurses
 LDFLAGS += -lprotobuf-c
-LDFLAGS += -lprotobuf-c-rpc
 
 include $(RTE_SDK)/mk/rte.extapp.mk
 
