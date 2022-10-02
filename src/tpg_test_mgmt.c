@@ -248,7 +248,6 @@ static void test_update_rates(tpg_test_case_t *test_case)
         duration = TPG_TIME_DIFF(prate_stats->rs_end_time,
                                  prate_stats->rs_start_time);
 
-
         /* Compute the averages and aggregate. */
         prate_stats->rs_estab_per_s +=
             rate_stats.rs_estab_per_s * (uint64_t)TPG_SEC_TO_USEC /
@@ -259,77 +258,6 @@ static void test_update_rates(tpg_test_case_t *test_case)
         prate_stats->rs_data_per_s +=
             rate_stats.rs_data_per_s * (uint64_t)TPG_SEC_TO_USEC /
             duration;
-    } FOREACH_CORE_IN_PORT_END()
-}
-
-/*****************************************************************************
- * test_update_state_counter()
- ****************************************************************************/
-void test_update_state_counter(const tpg_test_case_t *test_case,
-                                test_state_counter_t *state_counter)
-{
-    test_state_counter_t tci_state;
-    int               error = 0;
-    uint32_t          core;
-    MSG_LOCAL_DEFINE(test_case_rates_req_msg_t, smsg);
-
-    bzero(state_counter, sizeof(test_state_counter_t));
-
-    FOREACH_CORE_IN_PORT_START(core, test_case->tc_eth_port) {
-        msg_t                      *msgp;
-        test_case_states_req_msg_t *stats_msg;
-        uint32_t                   state;
-
-        /* Skip non-packet cores */
-        if (!cfg_is_pkt_core(core))
-            continue;
-
-        bzero(&tci_state, sizeof(tci_state));
-
-        msgp = MSG_LOCAL(smsg);
-        msg_init(msgp, MSG_TEST_CASE_STATES_REQ, core, 0);
-
-        stats_msg = MSG_INNER(test_case_states_req_msg_t, msgp);
-        stats_msg->tcsrm_eth_port = test_case->tc_eth_port;
-        stats_msg->tcsrm_test_case_id = test_case->tc_id;
-        stats_msg->tcsrm_test_state_counter = &tci_state;
-
-        /* BLOCK waiting for msg to be processed */
-        error = msg_send(msgp, 0);
-        if (error) {
-            TPG_ERROR_ABORT("ERROR: Failed to send state req msg: %s(%d)!\n",
-                            rte_strerror(-error), -error);
-        }
-
-        state_counter->tos_to_init_cbs += tci_state.tos_to_init_cbs;
-        state_counter->tos_to_open_cbs += tci_state.tos_to_open_cbs;
-        state_counter->tos_to_close_cbs += tci_state.tos_to_close_cbs;
-        state_counter->tos_to_send_cbs += tci_state.tos_to_send_cbs;
-        state_counter->tos_closed_cbs += tci_state.tos_closed_cbs;
-
-        for (state = 0; state < TSTS_MAX_STATE; ++state) {
-            state_counter->test_states_from_test[state] +=
-                    tci_state.test_states_from_test[state];
-            state_counter->test_states_from_tcp[state] += tci_state
-                .test_states_from_tcp[state];
-            state_counter->test_states_from_udp[state] += tci_state
-                .test_states_from_udp[state];
-        }
-
-        for (state = 0; state < TS_MAX_STATE; ++state) {
-            state_counter->tcp_states_from_test[state] +=
-                    tci_state.tcp_states_from_test[state];
-            state_counter->tcp_states_from_tcp[state] += tci_state
-                .tcp_states_from_tcp[state];
-            if (state == TS_SYN_RECV &&
-                (tci_state.tcp_states_from_test[state] != 0))
-                RTE_LOG(INFO, USER1, "core %d has %d TS_SYN_RECV\n", core,
-                        tci_state.tcp_states_from_test[state]);
-        }
-
-        for (state = 0; state < US_MAX_STATE; ++state)
-            state_counter->udp_states_from_udp[state] += tci_state
-                .udp_states_from_udp[state];
     } FOREACH_CORE_IN_PORT_END()
 }
 
@@ -733,7 +661,8 @@ static void test_entry_tmr_cb(struct rte_timer *tmr __rte_unused, void *arg)
         state->teos_test_case_state = TEST_CASE_STATE__PASSED;
         RTE_LOG(INFO, USER1,
                 "Port %"PRIu32", Test Case %"PRIu32" \"PASSED\"!\n",
-                eth_port, tcid);
+                eth_port,
+                tcid);
     }
 
     if (done) {
@@ -741,14 +670,16 @@ static void test_entry_tmr_cb(struct rte_timer *tmr __rte_unused, void *arg)
             state->teos_test_case_state = TEST_CASE_STATE__FAILED;
             RTE_LOG(INFO, USER1,
                     "Port %"PRIu32", Test Case %"PRIu32" \"FAILED\"!\n",
-                    eth_port, tcid);
+                    eth_port,
+                    tcid);
         }
 
         /* Servers UP doesn't mean we're done with the server test case. Server
          * test cases must be explicitly stopped!
          */
         if (entry->tc_type != TEST_CASE_TYPE__SERVER) {
-            rte_timer_stop(tmr);
+            rte_timer_stop(&state->teos_timer);
+            rte_timer_stop(&state->teos_rates_timer);
             test_stop_test_case(eth_port, entry, state,
                                 state->teos_test_case_state);
         }
@@ -758,13 +689,6 @@ static void test_entry_tmr_cb(struct rte_timer *tmr __rte_unused, void *arg)
         /* Check if we need to start another test entry. */
         if (tenv->te_test_case_to_start && tcid == tenv->te_test_case_next - 1)
             test_start_test_case(eth_port, tenv);
-    }
-
-    if (state->teos_update_rates == true) {
-        test_update_rates(&tenv->te_test_cases[tcid].cfg);
-        state->teos_update_rates = false;
-    } else {
-        state->teos_update_rates = true;
     }
 
     /* Check if all test cases have stopped running.
@@ -780,6 +704,19 @@ static void test_entry_tmr_cb(struct rte_timer *tmr __rte_unused, void *arg)
 
         tenv->te_test_running = false;
     }
+}
+
+/*****************************************************************************
+ * test_entry_rates_tmr_cb()
+ ****************************************************************************/
+static void test_entry_rates_tmr_cb(struct rte_timer *tmr __rte_unused,
+                                    void *arg)
+{
+    test_env_tmr_arg_t *tmr_arg  = arg;
+    test_env_t         *tenv     = tmr_arg->teta_test_env;
+    uint32_t            tcid     = tmr_arg->teta_test_case_id;
+
+    test_update_rates(&tenv->te_test_cases[tcid].cfg);
 }
 
 /*****************************************************************************
@@ -838,11 +775,16 @@ static void test_start_test_case(uint32_t eth_port, test_env_t *tenv)
     state->teos_stop_time = 0;
 
     state->teos_test_case_state = TEST_CASE_STATE__RUNNING;
-    rte_timer_reset(&state->teos_timer,
-                    GCFG_TEST_MGMT_TMR_TO * cycles_per_us,
+    rte_timer_reset(&state->teos_timer, GCFG_TEST_MGMT_TMR_TO * cycles_per_us,
                     PERIODICAL,
                     rte_lcore_id(),
                     test_entry_tmr_cb,
+                    &state->teos_timer_arg);
+    rte_timer_reset(&state->teos_rates_timer,
+                    GCFG_TEST_MGMT_RATES_TMR_TO * cycles_per_us,
+                    PERIODICAL,
+                    rte_lcore_id(),
+                    test_entry_rates_tmr_cb,
                     &state->teos_timer_arg);
 
     /* Mark if we need to start more tests later. */
@@ -974,6 +916,7 @@ static int test_start_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
     for (i = 0; i < TPG_TEST_MAX_ENTRIES; i++) {
         state = &tenv->te_test_cases[i].state;
         rte_timer_init(&state->teos_timer);
+        rte_timer_init(&state->teos_rates_timer);
         state->teos_timer_arg.teta_eth_port = start_msg->tssm_eth_port;
         state->teos_timer_arg.teta_test_case_id = i;
         state->teos_timer_arg.teta_test_env = tenv;
@@ -1050,6 +993,7 @@ static int test_stop_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
     TEST_CASE_FOREACH_START(tenv, i, entry, state) {
         /* Cancel test case timers. */
         rte_timer_stop(&state->teos_timer);
+        rte_timer_stop(&state->teos_rates_timer);
 
         test_stop_test_case(stop_msg->tssm_eth_port, entry, state,
                             TEST_CASE_STATE__STOPPED);
@@ -1062,11 +1006,8 @@ static int test_stop_cb(uint16_t msgid, uint16_t lcore __rte_unused, void *msg)
 
     /* Delete L3 interfaces. */
     for (i = 0; i < pcfg->pc_l3_intfs_count; i++) {
-        route_v4_intf_del(stop_msg->tssm_eth_port,
-                          pcfg->pc_l3_intfs[i].l3i_ip,
-                          pcfg->pc_l3_intfs[i].l3i_mask,
-                          pcfg->pc_l3_intfs[i].l3i_vlan_id,
-                          pcfg->pc_l3_intfs[i].l3i_gw);
+        route_v4_intf_del(stop_msg->tssm_eth_port, pcfg->pc_l3_intfs[i].l3i_ip,
+                          pcfg->pc_l3_intfs[i].l3i_mask);
     }
 
     /* Mark test as not running.*/
@@ -1122,7 +1063,7 @@ static bool test_mgmt_init_env(void)
      * Allocate port test configuration array.
      */
     test_env = rte_zmalloc_socket("test_env",
-                                  rte_eth_dev_count_avail() * sizeof(*test_env),
+                                  rte_eth_dev_count() * sizeof(*test_env),
                                   0,
                                   rte_lcore_to_socket_id(rte_lcore_id()));
 
@@ -1139,7 +1080,7 @@ static bool test_mgmt_init_runtime_stats(void)
      */
     test_runtime_gen_stats =
         rte_zmalloc_socket("test_runtime_gen_stats",
-                           rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES *
+                           rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES *
                            sizeof(*test_runtime_gen_stats),
                            0,
                            rte_lcore_to_socket_id(rte_lcore_id()));
@@ -1148,7 +1089,7 @@ static bool test_mgmt_init_runtime_stats(void)
 
     test_runtime_rate_stats =
         rte_zmalloc_socket("test_runtime_rate_stats",
-                           rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES *
+                           rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES *
                            sizeof(*test_runtime_rate_stats),
                            0,
                            rte_lcore_to_socket_id(rte_lcore_id()));
@@ -1157,7 +1098,7 @@ static bool test_mgmt_init_runtime_stats(void)
 
     test_runtime_app_stats =
         rte_zmalloc_socket("test_runtime_app_stats",
-                           rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES *
+                           rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES *
                            sizeof(*test_runtime_app_stats),
                            0,
                            rte_lcore_to_socket_id(rte_lcore_id()));

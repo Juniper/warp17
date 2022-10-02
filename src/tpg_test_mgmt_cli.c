@@ -261,7 +261,7 @@ static void cmd_show_link_rate_parsed(void *parsed_result __rte_unused,
 
     parg = TPG_PRINTER_ARG(cli_printer, cl);
 
-    for (eth_port = 0; eth_port < rte_eth_dev_count_avail(); eth_port++)
+    for (eth_port = 0; eth_port < rte_eth_dev_count(); eth_port++)
         test_show_link_rate(eth_port, &parg);
 }
 
@@ -314,78 +314,6 @@ cmdline_parse_inst_t cmd_show_tests_ui = {
     },
 };
 
-#if defined(TPG_DEBUG)
-/****************************************************************************
- * - "show tests debug info port <eth_port> test-case-id <tcid>"
- ****************************************************************************/
-struct cmd_show_tests_debug_info_result {
-    cmdline_fixed_string_t show;
-    cmdline_fixed_string_t tests;
-    cmdline_fixed_string_t debug;
-    cmdline_fixed_string_t info;
-    cmdline_fixed_string_t port_kw;
-    uint32_t               port;
-    cmdline_fixed_string_t tcid_kw;
-    uint32_t               tcid;
-};
-
-static cmdline_parse_token_string_t cmd_show_tests_debug_info_T_show =
-    TOKEN_STRING_INITIALIZER(struct cmd_show_tests_debug_info_result, show, "show");
-static cmdline_parse_token_string_t cmd_show_tests_debug_info_T_tests =
-    TOKEN_STRING_INITIALIZER(struct cmd_show_tests_debug_info_result, tests, "tests");
-static cmdline_parse_token_string_t cmd_show_tests_debug_info_T_debug =
-    TOKEN_STRING_INITIALIZER(struct cmd_show_tests_debug_info_result, debug, "debug");
-static cmdline_parse_token_string_t cmd_show_tests_debug_info_T_info =
-    TOKEN_STRING_INITIALIZER(struct cmd_show_tests_debug_info_result, info, "info");
-static cmdline_parse_token_string_t cmd_show_tests_debug_info_T_port_kw =
-    TOKEN_STRING_INITIALIZER(struct cmd_show_tests_debug_info_result, port_kw, "port");
-static cmdline_parse_token_num_t cmd_show_tests_debug_info_T_port =
-    TOKEN_NUM_INITIALIZER(struct cmd_show_tests_debug_info_result, port, UINT32);
-static cmdline_parse_token_string_t cmd_show_tests_debug_info_T_tcid_kw =
-    TOKEN_STRING_INITIALIZER(struct cmd_show_tests_debug_info_result, tcid_kw, "test-case-id");
-static cmdline_parse_token_num_t cmd_show_tests_debug_info_T_tcid =
-    TOKEN_NUM_INITIALIZER(struct cmd_show_tests_debug_info_result, tcid, UINT32);
-
-
-static void cmd_show_tests_debug_info_parsed(void *parsed_result,
-                                             struct cmdline *cl __rte_unused,
-                                             void *data __rte_unused)
-{
-    printer_arg_t                            parg;
-    tpg_test_case_t                          tc;
-    struct cmd_show_tests_debug_info_result *pr;
-
-
-    parg = TPG_PRINTER_ARG(cli_printer, cl);
-    pr = parsed_result;
-
-    if (test_mgmt_get_test_case_cfg(pr->port, pr->tcid, &tc, &parg) != 0)
-        return;
-
-    cmdline_printf(cl, "Port %"PRIu32", Test Case %"PRIu32" Counters:\n",
-        pr->port, pr->tcid);
-
-    test_debug_show_counters(&tc, &parg);
-
-}
-cmdline_parse_inst_t cmd_show_tests_debug_info = {
-    .f = cmd_show_tests_debug_info_parsed,
-    .data = NULL,
-    .help_str = "show tests debug info port <eth_port> test-case-id <tcid>",
-    .tokens = {
-        (void *)&cmd_show_tests_debug_info_T_show,
-        (void *)&cmd_show_tests_debug_info_T_tests,
-        (void *)&cmd_show_tests_debug_info_T_debug,
-        (void *)&cmd_show_tests_debug_info_T_info,
-        (void *)&cmd_show_tests_debug_info_T_port_kw,
-        (void *)&cmd_show_tests_debug_info_T_port,
-        (void *)&cmd_show_tests_debug_info_T_tcid_kw,
-        (void *)&cmd_show_tests_debug_info_T_tcid,
-        NULL,
-    },
-};
-#endif /*defined(TPG_DEBUG)*/
-
 /****************************************************************************
  * - "show tests config"
  ****************************************************************************/
@@ -418,9 +346,9 @@ static void cmd_show_tests_config_parsed(void *parsed_result, struct cmdline *cl
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
 
-    if (pr->port >= rte_eth_dev_count_avail()) {
+    if (pr->port >= rte_eth_dev_count()) {
         cmdline_printf(cl, "ERROR: Port should be in the range 0..%"PRIu32"\n",
-                       rte_eth_dev_count_avail());
+                       rte_eth_dev_count());
         return;
     }
 
@@ -483,9 +411,9 @@ static void cmd_show_tests_state_parsed(void *parsed_result, struct cmdline *cl,
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
 
-    if (pr->port >= rte_eth_dev_count_avail()) {
+    if (pr->port >= rte_eth_dev_count()) {
         cmdline_printf(cl, "ERROR: Port should be in the range 0..%"PRIu32"\n",
-                       rte_eth_dev_count_avail());
+                       rte_eth_dev_count());
         return;
     }
 
@@ -636,7 +564,7 @@ static void cmd_tests_add_l3_intf_parsed(void *parsed_result, struct cmdline *cl
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
     vlan_enable = (intptr_t)data;
-    gw = TPG_IPV4(RTE_IPV4(0, 0, 0, 0));
+    gw = TPG_IPV4(IPv4(0, 0, 0, 0));
 
     if (pr->ip.family != AF_INET) {
         cmdline_printf(cl, "ERROR: IPv6 not supported yet!\n");
@@ -2516,8 +2444,8 @@ static void cmd_syslog_parsed(void *parsed_result __rte_unused,
     if (pos == level_count)
         return;
 
-    rte_log_set_global_level(pos);
-    log_level = rte_log_get_global_level();
+    rte_set_log_level(pos);
+    log_level = rte_get_log_level();
     cmdline_printf(cl, "Syslog set to %s\n", levels[log_level]);
 }
 
@@ -2586,10 +2514,26 @@ static void cmd_latency_parsed(void *parsed_result, struct cmdline *cl,
     printer_arg_t              parg;
     struct cmd_latency_result *pr;
     tpg_update_arg_t           update_arg;
+    tpg_ipv4_sockopt_t         ipv4_sockopt;
 
     tpg_xlate_default_UpdateArg(&update_arg);
     parg = TPG_PRINTER_ARG(cli_printer, cl);
     pr = parsed_result;
+
+    if (test_mgmt_get_ipv4_sockopt(pr->port, pr->tcid, &ipv4_sockopt, &parg))
+        return;
+
+    /*
+     * Once we will give possibility of changing test config at runtime thise
+     * should go away.
+     */
+    if (!ipv4_sockopt.ip4so_rx_tstamp) {
+        cmdline_printf(cl,
+                       "WARNING: Seting latency option without RX timestamping "
+                       "enabled in test case %"PRIu32" config on "
+                       "port %"PRIu32"\n",
+                       pr->tcid, pr->port);
+    }
 
     if (pr->samples) {
         TPG_XLATE_OPTIONAL_SET_FIELD(&update_arg.ua_latency, tcs_samples,
@@ -2742,9 +2686,6 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_tests_stop,
     &cmd_clear_stats,
     &cmd_show_tests_ui,
-#if defined(TPG_DEBUG)
-    &cmd_show_tests_debug_info,
-#endif /*defined(TPG_DEBUG)*/
     &cmd_show_link_rate,
     &cmd_show_tests_config,
     &cmd_show_tests_state,

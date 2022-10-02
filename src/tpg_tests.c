@@ -215,43 +215,6 @@ static void test_update_recent_latency_stats(tpg_latency_stats_t *stats,
 static void test_case_latency_init(test_case_info_t *tc_info);
 
 /*****************************************************************************
- * test_update_cksum_tstamp()
- *      this function uses incremental checksum from RFC1624 in order to update
- *      the checksum (Ipv4/TCP/UDP) after the timstamp is added
- *      https://tools.ietf.org/html/rfc1624
- ****************************************************************************/
-static void test_update_cksum_tstamp(struct rte_mbuf *mbuf __rte_unused,
-                                     struct rte_mbuf *mbuf_seg,
-                                     uint32_t offset, uint32_t size)
-{
-    uint16_t        *tstamp;
-    uint16_t        *cksum_ptr;
-    uint16_t         cksum;
-    uint32_t         cksum_32;
-    uint32_t         offset_ck;
-
-    offset_ck = DATA_GET_CKSUM_OFFSET(mbuf);
-
-    /* Offset checksum works only with TPG_SW_CHECKSUMMING enabled! */
-    if (!offset_ck)
-        return;
-
-    cksum_ptr = (uint16_t *) data_mbuf_mtod_offset(mbuf, offset_ck);
-    tstamp = (uint16_t *) data_mbuf_mtod_offset(mbuf_seg, offset);
-
-    /* This is needed otherwise the checksum calc won't work */
-    cksum = ~(*cksum_ptr) & 0xFFFF;
-    /* WARNING: those functions are private functions from dpdk library, they
-     * may change in future!!!
-     */
-
-    cksum_32 = __rte_raw_cksum(tstamp, size, cksum);
-    cksum = __rte_raw_cksum_reduce(cksum_32);
-    cksum = (cksum == 0xFFFF) ? cksum : ~cksum;
-    *cksum_ptr = cksum;
-}
-
-/*****************************************************************************
  * Client and server config control block walk functions
  ****************************************************************************/
 
@@ -1297,48 +1260,6 @@ static uint32_t test_purge_list(test_case_info_t *tc_info,
 }
 
 /*****************************************************************************
- * test_tcb_count_tail()
- ****************************************************************************/
-static uint32_t test_tcb_count_tail(tlkp_test_cb_list_t *cb_list,
-                                    uint32_t test_states[TSTS_MAX_STATE],
-                                    uint32_t tcp_states[TS_MAX_STATE])
-{
-    uint32_t             cnt = 0;
-    l4_control_block_t  *l4_cb;
-    tcp_control_block_t *tcb;
-
-    TAILQ_FOREACH(l4_cb, cb_list, l4cb_test_list_entry) {
-        tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
-
-        test_states[l4_cb->l4cb_test_state]++;
-        tcp_states[tcb->tcb_state]++;
-        cnt++;
-    }
-    return cnt;
-}
-
-/*****************************************************************************
- * test_ucb_count_tail()
- ****************************************************************************/
-static uint32_t test_ucb_count_tail(tlkp_test_cb_list_t *cb_list,
-                                    uint32_t test_states[TSTS_MAX_STATE],
-                                    uint32_t udp_states[US_MAX_STATE])
-{
-    uint32_t             cnt = 0;
-    l4_control_block_t  *l4_cb;
-    udp_control_block_t *ucb;
-
-    TAILQ_FOREACH(l4_cb, cb_list, l4cb_test_list_entry) {
-        ucb = container_of(l4_cb, udp_control_block_t, ucb_l4);
-
-        test_states[l4_cb->l4cb_test_state]++;
-        udp_states[ucb->ucb_state]++;
-        cnt++;
-    }
-    return cnt;
-}
-
-/*****************************************************************************
  * test_case_purge_cbs()
  ****************************************************************************/
 static void test_case_purge_cbs(test_case_info_t *tc_info)
@@ -1346,11 +1267,9 @@ static void test_case_purge_cbs(test_case_info_t *tc_info)
     tpg_test_case_type_t tc_type = tc_info->tci_cfg->tcim_test_case.tc_type;
     tpg_l4_proto_t       l4_proto = tc_info->tci_cfg->tcim_l4_type;
 
-    uint32_t eth_port  = tc_info->tci_cfg->tcim_test_case.tc_eth_port;
-    uint32_t tc_id     = tc_info->tci_cfg->tcim_test_case.tc_id;
+    uint32_t eth_port = tc_info->tci_cfg->tcim_test_case.tc_eth_port;
+    uint32_t tc_id    = tc_info->tci_cfg->tcim_test_case.tc_id;
     uint32_t purge_cnt = 0;
-    uint32_t cnt       = 0;
-    int lcore_id       = rte_lcore_id();
 
     test_case_htable_walk_cb_t htable_walk_fn;
 
@@ -1359,138 +1278,26 @@ static void test_case_purge_cbs(test_case_info_t *tc_info)
         if (l4_cb->l4cb_test_case_id != tc_id)
             return true;
 
-        cnt++;
+        purge_cnt++;
 
         test_sm_purge(l4_cb, tc_info);
         test_callbacks[tc_type][l4_proto].sess_purge(l4_cb);
         return true;
     }
 
-    cnt = test_purge_list(tc_info, &tc_info->tci_state.tos_to_init_cbs);
-    if (cnt) {
-        RTE_LOG(INFO, USER1,
-                "lcore=%d Purged %d sessions from tos_to_init_cbs\n",
-                lcore_id, cnt);
-        purge_cnt += cnt;
-    }
+    purge_cnt += test_purge_list(tc_info, &tc_info->tci_state.tos_to_init_cbs);
+    purge_cnt += test_purge_list(tc_info, &tc_info->tci_state.tos_to_open_cbs);
+    purge_cnt += test_purge_list(tc_info, &tc_info->tci_state.tos_to_close_cbs);
+    purge_cnt += test_purge_list(tc_info, &tc_info->tci_state.tos_to_send_cbs);
+    purge_cnt += test_purge_list(tc_info, &tc_info->tci_state.tos_closed_cbs);
 
-    cnt = test_purge_list(tc_info, &tc_info->tci_state.tos_to_open_cbs);
-    if (cnt) {
-        RTE_LOG(INFO, USER1,
-                "lcore=%d Purged %d sessions from tos_to_open_cbs\n",
-                lcore_id, cnt);
-        purge_cnt += cnt;
-    }
-
-    cnt = test_purge_list(tc_info, &tc_info->tci_state.tos_to_close_cbs);
-    if (cnt) {
-        RTE_LOG(INFO, USER1,
-                "lcore=%d Purged %d sessions from tos_to_close_cbs\n",
-                lcore_id, cnt);
-        purge_cnt += cnt;
-    }
-
-    cnt = test_purge_list(tc_info, &tc_info->tci_state.tos_to_send_cbs);
-    if (cnt) {
-        RTE_LOG(INFO, USER1,
-                "lcore=%d Purged %d sessions from tos_to_send_cbs\n",
-                lcore_id, cnt);
-        purge_cnt += cnt;
-    }
-
-    cnt = test_purge_list(tc_info, &tc_info->tci_state.tos_closed_cbs);
-    if (cnt) {
-        RTE_LOG(INFO, USER1,
-                "lcore=%d Purged %d sessions from tos_to_closed_cbs\n",
-                lcore_id, cnt);
-        purge_cnt += cnt;
-    }
-
-    cnt = 0;
     htable_walk_fn = test_callbacks[tc_type][l4_proto].sess_htable_walk;
+
     htable_walk_fn(eth_port, purge_htable_cb, NULL);
-    if (cnt) {
-        RTE_LOG(INFO, USER1,
-                "lcore=%d Purged %d sessions from the session table\n",
-                lcore_id, cnt);
-        purge_cnt += cnt;
-    }
 
     RTE_LOG(INFO, USER1,
-            "lcore=%d Purged %u total sessions on eth_port %"PRIu32" tcid %"PRIu32"\n",
-            lcore_id, purge_cnt, eth_port, tc_id);
-}
-
-/*****************************************************************************
- * test_case_count_tcb_cbs()
- ****************************************************************************/
-static void test_case_count_tcb_cbs(test_case_info_t *tc_info,
-                                    uint32_t test_states[TSTS_MAX_STATE],
-                                    uint32_t tcp_states[TS_MAX_STATE])
-{
-    tpg_test_case_type_t tc_type = tc_info->tci_cfg->tcim_test_case.tc_type;
-    tpg_l4_proto_t       l4_proto = tc_info->tci_cfg->tcim_l4_type;
-    tcp_control_block_t *tcb;
-    uint32_t             sessions = 0;
-
-    uint32_t eth_port = tc_info->tci_cfg->tcim_test_case.tc_eth_port;
-    uint32_t tc_id    = tc_info->tci_cfg->tcim_test_case.tc_id;
-
-    test_case_htable_walk_cb_t htable_walk_fn;
-
-    bool count_htable_cb(l4_control_block_t *l4_cb, void *arg __rte_unused)
-    {
-        if (l4_cb->l4cb_test_case_id != tc_id)
-            return true;
-
-        tcb = container_of(l4_cb, tcp_control_block_t, tcb_l4);
-        test_states[l4_cb->l4cb_test_state]++;
-        tcp_states[tcb->tcb_state]++;
-        sessions++;
-
-        return true;
-    }
-
-    htable_walk_fn = test_callbacks[tc_type][l4_proto].sess_htable_walk;
-
-    htable_walk_fn(eth_port, count_htable_cb, NULL);
-
-}
-
-/*****************************************************************************
- * test_case_count_ucb_cbs()
- ****************************************************************************/
-static void test_case_count_ucb_cbs(test_case_info_t *tc_info,
-                                    uint32_t test_states[TSTS_MAX_STATE],
-                                    uint32_t udp_states[US_MAX_STATE])
-{
-    tpg_test_case_type_t  tc_type = tc_info->tci_cfg->tcim_test_case.tc_type;
-    tpg_l4_proto_t        l4_proto = tc_info->tci_cfg->tcim_l4_type;
-    udp_control_block_t  *ucb;
-    uint32_t              sessions = 0;
-
-    uint32_t eth_port = tc_info->tci_cfg->tcim_test_case.tc_eth_port;
-    uint32_t tc_id    = tc_info->tci_cfg->tcim_test_case.tc_id;
-
-    test_case_htable_walk_cb_t htable_walk_fn;
-
-    bool count_htable_cb(l4_control_block_t *l4_cb, void *arg __rte_unused)
-    {
-        if (l4_cb->l4cb_test_case_id != tc_id)
-            return true;
-
-        ucb = container_of(l4_cb, udp_control_block_t, ucb_l4);
-        test_states[l4_cb->l4cb_test_state]++;
-        udp_states[ucb->ucb_state]++;
-        sessions++;
-
-        return true;
-    }
-
-    htable_walk_fn = test_callbacks[tc_type][l4_proto].sess_htable_walk;
-
-    htable_walk_fn(eth_port, count_htable_cb, NULL);
-
+            "Purged %u sessions on eth_port %"PRIu32" tcid %"PRIu32"\n",
+            purge_cnt, eth_port, tc_id);
 }
 
 /*****************************************************************************
@@ -1536,19 +1343,13 @@ static int test_case_init_cb(uint16_t msgid, uint16_t lcore, void *msg)
     test_latency = &tc_info->tci_cfg->tcim_test_case.tc_latency;
 
     if (tc_info->tci_cfg->tcim_tx_tstamp) {
-        tstamp_tx_post_cb_t  cb;
-        sockopt_t           *sockopt;
+        tstamp_tx_post_cb_t cb = NULL;
 
-        sockopt = &tc_info->tci_cfg->tcim_sockopt;
-        if (!sockopt->so_eth.ethso_tx_offload_ipv4_cksum ||
-                !sockopt->so_eth.ethso_tx_offload_tcp_cksum ||
-                !sockopt->so_eth.ethso_tx_offload_udp_cksum)
-            cb = test_update_cksum_tstamp;
-        else
-            cb = NULL;
-
-        tstamp_start_tx(eth_port, port_get_tx_queue_id(lcore, eth_port),
-                        cb);
+        /* TODO: set callback ipv4 recalc if defined(TPG_SW_CHECKSUMMING) or
+         * when the NIC doesn't support checksum offload.
+         * cb = ipv4_recalc_tstamp_cksum(mbuf, offset, size);
+         */
+        tstamp_start_tx(eth_port, port_get_tx_queue_id(lcore, eth_port), cb);
     }
 
     if (tc_info->tci_cfg->tcim_rx_tstamp) {
@@ -2071,66 +1872,6 @@ static int test_case_stats_req_cb(uint16_t msgid, uint16_t lcore __rte_unused,
 }
 
 /*****************************************************************************
- * test_case_get_state_counter()
- ****************************************************************************/
-static void test_case_get_state_counter(test_case_info_t *tc_info,
-                                        test_state_counter_t *state_counter)
-{
-
-    bzero(state_counter, sizeof(test_state_counter_t));
-
-    if (tc_info->tci_cfg->tcim_l4_type == L4_PROTO__TCP) {
-        state_counter->tos_to_init_cbs =
-            test_tcb_count_tail(&tc_info->tci_state.tos_to_init_cbs,
-                                state_counter->test_states_from_test,
-                                state_counter->tcp_states_from_test);
-        state_counter->tos_to_open_cbs =
-            test_tcb_count_tail(&tc_info->tci_state.tos_to_open_cbs,
-                                state_counter->test_states_from_test,
-                                state_counter->tcp_states_from_test);
-        state_counter->tos_to_close_cbs =
-            test_tcb_count_tail(&tc_info->tci_state.tos_to_close_cbs,
-                                state_counter->test_states_from_test,
-                                state_counter->tcp_states_from_test);
-        state_counter->tos_to_send_cbs =
-            test_tcb_count_tail(&tc_info->tci_state.tos_to_send_cbs,
-                                state_counter->test_states_from_test,
-                                state_counter->tcp_states_from_test);
-        state_counter->tos_closed_cbs =
-            test_tcb_count_tail(&tc_info->tci_state.tos_closed_cbs,
-                                state_counter->test_states_from_test,
-                                state_counter->tcp_states_from_test);
-
-        test_case_count_tcb_cbs(tc_info, state_counter->test_states_from_tcp,
-                                state_counter->tcp_states_from_tcp);
-    } else if (tc_info->tci_cfg->tcim_l4_type == L4_PROTO__UDP) {
-        state_counter->tos_to_init_cbs =
-            test_ucb_count_tail(&tc_info->tci_state.tos_to_init_cbs,
-                                state_counter->test_states_from_test,
-                                state_counter->udp_states_from_test);
-        state_counter->tos_to_open_cbs =
-            test_ucb_count_tail(&tc_info->tci_state.tos_to_open_cbs,
-                                state_counter->test_states_from_test,
-                                state_counter->udp_states_from_test);
-        state_counter->tos_to_close_cbs =
-            test_ucb_count_tail(&tc_info->tci_state.tos_to_close_cbs,
-                                state_counter->test_states_from_test,
-                                state_counter->udp_states_from_test);
-        state_counter->tos_to_send_cbs =
-            test_ucb_count_tail(&tc_info->tci_state.tos_to_send_cbs,
-                                state_counter->test_states_from_test,
-                                state_counter->udp_states_from_test);
-        state_counter->tos_closed_cbs =
-            test_ucb_count_tail(&tc_info->tci_state.tos_closed_cbs,
-                                state_counter->test_states_from_test,
-                                state_counter->udp_states_from_test);
-
-        test_case_count_ucb_cbs(tc_info, state_counter->test_states_from_udp,
-                                state_counter->udp_states_from_udp);
-    }
-}
-
-/*****************************************************************************
  * test_case_rates_stats_req_cb()
  ****************************************************************************/
 static int test_case_rates_stats_req_cb(uint16_t msgid,
@@ -2155,39 +1896,6 @@ static int test_case_rates_stats_req_cb(uint16_t msgid,
     *sm->tcrrm_test_case_rate_stats = *tc_info->tci_rate_stats;
 
     /* Clear the rates stats. They're aggregated by the test manager. */
-    bzero(tc_info->tci_rate_stats, sizeof(*tc_info->tci_rate_stats));
-
-    /* Store the new initial timestamp. */
-    tc_info->tci_rate_stats->rs_start_time = now;
-
-    return 0;
-}
-
-/*****************************************************************************
- * test_case_states_stats_req_cb()
- ****************************************************************************/
-static int test_case_states_stats_req_cb(uint16_t msgid,
-                                        uint16_t lcore __rte_unused,
-                                        void *msg)
-{
-    test_case_states_req_msg_t *sm;
-    test_case_info_t          *tc_info;
-    uint64_t                   now;
-
-    if (MSG_INVALID(msgid, msg, MSG_TEST_CASE_STATES_REQ))
-        return -EINVAL;
-
-    sm = msg;
-
-    tc_info = TEST_GET_INFO(sm->tcsrm_eth_port, sm->tcsrm_test_case_id);
-
-    now = rte_get_timer_cycles();
-    tc_info->tci_rate_stats->rs_end_time = now;
-
-    /* Struct copy the stats! */
-    test_case_get_state_counter(tc_info, sm->tcsrm_test_state_counter);
-
-    /* Clear the states stats. They're aggregated by the test manager. */
     bzero(tc_info->tci_rate_stats, sizeof(*tc_info->tci_rate_stats));
 
     /* Store the new initial timestamp. */
@@ -2270,11 +1978,6 @@ bool test_init(void)
         if (error)
             break;
 
-        error = msg_register_handler(MSG_TEST_CASE_STATES_REQ,
-                                     test_case_states_stats_req_cb);
-        if (error)
-            break;
-
         return true;
     }
 
@@ -2310,7 +2013,7 @@ static void test_lcore_init_test_case_info(void)
     uint32_t eth_port;
     uint32_t tcid;
 
-    for (eth_port = 0; eth_port < rte_eth_dev_count_avail(); eth_port++) {
+    for (eth_port = 0; eth_port < rte_eth_dev_count(); eth_port++) {
         for (tcid = 0; tcid < TPG_TEST_MAX_ENTRIES; tcid++) {
             test_case_info_t *tc_info = TEST_GET_INFO(eth_port, tcid);
 
@@ -2330,48 +2033,48 @@ void test_lcore_init(uint32_t lcore_id)
 {
     test_lcore_init_pool(RTE_PER_LCORE(test_case_info),
                          "per_lcore_test_case_info",
-                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
 
     test_lcore_init_pool(RTE_PER_LCORE(test_case_cfg),
                          "per_lcore_test_case_cfg",
-                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
 
     test_lcore_init_pool(RTE_PER_LCORE(test_case_stats),
                          "per_lcore_test_stats",
-                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
 
     test_lcore_init_pool(RTE_PER_LCORE(test_case_latency_state),
                          "per_lcore_test_case_latency_state",
-                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
 
     test_lcore_init_pool(RTE_PER_LCORE(test_open_msgpool),
                          "per_lcore_open_msgpool",
-                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
     test_lcore_init_pool(RTE_PER_LCORE(test_close_msgpool),
                          "per_lcore_close_msgpool",
-                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
     test_lcore_init_pool(RTE_PER_LCORE(test_send_msgpool),
                          "per_lcore_send_msgpool",
-                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
 
     test_lcore_init_pool(RTE_PER_LCORE(test_tmr_open_args),
                          "per_lcore_tmr_open_arg",
-                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
     test_lcore_init_pool(RTE_PER_LCORE(test_tmr_close_args),
                          "per_lcore_tmr_close_arg",
-                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
     test_lcore_init_pool(RTE_PER_LCORE(test_tmr_send_args),
                          "per_lcore_tmr_send_arg",
-                         rte_eth_dev_count_avail() * TPG_TEST_MAX_ENTRIES,
+                         rte_eth_dev_count() * TPG_TEST_MAX_ENTRIES,
                          lcore_id);
 
     test_lcore_init_test_case_info();

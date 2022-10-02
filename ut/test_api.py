@@ -526,21 +526,20 @@ class TestApi(Warp17UnitTestCase):
                 server_result = self.warp17_call('GetStatistics',
                                                  PortArg(pa_eth_port=i))
 
-                if Warp17UnitTestCase.env.get_ring_ports() == 0:
-                    self.assertGreater(server_result.sr_phy.pys_rx_pkts, 0,
-                                       'Phy pys_rx_pkts has to be greater than 0')
-                    self.assertGreater(server_result.sr_phy.pys_rx_bytes, 0,
-                                       'Phy pys_rx_bytes has to be greater than 0')
-                    self.assertGreater(server_result.sr_phy.pys_tx_pkts, 0,
-                                       'Phy pys_tx_pkts has to be greater than 0')
-                    self.assertGreater(server_result.sr_phy.pys_tx_bytes, 0,
-                                       'Phy pys_tx_bytes has to be greater than 0')
-                    self.assertEqual(server_result.sr_phy.pys_rx_errors, 0,
-                                     'Phy pys_rx_errors has to be 0')
-                    self.assertEqual(server_result.sr_phy.pys_tx_errors, 0,
-                                     'Phy pys_tx_errors has to be 0')
-                    self.assertGreater(server_result.sr_phy.pys_link_speed, 0,
-                                       'Phy pys_link_speed has to be greater than 0')
+                self.assertGreater(server_result.sr_phy.pys_rx_pkts, 0,
+                                   'Phy pys_rx_pkts has to be greater than 0')
+                self.assertGreater(server_result.sr_phy.pys_rx_bytes, 0,
+                                   'Phy pys_rx_bytes has to be greater than 0')
+                self.assertGreater(server_result.sr_phy.pys_tx_pkts, 0,
+                                   'Phy pys_tx_pkts has to be greater than 0')
+                self.assertGreater(server_result.sr_phy.pys_tx_bytes, 0,
+                                   'Phy pys_tx_bytes has to be greater than 0')
+                self.assertEqual(server_result.sr_phy.pys_rx_errors, 0,
+                                 'Phy pys_rx_errors has to be 0')
+                self.assertEqual(server_result.sr_phy.pys_tx_errors, 0,
+                                 'Phy pys_tx_errors has to be 0')
+                self.assertGreater(server_result.sr_phy.pys_link_speed, 0,
+                                   'Phy pys_link_speed has to be greater than 0')
 
                 self.assertGreater(server_result.sr_port.ps_received_pkts, 0,
                                    'Port ps_received_pkts has to be greater than 0')
@@ -570,9 +569,6 @@ class TestApi(Warp17UnitTestCase):
                     self.assertGreater(server_result.sr_tcp.ts_sent_ctrl_bytes,
                                        0,
                                        'TCP ts_sent_ctrl_bytes has to be greater than 0')
-                    self.assertGreater(server_result.sr_tcp.ts_sent_syn,
-                                       0,
-                                       'TCP ts_sent_syn has to be greater than 0')
                     self.assertGreater(server_result.sr_tcp.ts_sent_data_pkts,
                                        0,
                                        'TCP ts_sent_data_pkts has to be greater than 0')
@@ -638,114 +634,6 @@ class TestApi(Warp17UnitTestCase):
             self.Stop()
             self.TearDown()
 
-    def test_rate(self):
-        """Setup a single UDP/TCP session and check that the test passed"""
-
-        # n_sessions = n_ip * n_ip * n_ports_c
-        n_ip = 1
-        n_ports = 50000
-        run_time = 20
-
-
-        app_ccfg, app_scfg, rate_ccfg = self.SetUp(ip_cnt=n_ip)
-        for l4_proto in [TCP, UDP]:
-            l4_ccfg = \
-                L4Client(l4c_proto=l4_proto,
-                         l4c_tcp_udp=TcpUdpClient(
-                             tuc_sports=b2b_ports(n_ports),
-                             tuc_dports=b2b_ports(1)))
-
-            uptime_delay = Delay(d_value=2)
-            downtime_delay = Delay(d_value=2)
-
-            rate_ccfg = RateClient(rc_open_rate=Rate(r_value=10000),
-                                   rc_close_rate=Rate(r_value=10000),
-                                   rc_send_rate=Rate(r_value=10000))
-
-            ccfg = TestCase(tc_type=CLIENT, tc_eth_port=0, tc_id=0,
-                            tc_client=Client(cl_src_ips=b2b_sips(0, 1),
-                                             cl_dst_ips=b2b_dips(0, 1),
-                                             cl_l4=l4_ccfg,
-                                             cl_rates=rate_ccfg),
-                            tc_app=app_ccfg,
-                            tc_uptime=uptime_delay,
-                            tc_downtime=downtime_delay,
-                            tc_criteria=TestCriteria(tc_crit_type=RUN_TIME,
-                                                     tc_run_time_s=run_time))
-            self.assertEqual(self.warp17_call('ConfigureTestCase', ccfg).e_code,
-                             0,
-                             'ConfigureTestCase')
-
-            l4_scfg = L4Server(l4s_proto=l4_proto,
-                               l4s_tcp_udp=TcpUdpServer(tus_ports=b2b_ports(1)))
-            scfg = TestCase(tc_type=SERVER, tc_eth_port=1, tc_id=0,
-                            tc_server=Server(srv_ips=b2b_sips(1, 1),
-                                             srv_l4=l4_scfg),
-                            tc_app=app_scfg,
-                            tc_criteria=TestCriteria(tc_crit_type=SRV_UP,
-                                                     tc_srv_up=1))
-            self.assertEqual(self.warp17_call('ConfigureTestCase', scfg).e_code,
-                             0,
-                             'ConfigureTestCase')
-
-            self.Start(sleep_t=5)
-
-            # Check for the Client rate
-            precision_window = 0.05 # 5%
-
-            client_result = self.warp17_call('GetTestStatus',
-                                             TestCaseArg(tca_eth_port=0,
-                                                         tca_test_case_id=0))
-            self.assertEqual(client_result.tsr_error.e_code, 0, 'GetTestStatus')
-
-            rate = client_result.tsr_rate_stats
-            self.check_rate_window(rate.rs_estab_per_s,
-                                   rate_ccfg.rc_open_rate.r_value,
-                                   precision_window, 'rc_open_rate')
-
-            self.check_rate_window(rate.rs_data_per_s,
-                                   rate_ccfg.rc_send_rate.r_value,
-                                   precision_window, 'rc_send_rate')
-
-            self.check_rate_window(rate.rs_closed_per_s,
-                                   rate_ccfg.rc_close_rate.r_value,
-                                   precision_window, 'rc_close_rate')
-
-            # check for the Server rate
-            server_result = self.warp17_call('GetTestStatus',
-                                             TestCaseArg(tca_eth_port=1,
-                                                         tca_test_case_id=0))
-            self.assertEqual(server_result.tsr_error.e_code, 0, 'GetTestStatus')
-
-            rate = server_result.tsr_rate_stats
-            self.check_rate_window(rate.rs_estab_per_s,
-                                   rate_ccfg.rc_open_rate.r_value,
-                                   precision_window, 'rc_open_rate')
-
-            self.check_rate_window(rate.rs_data_per_s,
-                                   rate_ccfg.rc_send_rate.r_value,
-                                   precision_window, 'rc_send_rate')
-
-
-            # we can't actually set uptime for server, this means that with UDP
-            # server we won't see any closed_per_s rate
-            if l4_proto is TCP:
-                self.check_rate_window(rate.rs_closed_per_s,
-                                       rate_ccfg.rc_close_rate.r_value,
-                                       precision_window, 'rc_close_rate')
-
-
-            self.assertGreater(rate.rs_start_time, 0, 'rs_start_time')
-            self.assertGreater(rate.rs_end_time, 0, 'rs_end_time')
-
-            self.Stop()
-            self.TearDown()
-
-    def check_rate_window(self, rate, expected_rate, window, var_name):
-        self.assertTrue(abs(expected_rate - rate) < window * expected_rate,
-                        "{} value {} instead of {} +-{}%".format(var_name, rate,
-                                                         expected_rate, window))
-
     def test_get_statistics(self):
         for eth_port in range(0, self.PORT_CNT):
             res = self.warp17_call('GetStatistics',
@@ -766,7 +654,6 @@ class TestApi(Warp17UnitTestCase):
         run_t = 2                       # run time
         ip_cnt = TPG_TEST_MAX_L3_INTF   # ip count
         port_cnt = 100                  # port count
-
         n_sess = (port_cnt * ip_cnt)    # n of sessions
         self.lh.info('Check recent latency behaviour for TCP/UDP with sessions {}'.format(n_sess))
 
@@ -856,22 +743,18 @@ class TestApi(Warp17UnitTestCase):
                     self.warp17_call('SetIpv4Sockopt', ip4_opt_arg).e_code,
                     0, 'SetIpv4Sockopt')
 
-                self.Start(run_t)
+                self.Start()
+                sleep(run_t)  # to be sure to collect all the data
 
                 #########################################
                 #               CLIENT                  #
                 #########################################
-
-                # Ring ifs are really slow
-                if Warp17UnitTestCase.env.get_ring_ports() != 0:
-                    sleep(2)
 
                 # Check client test to be passed
                 c_result = self.warp17_call('GetTestStatus', c_tc)
                 self.assertEqual(c_result.tsr_error.e_code, 0, 'GetTestStatus')
                 self.assertEqual(c_result.tsr_state, PASSED,
                                  'PortStatus PASSED')
-
                 self.assertEqual(c_result.tsr_type, CLIENT,
                                  'PortStatus CLIENT')
                 self.assertEqual(c_result.tsr_l4_proto, l4_proto,
@@ -952,9 +835,8 @@ class TestApi(Warp17UnitTestCase):
                     if tcs_max is not None and tcs_max_avg is not None:
                         self.assertGreater(stat.ls_max_exceeded, 0,
                                            'ls_max_exceeded')
-                        if Warp17UnitTestCase.env.get_ring_ports() == 0:
-                            self.assertGreater(stat.ls_max_average_exceeded, 0,
-                                               'ls_max_average_exceeded')
+                        self.assertGreater(stat.ls_max_average_exceeded, 0,
+                                           'ls_max_average_exceeded')
                     else:
                         self.assertEqual(stat.ls_max_exceeded, 0,
                                          'ls_max_exceeded')
@@ -970,6 +852,7 @@ class TestApi(Warp17UnitTestCase):
                     self.assertEqual(tc_result.tsr_stats.gs_latency_stats.
                                      gls_sample_stats.ls_samples_count, 0,
                                      'ls_samples_count')
+
 
                 self.Stop()
                 self.TearDown()
@@ -1049,7 +932,7 @@ class TestApi(Warp17UnitTestCase):
                                                 rs_resp_plen=10))
         return app_ccfg, app_scfg, rate_ccfg
 
-    def Start(self, sleep_t=5):
+    def Start(self):
         # Start server test
         self.assertEqual(self.warp17_call('PortStart',
                                           PortArg(pa_eth_port=1)).e_code,
@@ -1061,7 +944,7 @@ class TestApi(Warp17UnitTestCase):
                          0,
                          'PortStart')
         # should be done in way less than 5 seconds!
-        sleep(sleep_t)
+        sleep(5)
 
     def Stop(self):
         # Stop server test
@@ -1076,9 +959,6 @@ class TestApi(Warp17UnitTestCase):
                          'PortStop')
 
     def TearDown(self):
-        # Stop testcases left
-        self.warp17_call('PortStop',PortArg(pa_eth_port=0))
-        self.warp17_call('PortStop',PortArg(pa_eth_port=1))
         # Delete client test
         self.assertEqual(self.warp17_call('DelTestCase',
                                           TestCaseArg(tca_eth_port=0,

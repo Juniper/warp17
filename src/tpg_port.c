@@ -165,6 +165,7 @@ static void port_setup_reta_table(uint8_t port, int nr_of_queus)
     rte_free(reta_data);
 }
 
+
 /*****************************************************************************
  * port_get_pre_init_port_count()
  ****************************************************************************/
@@ -174,7 +175,7 @@ static inline uint32_t port_get_pre_init_port_count(void)
      * This gets the total number of potential ports in the system,
      * total physical ports, plus potential virtual ports.
      */
-    return rte_eth_dev_count_avail() + ring_if_get_count() + kni_if_get_count();
+    return rte_eth_dev_count() + ring_if_get_count() + kni_if_get_count();
 }
 
 /*****************************************************************************
@@ -190,9 +191,8 @@ static inline bool port_is_kni_port(uint32_t port)
  ****************************************************************************/
 static inline bool port_pre_init_is_kni_port(uint32_t port)
 {
-    if (port >= (rte_eth_dev_count_avail() + ring_if_get_count()) &&
-        port < (rte_eth_dev_count_avail() + ring_if_get_count() +
-                kni_if_get_count()))
+    if (port >= (rte_eth_dev_count() + ring_if_get_count()) &&
+        port < (rte_eth_dev_count() + ring_if_get_count() + kni_if_get_count()))
         return true;
 
     return false;
@@ -218,8 +218,8 @@ static bool port_pre_init_all_kni_ports(void)
  ****************************************************************************/
 static bool port_pre_init_is_ring_port(uint32_t port)
 {
-    if (port >= rte_eth_dev_count_avail() &&
-        port < (rte_eth_dev_count_avail() + ring_if_get_count()))
+    if (port >= rte_eth_dev_count() &&
+        port < (rte_eth_dev_count() + ring_if_get_count()))
         return true;
 
     return false;
@@ -418,13 +418,7 @@ static int port_set_conn_options_internal(uint32_t port,
  ****************************************************************************/
 static bool port_adjust_info(uint32_t port)
 {
-    struct rte_ether_addr mac_addr;
-
-    /* Adjust max_rx_pktlen. Max pktlen size may be 2 * PORT_MAX_MTU.
-     */
-    if (!port_dev_info[port].pi_dev_info.max_rx_pktlen ||
-            port_dev_info[port].pi_dev_info.max_rx_pktlen > PORT_MAX_MTU)
-        port_dev_info[port].pi_dev_info.max_rx_pktlen = PORT_MAX_MTU;
+    struct ether_addr mac_addr;
 
     /* Adjust reta_size. RETA size may be 0 in case we're running on a VF.
      * e.g: for Intel 82599 10G.
@@ -448,10 +442,10 @@ static bool port_adjust_info(uint32_t port)
      * of the interface may not be set and returned as -1. In those cases
      * assume the interface resides on socket-id 0.
      */
-    if (port_dev_info[port].pi_dev_info.device &&
-            port_dev_info[port].pi_dev_info.device->numa_node != -1)
+    if (port_dev_info[port].pi_dev_info.pci_dev &&
+            port_dev_info[port].pi_dev_info.pci_dev->device.numa_node != -1)
         port_dev_info[port].pi_numa_node =
-            port_dev_info[port].pi_dev_info.device->numa_node;
+            port_dev_info[port].pi_dev_info.pci_dev->device.numa_node;
 
     /* Prefetch the port MAC address. */
     rte_eth_macaddr_get(port, &mac_addr);
@@ -465,49 +459,63 @@ static bool port_adjust_info(uint32_t port)
  ****************************************************************************/
 static bool port_setup_port(uint8_t port)
 {
-    int                    rc;
-    int                    queue;
+    int                 rc;
+    int                 queue;
 #if !defined(TPG_SW_CHECKSUMMING)
-    uint64_t               expected_rx_flags;
-    uint64_t               expected_tx_flags;
+    int                 expected_rx_flags;
+    int                 expected_tx_flags;
 #endif /* !defined(TPG_SW_CHECKSUMMING) */
-    uint16_t               number_of_rings;
-    global_config_t       *cfg;
-    struct rte_ether_addr  mac_addr;
-    tpg_port_options_t     default_port_options;
-    struct rte_eth_rxconf  rx_conf;
-    struct rte_eth_txconf  tx_conf;
+    uint16_t            number_of_rings;
+    global_config_t    *cfg;
+    struct ether_addr   mac_addr;
+    tpg_port_options_t  default_port_options;
 
     struct rte_eth_conf default_port_config = {
         .rxmode = {
             .mq_mode        = ETH_MQ_RX_RSS,
             .max_rx_pkt_len = port_dev_info[port].pi_dev_info.max_rx_pktlen,
             .split_hdr_size = 0,
-            .offloads       = DEV_RX_OFFLOAD_IPV4_CKSUM |
-                              DEV_RX_OFFLOAD_JUMBO_FRAME |
-                              DEV_RX_OFFLOAD_SCATTER |
-                              DEV_RX_OFFLOAD_KEEP_CRC,
+            .header_split   = 0, /**< Header Split disabled */
+            .hw_ip_checksum = 1, /**< IP checksum offload enabled */
+            .hw_vlan_filter = 0, /**< VLAN filtering disabled */
+            .jumbo_frame    = 1, /**< Jumbo Frame Support enabled */
+            .hw_strip_crc   = 0, /**< CRC stripped by hardware */
+            .enable_scatter = 1,
         },
         .rx_adv_conf = {
             .rss_conf = {
                 .rss_key = port_rss_key,
                 .rss_key_len = sizeof(port_rss_key),
-                .rss_hf = ETH_RSS_IPV4 |
-                          ETH_RSS_NONFRAG_IPV4_TCP |
-                          ETH_RSS_NONFRAG_IPV4_UDP,
+                .rss_hf = ETH_RSS_IPV4 | ETH_RSS_NONFRAG_IPV4_TCP | ETH_RSS_NONFRAG_IPV4_UDP,
             },
         },
         .txmode = {
-            .offloads = DEV_TX_OFFLOAD_IPV4_CKSUM |
-                        DEV_TX_OFFLOAD_UDP_CKSUM |
-                        DEV_TX_OFFLOAD_TCP_CKSUM |
-                        DEV_TX_OFFLOAD_MULTI_SEGS,
             .mq_mode = ETH_MQ_TX_NONE,
         }
     };
 
-    rx_conf = port_dev_info[port].pi_dev_info.default_rxconf;
-    tx_conf = port_dev_info[port].pi_dev_info.default_txconf;
+    /* TODO: investigate what values we actually need? Can we make rx_conf and
+     * tx_conf device independent?
+     */
+    struct rte_eth_rxconf rx_conf = {
+        .rx_thresh = {
+            .pthresh = 8,
+            .hthresh = 8,
+            .wthresh = 4,
+        },
+        .rx_free_thresh = 64,
+        .rx_drop_en = 0
+    };
+
+    struct rte_eth_txconf tx_conf = {
+        .tx_thresh = {
+            .pthresh = 36,
+            .hthresh = 0,
+            .wthresh = 0,
+        },
+        .tx_free_thresh = 64,
+        .tx_rs_thresh = 32,
+    };
 
     if (!port_dev_info[port].pi_dev_info.max_rx_pktlen)
         TPG_ERROR_EXIT(EXIT_FAILURE,
@@ -520,59 +528,23 @@ static bool port_setup_port(uint8_t port)
                          DEV_RX_OFFLOAD_UDP_CKSUM |
                          DEV_RX_OFFLOAD_TCP_CKSUM);
 
-    if ((port_dev_info[port].pi_dev_info.rx_offload_capa &
-          expected_rx_flags) != expected_rx_flags)
+    if (!(port_dev_info[port].pi_dev_info.rx_offload_capa & expected_rx_flags))
         TPG_ERROR_EXIT(EXIT_FAILURE,
                        "ERROR: %s doesn't support vlan/ipv4/udp/tcp rx capabilities!\n",
                        port_dev_info[port].pi_dev_info.driver_name);
 #endif /* !defined(TPG_SW_CHECKSUMMING) */
 
 #if !defined(TPG_SW_CHECKSUMMING)
-    expected_tx_flags = (DEV_TX_OFFLOAD_IPV4_CKSUM |
-                         DEV_TX_OFFLOAD_UDP_CKSUM |
-                         DEV_TX_OFFLOAD_TCP_CKSUM);
+    expected_tx_flags = (DEV_RX_OFFLOAD_VLAN_STRIP |
+                         DEV_RX_OFFLOAD_IPV4_CKSUM |
+                         DEV_RX_OFFLOAD_UDP_CKSUM |
+                         DEV_RX_OFFLOAD_TCP_CKSUM);
 
-    if ((port_dev_info[port].pi_dev_info.tx_offload_capa & expected_tx_flags)
-        != expected_tx_flags)
+    if (!(port_dev_info[port].pi_dev_info.tx_offload_capa & expected_tx_flags))
         TPG_ERROR_EXIT(EXIT_FAILURE,
                        "ERROR: %s doesn't support vlan/ipv4/udp/tcp tx capabilities!\n",
                        port_dev_info[port].pi_dev_info.driver_name);
 #endif /* !defined(TPG_SW_CHECKSUMMING) */
-
-    /* We really need support for multi segments but unfortunately some
-     * PMDs don't advertise it even though they support it (e.g., ring PMD).
-     */
-    if ((port_dev_info[port].pi_dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MULTI_SEGS) !=
-            DEV_TX_OFFLOAD_MULTI_SEGS)
-        default_port_config.txmode.offloads &= ~DEV_TX_OFFLOAD_MULTI_SEGS;
-
-    if ((port_dev_info[port].pi_dev_info.rx_offload_capa & DEV_RX_OFFLOAD_IPV4_CKSUM) !=
-            DEV_RX_OFFLOAD_IPV4_CKSUM)
-        default_port_config.rxmode.offloads &= ~DEV_RX_OFFLOAD_IPV4_CKSUM;
-
-    if ((port_dev_info[port].pi_dev_info.rx_offload_capa & DEV_RX_OFFLOAD_JUMBO_FRAME) !=
-            DEV_RX_OFFLOAD_JUMBO_FRAME)
-        default_port_config.rxmode.offloads &= ~DEV_RX_OFFLOAD_JUMBO_FRAME;
-
-    if ((port_dev_info[port].pi_dev_info.rx_offload_capa & DEV_RX_OFFLOAD_SCATTER) !=
-            DEV_RX_OFFLOAD_SCATTER)
-        default_port_config.rxmode.offloads &= ~DEV_RX_OFFLOAD_SCATTER;
-
-    if ((port_dev_info[port].pi_dev_info.rx_offload_capa & DEV_RX_OFFLOAD_KEEP_CRC) !=
-            DEV_RX_OFFLOAD_KEEP_CRC)
-        default_port_config.rxmode.offloads &= ~DEV_RX_OFFLOAD_KEEP_CRC;
-
-    if ((port_dev_info[port].pi_dev_info.tx_offload_capa & DEV_TX_OFFLOAD_IPV4_CKSUM) !=
-            DEV_TX_OFFLOAD_IPV4_CKSUM)
-        default_port_config.txmode.offloads &= ~DEV_TX_OFFLOAD_IPV4_CKSUM;
-
-    if ((port_dev_info[port].pi_dev_info.tx_offload_capa & DEV_TX_OFFLOAD_UDP_CKSUM) !=
-            DEV_TX_OFFLOAD_UDP_CKSUM)
-        default_port_config.txmode.offloads &= ~DEV_TX_OFFLOAD_UDP_CKSUM;
-
-    if ((port_dev_info[port].pi_dev_info.tx_offload_capa & DEV_TX_OFFLOAD_TCP_CKSUM) !=
-            DEV_TX_OFFLOAD_TCP_CKSUM)
-        default_port_config.txmode.offloads &= ~DEV_TX_OFFLOAD_TCP_CKSUM;
 
     RTE_LOG(INFO, USER1, "[%s()] Initializing Ethernet port %u.\n", __func__,
             port);
@@ -590,18 +562,6 @@ static bool port_setup_port(uint8_t port)
                 port, default_port_config.rx_adv_conf.rss_conf.rss_key_len, sizeof(port_rss_key));
         return false;
     }
-
-    if ((port_dev_info[port].pi_dev_info.flow_type_rss_offloads & ETH_RSS_IPV4) !=
-            ETH_RSS_IPV4)
-        default_port_config.rx_adv_conf.rss_conf.rss_hf &= ~ETH_RSS_IPV4;
-
-    if ((port_dev_info[port].pi_dev_info.flow_type_rss_offloads & ETH_RSS_NONFRAG_IPV4_TCP) !=
-            ETH_RSS_NONFRAG_IPV4_TCP)
-        default_port_config.rx_adv_conf.rss_conf.rss_hf &= ~ETH_RSS_NONFRAG_IPV4_TCP;
-
-    if ((port_dev_info[port].pi_dev_info.flow_type_rss_offloads & ETH_RSS_NONFRAG_IPV4_UDP) !=
-            ETH_RSS_NONFRAG_IPV4_UDP)
-        default_port_config.rx_adv_conf.rss_conf.rss_hf &= ~ETH_RSS_NONFRAG_IPV4_UDP;
 
     if (number_of_rings > port_dev_info[port].pi_dev_info.max_rx_queues ||
         number_of_rings > port_dev_info[port].pi_dev_info.max_tx_queues) {
@@ -954,8 +914,8 @@ static void port_handle_cmdline_opt_qmap_maxc(uint64_t *pcore_mask)
      * In the future this should be properly taken care of by having an
      * abstraction layer to provide all the capabilities of physical AND
      * virtual interfaces. Also, we could start with the current
-     * rte_eth_dev_count_avail() as we know RING interfaces are added starting
-     * with that value but we try not to make it even hackier..
+     * rte_eth_dev_count() as we know RING interfaces are added starting with
+     * that value but we try not to make it even hackier..
      */
     for (port = 0;
          port < port_count && !port_pre_init_is_ring_port(port);
@@ -994,7 +954,7 @@ static bool port_start_ports(void)
     struct rte_eth_link link;
 
     /* First setup and start the ethernet ports. */
-    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
+    for (port = 0; port < rte_eth_dev_count(); port++) {
         if (!port_setup_port(port))
             return false;
     }
@@ -1004,7 +964,7 @@ static bool port_start_ports(void)
      * rte_eth_link_get we make sure that (at least) after init the ports have
      * finished their initialization.
      */
-    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
+    for (port = 0; port < rte_eth_dev_count(); port++) {
         rte_eth_link_get(port, &link);
         if (!link.link_status) {
             RTE_LOG(WARNING, USER1,
@@ -1055,14 +1015,6 @@ void port_link_info_get_nowait(uint32_t port, struct rte_eth_link *link)
 }
 
 /*****************************************************************************
- * port_flow_ctrl_get()
- *****************************************************************************/
-void port_flow_ctrl_get(uint32_t port, struct rte_eth_fc_conf *fc_conf)
-{
-    rte_eth_dev_flow_ctrl_get(port, fc_conf);
-}
-
-/*****************************************************************************
  * port_link_stats_get()
  *****************************************************************************/
 void port_link_stats_get(uint32_t port, struct rte_eth_stats *total_link_stats)
@@ -1101,9 +1053,6 @@ void port_link_rate_stats_get(uint32_t port, struct rte_eth_stats *total_rstats)
 
     total_rstats->obytes = (estats.obytes - lrstats->lrs_estats.obytes) *
                            hz / time_diff;
-
-    total_rstats->imissed = (estats.imissed - lrstats->lrs_estats.imissed) *
-                            hz / time_diff;
 
     total_rstats->ierrors = (estats.ierrors - lrstats->lrs_estats.ierrors) *
                             hz / time_diff;
@@ -1244,25 +1193,19 @@ bool port_handle_cmdline(void)
  ****************************************************************************/
 struct cmd_show_port_statistics_result {
     cmdline_fixed_string_t show;
-    cmdline_fixed_string_t portS;
+    cmdline_fixed_string_t port;
     cmdline_fixed_string_t statistics;
     cmdline_fixed_string_t details;
-    cmdline_fixed_string_t port_kw;
-    uint32_t               port;
 };
 
 static cmdline_parse_token_string_t cmd_show_port_statistics_T_show =
     TOKEN_STRING_INITIALIZER(struct cmd_show_port_statistics_result, show, "show");
-static cmdline_parse_token_string_t cmd_show_port_statistics_T_portS =
-    TOKEN_STRING_INITIALIZER(struct cmd_show_port_statistics_result, portS, "port");
+static cmdline_parse_token_string_t cmd_show_port_statistics_T_port =
+    TOKEN_STRING_INITIALIZER(struct cmd_show_port_statistics_result, port, "port");
 static cmdline_parse_token_string_t cmd_show_port_statistics_T_statistics =
     TOKEN_STRING_INITIALIZER(struct cmd_show_port_statistics_result, statistics, "statistics");
 static cmdline_parse_token_string_t cmd_show_port_statistics_T_details =
     TOKEN_STRING_INITIALIZER(struct cmd_show_port_statistics_result, details, "details");
-static cmdline_parse_token_string_t cmd_show_port_statistics_T_port_kw =
-        TOKEN_STRING_INITIALIZER(struct cmd_show_port_statistics_result, port_kw, "port");
-static cmdline_parse_token_num_t cmd_show_port_statistics_T_port =
-        TOKEN_NUM_INITIALIZER(struct cmd_show_port_statistics_result, port, UINT32);
 
 #define SHOW_ETH_STATS(counter)                        \
 do {                                                   \
@@ -1288,14 +1231,11 @@ static void cmd_show_port_statistics_parsed(void *parsed_result __rte_unused,
                                             struct cmdline *cl,
                                             void *data)
 {
-    uint32_t                                port;
-    int                                     option = (intptr_t) data;
-    struct cmd_show_port_statistics_result *pr = parsed_result;
-    printer_arg_t                           parg = TPG_PRINTER_ARG(cli_printer, cl);
+    int           port;
+    int           option = (intptr_t) data;
+    printer_arg_t parg = TPG_PRINTER_ARG(cli_printer, cl);
 
-    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
-        if ((option == 'p' || option == 'c') && port != pr->port)
-            continue;
+    for (port = 0; port < rte_eth_dev_count(); port++) {
 
         /*
          * Calculate totals first
@@ -1354,7 +1294,7 @@ static void cmd_show_port_statistics_parsed(void *parsed_result __rte_unused,
 
     if (option == 'd') {
 
-        for (port = 0; port < rte_eth_dev_count_avail(); port++) {
+        for (port = 0; port < rte_eth_dev_count(); port++) {
 
             struct rte_eth_stats estats;
 
@@ -1379,7 +1319,7 @@ static void cmd_show_port_statistics_parsed(void *parsed_result __rte_unused,
             cmdline_printf(cl, "\n");
         }
 
-        for (port = 0; port < rte_eth_dev_count_avail(); port++) {
+        for (port = 0; port < rte_eth_dev_count(); port++) {
 
 #define MAX_XSTATS_TO_DISPLAY 256
 
@@ -1432,7 +1372,7 @@ cmdline_parse_inst_t cmd_show_port_statistics = {
     .help_str = "show port statistics",
     .tokens = {
         (void *)&cmd_show_port_statistics_T_show,
-        (void *)&cmd_show_port_statistics_T_portS,
+        (void *)&cmd_show_port_statistics_T_port,
         (void *)&cmd_show_port_statistics_T_statistics,
         NULL,
     },
@@ -1444,38 +1384,9 @@ cmdline_parse_inst_t cmd_show_port_statistics_details = {
     .help_str = "show port statistics details",
     .tokens = {
         (void *)&cmd_show_port_statistics_T_show,
-        (void *)&cmd_show_port_statistics_T_portS,
+        (void *)&cmd_show_port_statistics_T_port,
         (void *)&cmd_show_port_statistics_T_statistics,
         (void *)&cmd_show_port_statistics_T_details,
-        NULL,
-    },
-};
-cmdline_parse_inst_t cmd_show_port_statistics_port = {
-    .f = cmd_show_port_statistics_parsed,
-    .data = (void *) (intptr_t) 'p',
-    .help_str = "show port statistics port <id>",
-    .tokens = {
-        (void *)&cmd_show_port_statistics_T_show,
-        (void *)&cmd_show_port_statistics_T_portS,
-        (void *)&cmd_show_port_statistics_T_statistics,
-        (void *)&cmd_show_port_statistics_T_port_kw,
-        (void *)&cmd_show_port_statistics_T_port,
-        NULL,
-    },
-};
-
-/* ATTENTION: data is gonna be filled with 'c' which means "port and details" */
-cmdline_parse_inst_t cmd_show_port_statistics_port_details = {
-    .f = cmd_show_port_statistics_parsed,
-    .data = (void *) (intptr_t) 'c',
-    .help_str = "show port statistics details port <id>",
-    .tokens = {
-        (void *)&cmd_show_port_statistics_T_show,
-        (void *)&cmd_show_port_statistics_T_portS,
-        (void *)&cmd_show_port_statistics_T_statistics,
-        (void *)&cmd_show_port_statistics_T_details,
-        (void *)&cmd_show_port_statistics_T_port_kw,
-        (void *)&cmd_show_port_statistics_T_port,
         NULL,
     },
 };
@@ -1502,26 +1413,24 @@ static void cmd_show_port_link_parsed(void *parsed_result __rte_unused,
 {
     int port;
 
-    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
+    for (port = 0; port < rte_eth_dev_count(); port++) {
         struct rte_eth_link link;
-        struct rte_eth_fc_conf fc_conf;
 
         port_link_info_get(port, &link);
-        port_flow_ctrl_get(port, &fc_conf);
 
         if (link.link_status == 0) {
             cmdline_printf(cl, "Port %d linkstate %s\n",
                            port, "DOWN");
         } else {
+
             cmdline_printf(cl,
                            "Port %"PRIu32" linkstate %s, speed %d%s, "
-                           "duplex %s%s, pause %s%s\n",
+                           "duplex %s%s\n",
                            port,
                            LINK_STATE(&link),
                            LINK_SPEED(&link),
                            LINK_SPEED_SZ(&link),
-                           LINK_DUPLEX(&link),
-                           LINK_PAUSE(&fc_conf));
+                           LINK_DUPLEX(&link));
         }
     }
 }
@@ -1560,7 +1469,7 @@ static void cmd_show_port_map_parsed(void *parsed_result __rte_unused,
 {
     uint32_t port;
 
-    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
+    for (port = 0; port < rte_eth_dev_count(); port++) {
         uint32_t core;
 
         cmdline_printf(cl, "Port %u[socket: %d]:\n", port,
@@ -1616,7 +1525,7 @@ static void cmd_show_port_info_parsed(void *parsed_result __rte_unused,
     cmdline_printf(cl, "Port Driver           MTU   PCI address  Soc rx    tx    offload offload    IPv4   IPv6  ex  2\n");
     cmdline_printf(cl, "---- ---------------- ----- ------------ --- ----- ----- ------- ---------- ------+---------+--\n");
 
-    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
+    for (port = 0; port < rte_eth_dev_count(); port++) {
 
         struct rte_eth_dev_info  dev_info;
         struct rte_pci_device   *pci_dev = NULL;
@@ -1624,9 +1533,9 @@ static void cmd_show_port_info_parsed(void *parsed_result __rte_unused,
 
         rte_eth_dev_info_get(port, &dev_info);
 
-        if (dev_info.device) {
-            pci_dev = RTE_ETH_DEV_TO_PCI(&dev_info);
-            pci = &pci_dev->addr;
+        if (dev_info.pci_dev) {
+            pci_dev = dev_info.pci_dev;
+            pci = &dev_info.pci_dev->addr;
         }
 
         cmdline_printf(cl,
@@ -1729,8 +1638,6 @@ static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_show_port_link,
     &cmd_show_port_statistics,
     &cmd_show_port_statistics_details,
-    &cmd_show_port_statistics_port,
-    &cmd_show_port_statistics_port_details,
     NULL,
 };
 
@@ -1738,7 +1645,7 @@ static cmdline_parse_ctx_t cli_ctx[] = {
  * port_interfaces_init()
  *      Intializes the port mapping memory. Creates ring interfaces if
  *      required. This function MUST be called before iterating through eth
- *      devices or using the result of rte_eth_dev_count_avail()!
+ *      devices or using the result of rte_eth_dev_count()!
  ****************************************************************************/
 static bool port_interfaces_init(void)
 {
@@ -1820,7 +1727,7 @@ static bool port_interfaces_init(void)
     /* Initialize port_info for all physical ports. Ring-if port_info is
      * initialized by ring_if_init().
      */
-    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
+    for (port = 0; port < rte_eth_dev_count(); port++) {
         rte_eth_dev_info_get(port, &port_dev_info[port].pi_dev_info);
         if (!port_adjust_info(port))
             return false;
@@ -1831,7 +1738,7 @@ static bool port_interfaces_init(void)
      *
      *   The init functions below should be called in this order,
      *   reason being that once the init function returns it's
-     *   interface are now included in the rte_eth_dev_count_avail()!!
+     *   interface are now included in the rte_eth_dev_count()!!
      */
     if (!ring_if_init()) {
         RTE_LOG(ERR, USER1, "ERROR: Failed initializing ring interfaces!\n");
@@ -1868,16 +1775,16 @@ bool port_init(void)
      * WARNING: this must be first as we need the qmaps when initializing ring
      * interfaces. The ring interfaces MUST be initialized early as they count
      * as "eth devices" and there are a lot of arrays checking for
-     * rte_eth_dev_count_avail().
+     * rte_eth_dev_count().
      */
     if (!port_interfaces_init()) {
         RTE_LOG(ERR, USER1, "ERROR: Can't initialize interfaces!\n");
         return false;
     }
 
-    /* rte_eth_dev_count_avail() was updated by the call to
-     * port_interfaces_init(). We can deal with any ring interfaes that were
-     * created as if they were "normal" interfaces.
+    /* rte_eth_dev_count() was updated by the call to port_interfaces_init().
+     * We can deal with any ring interfaes that were created as if they were
+     * "normal" interfaces.
      */
 
     /*
@@ -1893,7 +1800,7 @@ bool port_init(void)
      * Allocate memory for link rate stats and initialize all of them.
      */
     link_rate_statistics = rte_malloc("link_rate_stats",
-                                      rte_eth_dev_count_avail() *
+                                      rte_eth_dev_count() *
                                         sizeof(*link_rate_statistics),
                                       0);
 
@@ -1903,14 +1810,14 @@ bool port_init(void)
         return false;
     }
 
-    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
+    for (port = 0; port < rte_eth_dev_count(); port++) {
         bzero(&link_rate_statistics[port].lrs_estats,
               sizeof(link_rate_statistics[port].lrs_estats));
         link_rate_statistics[port].lrs_timestamp = rte_get_timer_cycles();
     }
 
     RTE_LOG(INFO, USER1, "Found %d Ethernet ports to start.\n",
-            rte_eth_dev_count_avail());
+            rte_eth_dev_count());
 
     /*
      * Initialize all available ethernet ports.
@@ -1918,8 +1825,7 @@ bool port_init(void)
     if (!port_start_ports())
         return false;
 
-    RTE_LOG(INFO, USER1, "Started %d Ethernet ports.\n",
-            rte_eth_dev_count_avail());
+    RTE_LOG(INFO, USER1, "Started %d Ethernet ports.\n", rte_eth_dev_count());
 
     return true;
 }

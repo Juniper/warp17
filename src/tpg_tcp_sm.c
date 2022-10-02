@@ -119,7 +119,7 @@ static tsm_function tsm_function_array[] = {
 /*****************************************************************************
  * Define statemachine state and event names
  ****************************************************************************/
-const char *stateNamesTCP[TS_MAX_STATE] = {
+const char *stateNames[TS_MAX_STATE] = {
 
     "INIT",
     "LISTEN",
@@ -165,24 +165,6 @@ static const char *eventNames[TE_MAX_EVENT] = {
                                (tcb)->tcb_l4.l4cb_interface), \
                    stat_fld),                                 \
          true))
-
-/*****************************************************************************
- * TCP stat macros
- ****************************************************************************/
-#define TCP_RECV_SYN_INC_STAT(tcb)                       \
-    INC_STATS(STATS_LOCAL(tpg_tcp_statistics_t,          \
-                          (tcb)->tcb_l4.l4cb_interface), \
-              ts_recv_syn);
-
-#define TCP_RECV_FIN_INC_STAT(tcb)                       \
-    INC_STATS(STATS_LOCAL(tpg_tcp_statistics_t,          \
-                          (tcb)->tcb_l4.l4cb_interface), \
-              ts_recv_fin);
-
-#define TCP_RECV_RST_INC_STAT(tcb)                       \
-    INC_STATS(STATS_LOCAL(tpg_tcp_statistics_t,          \
-                          (tcb)->tcb_l4.l4cb_interface), \
-              ts_recv_rst);
 
 /*****************************************************************************
  * tsm_schedule_retransmission()
@@ -296,8 +278,7 @@ static void tsm_cleanup_retrans_queu(tcp_control_block_t *tcb, uint32_t seg_ack)
     if (acked_bytes) {
         TCB_TRACE(tcb, TSM, DEBUG, "RetransQ cleanup: ADJ bytes=%"PRIu32,
                   acked_bytes);
-        retrans->tr_data_mbufs = data_adj_chain(retrans->tr_data_mbufs,
-                                                acked_bytes);
+        rte_pktmbuf_adj(retrans->tr_data_mbufs, acked_bytes);
     }
 
     if (retrans->tr_data_mbufs && retrans->tr_data_mbufs->data_len == 0) {
@@ -351,7 +332,7 @@ static uint32_t tsm_handle_incoming(tcp_control_block_t *tcb,
      */
     was_missing = !LIST_EMPTY(&tcb->tcb_rcv_buf);
 
-    if (TCP_IS_FLAG_SET(pcb->pcb_tcp, RTE_TCP_URG_FLAG)) {
+    if (TCP_IS_FLAG_SET(pcb->pcb_tcp, TCP_URG_FLAG)) {
         /*
          * sixth, check the URG bit, [77]
          */
@@ -437,7 +418,7 @@ int tsm_str_to_state(const char *state_str)
     tcpState_t state;
 
     for (state = 0; state < TS_MAX_STATE; state++) {
-        if (strcmp(state_str, stateNamesTCP[state]) == 0)
+        if (strcmp(state_str, stateNames[state]) == 0)
             return state;
     }
     /* Should never be reached! */
@@ -469,12 +450,12 @@ int tsm_dispatch_net_event(tcp_control_block_t *tcb, tcpEvent_t event,
 
     if (pcb->pcb_tcp != NULL) {
         TCB_TRACE(tcb, TSM, DEBUG, "   tcp {flags=%c%c%c%c%c%c, seq=%u, ack=%u, win=%u, urp=%u}",
-                  (pcb->pcb_tcp->tcp_flags & RTE_TCP_URG_FLAG) == 0 ? '-' : 'u',
-                  (pcb->pcb_tcp->tcp_flags & RTE_TCP_ACK_FLAG) == 0 ? '-' : 'a',
-                  (pcb->pcb_tcp->tcp_flags & RTE_TCP_PSH_FLAG) == 0 ? '-' : 'p',
-                  (pcb->pcb_tcp->tcp_flags & RTE_TCP_RST_FLAG) == 0 ? '-' : 'r',
-                  (pcb->pcb_tcp->tcp_flags & RTE_TCP_SYN_FLAG) == 0 ? '-' : 's',
-                  (pcb->pcb_tcp->tcp_flags & RTE_TCP_FIN_FLAG) == 0 ? '-' : 'f',
+                  (pcb->pcb_tcp->tcp_flags & TCP_URG_FLAG) == 0 ? '-' : 'u',
+                  (pcb->pcb_tcp->tcp_flags & TCP_ACK_FLAG) == 0 ? '-' : 'a',
+                  (pcb->pcb_tcp->tcp_flags & TCP_PSH_FLAG) == 0 ? '-' : 'p',
+                  (pcb->pcb_tcp->tcp_flags & TCP_RST_FLAG) == 0 ? '-' : 'r',
+                  (pcb->pcb_tcp->tcp_flags & TCP_SYN_FLAG) == 0 ? '-' : 's',
+                  (pcb->pcb_tcp->tcp_flags & TCP_FIN_FLAG) == 0 ? '-' : 'f',
                   rte_be_to_cpu_32(pcb->pcb_tcp->sent_seq),
                   rte_be_to_cpu_32(pcb->pcb_tcp->recv_ack),
                   rte_be_to_cpu_16(pcb->pcb_tcp->rx_win),
@@ -580,7 +561,6 @@ void tsm_initialize_statemachine(tcp_control_block_t *tcb, bool active)
 
     tsm_initialize_minimal_statemachine(tcb, active);
     tcb->tcb_fin_rcvd = false;
-    tcb->tcb_rst_rcvd = false;
     tcb->tcb_rcv_fin_seq = 0;
 
     bzero(&tcb->tcb_snd, sizeof(tcb_snd_t));
@@ -635,7 +615,7 @@ static int tsm_SF_init(tcp_control_block_t *tcb, tcpEvent_t event,
             tcb->tcb_snd.nxt = tcb->tcb_snd.iss + 1;
 
             /* Send <SEQ=ISS><CTL=SYN> */
-            tcp_send_ctrl_pkt(tcb, RTE_TCP_SYN_FLAG | TCP_BUILD_FLAG_USE_ISS);
+            tcp_send_ctrl_pkt(tcb, TCP_SYN_FLAG | TCP_BUILD_FLAG_USE_ISS);
 
             /* Always return after calling tsm_enter_state() */
             return tsm_enter_state(tcb, TS_SYN_SENT, NULL);
@@ -700,17 +680,15 @@ static int tsm_SF_listen(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_SEGMENT_ARRIVES:
         if (likely(tsm_arg != NULL)) {
             packet_control_block_t *pcb = tsm_arg;
-            struct rte_tcp_hdr     *tcp = pcb->pcb_tcp;
+            struct tcp_hdr         *tcp = pcb->pcb_tcp;
             int                     error;
             uint32_t                seg_seq;
 
             seg_seq = rte_be_to_cpu_32(tcp->sent_seq);
 
             /* An incoming RST should be ignored.  Return. */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
-                TCP_RECV_RST_INC_STAT(tcb);
+            if (TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG))
                 return 0;
-            }
 
             /* Any acknowledgment is bad if it arrives on a connection still in
             * the LISTEN state.  An acceptable reset segment should be formed
@@ -719,13 +697,12 @@ static int tsm_SF_listen(tcp_control_block_t *tcb, tcpEvent_t event,
             *
             *   <SEQ=SEG.ACK><CTL=RST>
             */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_ACK_FLAG)) {
-                tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG | RTE_TCP_RST_FLAG);
+            if (TCP_IS_FLAG_SET(tcp, TCP_ACK_FLAG)) {
+                tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG | TCP_RST_FLAG);
                 return 0;
             }
 
-            if (likely(TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG))) {
-                TCP_RECV_SYN_INC_STAT(tcb);
+            if (likely(TCP_IS_FLAG_SET(tcp, TCP_SYN_FLAG))) {
                 /* Keep the old tcb in the LISTEN state and continue using
                  * a clone.
                  */
@@ -786,7 +763,7 @@ static int tsm_SF_listen(tcp_control_block_t *tcb, tcpEvent_t event,
                 new_tcb->tcb_snd.nxt = new_tcb->tcb_snd.iss + 1;
 
                 tcp_send_ctrl_pkt(new_tcb,
-                    RTE_TCP_SYN_FLAG | RTE_TCP_ACK_FLAG | TCP_BUILD_FLAG_USE_ISS);
+                            TCP_SYN_FLAG | TCP_ACK_FLAG | TCP_BUILD_FLAG_USE_ISS);
                 return tsm_enter_state(new_tcb, TS_SYN_RECV, pcb);
             } else {
                 /* Any other control or text-bearing segment
@@ -848,7 +825,7 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_SEGMENT_ARRIVES:
         if (likely(tsm_arg != NULL)) {
             packet_control_block_t *pcb = tsm_arg;
-            struct rte_tcp_hdr     *tcp = pcb->pcb_tcp;
+            struct tcp_hdr         *tcp = pcb->pcb_tcp;
             uint32_t                seg_ack;
             uint32_t                seg_seq;
             uint32_t                seg_len;
@@ -862,7 +839,7 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * first check the ACK bit [66]
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_ACK_FLAG)) {
+            if (TCP_IS_FLAG_SET(tcp, TCP_ACK_FLAG)) {
                 /*
                  * If SEG.ACK =< ISS, or SEG.ACK > SND.NXT, send a reset (unless
                  * the RST bit is set, if so drop the segment and return)
@@ -873,11 +850,9 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
                  */
                 if (SEG_LE(seg_ack, tcb->tcb_snd.iss) ||
                         SEG_GT(seg_ack, tcb->tcb_snd.nxt)) {
-                    if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
-                        TCP_RECV_RST_INC_STAT(tcb);
+                    if (TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG))
                         return 0;
-                    }
-                    tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG | RTE_TCP_RST_FLAG);
+                    tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG | TCP_RST_FLAG);
                     return 0;
                 }
 
@@ -897,15 +872,13 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * If the RST bit is set.
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
-                TCP_RECV_RST_INC_STAT(tcb);
+            if (TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG)) {
                 /*
                  * If the ACK was acceptable then signal the user "error:
                  * connection reset", drop the segment, enter CLOSED state,
                  * delete TCB, and return.  Otherwise (no ACK) drop the segment
                  * and return.
                  */
-                tcb->tcb_rst_rcvd = true;
                 TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
@@ -919,8 +892,7 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
              * This step should be reached only if the ACK is ok, or there is
              * no ACK, and it the segment did not contain a RST.
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
-                TCP_RECV_SYN_INC_STAT(tcb);
+            if (TCP_IS_FLAG_SET(tcp, TCP_SYN_FLAG)) {
                 /*
                  * If the SYN bit is on and the security/compartment and precedence
                  * are acceptable then, RCV.NXT is set to SEG.SEQ+1, IRS is set to
@@ -930,7 +902,7 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
                  */
                 tcb->tcb_rcv.nxt = seg_seq + 1;
                 tcb->tcb_rcv.irs = seg_seq;
-                if (TCP_IS_FLAG_SET(tcp, RTE_TCP_ACK_FLAG)) {
+                if (TCP_IS_FLAG_SET(tcp, TCP_ACK_FLAG)) {
                     /* Increment tcb_snd.una so we take into account the ack for
                      * the SYN we sent. There might be some data segments that
                      * were acked too.
@@ -984,7 +956,7 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
 
                         /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
                         if (tsm_need_ack(tcb))
-                            tcp_send_ack_pkt(tcb);
+                            tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
 
                         return ret;
                     }
@@ -994,7 +966,7 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
                  * Otherwise enter SYN-RECEIVED, form a SYN,ACK segment
                  * Send <SEQ=ISS><ACK=RCV.NXT><CTL=SYN,ACK>
                  */
-                tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG | RTE_TCP_SYN_FLAG |
+                tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG | TCP_SYN_FLAG |
                                        TCP_BUILD_FLAG_USE_ISS);
 
                 return tsm_enter_state(tcb, TS_SYN_RECV, NULL);
@@ -1020,7 +992,7 @@ static int tsm_SF_syn_sent(tcp_control_block_t *tcb, tcpEvent_t event,
         /* Resend the SYN that got us in this state and reschedule the retrans
          * timer.
          */
-        tcp_send_ctrl_pkt(tcb, RTE_TCP_SYN_FLAG | TCP_BUILD_FLAG_USE_ISS);
+        tcp_send_ctrl_pkt(tcb, TCP_SYN_FLAG | TCP_BUILD_FLAG_USE_ISS);
         tsm_schedule_retransmission(tcb);
         break;
     case TE_ORPHAN_TIMEOUT:
@@ -1069,7 +1041,7 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_SEGMENT_ARRIVES:
         if (likely(tsm_arg != NULL)) {
             packet_control_block_t *pcb = tsm_arg;
-            struct rte_tcp_hdr     *tcp = pcb->pcb_tcp;
+            struct tcp_hdr         *tcp = pcb->pcb_tcp;
             uint32_t                seg_len = pcb->pcb_l5_len;
             uint32_t                seg_seq = rte_be_to_cpu_32(tcp->sent_seq);
             uint32_t                seg_ack = rte_be_to_cpu_32(tcp->recv_ack);
@@ -1083,11 +1055,9 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
             seg_ok = tsm_do_receive_acceptance_test(tcb, seg_len, seg_seq);
 
             if (!seg_ok) {
-                if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                if (!TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG)) {
                     /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                    tcp_send_ack_pkt(tcb);
-                } else {
-                    TCP_RECV_RST_INC_STAT(tcb);
+                    tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
                 }
                 return 0;
             }
@@ -1096,10 +1066,7 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
              * second check the RST bit, [70]
              */
 
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
-                TCP_RECV_RST_INC_STAT(tcb);
-                tcb->tcb_rst_rcvd = true;
-
+            if (TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG)) {
                 if (!tcb->tcb_active) {
                     /* If this connection was initiated with a passive OPEN
                      * (i.e., came from the LISTEN state), then return this
@@ -1132,8 +1099,7 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
              * fourth, check the SYN bit, [71]
              */
 
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
-                TCP_RECV_SYN_INC_STAT(tcb);
+            if (TCP_IS_FLAG_SET(tcp, TCP_SYN_FLAG)) {
                 /*
                  * The user is informed of the state change through a
                  * notification.
@@ -1146,7 +1112,7 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * fifth check the ACK field, [72]
              */
-            if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_ACK_FLAG))
+            if (!TCP_IS_FLAG_SET(tcp, TCP_ACK_FLAG))
                 return 0;
 
 
@@ -1157,7 +1123,7 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
                  *   <SEQ=SEG.ACK><CTL=RST>
                  * and send it.
                  */
-                tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG | RTE_TCP_RST_FLAG);
+                tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG | TCP_RST_FLAG);
                 return 0;
             }
 
@@ -1205,14 +1171,13 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
 
                 /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
                 if (tsm_need_ack(tcb))
-                    tcp_send_ack_pkt(tcb);
+                    tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
             }
 
             /*
              * eighth, check the FIN bit,
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_FIN_FLAG)) {
-                TCP_RECV_FIN_INC_STAT(tcb);
+            if (TCP_IS_FLAG_SET(tcp, TCP_FIN_FLAG)) {
                 /*
                  * We do not ack the fin yet, this happens when we move to LAST_ACK,
                  * but we do update the RCV.NXT here.
@@ -1245,8 +1210,7 @@ static int tsm_SF_syn_recv(tcp_control_block_t *tcb, tcpEvent_t event,
         }
 
         /* Retrans the SYN-ACK packet that got us here. */
-        tcp_send_ctrl_pkt(tcb, RTE_TCP_SYN_FLAG | RTE_TCP_ACK_FLAG |
-                               TCP_BUILD_FLAG_USE_ISS);
+        tcp_send_ctrl_pkt(tcb, TCP_SYN_FLAG | TCP_ACK_FLAG | TCP_BUILD_FLAG_USE_ISS);
         tsm_schedule_retransmission(tcb);
         break;
     case TE_ORPHAN_TIMEOUT:
@@ -1294,7 +1258,7 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_SEGMENT_ARRIVES:
         if (likely(tsm_arg != NULL)) {
             packet_control_block_t *pcb = tsm_arg;
-            struct rte_tcp_hdr     *tcp = pcb->pcb_tcp;
+            struct tcp_hdr         *tcp = pcb->pcb_tcp;
             uint32_t                seg_len = pcb->pcb_l5_len;
             uint32_t                seg_seq = rte_be_to_cpu_32(tcp->sent_seq);
             uint32_t                seg_ack = rte_be_to_cpu_32(tcp->recv_ack);
@@ -1307,11 +1271,9 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
             seg_ok = tsm_do_receive_acceptance_test(tcb, seg_len, seg_seq);
 
             if (!seg_ok) {
-                if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                if (!TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG)) {
                     /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                    tcp_send_ack_pkt(tcb);
-                } else {
-                    TCP_RECV_RST_INC_STAT(tcb);
+                    tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
                 }
                 return 0;
             }
@@ -1319,12 +1281,10 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * second check the RST bit, [70]
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
-                TCP_RECV_RST_INC_STAT(tcb);
+            if (TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG)) {
                 /* Starting to close the session so send out the
                  * notification. Buffers are cleaned up upon close.
                  */
-                tcb->tcb_rst_rcvd = true;
                 TCP_NOTIF(TEST_NOTIF_SESS_CLOSING, tcb);
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
@@ -1337,8 +1297,7 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
              * fourth, check the SYN bit, [71]
              */
 
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
-                TCP_RECV_SYN_INC_STAT(tcb);
+            if (TCP_IS_FLAG_SET(tcp, TCP_SYN_FLAG)) {
                 /* Starting to close the session so send out the
                  * notification. Buffers are cleaned up upon close.
                  */
@@ -1349,7 +1308,7 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * fifth check the ACK field, [72]
              */
-            if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_ACK_FLAG))
+            if (!TCP_IS_FLAG_SET(tcp, TCP_ACK_FLAG))
                 return 0;
 
 
@@ -1395,15 +1354,14 @@ static int tsm_SF_estab(tcp_control_block_t *tcb, tcpEvent_t event,
                  */
 
                 if (tsm_need_ack(tcb))
-                    tcp_send_ack_pkt(tcb);
+                    tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
             }
 
             /*
              * eighth, check the FIN bit,
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_FIN_FLAG)) {
+            if (TCP_IS_FLAG_SET(tcp, TCP_FIN_FLAG)) {
                 uint32_t fin_seq = seg_seq + seg_len;
-                TCP_RECV_FIN_INC_STAT(tcb);
 
                 /* If we're missing some data we can't process the fin yet. Store
                  * the information in the TCB and process later.
@@ -1487,7 +1445,7 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
     switch (event) {
     case TE_ENTER_STATE:
         /* Send the FIN with the current sequence number. */
-        tcp_send_ctrl_pkt(tcb, RTE_TCP_FIN_FLAG | RTE_TCP_ACK_FLAG);
+        tcp_send_ctrl_pkt(tcb, TCP_FIN_FLAG | TCP_ACK_FLAG);
         /* Increment snd.nxt to take into account the FIN we just sent. */
         tcb->tcb_snd.nxt++;
         /* We might need to retransmit the packets from previous states
@@ -1513,7 +1471,7 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_SEGMENT_ARRIVES:
         if (likely(tsm_arg != NULL)) {
             packet_control_block_t *pcb = tsm_arg;
-            struct rte_tcp_hdr     *tcp = pcb->pcb_tcp;
+            struct tcp_hdr         *tcp = pcb->pcb_tcp;
             uint32_t                seg_len = pcb->pcb_l5_len;
             uint32_t                seg_seq = rte_be_to_cpu_32(tcp->sent_seq);
             uint32_t                seg_ack = rte_be_to_cpu_32(tcp->recv_ack);
@@ -1528,11 +1486,9 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
             seg_ok = tsm_do_receive_acceptance_test(tcb, seg_len, seg_seq);
 
             if (!seg_ok) {
-                if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                if (!TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG)) {
                     /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                    tcp_send_ack_pkt(tcb);
-                } else {
-                    TCP_RECV_RST_INC_STAT(tcb);
+                    tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
                 }
                 return 0;
             }
@@ -1540,8 +1496,7 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * second check the RST bit, [70]
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
-                TCP_RECV_RST_INC_STAT(tcb);
+            if (TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG)) {
                 /* Cancel the orphan timer first. */
                 tcp_timer_slow_cancel(&tcb->tcb_l4);
                 /*
@@ -1549,7 +1504,6 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
                  * notification.
                  * Buffers are cleaned up upon close.
                  */
-                tcb->tcb_rst_rcvd = true;
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
 
@@ -1561,8 +1515,7 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
              * fourth, check the SYN bit, [71]
              */
 
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
-                TCP_RECV_SYN_INC_STAT(tcb);
+            if (TCP_IS_FLAG_SET(tcp, TCP_SYN_FLAG)) {
                 /* Cancel the orphan timer first. */
                 tcp_timer_slow_cancel(&tcb->tcb_l4);
                 /*
@@ -1576,7 +1529,7 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * fifth check the ACK field, [72]
              */
-            if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_ACK_FLAG))
+            if (!TCP_IS_FLAG_SET(tcp, TCP_ACK_FLAG))
                 return 0;
 
 
@@ -1641,7 +1594,7 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * eighth, check the FIN bit,
              */
-            if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_FIN_FLAG)) {
+            if (!TCP_IS_FLAG_SET(tcp, TCP_FIN_FLAG)) {
                 if (unlikely(tcb->tcb_fin_rcvd)) {
                     /* If we got the FIN before and we finally received all the
                      * data we were waiting for then we can increment nxt to
@@ -1651,10 +1604,9 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
                         tcb->tcb_rcv.nxt++;
                 }
                 /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                tcp_send_ack_pkt(tcb);
+                tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
             } else {
                 uint32_t fin_seq = seg_seq + seg_len;
-                TCP_RECV_FIN_INC_STAT(tcb);
 
                 /* IF our FIN has been ACKed (perhaps in this segment),
                  * then enter TIME_WAIT, start the time-wait timer, turn
@@ -1673,7 +1625,7 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
 
                 /* Ack everything including the FIN. */
                 tcb->tcb_rcv.nxt++;
-                tcp_send_ack_pkt(tcb);
+                tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
 
                 /* Cancel the orphan timer first. */
                 tcp_timer_slow_cancel(&tcb->tcb_l4);
@@ -1723,7 +1675,7 @@ static int tsm_SF_fin_wait_I(tcp_control_block_t *tcb, tcpEvent_t event,
          * packet. We know for sure we didn't send any data after FIN!
          */
         tcp_send_ctrl_pkt_with_sseq(tcb, tcb->tcb_snd.nxt - 1,
-                                    RTE_TCP_FIN_FLAG | RTE_TCP_ACK_FLAG);
+                                    TCP_FIN_FLAG | TCP_ACK_FLAG);
         tsm_schedule_retransmission(tcb);
         break;
     case TE_ORPHAN_TIMEOUT:
@@ -1778,7 +1730,7 @@ static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_SEGMENT_ARRIVES:
         if (likely(tsm_arg != NULL)) {
             packet_control_block_t *pcb = tsm_arg;
-            struct rte_tcp_hdr     *tcp = pcb->pcb_tcp;
+            struct tcp_hdr         *tcp = pcb->pcb_tcp;
             uint32_t                seg_len = pcb->pcb_l5_len;
             uint32_t                seg_seq = rte_be_to_cpu_32(tcp->sent_seq);
             uint32_t                seg_ack = rte_be_to_cpu_32(tcp->recv_ack);
@@ -1792,11 +1744,9 @@ static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
             seg_ok = tsm_do_receive_acceptance_test(tcb, seg_len, seg_seq);
 
             if (!seg_ok) {
-                if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                if (!TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG)) {
                     /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                    tcp_send_ack_pkt(tcb);
-                } else {
-                    TCP_RECV_RST_INC_STAT(tcb);
+                    tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
                 }
                 return 0;
             }
@@ -1804,8 +1754,7 @@ static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * second check the RST bit, [70]
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
-                TCP_RECV_RST_INC_STAT(tcb);
+            if (TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG)) {
                 /* Cancel the fin timer first. */
                 tcp_timer_slow_cancel(&tcb->tcb_l4);
                 /*
@@ -1813,7 +1762,6 @@ static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
                  * notification.
                  * Buffers are cleaned up upon close.
                  */
-                tcb->tcb_rst_rcvd = true;
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
 
@@ -1825,8 +1773,7 @@ static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
              * fourth, check the SYN bit, [71]
              */
 
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
-                TCP_RECV_SYN_INC_STAT(tcb);
+            if (TCP_IS_FLAG_SET(tcp, TCP_SYN_FLAG)) {
                 /* Cancel the fin timer first. */
                 tcp_timer_slow_cancel(&tcb->tcb_l4);
 
@@ -1841,7 +1788,7 @@ static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * fifth check the ACK field, [72]
              */
-            if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_ACK_FLAG))
+            if (!TCP_IS_FLAG_SET(tcp, TCP_ACK_FLAG))
                 return 0;
 
             if (SEG_GT(seg_ack, tcb->tcb_snd.una) &&
@@ -1894,11 +1841,10 @@ static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * eighth, check the FIN bit,
              */
-            if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_FIN_FLAG)) {
+            if (!TCP_IS_FLAG_SET(tcp, TCP_FIN_FLAG)) {
                 /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                tcp_send_ack_pkt(tcb);
+                tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
             } else {
-                TCP_RECV_FIN_INC_STAT(tcb);
                 /* Cancel the fin timer first. */
                 tcp_timer_slow_cancel(&tcb->tcb_l4);
 
@@ -1908,7 +1854,7 @@ static int tsm_SF_fin_wait_II(tcp_control_block_t *tcb, tcpEvent_t event,
                  * didn't receive all the data.
                  */
                 tcb->tcb_rcv.nxt++;
-                tcp_send_ack_pkt(tcb);
+                tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
                 return tsm_enter_state(tcb, TS_TIME_WAIT, NULL);
             }
 
@@ -1970,7 +1916,7 @@ static int tsm_SF_last_ack(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_SEGMENT_ARRIVES:
         if (likely(tsm_arg != NULL)) {
             packet_control_block_t *pcb = tsm_arg;
-            struct rte_tcp_hdr     *tcp = pcb->pcb_tcp;
+            struct tcp_hdr         *tcp = pcb->pcb_tcp;
             uint32_t                seg_len = pcb->pcb_l5_len;
             uint32_t                seg_seq = rte_be_to_cpu_32(tcp->sent_seq);
             uint32_t                seg_ack = rte_be_to_cpu_32(tcp->recv_ack);
@@ -1982,11 +1928,9 @@ static int tsm_SF_last_ack(tcp_control_block_t *tcb, tcpEvent_t event,
             seg_ok = tsm_do_receive_acceptance_test(tcb, seg_len, seg_seq);
 
             if (!seg_ok) {
-                if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                if (!TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG)) {
                     /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                    tcp_send_ack_pkt(tcb);
-                } else {
-                    TCP_RECV_RST_INC_STAT(tcb);
+                    tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
                 }
                 return 0;
             }
@@ -1994,11 +1938,8 @@ static int tsm_SF_last_ack(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * second check the RST bit, [70]
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
-                TCP_RECV_RST_INC_STAT(tcb);
-                tcb->tcb_rst_rcvd = true;
+            if (TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG))
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
-            }
 
             /*
              * third check security and precedence [71]
@@ -2008,8 +1949,7 @@ static int tsm_SF_last_ack(tcp_control_block_t *tcb, tcpEvent_t event,
              * fourth, check the SYN bit, [71]
              */
 
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
-                TCP_RECV_SYN_INC_STAT(tcb);
+            if (TCP_IS_FLAG_SET(tcp, TCP_SYN_FLAG)) {
                 /*
                  * The user is informed of the state change through a
                  * notification.
@@ -2021,7 +1961,7 @@ static int tsm_SF_last_ack(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * fifth check the ACK field, [72]
              */
-            if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_ACK_FLAG))
+            if (!TCP_IS_FLAG_SET(tcp, TCP_ACK_FLAG))
                 return 0;
 
             /*
@@ -2056,7 +1996,7 @@ static int tsm_SF_last_ack(tcp_control_block_t *tcb, tcpEvent_t event,
          * We know for sure we didn't send any data after FIN!
          */
         tcp_send_ctrl_pkt_with_sseq(tcb, tcb->tcb_snd.nxt - 1,
-                                    RTE_TCP_ACK_FLAG | RTE_TCP_FIN_FLAG);
+                                    TCP_ACK_FLAG | TCP_FIN_FLAG);
         /* TODO: anything else to resend here?. */
         tsm_schedule_retransmission(tcb);
         break;
@@ -2098,7 +2038,7 @@ static int tsm_SF_closing(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_SEGMENT_ARRIVES:
         if (likely(tsm_arg != NULL)) {
             packet_control_block_t *pcb = tsm_arg;
-            struct rte_tcp_hdr     *tcp = pcb->pcb_tcp;
+            struct tcp_hdr         *tcp = pcb->pcb_tcp;
             uint32_t                seg_len = pcb->pcb_l5_len;
             uint32_t                seg_seq = rte_be_to_cpu_32(tcp->sent_seq);
             uint32_t                seg_ack = rte_be_to_cpu_32(tcp->recv_ack);
@@ -2112,11 +2052,9 @@ static int tsm_SF_closing(tcp_control_block_t *tcb, tcpEvent_t event,
             seg_ok = tsm_do_receive_acceptance_test(tcb, seg_len, seg_seq);
 
             if (!seg_ok) {
-                if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                if (!TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG)) {
                     /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                    tcp_send_ack_pkt(tcb);
-                } else {
-                    TCP_RECV_RST_INC_STAT(tcb);
+                    tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
                 }
                 return 0;
             }
@@ -2126,17 +2064,13 @@ static int tsm_SF_closing(tcp_control_block_t *tcb, tcpEvent_t event,
              * If the RST bit is set then, enter the CLOSED state, delete
              * the TCB and return.
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
-                TCP_RECV_RST_INC_STAT(tcb);
-                tcb->tcb_rst_rcvd = true;
+            if (TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG))
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
-            }
 
             /*
              * fourth, check the SYN bit, [71]
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
-                TCP_RECV_SYN_INC_STAT(tcb);
+            if (TCP_IS_FLAG_SET(tcp, TCP_SYN_FLAG)) {
                 /*
                  * The user is informed of the state change through a
                  * notification.
@@ -2148,7 +2082,7 @@ static int tsm_SF_closing(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * fifth check the ACK field, [72]
              */
-            if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_ACK_FLAG))
+            if (!TCP_IS_FLAG_SET(tcp, TCP_ACK_FLAG))
                 return 0;
 
             if (SEG_GT(seg_ack, tcb->tcb_snd.una) &&
@@ -2228,7 +2162,7 @@ static int tsm_SF_closing(tcp_control_block_t *tcb, tcpEvent_t event,
          * packet. We know for sure we didn't send any data after FIN!
          */
         tcp_send_ctrl_pkt_with_sseq(tcb, tcb->tcb_snd.nxt - 1,
-                                    RTE_TCP_FIN_FLAG | RTE_TCP_ACK_FLAG);
+                                    TCP_FIN_FLAG | TCP_ACK_FLAG);
         tsm_schedule_retransmission(tcb);
         break;
     case TE_ORPHAN_TIMEOUT:
@@ -2281,7 +2215,7 @@ static int tsm_SF_time_wait(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_SEGMENT_ARRIVES:
         if (likely(tsm_arg != NULL)) {
             packet_control_block_t *pcb = tsm_arg;
-            struct rte_tcp_hdr     *tcp = pcb->pcb_tcp;
+            struct tcp_hdr         *tcp = pcb->pcb_tcp;
             uint32_t                seg_len = pcb->pcb_l5_len;
             uint32_t                seg_seq = rte_be_to_cpu_32(tcp->sent_seq);
             bool                    seg_ok;
@@ -2293,11 +2227,9 @@ static int tsm_SF_time_wait(tcp_control_block_t *tcb, tcpEvent_t event,
             seg_ok = tsm_do_receive_acceptance_test(tcb, seg_len, seg_seq);
 
             if (!seg_ok) {
-                if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                if (!TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG)) {
                     /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                    tcp_send_ack_pkt(tcb);
-                } else {
-                    TCP_RECV_RST_INC_STAT(tcb);
+                    tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
                 }
                 return 0;
             }
@@ -2307,17 +2239,13 @@ static int tsm_SF_time_wait(tcp_control_block_t *tcb, tcpEvent_t event,
              * If the RST bit is set then, enter the CLOSED state, delete
              * the TCB and return.
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
-                TCP_RECV_RST_INC_STAT(tcb);
-                tcb->tcb_rst_rcvd = true;
+            if (TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG))
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
-            }
 
             /*
              * fourth, check the SYN bit, [71]
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
-                TCP_RECV_SYN_INC_STAT(tcb);
+            if (TCP_IS_FLAG_SET(tcp, TCP_SYN_FLAG)) {
                 /*
                  * The user is informed of the state change through a
                  * notification.
@@ -2330,7 +2258,7 @@ static int tsm_SF_time_wait(tcp_control_block_t *tcb, tcpEvent_t event,
              * retransmission of the remote FIN. Acknowledge it, and
              * restart the 2MSL timeout. [73]
              */
-            tcp_send_ack_pkt(tcb);
+            tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
 
             assert(TCB_SLOW_TMR_IS_SET(tcb));
 
@@ -2373,7 +2301,7 @@ static int tsm_SF_close_wait(tcp_control_block_t *tcb, tcpEvent_t event,
             /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=FIN,ACK>
              * Send the FIN with the current sequence number.
              */
-            tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG | RTE_TCP_FIN_FLAG);
+            tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG | TCP_FIN_FLAG);
             /* Increment snd.nxt to take into account the FIN. */
             tcb->tcb_snd.nxt++;
             return tsm_enter_state(tcb, TS_LAST_ACK, NULL);
@@ -2405,7 +2333,7 @@ static int tsm_SF_close_wait(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_SEGMENT_ARRIVES:
         if (likely(tsm_arg != NULL)) {
             packet_control_block_t *pcb = tsm_arg;
-            struct rte_tcp_hdr     *tcp = pcb->pcb_tcp;
+            struct tcp_hdr         *tcp = pcb->pcb_tcp;
             uint32_t                seg_len = pcb->pcb_l5_len;
             uint32_t                seg_seq = rte_be_to_cpu_32(tcp->sent_seq);
             uint32_t                seg_ack = rte_be_to_cpu_32(tcp->recv_ack);
@@ -2418,11 +2346,9 @@ static int tsm_SF_close_wait(tcp_control_block_t *tcb, tcpEvent_t event,
             seg_ok = tsm_do_receive_acceptance_test(tcb, seg_len, seg_seq);
 
             if (!seg_ok) {
-                if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
+                if (!TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG)) {
                     /* Send <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK> */
-                    tcp_send_ack_pkt(tcb);
-                } else {
-                    TCP_RECV_RST_INC_STAT(tcb);
+                    tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG);
                 }
                 return 0;
             }
@@ -2430,22 +2356,19 @@ static int tsm_SF_close_wait(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * second check the RST bit, [70]
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
-                TCP_RECV_RST_INC_STAT(tcb);
+            if (TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG)) {
                 /*
                  * The user is informed of the state change through a
                  * notification.
                  * Buffers are cleaned up upon close.
                  */
-                tcb->tcb_rst_rcvd = true;
                 return tsm_enter_state(tcb, TS_CLOSED, NULL);
             }
 
             /*
              * fourth, check the SYN bit, [71]
              */
-            if (TCP_IS_FLAG_SET(tcp, RTE_TCP_SYN_FLAG)) {
-                TCP_RECV_SYN_INC_STAT(tcb);
+            if (TCP_IS_FLAG_SET(tcp, TCP_SYN_FLAG)) {
                 /*
                  * The user is informed of the state change through a
                  * notification.
@@ -2457,7 +2380,7 @@ static int tsm_SF_close_wait(tcp_control_block_t *tcb, tcpEvent_t event,
             /*
              * fifth check the ACK field, [72]
              */
-            if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_ACK_FLAG))
+            if (!TCP_IS_FLAG_SET(tcp, TCP_ACK_FLAG))
                 return 0;
 
             if (SEG_GT(seg_ack, tcb->tcb_snd.una) &&
@@ -2514,7 +2437,7 @@ static int tsm_SF_close_wait(tcp_control_block_t *tcb, tcpEvent_t event,
          * We know for sure we didn't send any data after FIN!
          */
         tcp_send_ctrl_pkt_with_sseq(tcb, tcb->tcb_snd.nxt - 1,
-                                    RTE_TCP_FIN_FLAG | RTE_TCP_ACK_FLAG);
+                                    TCP_FIN_FLAG | TCP_ACK_FLAG);
         break;
     case TE_ORPHAN_TIMEOUT:
     case TE_FIN_TIMEOUT:
@@ -2571,7 +2494,7 @@ static int tsm_SF_closed(tcp_control_block_t *tcb, tcpEvent_t event,
     case TE_SEGMENT_ARRIVES:
         if (likely(tsm_arg != NULL)) {
             packet_control_block_t *pcb = tsm_arg;
-            struct rte_tcp_hdr     *tcp = pcb->pcb_tcp;
+            struct tcp_hdr         *tcp = pcb->pcb_tcp;
             uint32_t                seg_len = pcb->pcb_l5_len;
             uint32_t                seg_seq = rte_be_to_cpu_32(tcp->sent_seq);
             uint32_t                seg_ack = rte_be_to_cpu_32(tcp->recv_ack);
@@ -2584,18 +2507,16 @@ static int tsm_SF_closed(tcp_control_block_t *tcb, tcpEvent_t event,
              * reset sequence acceptable to the TCP that sent the offending
              * segment. [65]
              */
-            if (!TCP_IS_FLAG_SET(tcp, RTE_TCP_RST_FLAG)) {
-                if (TCP_IS_FLAG_SET(tcp, RTE_TCP_ACK_FLAG)) {
+            if (!TCP_IS_FLAG_SET(tcp, TCP_RST_FLAG)) {
+                if (TCP_IS_FLAG_SET(tcp, TCP_ACK_FLAG)) {
                     /* <SEQ=SEG.ACK><CTL=RST> */
                     tcb->tcb_snd.nxt = seg_ack;
-                    tcp_send_ctrl_pkt(tcb, RTE_TCP_RST_FLAG);
+                    tcp_send_ctrl_pkt(tcb, TCP_RST_FLAG);
                 } else {
                     /* <SEQ=0><ACK=SEG.SEQ+SEG.LEN><CTL=RST,ACK> */
                     tcb->tcb_rcv.nxt = seg_seq + seg_len;
-                    tcp_send_ctrl_pkt(tcb, RTE_TCP_ACK_FLAG | RTE_TCP_RST_FLAG);
+                    tcp_send_ctrl_pkt(tcb, TCP_ACK_FLAG | TCP_RST_FLAG);
                 }
-            } else {
-                TCP_RECV_RST_INC_STAT(tcb);
             }
         }
         break;
@@ -2661,8 +2582,6 @@ struct cmd_show_tsm_statistics_result {
     cmdline_fixed_string_t tsm;
     cmdline_fixed_string_t statistics;
     cmdline_fixed_string_t details;
-    cmdline_fixed_string_t port_kw;
-    uint32_t               port;
 };
 
 static cmdline_parse_token_string_t cmd_show_tsm_statistics_T_show =
@@ -2673,25 +2592,18 @@ static cmdline_parse_token_string_t cmd_show_tsm_statistics_T_statistics =
     TOKEN_STRING_INITIALIZER(struct cmd_show_tsm_statistics_result, statistics, "statistics");
 static cmdline_parse_token_string_t cmd_show_tsm_statistics_T_details =
     TOKEN_STRING_INITIALIZER(struct cmd_show_tsm_statistics_result, details, "details");
-static cmdline_parse_token_string_t cmd_show_tsm_statistics_T_port_kw =
-        TOKEN_STRING_INITIALIZER(struct cmd_show_tsm_statistics_result, port_kw, "port");
-static cmdline_parse_token_num_t cmd_show_tsm_statistics_T_port =
-        TOKEN_NUM_INITIALIZER(struct cmd_show_tsm_statistics_result, port, UINT32);
 
-static void cmd_show_tsm_statistics_parsed(void *parsed_result,
+static void cmd_show_tsm_statistics_parsed(void *parsed_result __rte_unused,
                                            struct cmdline *cl,
                                            void *data)
 {
-    uint32_t                               port;
-    uint32_t                               core;
-    struct cmd_show_tsm_statistics_result *pr = parsed_result;
-    int                                    option = (intptr_t) data;
-    int                                    state;
-    printer_arg_t                          parg = TPG_PRINTER_ARG(cli_printer, cl);
+    int           port;
+    int           core;
+    int           option = (intptr_t) data;
+    int           state;
+    printer_arg_t parg = TPG_PRINTER_ARG(cli_printer, cl);
 
-    for (port = 0; port < rte_eth_dev_count_avail(); port++) {
-        if ((option == 'p' || option == 'c') && port != pr->port)
-            continue;
+    for (port = 0; port < rte_eth_dev_count(); port++) {
         /*
          * Calculate totals first
          */
@@ -2711,12 +2623,10 @@ static void cmd_show_tsm_statistics_parsed(void *parsed_result,
                            total_stats.tsms_tcb_states[state]);
         }
 
-        if (option == 'd' || option == 'c') {
+        if (option == 'd') {
             tpg_tsm_statistics_t *tsm_stats;
 
             STATS_FOREACH_CORE(tpg_tsm_statistics_t, port, core, tsm_stats) {
-                if (PORT_COREID_IN_MASK(port_port_cfg[port].ppc_core_mask, core))
-                    continue;
                 int idx = rte_lcore_index(core);
 
                 cmdline_printf(cl, "    - core idx %3.3u :\n", idx);
@@ -2771,20 +2681,6 @@ cmdline_parse_inst_t cmd_show_tsm_statistics = {
     },
 };
 
-cmdline_parse_inst_t cmd_show_tsm_statistics_port = {
-    .f = cmd_show_tsm_statistics_parsed,
-    .data = (void *) (intptr_t) 'p',
-    .help_str = "show tsm statistics port <id>",
-    .tokens = {
-        (void *)&cmd_show_tsm_statistics_T_show,
-        (void *)&cmd_show_tsm_statistics_T_tsm,
-        (void *)&cmd_show_tsm_statistics_T_statistics,
-        (void *)&cmd_show_tsm_statistics_T_port_kw,
-        (void *)&cmd_show_tsm_statistics_T_port,
-        NULL,
-    },
-};
-
 cmdline_parse_inst_t cmd_show_tsm_statistics_details = {
     .f = cmd_show_tsm_statistics_parsed,
     .data = (void *) (intptr_t) 'd',
@@ -2798,30 +2694,12 @@ cmdline_parse_inst_t cmd_show_tsm_statistics_details = {
     },
 };
 
-/* ATTENTION: data is gonna be filled with 'c' which means "port and details" */
-cmdline_parse_inst_t cmd_show_tsm_statistics_port_details = {
-    .f = cmd_show_tsm_statistics_parsed,
-    .data = (void *) (intptr_t) 'c',
-    .help_str = "show tsm statistics details port <id>",
-    .tokens = {
-        (void *)&cmd_show_tsm_statistics_T_show,
-        (void *)&cmd_show_tsm_statistics_T_tsm,
-        (void *)&cmd_show_tsm_statistics_T_statistics,
-        (void *)&cmd_show_tsm_statistics_T_details,
-        (void *)&cmd_show_tsm_statistics_T_port_kw,
-        (void *)&cmd_show_tsm_statistics_T_port,
-        NULL,
-    },
-};
-
 /*****************************************************************************
  * Main menu context
  ****************************************************************************/
 static cmdline_parse_ctx_t cli_ctx[] = {
     &cmd_show_tsm_statistics,
-    &cmd_show_tsm_statistics_port,
     &cmd_show_tsm_statistics_details,
-    &cmd_show_tsm_statistics_port_details,
     NULL,
 };
 

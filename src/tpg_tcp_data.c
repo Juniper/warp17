@@ -222,10 +222,10 @@ int tcp_data_send(tcp_control_block_t *tcb, tsm_data_arg_t *data)
     *data->tda_data_sent = 0;
 
     if (data->tda_push)
-        snd_flags |= RTE_TCP_PSH_FLAG;
+        snd_flags |= TCP_PSH_FLAG;
 
     if (data->tda_urg)
-        snd_flags |= RTE_TCP_URG_FLAG;
+        snd_flags |= TCP_URG_FLAG;
 
     stored_bytes = tcp_data_store_send(tcb, data);
     if (stored_bytes == 0)
@@ -247,7 +247,7 @@ int tcp_data_send(tcp_control_block_t *tcb, tsm_data_arg_t *data)
 
     tcp_data_send_segments(tcb, data_to_send, unsent_size, data_offset,
                            tcb->tcb_snd.nxt,
-                           RTE_TCP_ACK_FLAG | snd_flags);
+                           TCP_ACK_FLAG | snd_flags);
 
 done:
     if (data->tda_data_len == stored_bytes) {
@@ -287,13 +287,11 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
 
     /* The first part of the data might be a retransmission so just skip it. */
     if (unlikely(SEG_LT(seg_seq, tcb->tcb_rcv.nxt) &&
-                 SEG_GT(seg_seq + seg_len, tcb->tcb_rcv.nxt))) {
-        pcb->pcb_mbuf = data_adj_chain(pcb->pcb_mbuf,
-                                       SEG_DIFF(tcb->tcb_rcv.nxt, seg_seq));
-
-        if (unlikely(!pcb->pcb_mbuf))
+                    SEG_GT(seg_seq + seg_len, tcb->tcb_rcv.nxt))) {
+        if (unlikely(!data_mbuf_adj(pcb->pcb_mbuf,
+                                    SEG_DIFF(tcb->tcb_rcv.nxt, seg_seq)))) {
             assert(false);
-
+        }
         seg_len -= SEG_DIFF(tcb->tcb_rcv.nxt, seg_seq);
         seg_seq = tcb->tcb_rcv.nxt;
     }
@@ -335,13 +333,11 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
         } else if (SEG_LE(cur->tbh_seg_seq, new_hdr.tbh_seg_seq) &&
                         SEG_LT(new_hdr.tbh_seg_seq,
                                cur->tbh_seg_seq + cur->tbh_mbuf->pkt_len)) {
-            new_hdr.tbh_mbuf = data_adj_chain(new_hdr.tbh_mbuf,
-                                              SEG_DIFF(cur->tbh_seg_seq +
-                                                       cur->tbh_mbuf->pkt_len,
-                                                       new_hdr.tbh_seg_seq));
-            if (unlikely(!new_hdr.tbh_mbuf))
+            if (unlikely(!data_mbuf_adj(new_hdr.tbh_mbuf,
+                                        SEG_DIFF(cur->tbh_seg_seq + cur->tbh_mbuf->pkt_len,
+                                                 new_hdr.tbh_seg_seq)))) {
                 assert(false);
-
+            }
             data_mbuf_merge(cur->tbh_mbuf, new_hdr.tbh_mbuf);
             seg = cur;
             break;
@@ -371,11 +367,11 @@ uint32_t tcp_data_handle(tcp_control_block_t *tcb, packet_control_block_t *pcb,
 
             /* If there's still something useful in the old seg then adj it. */
             if (SEG_LT(seg_end, old_seg->tbh_seg_seq + old_seg->tbh_mbuf->pkt_len)) {
-                old_seg->tbh_mbuf =
-                    data_adj_chain(old_seg->tbh_mbuf,
-                                   SEG_DIFF(seg_end, old_seg->tbh_seg_seq));
-                if (unlikely(!old_seg->tbh_mbuf))
+                if (unlikely(!data_mbuf_adj(old_seg->tbh_mbuf,
+                                            SEG_DIFF(seg_end,
+                                                     old_seg->tbh_seg_seq)))) {
                     assert(false);
+                }
                 break;
             }
 
@@ -447,63 +443,7 @@ uint32_t tcp_data_retrans(tcp_control_block_t *tcb)
                                                    tcb->tcb_snd.wnd),
                                            0,
                                            tcb->tcb_snd.una,
-                                           RTE_TCP_ACK_FLAG);
+                                           TCP_ACK_FLAG);
     return retrans_bytes;
 }
 
-
-/*****************************************************************************
- * tcp_data_walk_segs()
- *      this function walks segments checking for data consistency
- ****************************************************************************/
-void tcp_data_walk_segs(tcp_control_block_t *tcb)
-{
-    uint32_t         pkt_len, count;
-    bool             enable_prints;
-    struct rte_mbuf *seg_mbuf;
-
-    enable_prints = FALSE;
-
-    /* In order to not compromise speediness we print just if I'm already sure
-     * to fail
-     */
-again:
-
-    count   = 0;
-    pkt_len = tcb->tcb_retrans.tr_total_size;
-
-    if (!pkt_len) {
-        assert(tcb->tcb_retrans.tr_data_mbufs == NULL);
-        return;
-    }
-
-    if (enable_prints)
-        RTE_LOG(DEBUG, USER1,
-                "Init packet len:_\t%d\n", pkt_len);
-
-    for (seg_mbuf = tcb->tcb_retrans.tr_data_mbufs;
-         seg_mbuf; seg_mbuf = seg_mbuf->next) {
-        count++;
-
-        assert(pkt_len >= seg_mbuf->data_len);
-        pkt_len -= seg_mbuf->data_len;
-        if (enable_prints)
-            RTE_LOG(DEBUG, USER1,
-                    "At cycle %d packet len:_\t%d\n", count, pkt_len);
-    }
-
-    if (enable_prints)
-        RTE_LOG(DEBUG, USER1,
-                "End packet len:_\t%d\n", pkt_len);
-
-    if (pkt_len > 0 && !enable_prints) {
-        /* Now that I know for sure that I'm going to fail I print out all
-         * the segments length
-         */
-        enable_prints = TRUE;
-
-        goto again;
-    }
-
-    assert(pkt_len == 0);
-}

@@ -614,7 +614,7 @@ raw_prepend_tstamp(l4_control_block_t *l4, raw_app_t *raw_app_data,
             INC_STATS(raw_stats, rsts_tstamp_no_win);
             return tx_mbuf;
         }
-        bzero(&latency_data->rld_tstamp[0], sizeof(latency_data->rld_tstamp));
+
         /* Build a clone mbuf pointing to the same memory as latency_data. */
         /* TODO: this might not work well in case RAW is ran on top of TCP and
          * response sizes are set to 0 (i.e., the ra_tx_tstamp/latency_data will

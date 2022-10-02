@@ -54,29 +54,27 @@
 #
 #
 
-.PHONY: all all-travis clean
+.PHONY: all clean
 
 Q?=@
 
 WARP17_INI_FILE ?= ./ini/$(shell hostname).ini
-WARP17_UNIQ_STAMP ?= $(shell python3 ../python/uniq.py)
+WARP17_UNIQ_STAMP ?= $(shell python ../python/uniq.py)
 TOPDIR = ..
 PY_RUNNER = $(TOPDIR)/py-runner.sh
 
 OBJS=*.pyc lib/*.pyc
 
-UT = $(PY_RUNNER) python3 -m unittest
+UT = $(PY_RUNNER) python -m unittest
 UT_FLAGS = -v
 
 TEST_TARGETS=$(sort $(patsubst %.py,%,$(wildcard *.py)))
-TEST_TARGETS_PERF=$(filter-out test_perf, $(sort $(patsubst %.py,%,$(wildcard *.py))))
+
 PARAMS  = WARP17_INI_FILE="$(WARP17_INI_FILE)"
 # Unique stamp to be used for creating output dir
 PARAMS += WARP17_UNIQ_STAMP="$(WARP17_UNIQ_STAMP)"
 
 all: $(TEST_TARGETS)
-
-all-travis: $(TEST_TARGETS_PERF)
 
 clean:
 	$(Q)$(RM) -rf $(OBJS)

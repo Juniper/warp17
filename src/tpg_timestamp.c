@@ -70,7 +70,7 @@
 RTE_DEFINE_PER_LCORE(tstamp_info_t, tstamp_tc_per_port_t)[TPG_ETH_DEV_MAX];
 
 /*****************************************************************************
- * tstamp_start_tx()
+ * tstamp_start()
  ****************************************************************************/
 void tstamp_start_tx(uint32_t port, uint32_t rss_queue __rte_unused,
                      tstamp_tx_post_cb_t cb)
@@ -86,7 +86,7 @@ void tstamp_start_tx(uint32_t port, uint32_t rss_queue __rte_unused,
 }
 
 /*****************************************************************************
- * tstamp_stop_tx()
+ * tstamp_stop()
  ****************************************************************************/
 void tstamp_stop_tx(uint32_t port, uint32_t rss_queue __rte_unused)
 {
@@ -95,7 +95,7 @@ void tstamp_stop_tx(uint32_t port, uint32_t rss_queue __rte_unused)
 }
 
 /*****************************************************************************
- * tstamp_start_rx()
+ * tstamp_start()
  ****************************************************************************/
 void tstamp_start_rx(uint32_t port, uint32_t rss_queue __rte_unused)
 {
@@ -109,7 +109,7 @@ void tstamp_start_rx(uint32_t port, uint32_t rss_queue __rte_unused)
 }
 
 /*****************************************************************************
- * tstamp_stop_rx()
+ * tstamp_stop()
  ****************************************************************************/
 void tstamp_stop_rx(uint32_t port, uint32_t rss_queue __rte_unused)
 {
@@ -131,17 +131,6 @@ bool tstamp_tx_is_running(uint32_t port, uint32_t rss_queue __rte_unused)
 bool tstamp_rx_is_running(uint32_t port, uint32_t rss_queue __rte_unused)
 {
     return RTE_PER_LCORE(tstamp_tc_per_port_t)[port].tstamp_rx_per_port > 0;
-}
-
-/*****************************************************************************
- * tstamp_write_cksum_offset()
- ****************************************************************************/
-void tstamp_write_cksum_offset(struct rte_mbuf *mbuf, uint32_t chksum_offset)
-{
-    if (chksum_offset != 0) {
-        chksum_offset += DATA_GET_CKSUM_OFFSET(mbuf);
-        DATA_SET_CKSUM_OFFSET(mbuf, chksum_offset);
-    }
 }
 
 /*****************************************************************************
