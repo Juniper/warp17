@@ -167,7 +167,7 @@ def configure_client_port():
     if err.e_code != 0:
         die('Error configuring client test case.')
 
-    print('Clients configured successfully!\n')
+    print 'Clients configured successfully!\n'
 
 def configure_server_port():
     # Configure 1 server IP interface and no default gateway on port 1.
@@ -213,7 +213,7 @@ def configure_server_port():
     if err.e_code != 0:
         die('Error configuring server test case.')
 
-    print('Servers configured successfully!\n')
+    print 'Servers configured successfully!\n'
 
 def start_client_port():
     err = warp17_method_call(warp17_host, warp17_port, Warp17_Stub, 'PortStart',
@@ -221,7 +221,7 @@ def start_client_port():
     if err.e_code != 0:
         die('Error starting client test cases.')
 
-    print('Clients started successfully!\n')
+    print 'Clients started successfully!\n'
 
 def start_server_port():
     err = warp17_method_call(warp17_host, warp17_port, Warp17_Stub, 'PortStart',
@@ -229,7 +229,7 @@ def start_server_port():
     if err.e_code != 0:
         die('Error starting server test cases.')
 
-    print('Servers started successfully!\n')
+    print 'Servers started successfully!\n'
 
 def check_stats():
     # Just check client stats a couple of times (once a second and stop
@@ -242,13 +242,13 @@ def check_stats():
         if client_result.tsr_error.e_code != 0:
             die('Error fetching client test case stats.')
 
-        print('Client test case state: ' + str(client_result.tsr_state) + '\n')
-        print('Global stats:')
-        print(client_result.tsr_stats)
-        print('Rate stats:')
-        print(client_result.tsr_rate_stats)
-        print('HTTP Client stats:')
-        print(client_result.tsr_app_stats.as_http)
+        print 'Client test case state: ' + str(client_result.tsr_state) + '\n'
+        print 'Global stats:'
+        print client_result.tsr_stats
+        print 'Rate stats:'
+        print client_result.tsr_rate_stats
+        print 'HTTP Client stats:'
+        print client_result.tsr_app_stats.as_http
 
         time.sleep(1)
 
@@ -258,7 +258,7 @@ def stop_client_port():
     if err.e_code != 0:
         die('Error stopping client test cases.')
 
-    print('Clients stopped successfully!\n')
+    print 'Clients stopped successfully!\n'
 
 def stop_server_port():
     err = warp17_method_call(warp17_host, warp17_port, Warp17_Stub, 'PortStop',
@@ -266,7 +266,7 @@ def stop_server_port():
     if err.e_code != 0:
         die('Error stopping server test cases.')
 
-    print('Servers stopped successfully!\n')
+    print 'Servers stopped successfully!\n'
 
 def run_test():
     ''' Assumes a back to back topology with two 40G ports. '''
