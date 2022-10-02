@@ -55,8 +55,6 @@
 //
 //
 
-syntax = "proto2";
-
 message PortOptions {
     optional uint32 po_mtu = 1 [default = 1500];
 }

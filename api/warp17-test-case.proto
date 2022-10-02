@@ -54,8 +54,6 @@
 //
 //
 
-syntax = "proto2";
-
 import "warp17-common.proto";
 import "warp17-client.proto";
 import "warp17-server.proto";

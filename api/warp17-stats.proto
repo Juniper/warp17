@@ -54,8 +54,6 @@
 //
 //
 
-syntax = "proto2";
-
 import "warp17-common.proto";
 
 message PortStatistics {
@@ -76,12 +74,10 @@ message PhyStatistics {
     required uint64 pys_tx_pkts     = 3;
     required uint64 pys_tx_bytes    = 4;
 
-    required uint64 pys_rx_drops    = 5;
-    required uint64 pys_rx_errors   = 6;
-    required uint64 pys_tx_errors   = 7;
-    required uint64 pys_rx_nombuf   = 8;
+    required uint64 pys_rx_errors   = 5;
+    required uint64 pys_tx_errors   = 6;
 
-    required uint32 pys_link_speed  = 9;
+    required uint32 pys_link_speed  = 7;
 }
 
 message EthStatistics {
@@ -206,13 +202,6 @@ message TcpStatistics {
     required uint32 ts_failed_data_clone = 16;
 
     required uint32 ts_reserved_bit_set  = 17;
-
-    required uint32 ts_sent_syn = 18;
-    required uint32 ts_recv_syn = 19;
-    required uint32 ts_sent_fin = 20;
-    required uint32 ts_recv_fin = 21;
-    required uint32 ts_sent_rst = 22;
-    required uint32 ts_recv_rst = 23;
 }
 
 message TsmStatistics {

@@ -54,8 +54,6 @@
 //
 //
 
-syntax = "proto2";
-
 message RawClient {
     required uint32 rc_req_plen  = 1;
     required uint32 rc_resp_plen = 2;
